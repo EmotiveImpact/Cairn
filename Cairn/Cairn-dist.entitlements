@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+      Distribution entitlements for Developer ID + Hardened Runtime (NOT sandboxed).
+      App Sandbox is intentionally OFF: a disk cleaner needs to see and reclaim
+      files across the whole home folder (and run tools like `docker`/`brew`),
+      which the sandbox forbids. Full Disk Access is granted by the user in
+      System Settings > Privacy & Security; it is not an entitlement.
+
+      Hardened runtime is required for notarization. We keep entitlements empty:
+      spawning separate processes (docker/brew/xcrun) does not require any
+      hardened-runtime exception, and we load no third-party plugins.
+    -->
+</dict>
+</plist>

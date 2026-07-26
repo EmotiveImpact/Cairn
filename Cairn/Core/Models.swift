@@ -1,0 +1,187 @@
+import Foundation
+
+// MARK: - Severity (computed, never assumed)
+
+/// SAFE = regenerates locally, trivial cost (may be pre-selected once the
+/// regenerability check passes). REVIEW = regenerates expensively or holds the
+/// only local copy (never pre-selected). RISKY = irreplaceable; never selectable
+/// without an explicit per-item confirm.
+enum Severity: Int, Comparable, Codable, CaseIterable {
+    case safe = 0
+    case review = 1
+    case risky = 2
+
+    static func < (a: Severity, b: Severity) -> Bool { a.rawValue < b.rawValue }
+
+    var label: String {
+        switch self {
+        case .safe: return "Safe"
+        case .review: return "Review"
+        case .risky: return "Risky"
+        }
+    }
+}
+
+// MARK: - Clean method
+
+/// A tool invocation (the paid "correct command" feature). Never built as a
+/// shell string — `tool` is resolved to an absolute path and `arguments` is an
+/// explicit array (no `/bin/sh -c`).
+struct ToolCommand: Equatable {
+    var tool: String           // "docker", "xcrun", "go", "pnpm"…
+    var arguments: [String]
+    var display: String        // shown in UI, e.g. "docker builder prune"
+    /// `docker system prune -a --volumes` etc. — destroys named volumes; must be
+    /// behind a typed confirmation, never a checkbox.
+    var destroysData: Bool = false
+}
+
+/// How an item is reclaimed.
+enum CleanMethod: Equatable {
+    case trash                 // move the path to ITS OWN volume's Trash
+    case emptyTrash            // empty a Trash directory (the genuine reclaim)
+    case tool(ToolCommand)     // run a CLI tool (paid)
+    case adviceOnly            // non-actionable advice card (Docker.raw, Nix, sleepimage)
+
+    var isActionable: Bool { if case .adviceOnly = self { return false } else { return true } }
+    var isPaid: Bool { if case .tool = self { return true } else { return false } }
+}
+
+// MARK: - Category
+
+enum CategoryGroup: String, Codable {
+    case developer
+    case ai
+    case creative
+    case general
+}
+
+struct CategoryInfo: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let group: CategoryGroup
+    /// Whether enabling this scanner requires Full Disk Access (most dev-dir
+    /// scanners do NOT — `~/.npm`, `~/.cargo`, `~/go` are plain 0700 user dirs).
+    let requiresFDA: Bool
+}
+
+// MARK: - ScanItem
+
+struct ScanItem: Identifiable {
+    let id = UUID()
+    var url: URL                       // original path as surfaced
+    var resolvedURL: URL               // symlink-resolved real path (what we act on)
+    var allocatedSize: Int64           // on-disk bytes (inode-aware where available)
+    var itemCount: Int                 // files counted
+    var latestModified: Date
+    var categoryID: String
+    var severity: Severity
+    var isRegenerable: Bool            // computed; SAFE requires this true
+    var requiresQuitBundleIDs: [String] // owning apps that must quit before cleaning
+    var requiresRunning: Bool          // e.g. Docker daemon must be UP to prune
+    var cleanMethod: CleanMethod
+    var note: String
+    var permissionDenied: Bool         // size may be incomplete (FDA)
+    var volumeURL: URL?                // the volume this lives on (for volume-aware trash)
+    var selected: Bool
+
+    init(
+        url: URL,
+        resolvedURL: URL? = nil,
+        allocatedSize: Int64,
+        itemCount: Int = 0,
+        latestModified: Date = .distantPast,
+        categoryID: String,
+        severity: Severity,
+        isRegenerable: Bool = true,
+        requiresQuitBundleIDs: [String] = [],
+        requiresRunning: Bool = false,
+        cleanMethod: CleanMethod = .trash,
+        note: String = "",
+        permissionDenied: Bool = false,
+        volumeURL: URL? = nil,
+        selected: Bool = false
+    ) {
+        self.url = url
+        self.resolvedURL = resolvedURL ?? url.resolvingSymlinksInPath()
+        self.allocatedSize = allocatedSize
+        self.itemCount = itemCount
+        self.latestModified = latestModified
+        self.categoryID = categoryID
+        self.severity = severity
+        self.isRegenerable = isRegenerable
+        self.requiresQuitBundleIDs = requiresQuitBundleIDs
+        self.requiresRunning = requiresRunning
+        self.cleanMethod = cleanMethod
+        self.note = note
+        self.permissionDenied = permissionDenied
+        self.volumeURL = volumeURL
+        self.selected = selected
+    }
+
+    var ageDays: Double {
+        max(0, Date().timeIntervalSince(latestModified) / 86_400)
+    }
+
+    var isActionable: Bool { cleanMethod.isActionable }
+}
+
+// MARK: - Formatting
+
+enum Fmt {
+    /// Formatters are expensive to build (each one does locale lookups). `size` is
+    /// called dozens of times per render across the dashboard and tables, so a
+    /// fresh formatter per call showed up as constant LocaleCache churn in
+    /// profiles. Build once, reuse. NSCache-free: these are immutable after setup.
+    private static let byteFormatter: ByteCountFormatter = {
+        let f = ByteCountFormatter()
+        f.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
+        f.countStyle = .file
+        return f
+    }()
+    private static let decimalFormatter: NumberFormatter = {
+        let f = NumberFormatter()
+        f.numberStyle = .decimal
+        return f
+    }()
+    private static let relativeFormatter: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    static func size(_ bytes: Int64) -> String {
+        byteFormatter.string(fromByteCount: max(0, bytes))
+    }
+
+    /// "1,284" — grouped integer.
+    static func grouped(_ n: Int) -> String {
+        decimalFormatter.string(from: NSNumber(value: n)) ?? "\(n)"
+    }
+
+    /// "2 days ago" — relative to now.
+    static func relative(_ date: Date) -> String {
+        relativeFormatter.localizedString(for: date, relativeTo: Date())
+    }
+
+    /// Split a formatted size into (value, unit), e.g. ("118", "GB").
+    static func split(_ bytes: Int64) -> (value: String, unit: String) {
+        // ByteCountFormatter separates value/unit with a NON-breaking space on some
+        // locales, so split on any whitespace (not just U+0020) or the unit is lost.
+        let parts = size(bytes).components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        if parts.count >= 2 { return (parts[0], parts.dropFirst().joined(separator: " ")) }
+        return (parts.first ?? "0", "")
+    }
+
+    static func age(_ days: Double) -> String {
+        if days < 1 {
+            let h = Int(days * 24)
+            return h <= 0 ? "today" : "\(h)h"
+        }
+        if days < 30 { return "\(Int(days))d" }
+        if days < 365 { return "\(Int(days / 30))mo" }
+        return String(format: "%.1fy", days / 365)
+    }
+}

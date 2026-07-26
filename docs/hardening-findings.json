@@ -1,0 +1,512 @@
+[
+  {
+    "area": "test",
+    "summary": "test",
+    "findings": [
+      {
+        "title": "t",
+        "detail": "d",
+        "severity": "low"
+      }
+    ]
+  },
+  {
+    "area": "Open-source macOS cleaner / disk-space / uninstaller projects \u2014 architecture and scan models for Cairn to learn from",
+    "summary": "Researched 8+ notable OSS macOS cleaning tools. Two architectural archetypes dominate. (1) App uninstallers (Pearcleaner, AppCleaner) are PURELY ON-DEMAND: nothing is scanned at launch; the user drags in one app, and the tool enumerates a small fixed set of ~/Library subfolders matching that ONE app by normalized bundle-id/name/team-id, optionally backed by a Spotlight (mdfind) query. The only background process is a tiny (~2-5MB) Trash watcher (Pearcleaner \"Sentinel\", AppCleaner \"SmartDelete\") that wakes the app when an .app hits Trash \u2014 never an autonomous full-disk scan. (2) Disk/dup tools (MacDirStat, GrandPerspective, OmniDiskSweeper, czkawka, SpaceSaver) are also on-demand per chosen root, stream results incrementally, and key on speed: MacDirStat uses BSD fts_open/read/close + an AsyncStream throttled to 50ms UI refreshes + the Squarify treemap algorithm; GrandPerspective adds a \"refresh\" that re-scans only changed folders and saves compressed scan snapshots; OmniDiskSweeper sorts a column view live as it walks. czkawka is the reference dup-finder design: 3-stage funnel (group by exact size \u2192 prehash first/last few KB \u2192 full hash), Blake3 default (CRC32/XXH3 optional), rayon multithreading, an on-disk hash cache (only files >5MB cached) so re-scans only hash new/changed files, BK-tree + perceptual hash for similar images. Key cross-cutting lessons for Cairn: never scan everything on launch; scope every scan to a user-chosen target or root; use a cheap Trash/FSEvents watcher instead of polling; cache hashes/sizes keyed on (path,size,mtime) and persist between runs; stream results to UI with throttling; always Trash (recoverable) not unlink; maintain explicit system-path exclusion/allowlists with a sensitivity dial; and \u2014 critical security lesson \u2014 Pearcleaner shipped a CVE-grade flaw where its root privileged-helper XPC accepted unauthenticated connections and ran arbitrary shell, so Cairn must authenticate XPC clients (code-signing requirement / audit token) and never expose a generic \"run command\" endpoint.",
+    "findings": [
+      {
+        "title": "Pearcleaner (alienator88/Pearcleaner) \u2014 on-demand per-app scan, normalized multi-key matching + Spotlight fallback",
+        "severity": "high",
+        "detail": "Swift/SwiftUI, ~11k stars, Apache-2.0 + Commons Clause. Scan is strictly ON-DEMAND per single app (drag-drop, list selection, CLI, or Finder extension) \u2014 nothing is indexed at launch. The matcher (Logic/AppPathsFetch.swift, AppPathFinder) enumerates a small fixed set of locations: ~/Library/Application Support, /Caches, /Preferences, /Containers, /Group Containers, /LaunchAgents, /Logs, /WebKit, /HTTPStorages, /Saved Application State, plus /Library and ~/Library at depth=2 to catch vendor subfolders (e.g. ~/Library/Microsoft/Edge). For each candidate file it tests CACHED, normalized identifiers computed once: bundle id (via pearFormat()), app name (and letters-only variant), path-component name, company name (from 3-part bundle ids), team identifier, base bundle id with helper/agent/daemon suffixes stripped, and a digit-stripped name ('Bartender 6' -> 'bartender'). A 'sensitivity level' dial (Strict=exact equality, Enhanced=contains/partial, Deep=fuzzy incl. team id + entitlements) trades recall vs false positives. Two skip lists (skipConditions with allowlist exceptions; skipDeepSearch to avoid recursing standard macOS dirs) plus a user folder-exclusion list prevent flagging system-critical paths. After manual enumeration a Spotlight (mdfind/NSMetadataQuery) pass over kMDItemDisplayName/Path/Comment/(optionally)TextContent recovers fuzzy matches. Results are deduplicated, hierarchically filtered (child paths under a matched parent dropped), then sized/iconed. Collection is concurrent: DispatchGroup at qos .userInitiated, sizing chunked across a concurrent queue with a serial collectionAccessQueue guarding the set. Deletions go to Trash (recoverable). Also has Orphaned File Search (leftovers of already-removed apps), Homebrew manager, dev-environment manager, plugin/login-item handling.",
+        "fix": "Cairn should borrow: (a) the multi-key normalized matcher (bundle id + team id + stripped name + company) with a user-facing sensitivity dial; (b) depth-2 Library scan to catch vendor subfolders; (c) Spotlight/mdfind as a recall booster on top of deterministic path enumeration; (d) hierarchical child-path dedup; (e) always-Trash-never-unlink.",
+        "sources": [
+          "https://github.com/alienator88/Pearcleaner",
+          "https://github.com/alienator88/Pearcleaner/blob/main/Pearcleaner/Logic/AppPathsFetch.swift",
+          "https://pearcleaner.com/"
+        ]
+      },
+      {
+        "title": "Pearcleaner Sentinel \u2014 tiny background Trash watcher, NOT a background disk scanner (the model for 'don't scan on launch')",
+        "severity": "high",
+        "detail": "Sentinel is a separate ~210KB helper using <=2-5MB RAM whose ONLY job is to watch the Trash. When any .app bundle is moved to Trash by any means, Sentinel launches/foregrounds Pearcleaner and surfaces that app's associated leftovers for one-click cleanup. It is optional and does no scanning itself \u2014 the expensive per-app enumeration only runs reactively, after a real user action (trashing an app). This is exactly how these tools 'avoid scanning everything on launch': they replace any continuous indexing with a near-zero-cost event watcher and defer all real work to a user-triggered, single-app scope. AppCleaner's 'SmartDelete' is the same pattern.",
+        "fix": "Cairn should ship an opt-in lightweight Trash/FSEvents watcher (a few MB, separate helper) that only triggers a scoped scan on a relevant event (app trashed, large download finished), and otherwise do ZERO background scanning. Treat launch as instant: show last cached results, scan only when the user picks a target.",
+        "sources": [
+          "https://github.com/alienator88/Pearcleaner",
+          "https://pearcleaner.com/",
+          "https://github.com/alienator88/Pearcleaner/issues/110"
+        ]
+      },
+      {
+        "title": "Pearcleaner privileged-helper XPC vulnerability \u2014 security lesson Cairn MUST NOT repeat",
+        "severity": "critical",
+        "detail": "Pearcleaner uses a LaunchDaemon privileged helper (PearcleanerHelper) installed via SMAppService and reached over XPC to delete files in root-owned/system directories (it requests Full Disk Access for ~/Library and the helper for system dirs). GHSA-gr2j-65fh-8pvc / issue #278: the helper's XPC service accepted UNAUTHENTICATED connections from ANY local process and exposed a method that executed ARBITRARY SHELL COMMANDS as root. Once the helper was approved, any local unprivileged user/process could escalate to root (LPE). The root cause is two compounding mistakes: (1) no client authentication on the XPC listener, and (2) a god-mode 'run this shell command' endpoint instead of narrow, typed operations.",
+        "fix": "If Cairn needs elevated deletes: authenticate every XPC client (set a code-signing-requirement on the listener via setCodeSigningRequirement / verify the peer's audit_token with SecCodeCheckValidity), reject connections that don't match Cairn's own signing identity, and expose ONLY narrow, validated operations (e.g. 'trash these specific validated paths') \u2014 never a generic command/shell endpoint. Validate every path against an allowlist server-side; never trust the client's path list blindly.",
+        "sources": [
+          "https://github.com/alienator88/Pearcleaner/security/advisories/GHSA-gr2j-65fh-8pvc",
+          "https://github.com/alienator88/Pearcleaner/issues/278"
+        ]
+      },
+      {
+        "title": "AppCleaner (FreeMacSoft) \u2014 the original drag-in uninstaller + SmartDelete Trash watcher",
+        "severity": "medium",
+        "detail": "Closed-source but the canonical reference UX. Drag an app in; it instantly enumerates associated files by matching the app's bundle identifier AND developer/vendor name, surfacing preferences, caches, application support, containers, widgets, preference panes, login items \u2014 files Finder never shows. Reported ~95% leftover-detection rate. SmartDelete is an optional background task that watches the Trash and, when you drag any app there, auto-builds a ready-to-delete leftover list and prompts \u2014 without launching AppCleaner manually. It never auto-deletes; the user always confirms. Same on-demand + tiny-watcher architecture as Pearcleaner.",
+        "fix": "Confirms the dominant pattern: bundle-id + developer-name matching, instant per-app results, optional Trash watcher, and a hard 'never delete without explicit confirmation' rule. Cairn should match this baseline and exceed recall via team-id/Spotlight as Pearcleaner does.",
+        "sources": [
+          "https://freemacsoft.net/appcleaner/",
+          "https://www.appcleaner.pro/"
+        ]
+      },
+      {
+        "title": "MacDirStat (phalladar/MacDirStat) \u2014 modern Swift reference for fast on-demand disk scanning",
+        "severity": "high",
+        "detail": "Pure SwiftUI / Swift Package Manager, Swift 6 strict concurrency, zero deps, offline, macOS 15+. FileScanner uses BSD fts_open/fts_read/fts_close for traversal \u2014 markedly faster than FileManager.enumerator because fts walks the directory tree in C with minimal per-entry allocation and returns stat info inline. Scan is ON-DEMAND per user-selected folder (no background indexing, no described persistent cache). The scanner emits ScanEvent objects via an AsyncStream so results stream in during traversal; a ScanCoordinator throttles UI refreshes to ~50ms intervals so the tree fills live without thrashing SwiftUI. Treemap uses the Squarify algorithm (rectangles with area proportional to size, near-square aspect ratios). Single @Observable AppState drives all views.",
+        "fix": "Cairn's disk-map/large-file scanner should use fts (or getattrlistbulk) not FileManager enumeration; stream results via AsyncStream/AsyncSequence; throttle UI to ~50ms; render with the Squarify treemap algorithm. This is the cleanest modern Swift blueprint to copy directly.",
+        "sources": [
+          "https://github.com/phalladar/MacDirStat"
+        ]
+      },
+      {
+        "title": "GrandPerspective \u2014 treemap pioneer; 'refresh only changed folders' and compressed saved scans",
+        "severity": "medium",
+        "detail": "Objective-C, macOS. Builds a full directory tree (FileItem nodes), visualized as a treemap (area proportional to size, siblings grouped). On-demand per chosen volume/folder. Two notable architectural features: (1) a 'Refresh' that is like a re-scan but much faster because it ONLY re-walks folders that changed since the last scan \u2014 i.e. incremental rescanning rather than full re-traversal; (2) it can SAVE scan data to disk, and newer versions store these snapshots COMPRESSED at ~1/10th the size with ~10x faster load \u2014 so you can reopen a prior scan instantly without re-walking the disk. Supports zoom/focus into subtrees, color schemes (by type/folder/depth), and filters to hide/show file classes.",
+        "fix": "Cairn should persist scan snapshots (compressed) so reopening shows results instantly with no rescan, and implement incremental refresh that only re-walks folders whose mtime changed (use FSEvents or compare dir mtimes) instead of a full re-traversal.",
+        "sources": [
+          "https://grandperspectiv.sourceforge.net/",
+          "https://grandperspective.org/"
+        ]
+      },
+      {
+        "title": "OmniDiskSweeper (The Omni Group) \u2014 live-sorting column view, results appear before scan finishes",
+        "severity": "low",
+        "detail": "Freeware, macOS. Recursively walks the filesystem and shows a Finder-style column (browser) view sorted largest-first, color-coded by size. Key UX trait: it starts building the column view almost immediately and sorts sizes live AS IT SCANS, so the user can begin drilling into the biggest folders before the full walk completes. Can be run as root to see space used by other users/system files. Purely on-demand per selected disk; no background indexing.",
+        "fix": "Reinforces progressive/streamed results with live size sorting so the user gets actionable output before the scan completes \u2014 pair with MacDirStat's AsyncStream approach. Offer an optional elevated (root) scan to attribute system/other-user space, but gate it behind the secure-XPC pattern noted above.",
+        "sources": [
+          "https://en.wikipedia.org/wiki/OmniDiskSweeper",
+          "https://www.omnigroup.com/more"
+        ]
+      },
+      {
+        "title": "czkawka (qarmin/czkawka) \u2014 reference duplicate-finder: size\u2192prehash\u2192full-hash funnel, Blake3, rayon, persistent hash cache",
+        "severity": "high",
+        "detail": "Rust, memory-safe, very fast. Duplicate detection is a staged funnel that minimizes bytes read: (1) GROUP BY EXACT SIZE (cheap; only same-size files can be dupes); (2) PREHASH \u2014 hash just the first/last few KB (docs say ~2-4KB) of each same-size file to eliminate ~50% of candidates without reading whole files; (3) FULL HASH only for files whose prehash collides. Hash algorithms: Blake3 (default, fast, cryptographic), CRC32 (crc32fast, fastest, rare collisions), XXH3 (xxhash-rust, non-cryptographic, Blake3-like speed/quality). Multithreading via the rayon crate for all CPU-bound hashing/image work, configurable thread count (--threads). Persistent ON-DISK cache (cache_duplicates_HASH.txt) stores full hashes + prehash entries so RE-SCANS only fully hash new/changed files; to keep the cache small, only fully-hashed files LARGER THAN 5MB are cached. Memory model is streaming, not load-everything: lazy metadata gathering during traversal, with an ~8GB guard when loading cache to avoid OOM. Other modes: empty folders/files, big files, temp files, similar images, similar videos, music (tags + content), broken/invalid-extension files, bad filenames, EXIF strip. Similar-images uses perceptual hashing (image_hasher crate) with a BK-tree for efficient nearest-neighbor (Hamming-distance) search; image hashes cached in binary/JSON (cache_similar_image_SIZE_HASH_FILTER.bin/.json) keyed by hash size/algorithm/filter.",
+        "fix": "Cairn's dup finder should copy the exact 3-stage funnel (size group -> prehash first+last KB -> full hash) \u2014 it slashes I/O. Default to Blake3 (offer XXH3/CRC32). Parallelize hashing across cores. Persist a hash cache keyed on (path,size,mtime), and only cache larger files (e.g. >5MB) to bound cache size, so re-scans are near-instant. Stream metadata; don't hold all hashes in RAM. For image dedup use perceptual hash + BK-tree with a tunable Hamming threshold and a cached hash store.",
+        "sources": [
+          "https://github.com/qarmin/czkawka",
+          "https://github.com/qarmin/czkawka/blob/master/instructions/Instruction.md",
+          "https://deepwiki.com/qarmin/czkawka",
+          "https://github.com/qarmin/czkawka/issues/22"
+        ]
+      },
+      {
+        "title": "mac-cleanup-py / mac-cleanup-sh (mac-cleanup org) \u2014 modular, declarative, dry-run-first cache cleaner",
+        "severity": "medium",
+        "detail": "mac-cleanup-sh is a deprecated Bash script; mac-cleanup-py is its Python rewrite (also on Homebrew/PyPI). Architecture is MODULAR: 40+ built-in 'modules', each a declarative unit describing paths/commands to clean for a specific tool \u2014 package managers (npm, pip, yarn, brew, composer, gradle, poetry), dev tools (Xcode DerivedData, JetBrains, Android, Docker), browsers (Chrome, Chromium, Arc, Adobe), system bits (DNS cache, system logs, Trash, inactive memory, Java heap dumps), and games (Steam, Minecraft). Custom modules loadable via --custom-path; module config screen via -c. Crucially it is DRY-RUN-FIRST: -n/--dry-run computes and prints the approximate space that WOULD be freed before anything is deleted, so the user sees the payoff and confirms first. Uses a Path Collection abstraction internally (collect candidate paths -> sum sizes -> optionally delete), with sudo only when a path requires it.",
+        "fix": "Cairn (a developer-focused cleaner) should ship a curated, DECLARATIVE module catalog of well-known dev cache locations (Xcode DerivedData/Archives/device support, npm/yarn/pnpm, pip/poetry, Gradle, CocoaPods, Docker, simulator caches, Homebrew cache) rather than hardcoding, so new targets are data not code. Always compute-and-show reclaimable space BEFORE deleting (dry-run-by-default), and only escalate privileges per-path when actually needed.",
+        "sources": [
+          "https://github.com/mac-cleanup/mac-cleanup-py",
+          "https://github.com/mac-cleanup/mac-cleanup-py/blob/main/README.md",
+          "https://github.com/mac-cleanup/mac-cleanup-sh"
+        ]
+      },
+      {
+        "title": "SpaceSaver (siddiqss/macos-space-saver) \u2014 SwiftUI cleaner with SwiftData-cached scans and progressive rendering",
+        "severity": "low",
+        "detail": "SwiftUI DaisyDisk/CleanMyMac-style alternative. On-demand scanning via async/await (FileScannerService). Categorizes results in a CategoryManager (e.g. 'Large Files >1GB'). Notably it PERSISTS scan results with SwiftData ('Scan Result Caching: SwiftData-based persistence') so prior scans reload without re-walking, and uses 'Progressive Rendering: intelligent batched loading' to display 100k+ segments without UI stalls. A PathExclusionManager enforces system-path protections + user exclusions. A DuplicateDetector.swift exists but the README gives no algorithm detail.",
+        "fix": "Confirms two patterns worth adopting in a SwiftUI app specifically: persist scan results (SwiftData/Core Data) so reopening is instant, and batch/progressively render very large result sets. Pair with a PathExclusionManager-style central allowlist/exclusion service.",
+        "sources": [
+          "https://github.com/siddiqss/macos-space-saver"
+        ]
+      }
+    ]
+  },
+  {
+    "area": "test",
+    "summary": "test",
+    "findings": [
+      {
+        "title": "t",
+        "detail": "d",
+        "severity": "low"
+      }
+    ]
+  },
+  {
+    "area": "Cairn macOS disk-cleaner \u2014 memory & performance audit (per-page store fix verification + full sweep)",
+    "summary": "The reported 50 GB fix is sound and complete: the three per-page stores (HealthStore, DuplicateStore, AppInventoryStore) are now owned as @State in AppShell (Cairn/UI/AppShell.swift lines 59-62), each has `deinit { scanTask?.cancel() }`, and each scan is guarded to run once (scanIfNeeded/startIfNeeded check phase/hasScanned). Navigating away no longer orphans a running disk walk, and returning no longer spawns a duplicate \u2014 the root cause is closed. Separately, the prime enumerator suspect, FileScan.measure in Cairn/Core/FileScanning.swift, ALREADY wraps each enumerated item in an autoreleasepool (lines 70-86), so the single hottest path is mitigated. However, several other genuine memory/CPU hazards remain. The most serious is DuplicateStore's Pass-1 walk: it enumerates every regular file >=1MB across Downloads/Documents/Desktop/Pictures/Movies into an unbounded `bySize` dictionary (two URLs retained per candidate) with NO autoreleasepool and NO cap on Pass-1 itself (candidateCap only bounds Pass-2 hashing) \u2014 on a large photo/video tree this alone can balloon. Two process-lifetime caches (IconCache, ThumbnailCache) grow forever with no eviction. AppInventoryStore re-measures every app bundle plus every associated ~/Library entry on each scan, fully sequential and fully retained. Smart Scan fans all 19 scanners into one unbounded task group, so multiple whole-home walks (DevProjects, GitMaintenance) run truly concurrently, and ItemRow recomputes NSWorkspace.runningApplications on every row redraw. Findings below with concrete fixes.",
+    "findings": [
+      {
+        "title": "Per-page store hoist + deinit cancellation fix is sound and complete",
+        "detail": "Verified in Cairn/UI/AppShell.swift (lines 56-67): `@State private var healthStore = HealthStore()`, `dupStore`, `appStore` are now owned by AppShell, so they persist for the app's lifetime instead of being recreated per navigation. Each store declares `nonisolated(unsafe) private var scanTask` and `deinit { scanTask?.cancel() }` (HealthStore.swift:54-56, DuplicateStore.swift:108-110, AppInventoryStore.swift:61-63). Re-entry is idempotent: HealthStore.scanIfNeeded guards `phase == .idle`, DuplicateStore.startIfNeeded guards `phase == .idle`, AppInventoryStore.scanIfNeeded guards `!hasScanned && !isScanning`. The views kick the scan from `.task`/onAppear behind a `didStart` flag (DuplicatesView.swift:92-96). Net: a running scan is no longer orphaned on navigate-away and no longer re-spawned on return. No further change needed here.",
+        "severity": "low",
+        "sources": [
+          "Cairn/UI/AppShell.swift",
+          "Cairn/Core/HealthStore.swift",
+          "Cairn/Core/DuplicateStore.swift",
+          "Cairn/Core/AppInventoryStore.swift",
+          "Cairn/UI/DuplicatesView.swift"
+        ]
+      },
+      {
+        "title": "FileScan.measure enumerator already has the autoreleasepool \u2014 primary 50GB path mitigated",
+        "detail": "Cairn/Core/FileScanning.swift lines 70-86: the `for case let item as URL in enumerator` body is wrapped in `autoreleasepool { ... }` per item, with a `stop`/`break` to honor maxFiles. This is THE hot path (every scanner's makeItem and every store routes through measure), so the most dangerous unbounded-autorelease accumulation is already handled. No change needed; called out so it isn't 'fixed' twice.",
+        "severity": "low",
+        "sources": [
+          "Cairn/Core/FileScanning.swift"
+        ]
+      },
+      {
+        "title": "DuplicateStore Pass-1: unbounded retained walk + no autoreleasepool (top remaining memory risk)",
+        "detail": "Cairn/Core/DuplicateStore.swift findDuplicates (lines 330-358). The Pass-1 enumerator over Downloads/Documents/Desktop/Pictures/Movies appends a `Candidate` for EVERY regular file >= minSize (1 MB) into `var bySize: [Int64:[Candidate]]`. Each Candidate retains two URLs (url and resolvingSymlinksInPath()) plus a Date. The `candidateCap` (20_000) only limits Pass-2 hashing (lines 363, 375) \u2014 it does NOT cap Pass-1, so bySize grows with the full file count of those trees (a large ~/Pictures or ~/Movies easily holds tens to hundreds of thousands of >=1MB files). There is also no autoreleasepool around the loop body, so `resourceValues` + `resolvingSymlinksInPath` autoreleased objects pile up until the task ends. On a media-heavy Mac this is a real multi-hundred-MB-to-GB spike, and resolving symlinks for every candidate up front (most never become duplicates) wastes syscalls.",
+        "severity": "high",
+        "fix": "1) Wrap the per-URL body in `autoreleasepool { }` like FileScanning.measure does. 2) Cap Pass-1 retention: stop appending (or skip) once total candidates collected exceeds a bound (e.g. 200_000) and surface 'partial' to the UI; better, prune singleton size-buckets cheaply. 3) Defer `url.resolvingSymlinksInPath()` from Pass-1 into Pass-2 (only compute the resolved URL for files that actually survive into a duplicate group), so most candidates retain a single URL.",
+        "sources": [
+          "Cairn/Core/DuplicateStore.swift"
+        ]
+      },
+      {
+        "title": "IconCache is an unbounded process-lifetime dictionary (no NSCache / no eviction)",
+        "detail": "Cairn/UI/FileIcon.swift lines 6-36: `IconCache.shared` holds `byPath: [String: NSImage]` and `byExt: [String: NSImage]`, inserted-into forever and never evicted. Every FileIcon (LargeFilesView rows, AppsView rows + the uninstall confirm sheet, ToolIcon) and every ThumbnailView fallback funnels through `icon(for:)`, so scrolling a large Large-Files or Apps list keys one full-resolution NSWorkspace icon per distinct path permanently. NSImages are not tiny; across thousands of paths this is a steady, unrecoverable growth that compounds the scan spikes.",
+        "severity": "high",
+        "fix": "Replace both dictionaries with `NSCache<NSString, NSImage>` (set countLimit, e.g. 1000-2000, and/or totalCostLimit). NSCache is thread-safe so the manual NSLock can go, and it evicts under memory pressure. Key by path for byPath and by lowercased extension for byExt.",
+        "sources": [
+          "Cairn/UI/FileIcon.swift",
+          "Cairn/UI/LargeFilesView.swift",
+          "Cairn/UI/AppsView.swift",
+          "Cairn/UI/ToolIcon.swift"
+        ]
+      },
+      {
+        "title": "ThumbnailCache is an unbounded process-lifetime dictionary of full thumbnails",
+        "detail": "Cairn/UI/DuplicatesView.swift lines 10-35: `ThumbnailCache.shared.store: [String: NSImage]` grows forever \u2014 one QuickLook-rendered NSImage per (path,size) key, generated for every visible duplicate group representative AND every file row in every expanded group (ThumbnailView at size 40 and size 28). On a large duplicate result with many expanded groups this retains hundreds of decoded bitmaps with no eviction. There is no cap and no response to memory pressure.",
+        "severity": "high",
+        "fix": "Switch `store` to `NSCache<NSString, NSImage>` with a countLimit (e.g. 500) and a totalCostLimit based on pixel area. Also guard against a render completing after the view scrolled away (it already returns the image via completion; with NSCache eviction the only cost is a regeneration).",
+        "sources": [
+          "Cairn/UI/DuplicatesView.swift"
+        ]
+      },
+      {
+        "title": "AppInventoryStore re-measures every app bundle and every associated entry, fully sequential and fully retained",
+        "detail": "Cairn/Core/AppInventoryStore.swift enumerate (lines 133-198). For each discovered app it calls `FileScan.measure(raw.url, maxFiles: 40_000)` (whole .app bundle), then for each matching `indexed` entry calls `FileScan.measure(entry.url, maxFiles: 20_000)` (whole ~/Library subtree per match). With 100+ apps and a one-level index of Application Support/Caches/Containers/etc., this is hundreds of full-tree measures done one-after-another on a single detached task \u2014 slow, and every AppEntry (with its `associated: [URL]` arrays) is retained for the whole session. Individual measures are capped and pooled (good), but the aggregate wall-time and the all-at-once result array are heavy. Re-running rescan() repeats the entire cost.",
+        "severity": "medium",
+        "fix": "1) Parallelize the per-app sizing with a bounded TaskGroup (width = activeProcessorCount - 1), same pattern DevProjectsScanner already uses, so the sequential stall goes away. 2) Cache app-bundle sizes keyed by bundle path+mtime so a rescan doesn't re-walk unchanged apps. 3) Consider lowering maxFiles for associated entries (20_000 leaf files per cache subtree is generous) since these feed only a size label.",
+        "sources": [
+          "Cairn/Core/AppInventoryStore.swift",
+          "Cairn/Scanners/DevProjectsScanner.swift"
+        ]
+      },
+      {
+        "title": "Smart Scan fans all 19 scanners into one unbounded TaskGroup \u2014 multiple whole-home walks run concurrently",
+        "detail": "Cairn/Core/ScanStore.swift run() lines 100-124: `withTaskGroup` adds a child task for EVERY scanner in ScannerRegistry.all() with no concurrency cap. Among them, DevProjectsScanner and GitMaintenanceScanner each perform a full bounded DFS of the entire home tree (FileManager.contentsOfDirectory per directory, up to 40_000 / 30_000 dirs), and OrphanedAppDataScanner/AppCachesScanner walk Library subtrees, all at once. DevProjects also internally spawns its own parallel sizing group (activeProcessorCount-1 wide). So on launch you can have two independent whole-home traversals plus N library scanners plus DevProjects' inner fan-out competing simultaneously \u2014 high peak CPU and page-cache churn, and on a slow/huge disk a lot of concurrently in-flight enumerator state. This isn't the 50GB cause (measure is pooled) but it is the launch CPU/thrash spike and amplifies every other issue here.",
+        "severity": "medium",
+        "fix": "Bound the outer scan fan-out with a semaphore/withTaskGroup throttle (e.g. max 4-6 concurrent scanners), and/or run the two whole-home walkers (DevProjects, GitMaintenance) sequentially or share a single home traversal between them since they prune nearly the same skipNames set. At minimum, cap outer concurrency so DevProjects' inner core-wide group isn't competing with 18 siblings.",
+        "sources": [
+          "Cairn/Core/ScanStore.swift",
+          "Cairn/Scanners/DevProjectsScanner.swift",
+          "Cairn/Scanners/GitMaintenanceScanner.swift"
+        ]
+      },
+      {
+        "title": "ItemRow recomputes NSWorkspace.runningApplications on every row redraw",
+        "detail": "Cairn/UI/ItemRow.swift badges (lines 83-88) calls `RunningApps.running(amongst: item.requiresQuitBundleIDs)` directly in the view body, and ItemDetail.createdBy (lines 114-119) calls `RunningApps.displayNames`. RunningApps.running/displayNames each build `Set(NSWorkspace.shared.runningApplications.compactMap { $0.bundleIdentifier })` (RunningApps.swift:9-25) \u2014 i.e. a full enumeration of every running process per call. In a list with many quit-gated items (browser/IDE/comm caches), this runs once per visible row per redraw (selection toggles, hovers, scan streaming appends all trigger rebuilds). It's CPU/allocation churn, not a leak, but it's needless work on the main actor during the live-streaming scan when rows re-render constantly.",
+        "severity": "low",
+        "fix": "Compute the running-bundle-id Set once per render pass (or cache it in the store / an @Observable with a short TTL or NSWorkspace.didLaunch/didTerminate notifications) and pass it down, instead of each ItemRow querying NSWorkspace independently.",
+        "sources": [
+          "Cairn/UI/ItemRow.swift",
+          "Cairn/Safety/RunningApps.swift"
+        ]
+      },
+      {
+        "title": "HealthStore.scanOrphanedAppData and AppInventory both measure full Application Support folders, repeatedly",
+        "detail": "Cairn/Core/HealthStore.swift scanOrphanedAppData (lines 295-330) calls `FileScan.measure(child, maxFiles: 8_000)` for each unclaimed, stale folder under ~/Library/Application Support. It has a good cheap pre-filter (folder's own mtime, line 312) that skips recent folders before measuring \u2014 that's the right pattern. The concern is overlap: OrphanedAppDataScanner (Smart Scan), HealthStore (Bugs page), and AppInventoryStore (Apps page) each independently measure overlapping ~/Library trees, so a user who visits all three pays the same full-tree sizing 3x with no shared cache. Each individual measure is pooled and capped, so this is efficiency, not a spike.",
+        "severity": "low",
+        "fix": "Introduce a small shared, mtime-keyed size cache (path -> (mtime, allocatedSize)) used by FileScan.measure callers that size the same ~/Library subtrees, so the second and third consumer reuse the first walk's result. Optional optimization, not a correctness issue.",
+        "sources": [
+          "Cairn/Core/HealthStore.swift",
+          "Cairn/Scanners/OrphanedAppDataScanner.swift",
+          "Cairn/Core/AppInventoryStore.swift"
+        ]
+      }
+    ]
+  },
+  {
+    "area": "Cairn macOS disk-cleaner \u2014 senior-dev correctness/bug audit (SwiftUI lifecycle, store hoist, Task cancellation, safety guards, selection/filter/format logic)",
+    "summary": "The recent @State\u2192hoisted-store fix in AppShell is structurally sound: ScanStore, HealthStore, DuplicateStore, and AppInventoryStore are now all owned by AppShell as @State and passed into their views as @Bindable/let, none of the live views own a store, and every store has a deinit that cancels its scanTask plus a startIfNeeded/scanIfNeeded guard so navigating away/back no longer re-spawns concurrent scans. I confirmed no surviving view owns one of these stores. However I found a set of real correctness bugs. The most serious is a data-safety bug in the new app-uninstall path: associated ~/Library files are trashed BEFORE the bundle move is checked, so a failed bundle trash leaves the app installed but its data already in the Trash. There is also a broken cancellation path in AppInventoryStore (Task.detached does not inherit cancellation, so the off-main app enumeration cannot actually be cancelled), a scanIfNeeded guard that permanently blocks Rescan-after-empty in the Apps view, a crashy force-unwrap in the duplicate engine, a logic bug in RunningApps.displayNames that drops apps, and several smaller filter/sort/empty-state/formatting issues. RootView.swift is dead code carrying a proEnabled=true that bypasses Pro gating and should be deleted.",
+    "findings": [
+      {
+        "title": "App uninstall trashes associated ~/Library data even when the .app bundle move fails \u2014 orphans user data",
+        "detail": "In AppInventoryStore.uninstall(_:) the detached batch loop (lines ~389-406) trashes every entry in app.associated FIRST, then trashes app.url and only THEN decides success/failure based on the bundle move. If the bundle trash fails (bundleOK == false \u2014 e.g. SIP-adjacent perms, app re-launched itself, file busy), the code records summary.failed += 1 and does NOT add the app to b.done \u2014 so the app stays in the list and on disk, but its Application Support / Containers / Group Containers / Preferences have ALREADY been moved to the Trash. The user is left with a still-installed app whose data/settings silently vanished. The app also reports moved bytes only when the bundle succeeds, so on partial failure the associated bytes already trashed are not even surfaced. This is the opposite of the 'only touch the app and its own files, all-or-nothing, recoverable' promise shown in the Safe Removal note.",
+        "severity": "high",
+        "fix": "Reorder: do let (bundleOK,bundleBytes)=Self.trash(app.url) first; guard bundleOK else { b.summary.failed+=1; continue } ; then loop app.associated.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Core/AppInventoryStore.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/AppInventoryStore.swift:387-408",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/AppsView.swift:347-366"
+        ]
+      },
+      {
+        "title": "AppInventoryStore enumeration is uncancellable \u2014 Task.detached does not inherit parent cancellation",
+        "detail": "run() does `await Task.detached(priority:.userInitiated){ Self.enumerate(isCancelled:{ Task.isCancelled }) }.value`. A DETACHED task starts with a fresh, un-cancellable context, so the `Task.isCancelled` evaluated inside the detached closure is ALWAYS false regardless of whether the outer scanTask was cancelled. enumerate() measures every app bundle and every ~/Library subtree (maxFiles 40_000/20_000 per item) and its isCancelled() break (line 161) never fires. So cancel()/deinit cancels the wrapper Task but the heavy filesystem walk runs to completion off-main. This is exactly the 'orphaned scan keeps running' class of problem the hoist was meant to kill \u2014 it's just hidden one layer down. (DuplicateStore.findDuplicates avoids this by being a `nonisolated static` func run inside a non-detached `Task`, where Task.isCancelled DOES propagate.)",
+        "severity": "high",
+        "fix": "Don't use Task.detached for the cancellation-sensitive walk. Capture a cancellation flag you can flip, or run enumerate inside the (non-detached) scanTask's context (e.g. make enumerate nonisolated and call it directly with `Task.isCancelled`, like DuplicateStore does), so cancellation actually reaches the loop.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Core/AppInventoryStore.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/AppInventoryStore.swift:121-130",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/DuplicateStore.swift:183-202"
+        ]
+      },
+      {
+        "title": "Force-unwrap in duplicate engine can crash when bucketing by size",
+        "detail": "In DuplicateStore.findDuplicates the candidate clusters are sorted with `clusters.sort { $0.first!.size > $1.first!.size }` (line 362). `clusters` is `bySize.values.filter { $0.count > 1 }`, so each cluster has \u22652 elements and .first! is non-nil TODAY \u2014 but this is a latent crash: any future change to the filter predicate, or an empty array slipping through, makes `.first!` a hard crash on a background task that takes down the app. Force-unwrap on a collection element in shipping code is a code-smell the rest of the file deliberately avoids (it uses `files.first?.size ?? 0` etc.).",
+        "severity": "low",
+        "fix": "Use a safe comparison: `clusters.sort { ($0.first?.size ?? 0) > ($1.first?.size ?? 0) }`.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Core/DuplicateStore.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/DuplicateStore.swift:361-362"
+        ]
+      },
+      {
+        "title": "Apps view: Rescan after an empty/zero result silently does nothing (scanIfNeeded guard never re-arms)",
+        "detail": "AppsView calls `store.scanIfNeeded()` in .task. scanIfNeeded guards on `!hasScanned && !isScanning`. After the first scan, hasScanned stays true forever (run() sets hasScanned=true and never resets it; only rescan() bypasses the guard). That part is fine for the Rescan button (which calls rescan()). But note the asymmetry vs HealthStore/DuplicateStore which also expose a one-shot guard \u2014 and AppsView's .task has no `didStart` latch (unlike HealthView/DuplicatesView). Because .task can re-run when the view identity is recreated, scanIfNeeded relies entirely on hasScanned/isScanning. During an in-flight first scan, isScanning==true so re-entry is blocked \u2014 OK. The real bug: if enumerate returns [] (e.g. transient FDA gap) hasScanned is still set true, so the empty-state shows 'No apps match this filter' with no automatic retry, and there is no didStart reset \u2014 consistent but worth a guard. Lower severity than it first appears, but the missing didStart latch is an inconsistency with the other two hoisted views.",
+        "severity": "low",
+        "fix": "For consistency and to avoid any future re-entrancy, mirror HealthView/DuplicatesView: add `@State private var didStart=false` and guard the .task. Functionally the hasScanned/isScanning guard is currently adequate.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/AppsView.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/AppsView.swift:45",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/AppInventoryStore.swift:98-101",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/HealthView.swift:30-34"
+        ]
+      },
+      {
+        "title": "RunningApps.displayNames silently drops apps due to mis-placed ?? (operator precedence)",
+        "detail": "`return ids.compactMap { id in apps.first { $0.bundleIdentifier == id }?.localizedName ?? shortName(id) }`. The `??` binds to the `.localizedName` optional, so the closure always yields a non-nil String \u2014 fine \u2014 BUT it is inside compactMap, which is correct only by accident. The real defect: when an id's app is NOT in runningApplications (race: it quit between the running() check and this call), `apps.first{...}` is nil, `nil?.localizedName` is nil, `?? shortName(id)` recovers it \u2014 so it works. However the QUIT-FIRST warning in ReviewSheet and AppsView's UninstallConfirmSheet builds `running` from RunningApps.running(amongst:) then displayNames(for:) \u2014 and running() already filtered to live ids, so this path is fine. The actual user-visible bug is cosmetic: shortName uses the bundle-id last component (e.g. 'docker' for com.docker.docker) which is shown uppercased as a tag, producing odd labels like 'QUIT DOCKER'. Verify intent; not a crash. Severity low.",
+        "severity": "low",
+        "fix": "Acceptable as-is; if cleaner labels are wanted, map known bundle ids to display names or title-case shortName. No correctness change required.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Safety/RunningApps.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Safety/RunningApps.swift:20-29",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/ItemRow.swift:83-88"
+        ]
+      },
+      {
+        "title": "Dead RootView.swift hard-codes proEnabled=true, bypassing all Pro gating if ever wired up",
+        "detail": "RootView (UI/RootView.swift) is a complete legacy screen that constructs its own `@State private var store = ScanStore()` and `private let proEnabled = true`, passes proEnabled into ReviewSheet, and calls store.startScan() in onAppear. It is NEVER instantiated (grep shows the only reference is its own declaration; the live entry point is CairnApp \u2192 AppShell). As dead code it is harmless today, but it (a) is a second ScanStore-owning view that contradicts the hoist invariant and is a trap for the next person, (b) ships proEnabled=true which would unlock paid tool-cleans for free if anyone re-enabled it, and (c) references store.startScan() with no external-volume flag.",
+        "severity": "medium",
+        "fix": "Delete RootView.swift (and Sidebar/CategoryDetailView/ScanningHero only if they are likewise unreferenced \u2014 verify). At minimum remove the proEnabled=true stub so it can't silently bypass licensing.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/RootView.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/RootView.swift:3-41",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/App/CairnApp.swift:18-35"
+        ]
+      },
+      {
+        "title": "FileScan.home vs SafePaths.home symlink mismatch can wrongly reject health-fix paths",
+        "detail": "SafePaths.home is `homeDirectoryForCurrentUser.resolvingSymlinksInPath()` (line 16) but FileScan.home is `homeDirectoryForCurrentUser` WITHOUT symlink resolution (FileScanning.swift:21). HealthTrash.trashAll calls `SafePaths.evaluate(resolved, allowedRoots:[FileScan.home])` (HealthStore.swift:168). evaluate() resolves both the candidate and the allowedRoots through resolvingSymlinksInPath().standardizedFileURL, so in the common case they reconcile. But the home denylist in evaluate() is built from SafePaths.home (resolved), while the allowed root passed in is FileScan.home (unresolved). On systems where the home dir contains a symlink component (FileVault-relocated homes, /Users symlinked to /System/Volumes/Data/Users on some setups), the allowedRoots resolution happens inside evaluate but the denyHomeRelative anchors use SafePaths.home \u2014 a divergence that can make a legitimately-under-HOME LaunchAgents plist read as 'outside this scanner's permitted roots' and refuse a safe fix. It will not cause an unsafe DELETE (the guard fails closed), so this is a correctness/UX bug not a safety hole.",
+        "severity": "low",
+        "fix": "Make FileScan.home also resolvingSymlinksInPath(), or have HealthTrash pass SafePaths.home as the allowed root, so the allowlist and denylist anchors are computed identically.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Core/FileScanning.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/FileScanning.swift:21",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/SafePaths.swift:16",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/HealthStore.swift:163-169"
+        ]
+      },
+      {
+        "title": "Apps filter-chip counts have no thousands separator while the rest of the screen uses grouped() \u2014 and are recomputed O(n) per chip per render",
+        "detail": "In AppsView.filterChips each chip renders `Text(\"\\(count(c))\")` (line 149) with raw Int interpolation \u2014 no NumberFormatter grouping, unlike DuplicatesView which routes every count through grouped(). On a Mac with many apps the 'All Apps' chip shows e.g. '1043' un-grouped, inconsistent with the comma-grouped numbers elsewhere; this matches the reported 'All Apps showing a wrapped number' complaint \u2014 combined with the chip having .fixedSize() and the count capsule padding, a 4-digit count can push the chip wider than expected in the horizontal ScrollView, and on the narrow content frame it reads as cramped/odd. Separately, count(c) calls store.apps.filter{...}.count for EVERY chip on EVERY body evaluation (5x full scans of the app list per render).",
+        "severity": "medium",
+        "fix": "Format counts with the same grouped()/NumberFormatter helper used in DuplicatesView, and compute all five chip counts once (e.g. a single pass building a [Chip:Int]) rather than five filters per render.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/AppsView.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/AppsView.swift:72,140-160",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/DuplicatesView.swift:360-363"
+        ]
+      },
+      {
+        "title": "'Clean AI Models' mission selects Review-severity items, contradicting its safe-by-default framing",
+        "detail": "Mission 'ai' applies `s.select { _, g in g == .ai }` \u2014 it selects ALL AI-group items regardless of severity (only .risky and non-actionable are filtered by select(where:)). So .review-severity AI items (e.g. model weights that are NOT cheaply re-downloadable / hold the only local copy) get pre-selected by a one-click mission, while the comparable 'dev' and 'creator' missions correctly add `it.severity == .safe`. This is an inconsistent selection policy: a user clicking 'Clean AI Models' can stage Review items they'd otherwise have to opt into per-item. Items still pass through the mandatory ReviewSheet before deletion, so it's not silent data loss, but it violates the 'never pre-select Review' principle the rest of the app follows.",
+        "severity": "medium",
+        "fix": "Add the severity guard for parity: `s.select { it, g in g == .ai && it.severity == .safe && it.isRegenerable }` (or at least `it.severity == .safe`).",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/Missions.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/Missions.swift:25-28",
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/ScanStore.swift:199-209"
+        ]
+      },
+      {
+        "title": "DuplicatesView 'Remove' button does not remove \u2014 it only stages selection",
+        "detail": "In groupCard the 'Remove' button (BrandButtonStyle, the primary CTA) does `store.keepBest(group.id)` then just expands the group (lines 236-240). It never trashes anything; actual removal only happens from the pinned footer's 'Review Duplicates \u2192' button (store.removeSelected()). A primary-styled button literally labelled 'Remove' that performs no removal is a confusing/incorrect affordance \u2014 users will click 'Remove' and believe copies are gone when they are merely selected. Compounding it, the footer button is labelled 'Review Duplicates \u2192' but immediately and irreversibly (to Trash) trashes the selected copies and shows a 'Moved to Trash' alert \u2014 the label implies a review step that doesn't exist.",
+        "severity": "medium",
+        "fix": "Either relabel the per-group button to 'Select extras' / 'Stage for removal', or make it actually trash that group. And relabel the footer to 'Move N to Trash' (it performs the destructive action directly, no review).",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/DuplicatesView.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/DuplicatesView.swift:234-240,310-323"
+        ]
+      },
+      {
+        "title": "Health 'Fix' from the issue-list runs with no confirmation and no result feedback path parity",
+        "detail": "In HealthView.issueListCard the row onPrimary for actionable groups does `Task { await store.fix(group: group) }` directly \u2014 no confirm sheet (unlike Fix All, which goes through FixAllSheet) and the row's onTapGesture separately opens the review sheet. So a single tap on the 'Fix' button trashes that group's items immediately. fix() routes through HealthTrash (recoverable Trash, SafePaths-guarded) so it's recoverable, but the inconsistency (Fix All confirms, per-group Fix doesn't) is a UX correctness gap, and because the button sits inside a row that also has onTapGesture\u2192onOpen, the hit-testing of the small 'Fix' button vs the row tap can mis-fire on trackpads.",
+        "severity": "low",
+        "fix": "Route per-group Fix through the same HealthReviewSheet/confirm flow as the review path (the sheet already exposes onFix), or add a lightweight confirm. Ensure the Fix button consumes the tap so the row's onTapGesture doesn't also fire.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/UI/HealthView.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/UI/HealthView.swift:144-162,247-282"
+        ]
+      },
+      {
+        "title": "Off-main mutation risk: DuplicateStore.onProgress double-captures self and hops actors per 16 hashes (benign now, fragile)",
+        "detail": "findDuplicates' onProgress closure is `{ hashed, candidates in Task { @MainActor [weak self] in ... } }` \u2014 it's invoked from the nonisolated static engine and correctly hops to @MainActor before touching @Observable state, so there is no actual off-main mutation. Note however the outer scanTask already captured [weak self], and this inner closure captures self again via the @MainActor Task; combined with onProgress firing every 16 files, this spawns many transient main-actor Tasks. Not a correctness bug, but under a huge candidate set it can flood the main queue with progress Tasks that outlive a cancel (each re-checks weak self so they no-op \u2014 acceptable). Flagging as the only place I could find a plausible main-actor concern; verified it is safe.",
+        "severity": "low",
+        "fix": "Optional: throttle progress (already every 16) and/or coalesce. No required change \u2014 included for completeness of the off-main-mutation review.",
+        "file": "/Users/augustusedem/CLEANSTUFF/Cairn/Core/DuplicateStore.swift",
+        "sources": [
+          "/Users/augustusedem/CLEANSTUFF/Cairn/Core/DuplicateStore.swift:183-202,376-378"
+        ]
+      }
+    ]
+  },
+  {
+    "area": "Cairn macOS disk cleaner \u2014 memory/correctness audit + product gap analysis against mockups & spec",
+    "summary": "The reported ~50 GB RAM fix is SOUND: HealthStore, DuplicateStore, and AppInventoryStore are now owned as @State in AppShell (the single live root), each scans once (guarded by phase/didStart/scanIfNeeded), each cancels its Task in deinit, and none is registered in the shared ScannerRegistry so they can't pile onto the main scan. Navigating between sidebar sections now just swaps @ViewBuilder content while the stores persist \u2014 no orphaned/duplicated scans. That said, the audit surfaced a separate high-severity correctness/trust bug (the Duplicates \"Review\" button deletes immediately, no review sheet), an uninstaller that bypasses the central SafePaths chokepoint, two genuinely unbounded image caches that work against the very RAM problem just fixed, dead duplicate root-view code that still spawns a scan, and multi-window scan duplication. On product: the five redesigned screens (Dashboard, Smart Scan, Developer, Large Files, Duplicates, Apps, Health, Settings) are built and broadly match the premium mockups, but auto-scanning everything at launch is the biggest UX mismatch with the spec's free/paid model, several spec v1 features are still missing (tool-mediated correct-command cleans surfaced in UI, FDA onboarding banner, removal log/undo surface, per-volume free-space preconditions), and \"Bugs & Fixes\" is the wrong name for a health/maintenance screen.",
+    "findings": [
+      {
+        "title": "Memory fix is sound \u2014 verify these four invariants hold and keep them",
+        "detail": "AppShell owns store/healthStore/dupStore/appStore as @State (AppShell.swift:57-62). CairnApp.swift instantiates exactly one AppShell. Each per-page store is @Observable @MainActor, exposes scanIfNeeded()/startIfNeeded() that early-return unless phase==.idle (HealthStore.scanIfNeeded, DuplicateStore.startIfNeeded, AppInventoryStore.scanIfNeeded with hasScanned/isScanning guards), and each has `deinit { scanTask?.cancel() }` with `nonisolated(unsafe) private var scanTask`. None is in ScannerRegistry.all(), so they never run inside the heavy concurrent Smart Scan. Views kick the scan via `.task { guard !didStart \u2026 }` / `.task { store.scanIfNeeded() }`, so re-navigation does not re-spawn. Net: navigating away no longer orphans a running scan, and returning no longer spawns a second one. The fix addresses the root cause described.",
+        "severity": "low",
+        "sources": [
+          "Cairn/UI/AppShell.swift:56-116",
+          "Cairn/Core/HealthStore.swift:54-113",
+          "Cairn/Core/DuplicateStore.swift:108-202",
+          "Cairn/Core/AppInventoryStore.swift:61-130",
+          "Cairn/Scanners/ScannerRegistry.swift"
+        ]
+      },
+      {
+        "title": "Duplicates 'Review Duplicates \u2192' button DELETES immediately with no review/confirm \u2014 trust-breaking and contradicts the spec",
+        "detail": "DuplicatesView.footer's primary button is labeled 'Review Duplicates \u2192' but its action calls store.removeSelected() directly, which trashes every selected copy on the spot (DuplicatesView.swift:315-318 \u2192 DuplicateStore.removeSelected). There is no ReviewSheet, no dry-run, no confirm step \u2014 the user clicks a button labeled 'Review' and files are gone (to Trash, recoverable, but still). The screen spec explicitly required generalizing ReviewSheet to take items+onClean and routing duplicate removal through that single trust surface (screen-specs.json Duplicates buildSteps 8-9). Cairn's entire brand promise is 'mandatory dry-run preview; cleaning is review-then-clean' (SPEC \u00a74.4). This is the one place that violates it. Also the per-group 'Remove' button just calls keepBest + expands \u2014 so the two removal entry points behave inconsistently (one stages, one deletes).",
+        "severity": "high",
+        "fix": "Rename the action or, better, route it through a confirm/review sheet before removeSelected(). Either reuse a generalized ReviewSheet (preferred \u2014 one chokepoint) seeded with the selected DupFiles mapped to transient ScanItems, or add a DuplicateConfirmSheet mirroring UninstallConfirmSheet. Keep the label honest ('Remove N duplicates\u2026') only if a confirm step follows.",
+        "sources": [
+          "Cairn/UI/DuplicatesView.swift:310-327",
+          "Cairn/Core/DuplicateStore.swift:264-289",
+          "docs/SPEC.md (\u00a74.4)",
+          "docs/screen-specs.json (Duplicates buildSteps 8-9)"
+        ]
+      },
+      {
+        "title": "App uninstaller bypasses the central SafePaths chokepoint and uses a broad, separately-maintained guard",
+        "detail": "AppInventoryStore.uninstall() trashes via its OWN guard isUninstallSafe() (AppInventoryStore.swift:417-453), NOT SafePaths.evaluate(). isUninstallSafe allows trashing (a) ANY *.app whose parent is /Applications, /Applications/Utilities, or ~/Applications, and (b) ANYTHING strictly under ~/Library. The associated-file set is built by dottedPrefixMatch over normalized folder names (lines 171-179); a short/edge-case bundle id (e.g. an app whose id normalizes to a common vendor token) could prefix-match unrelated ~/Library folders and sweep them into `associated`, which are then trashed with the app. Because this path never calls SafePaths, the carefully-built denylist (Keychains, .ssh, Mail, Messages, MobileSync, Photos) is NOT consulted for the associated files \u2014 the only protection is 'under ~/Library', and several of those denied trees ARE under ~/Library (Library/Keychains, Library/Mail, Library/Messages). A pathological match could therefore trash protected data the central guard was designed to refuse. The spec called this out as the single highest-risk change and required it be test-gated through SafePaths with proof that /System and protected paths stay rejected (SPEC \u00a75.1, screen-specs Apps gaps/buildStep 5).",
+        "severity": "high",
+        "fix": "Route every uninstall trash through SafePaths.evaluate() with an explicit, audited app-uninstall allowlist-of-roots, rather than a parallel ad-hoc guard. At minimum, run the associated-file URLs through SafePaths (which already denies Library/Keychains, Library/Mail, Library/Messages, MobileSync) before trashing. Add unit tests proving a system app, ~/.ssh, Library/Keychains, and a mis-matched protected folder are rejected. Tighten dottedPrefixMatch to require a minimum bundle-id specificity (>=2 dotted segments) before collecting associated paths.",
+        "sources": [
+          "Cairn/Core/AppInventoryStore.swift:373-453",
+          "Cairn/Core/AppInventoryStore.swift:160-179",
+          "Cairn/Core/SafePaths.swift:27-35",
+          "docs/SPEC.md (\u00a75.1)",
+          "docs/screen-specs.json (Apps gaps, buildStep 5)"
+        ]
+      },
+      {
+        "title": "IconCache and ThumbnailCache are unbounded and never evicted \u2014 works against the RAM fix",
+        "detail": "IconCache.byPath/byExt are plain dictionaries that grow forever (FileIcon.swift:6-36); ThumbnailCache.store is the same (DuplicatesView.swift:10-34). A duplicates scan over Pictures/Movies can surface thousands of files, each generating a 2x QuickLook NSImage held permanently, plus an NSWorkspace icon per row. On a machine the user already pushed to ~50 GB RAM, an unbounded decoded-image cache is exactly the kind of slow leak that compounds. Nothing ever calls a purge. Thumbnails are keyed by path+side only (not mtime, despite the doc comment claiming '+mtime'), so a changed file also serves a stale image.",
+        "severity": "medium",
+        "fix": "Back both caches with NSCache (automatic memory-pressure eviction, countLimit/totalCostLimit by pixel size) instead of a raw Dictionary+NSLock. Include mtime in the thumbnail key to match the comment and avoid staleness.",
+        "sources": [
+          "Cairn/UI/FileIcon.swift:6-36",
+          "Cairn/UI/DuplicatesView.swift:10-34"
+        ]
+      },
+      {
+        "title": "Dead duplicate root view (RootView.swift) still owns a ScanStore and starts a scan",
+        "detail": "RootView.swift is a complete second top-level view that owns its own @State ScanStore and calls store.startScan() in .onAppear (RootView.swift:4,40). It is never instantiated (CairnApp uses AppShell; grep for RootView() returns nothing). It also still references the old proEnabled stub and a separate Sidebar/SettingsView. As dead code it's a maintenance hazard and a foot-gun: if anyone wires it up (or a preview instantiates it), it spawns a full second concurrent disk scan \u2014 the same class of bug just fixed. It also duplicates ReviewSheet/About/Settings wiring that has diverged from AppShell.",
+        "severity": "medium",
+        "fix": "Delete RootView.swift (and confirm Sidebar.swift/SettingsView.swift aren't otherwise orphaned \u2014 SettingsPage is the live settings screen). Removing it eliminates a dormant duplicate-scan path and reduces drift.",
+        "sources": [
+          "Cairn/UI/RootView.swift:1-40",
+          "Cairn/App/CairnApp.swift:22-25"
+        ]
+      },
+      {
+        "title": "WindowGroup permits multiple windows; each new window = a fresh AppShell = a full second scan + 3 more lazy stores",
+        "detail": "CairnApp uses WindowGroup (CairnApp.swift:22). New-window via Cmd-N is suppressed (CommandGroup replacing .newItem), but WindowGroup can still open additional windows (e.g. reopening from Dock when none are open, or future menu/restoration), and each one constructs a new AppShell with its own ScanStore + HealthStore + DuplicateStore + AppInventoryStore and runs startScan() onAppear (AppShell.swift:86). Two windows = two full concurrent home-tree scans and two sets of unbounded caches \u2014 a direct multiplier on the memory problem.",
+        "severity": "medium",
+        "fix": "Use `Window` (single-window scene, macOS 13+) instead of `WindowGroup` for a single-document utility like this, or hoist the stores into an @Observable owned above the scene / a shared singleton so all windows share one ScanStore and one scan. Single Window is the simplest correct fit.",
+        "sources": [
+          "Cairn/App/CairnApp.swift:20-31",
+          "Cairn/UI/AppShell.swift:86"
+        ]
+      },
+      {
+        "title": "Auto-scanning EVERYTHING at launch is the biggest UX/spec mismatch \u2014 and a heavy first-run cost",
+        "detail": "AppShell.onAppear fires store.startScan() unconditionally on first launch (AppShell.swift:86), running all 19 registered scanners \u2014 including the signature whole-disk DevProjects hunt and external volumes unless disabled. The spec's model is a deliberate, cancellable, streaming Smart Scan the user initiates, with the free/paid conversion built around the user choosing to scan then act (SPEC \u00a72, \u00a74.1). Auto-running the full multi-scanner sweep the instant the window appears (a) front-loads the heaviest work before the user has oriented, (b) competes with the lazy per-page stores if the user immediately navigates, and (c) undercuts the 'runs only when opened' positioning vs CleanMyMac's daemon. Duplicates/Apps/Health are correctly lazy; the main scan should be at least as intentional (Dashboard already has a 'Start Smart Scan' CTA that's redundant if it auto-ran).",
+        "severity": "medium",
+        "fix": "Don't auto-run the full scan on launch. Land on the Dashboard in an idle state, let the prominent 'Start Smart Scan' button (already present) kick it, or scan only on first navigation to Smart Scan. Optionally auto-run only a cheap subset (caches) and defer the whole-disk DevProjects hunt to explicit action.",
+        "sources": [
+          "Cairn/UI/AppShell.swift:86",
+          "Cairn/Scanners/ScannerRegistry.swift",
+          "Cairn/UI/DashboardView.swift:37-43",
+          "docs/SPEC.md (\u00a72, \u00a74.1)"
+        ]
+      },
+      {
+        "title": "'Bugs & Fixes' is the wrong name for a system-health/maintenance screen \u2014 rename it",
+        "detail": "The screen is a system-health fixer (orphaned data, old launch agents, broken login items, corrupted prefs, permission issues) \u2014 see HealthStore/HealthView. 'Bugs & Fixes' reads like an app changelog (which is exactly what it USED to be, and that content correctly moved to Settings \u25b8 About). For a disk cleaner, 'Bugs' implies defects in Cairn itself, not maintenance of the user's Mac. The in-screen header even says 'Keeping your Mac healthy and running its best' \u2014 health/maintenance language. 'Duplicates' is fine and standard (DaisyDisk/Gemini/CleanMyMac all use it). 'Developer Cleanup', 'Large Files', 'Apps', 'Smart Scan' are all clear.",
+        "severity": "medium",
+        "fix": "Rename NavSection.bugs title to 'Maintenance' or 'Health' (Health matches the store/view names and the hero copy). Update the sidebar icon from 'ladybug' (literally a bug) to e.g. 'heart.text.square' / 'stethoscope' / 'checkmark.shield'. Update the Dashboard tile label (currently 'Fixes'). Keep the rename consistent across NavSection.title, the dashboard card, and the screen header label.",
+        "sources": [
+          "Cairn/UI/AppShell.swift:18,34",
+          "Cairn/UI/HealthView.swift:57-60",
+          "Cairn/Core/HealthStore.swift",
+          "Cairn/UI/DashboardView.swift:75"
+        ]
+      },
+      {
+        "title": "Spec v1 'correct-command' tool cleans exist in the engine but are not surfaced or unlockable in the new UI",
+        "detail": "The headline paid feature is tool-mediated correct cleans (simctl delete unavailable, go clean -modcache, pnpm store prune, docker prune, etc.) \u2014 modeled by CleanMethod.tool(ToolCommand) and executed by Cleaner.runTool with Pro gating (Models.swift:30-48, Cleaner.swift:79-100). But the redesigned Developer screen only renders bucket totals + a generic ReviewSheet clean; there's no UI affordance that shows 'this needs the correct command', no Pro upsell at that moment, and Docker/Go/pnpm REVIEW items that require a tool will just fail or be skipped through the trash path. The free/paid wedge (SPEC \u00a72) hinges on this being visible. Right now the differentiated, monetizable capability is invisible in the premium screens.",
+        "severity": "medium",
+        "fix": "In DevToolRow / ReviewSheet, badge items whose cleanMethod is .tool with a 'Correct command' chip and the command string; show a Pro lock for free users (isUnlocked == false) with an upgrade affordance, and surface tool-availability/'run it yourself' fallback copy. This is core to the value proposition, not polish.",
+        "sources": [
+          "Cairn/Core/Models.swift:30-48",
+          "Cairn/Safety/Cleaner.swift:79-100",
+          "Cairn/UI/DeveloperCleanupView.swift:141-197",
+          "docs/SPEC.md (\u00a72, \u00a74)"
+        ]
+      },
+      {
+        "title": "FDA onboarding banner, removal-log/undo surface, and per-volume free-space preconditions from the spec are not present in the redesigned UI",
+        "detail": "The engine tracks FDA (FullDiskAccess.isGranted, ScanStore.fdaGranted, ScanItem.permissionDenied) and the spec requires an onboarding banner explaining which features need FDA plus per-item 'incomplete (permission denied)' states (SPEC \u00a74.5). I found no banner/affordance in the new screens that prompts for FDA or shows the permission-gap state (ScanStore.Bucket.permissionGap exists but isn't rendered). Likewise the spec's undo/removal-log + 'Restore from Trash' history (SPEC \u00a74.4) is only a transient CelebrationOverlay/undoLast \u2014 there's no persistent removal log UI, and Health/Duplicates/Apps cleans don't feed it (they have their own one-shot result alerts). Per-volume free-space precondition messaging (SPEC \u00a75.2) isn't surfaced before promising reclaim.",
+        "severity": "low",
+        "fix": "Add a dismissible FDA banner on Dashboard/Smart Scan when !fdaGranted (deep-link via FullDiskAccess.openSettings) and render bucket.permissionGap as an 'incomplete \u2014 grant Full Disk Access' row state. Add a Settings \u25b8 Restore Bin/removal-log list backed by lastCleanSummary.restorable (and unify Health/Duplicate/App removals into it). Surface a per-volume 'needs N GB free' note in ReviewSheet. These are spec v1 commitments, currently partial.",
+        "sources": [
+          "Cairn/Safety/FullDiskAccess.swift",
+          "Cairn/Core/ScanStore.swift:38,23,275-279",
+          "Cairn/UI/SettingsPage.swift:135-145",
+          "docs/SPEC.md (\u00a74.4, \u00a74.5, \u00a75.2)"
+        ]
+      },
+      {
+        "title": "Health 'orphaned' data is double-surfaced and the per-row 'Fix' acts with no confirm step",
+        "detail": "Orphaned app data is detected by HealthStore's own scanLaunchAgents/scanOrphanedAppData (HealthStore.swift) AND by the registered OrphanedAppDataScanner that feeds the Apps area mapping (AppShell.NavSection.apps.buckets filters store.buckets to id=='orphaned'). The redesign plan flagged this exact double-surfacing risk (REDESIGN-PLAN \u00a73 caveat). Separately, HealthView's per-row 'Fix' button calls store.fix(group:) immediately (HealthView.swift:149-154) \u2014 trashing the group's fixable plists/folders with no confirm \u2014 while the 'Fix All' path DOES show a confirm sheet. Inconsistent: a single 'Fix' is more dangerous (no review) than 'Fix All'.",
+        "severity": "low",
+        "fix": "Decide one owner for orphaned leftovers (Health screen vs Apps 'Leftover Files') to avoid showing the same reclaim twice and double-counting. Make per-row 'Fix' open the same HealthReviewSheet (it already supports an onFix) rather than trashing inline, so every Health deletion has a review step like Fix All.",
+        "sources": [
+          "Cairn/Core/HealthStore.swift:218-330",
+          "Cairn/UI/AppShell.swift:50",
+          "Cairn/UI/HealthView.swift:146-164",
+          "docs/REDESIGN-PLAN.md (\u00a73)"
+        ]
+      },
+      {
+        "title": "Polish gaps vs the premium mockups: Developer donut is not interactive, Large Files inspector lacks Last-Opened, several mockup states are simplified",
+        "detail": "Against the screen-specs intent: (1) Developer donut + legend have no hover-dim or tap-to-expand-row wiring (screen-specs Developer interactions/gap call for donut\u2194table linkage); it's a static ring. (2) Large Files 'Last Opened' column actually shows latestModified (LargeFilesView.row uses item.latestModified, not contentAccessDate), and the inspector omits a real 'Last Opened' row \u2014 honest fallback is fine but the column header says 'Last Opened' while showing modified date, which is mislabeled. (3) SafetyPill correctly reflects worst severity (good, honest deviation from always-green mockup). (4) Apps summary ring fraction and chip counts are wired; looks close to mockup. (5) Dashboard 'Duplicates' tile still shows '\u2014'/'Soon' (DashboardView.cardItems:73) even though DuplicatesView is fully built \u2014 stale. These are spacing/state/labeling refinements, not blockers.",
+        "severity": "low",
+        "fix": "Wire the donut legend/segment tap to expand the matching DevToolRow (lift expandedBucketID into DeveloperCleanupView). Either fetch contentAccessDate for the Large Files 'Last Opened' column or relabel it 'Modified' to match the data. Update the Dashboard Duplicates tile to show live groupCount/reclaimable (or a 'Scan' CTA) instead of 'Soon'.",
+        "sources": [
+          "Cairn/UI/DeveloperCleanupView.swift:16-20,99-101",
+          "Cairn/UI/LargeFilesView.swift:104-105,152-153",
+          "Cairn/UI/DashboardView.swift:73",
+          "docs/screen-specs.json (Developer/Large Files interactions)"
+        ]
+      }
+    ]
+  }
+]

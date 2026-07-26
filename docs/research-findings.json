@@ -1,0 +1,979 @@
+{
+  "research": {
+    "competitors": null,
+    "demand": {
+      "angle": "What Mac users \u2014 especially developers \u2014 actually request and complain about regarding disk space and cleaning, with concrete features, frustrations, \"freed N GB\" stories, willingness-to-pay, and trust signals.",
+      "summary": "Mac users split into two cleaning camps with sharply different needs. (1) General users panic over an opaque \"System Data\" bucket (often 50-150 GB) they don't understand and are afraid to touch \u2014 they mostly want a trustworthy explainer + safe one-click reclaim, and they're deeply skeptical of CleanMyMac, which the technical crowd labels scareware/bloat that \"duplicates what macOS already does\" for ~$35-40/yr. (2) Developers have a concrete, well-understood problem: dev toolchains silently hoard 50-150 GB in known paths (Xcode DerivedData, iOS DeviceSupport, CoreSimulator, node_modules, Gradle/Android, Docker, Cargo, Homebrew caches). They know exactly what to delete and that it's regenerable \u2014 they just want a fast, transparent tool that finds it across all projects, shows sizes, marks safe-vs-risky, and never touches source code. The dominant frustrations are: subscriptions (huge \u2014 people loudly prefer one-time/open-source), fear of breaking things, bloat/scareware marketing, and tools that \"barely move the needle\" on the hidden dev caches. Willingness-to-pay is real but capped: one-time $9.99-29 is celebrated; recurring $35-40/yr is resented. Trust signals that win: open source, \"show exactly what will be deleted\" preview, no account required, notarized, local-only, small footprint, and safe/danger tiering.",
+      "findings": [
+        {
+          "point": "Developers' #1 disk hog is Xcode: DerivedData, iOS DeviceSupport, CoreSimulator, and Archives routinely total 30-150+ GB in known, safe-to-delete paths",
+          "detail": "Concrete path/size table that recurs across sources: ~/Library/Developer/Xcode/DerivedData (10-50 GB, safe, auto-rebuilds), ~/Library/Developer/CoreSimulator/Devices (20-150 GB; the folder 'can easily reach 20-30 GB or more'), ~/Library/Developer/Xcode/iOS DeviceSupport (10-40 GB; each iOS version dir is 2-5 GB and 10+ accumulate over 2-3 yrs), ~/Library/Developer/Xcode/Archives (5-30 GB), ~/Library/Caches/CocoaPods and ~/Library/Caches/org.swift.swiftpm (1-5 GB each). Canonical commands users run: rm -rf ~/Library/Developer/Xcode/DerivedData/* and xcrun simctl delete unavailable. iOS devs report 50-100 GB consumed after a year of development. This is the single most actionable feature target: a one-click 'Xcode reclaim' that knows these exact paths and which are safe.",
+          "confidence": "high",
+          "sources": [
+            "https://dev.to/nixeton/how-to-clean-up-xcode-and-free-30-50gb-on-your-mac-3ogh",
+            "https://www.donnywals.com/delete-old-simulators-and-device-support-files-to-free-disk-space/",
+            "https://www.w3tutorials.net/blog/is-it-okay-to-delete-the-macos-xcode-coresimulator-devices-folder/",
+            "https://macpaw.com/how-to/clear-xcode-cache",
+            "https://bysiber.github.io/cleardisk/blog/xcode-simulators-device-support-cleanup-mac.html"
+          ]
+        },
+        {
+          "point": "Concrete 'I freed N GB by deleting X' stories \u2014 devs reclaim 80-200+ GB and know exactly what worked",
+          "detail": "168 GB freed (257\u219288 GB) by deleting ~/Library/Android/sdk/system-images, ~/.gradle/caches, Xcode DerivedData, iOS DeviceSupport, and old simulators (xcrun simctl delete unavailable). 80 GB freed with DevCleaner broken down as: Xcode DerivedData 35 GB, Android Studio/Gradle 22 GB, Flutter builds 12 GB, IDE caches 8 GB, logs/junk 3 GB (Mac had only 10 GB free, was sluggish). npkill (npx npkill, deletes node_modules interactively) testimonials: 'one user saved over 200GB', another 'deleted 50 GB+ so far'. node_modules is typically 200 MB-1 GB per project and accumulates to 15+ GB across abandoned repos. The recurring narrative: a dev hits near-zero free space, scans, and is shocked how much was hidden in caches they forgot existed.",
+          "confidence": "high",
+          "sources": [
+            "https://medium.com/@iestebanvega1/how-i-freed-168-gb-of-system-data-on-my-mac-by-cleaning-android-studio-and-xcode-from-257-gb-80a3276d29ef",
+            "https://parthvatalia.medium.com/devcleaner-the-one-click-solution-that-freed-up-80gb-on-my-mac-3598bb540863",
+            "https://npkill.js.org/",
+            "https://medium.com/weekly-webtips/npkill-clean-your-computer-of-old-node-modules-484a6152adaa",
+            "https://code-cleaner.com/promo/delete-node-modules-mac"
+          ]
+        },
+        {
+          "point": "The biggest emotional frustration for general users: a huge, opaque 'System Data' bucket they're afraid to touch",
+          "detail": "macOS lumps caches, logs, local Time Machine snapshots, iOS device backups, and temp files into 'System Data', which users see balloon to 100-200+ GB with no explanation. A healthy size is ~12-25 GB; >30 GB signals stale caches/snapshots, >100 GB demands cleanup. Top real culprits users discover: local Time Machine snapshots (tens of GB when backup drive disconnected), old iPhone/iPad backups (single backup 20-40 GB), stale app caches. Apple-forum threads show users with 'System data taking up 115GB' asking what is safe. The product opportunity: explain the bucket in plain language and surface the specific reclaimable sub-categories (snapshots, iOS backups, caches) with sizes \u2014 users want understanding before they'll click delete.",
+          "confidence": "high",
+          "sources": [
+            "https://www.macworld.com/article/676493/how-to-delete-system-data-mac.html",
+            "https://setapp.com/how-to/macos-system-data-large",
+            "https://discussions.apple.com/thread/254588225",
+            "https://www.macobserver.com/macos/fix-macos-system-data-huge/",
+            "https://medium.com/@zeng2483613716/why-system-data-is-huge-on-your-mac-and-how-i-actually-fix-it-381e299132db"
+          ]
+        },
+        {
+          "point": "Subscriptions are the single most-cited dealbreaker; one-time purchase and open-source are the loudest requests",
+          "detail": "CleanMyMac's ~$35-40/yr subscription drives explicit defection. A HN developer: 'built a $5.99 alternative to CleanMyMac because I was tired of paying $40/yr.' DevCleaner blog post explicitly contrasts itself with 'generic Mac cleaner apps that charge subscription fees' and the author trusted it because it's '100% Free and Open Source' with 'no hidden fees or subscriptions.' Pricing that the market celebrates: DaisyDisk $9.99 one-time ('worth every penny', 'no subscriptions or hidden fees', 'one of the easiest Mac utility recommendations'); DevCleaner Pro Lifetime $29 one-time (vs $9.99/yr); free tools (OmniDiskSweeper, GrandPerspective, AppCleaner, OnyX, npkill) are heavily recommended. CleanMyMac also generates auto-renewal/refund complaints (50+ on PissedConsumer over 3 yrs; unexpected $34.95 charges). Implication for spec: lead with one-time pricing; recurring will be punished in this category.",
+          "confidence": "high",
+          "sources": [
+            "https://corelock.net/blog/is-cleanmymac-safe",
+            "https://daisydiskapp.com/support/pricing/",
+            "https://devcleaner.app/",
+            "https://parthvatalia.medium.com/devcleaner-the-one-click-solution-that-freed-up-80gb-on-my-mac-3598bb540863",
+            "https://www.justanswer.com/software/rqknf-not-subscribe-charged-34-95-macpaw-subscription.html"
+          ]
+        },
+        {
+          "point": "Technical users distrust CleanMyMac-style cleaners as scareware/bloat that 'barely moves the needle' and may break things",
+          "detail": "HN themes: 'absolute JUNK', 'patronizing' marketing copy like 'awesomize your Mac', and 'software McCarthyism' (it flagged Russian-developer utilities as untrustworthy 'because they are russian'). Effectiveness complaint: one power user said it 'barely moved' their 220 GB of System Data because dev tools hide GBs in cache paths the app can't detect. Fear-of-breaking is real: Apple-forum users report 'had to reinstall macOS multiple times' and warn cache cleaners 'can interfere with critical system functions' / 'brick your Mac' by deleting needed components. Counter-evidence worth noting for the spec: CleanMyMac is in fact notarized and one detailed review found 'no complaints about it breaking Macs or deleting needed files' \u2014 so the fear is largely reputational/perception, which a trustworthy newcomer can win on by being transparent.",
+          "confidence": "high",
+          "sources": [
+            "https://hn.algolia.com/api/v1/search?query=CleanMyMac&tags=comment",
+            "https://discussions.apple.com/thread/250282739",
+            "https://corelock.net/blog/is-cleanmymac-safe",
+            "https://macpaw.com/support/cleanmymac/knowledgebase/cleanmymac-safety"
+          ]
+        },
+        {
+          "point": "Most-requested feature set for a developer-focused cleaner (synthesized from what tools advertise + what devs praise)",
+          "detail": "(1) Multi-toolchain scan across many projects at once \u2014 DevCleaner scans 23 toolchains incl. Xcode, Android/Gradle, Node/npm (~/.npm/_cacache), CocoaPods (~/Library/Caches/CocoaPods), Homebrew (~/Library/Caches/Homebrew), Flutter (~/.pub-cache), Go (~/Library/Caches/go-build), Rust (~/.cargo/registry/cache), Docker, plus AI tools (Ollama, LM Studio, Cursor, Claude, ChatGPT caches). (2) Size + last-used date per item with sort by size/recency. (3) Safe/Warning/Danger tiering so users know what regenerates vs what's risky (npkill marks apps like Spotify/Discord with a \u26a0\ufe0f because deleting their node_modules breaks them). (4) Never touch source code \u2014 'Source code is never targeted', 'only known cache and build artifact paths'. (5) One-click Quick Clean + optional auto-clean/smart triggers. (6) 'Project hibernation' / archive-and-restore idle projects (DevCleaner Pro). Treemap/sunburst visualization (DaisyDisk-style) is the most-praised UX for the 'where did my space go' job.",
+          "confidence": "high",
+          "sources": [
+            "https://devcleaner.app/",
+            "https://code-cleaner.com/promo/delete-node-modules-mac",
+            "https://npkill.js.org/",
+            "https://daisydiskapp.com/support/pricing/",
+            "https://nektony.com/reviews/best-disk-space-analyzer-for-mac"
+          ]
+        },
+        {
+          "point": "Trust signals people explicitly look for before running a cleaner",
+          "detail": "Recurring trust requirements from the sources: open source / GitHub-visible code (cited as the reason the DevCleaner reviewer trusted it); 'show exactly what will be deleted' / preview before delete (CleanMyMac users specifically use the Review step; CodeCleaner offers 'free preview before deletion'); no account required (DevCleaner, CodeCleaner both advertise this); local-only processing, no cloud upload; Apple notarization; small footprint (DevCleaner is 4 MB); minimal/opt-out telemetry ('only bytes freed tracked; can be disabled'); and a restore/undo path (DevCleaner offers 'dry-run restore' for archived projects; regenerability messaging \u2014 'Xcode will regenerate this automatically' \u2014 reduces fear). The absence of preview/undo and the presence of pushy upsell marketing are the fastest trust-killers.",
+          "confidence": "high",
+          "sources": [
+            "https://devcleaner.app/",
+            "https://code-cleaner.com/promo/delete-node-modules-mac",
+            "https://parthvatalia.medium.com/devcleaner-the-one-click-solution-that-freed-up-80gb-on-my-mac-3598bb540863",
+            "https://macpaw.com/how-to/clean-up-mac"
+          ]
+        },
+        {
+          "point": "Hardware reality amplifies the pain: soldered, non-upgradeable, often small (256 GB) Apple Silicon SSDs",
+          "detail": "Developers repeatedly vent that modern Macs have soldered SSDs that can't be upgraded \u2014 'I ran out of disk space on the (soldered in SSD) Mac. I can't delete anything.' Apple's pricing for storage upgrades pushes many devs onto 256/512 GB machines, so reclaiming 50-150 GB of dev caches isn't a nicety \u2014 it's what keeps the machine usable. Secondary modern irritants devs name: Apple Intelligence consuming ~5 GB 'despite telling it to fuck off', macOS 'leaking' ~20 GB into System Data, Mac App Store forcing installs into /Applications, and apps scattering files into 'arcane directories' beyond the .app bundle. This validates urgency/recurrence \u2014 it's not a one-time chore, it's a constant battle on capacity-constrained hardware.",
+          "confidence": "high",
+          "sources": [
+            "https://hn.algolia.com/api/v1/search?query=mac%20disk%20space%20cleaner&tags=comment",
+            "https://hn.algolia.com/api/v1/search?query=CleanMyMac&tags=comment"
+          ]
+        },
+        {
+          "point": "Competitive landscape and price anchors to position against",
+          "detail": "Free/loved: OmniDiskSweeper (simple largest-first list), GrandPerspective (free treemap, 'powerful but not friendly'), AppCleaner (uninstaller), OnyX (system maintenance), npkill/dustoff (CLI node_modules killers), Mole (MIT-licensed). Paid one-time (the sweet spot): DaisyDisk $9.99 (sunburst visualizer, scans disk in <30s, universally recommended), DevCleaner Pro $29 lifetime, CodeCleaner (free scan, paid cleanup). Subscription (resented): CleanMyMac ~$35-40/yr, Setapp bundle. Emerging dev/cache-focused entrants to watch: Clutterfall (Clean vs DeepClean modes for browser/chat/dev/AI caches), Devpurge, Cluttered. Gap to exploit: a transparent, one-time-priced, open-or-auditable tool that does both the general 'System Data explainer' job AND the deep developer-cache job in one app \u2014 most tools do only one half well.",
+          "confidence": "medium",
+          "sources": [
+            "https://nektony.com/reviews/best-disk-space-analyzer-for-mac",
+            "https://macpaw.com/reviews/daisydisk-alternatives",
+            "https://hn.algolia.com/api/v1/search?query=mac%20disk%20space%20cleaner&tags=comment",
+            "https://devcleaner.app/",
+            "https://daisydiskapp.com/support/pricing/"
+          ]
+        }
+      ],
+      "recommendations": [
+        "Lead the product on a one-time price (anchor against DaisyDisk $9.99 and DevCleaner $29 lifetime); avoid a mandatory subscription \u2014 it is the most-cited reason people abandon CleanMyMac. If recurring revenue is needed, make it optional auto-clean Pro, not a gate on core scanning.",
+        "Ship the developer-cache engine as the wedge: scan ALL projects/toolchains at once with exact known paths (Xcode DerivedData, CoreSimulator, iOS DeviceSupport, Archives, node_modules, ~/.gradle/caches, Docker, ~/.cargo, Homebrew, CocoaPods, SwiftPM, AI-tool caches). Show size + last-used date, sort by size/recency. This is the highest-confidence, most-actionable demand.",
+        "Make trust the core differentiator: a mandatory 'here is exactly what will be deleted' preview, Safe/Warning/Danger tiering, 'this regenerates automatically' reassurance copy, no account, local-only, notarized, small footprint, and an undo/archive-restore path. Consider open-sourcing the cleaning rules even if the app is paid.",
+        "Never touch source code and explicitly say so ('only known cache/build-artifact paths; source is never targeted') \u2014 and flag dependencies that break apps if deleted (npkill's \u26a0\ufe0f pattern).",
+        "For non-developers, build a plain-language 'System Data explainer' that itemizes the real reclaimable culprits (local Time Machine snapshots, old iOS device backups 20-40 GB each, stale caches) with sizes, rather than a single scary opaque number.",
+        "Quantify wins in the UI and marketing the way users talk about them ('freed 80 GB: DerivedData 35 GB, Gradle 22 GB...') \u2014 the '/I freed N GB by deleting X' story is the proven viral/word-of-mouth hook.",
+        "Offer a DaisyDisk-style treemap/sunburst visualization for the 'where did my space go' job; it's the most-praised UX in this category and complements the targeted cache cleaner.",
+        "Avoid scareware/upsell marketing tone at all costs \u2014 the technical audience actively punishes 'awesomize your Mac' patronizing copy and bundled malware scanners; credibility with developers spreads to general users."
+      ]
+    },
+    "devSpace": {
+      "angle": "Definitive product-spec catalog of developer-related disk-space hogs on macOS: exact path(s), typical size, deletion risk tier (SAFE / REVIEW / RISKY), correct reclamation method (tool command vs delete), and the load-bearing gotcha for each. Ordered roughly by typical reclaim potential. All sizes are typical-developer-machine ranges from 2024-2026 sources; treat them as \"what a scanner should expect to find,\" not guarantees.",
+      "summary": "A typical macOS developer machine carries 50-200GB of reclaimable developer cruft. The biggest hogs, in order, are usually: Xcode (DerivedData + simulator runtimes + DeviceSupport + Archives, often 50-150GB combined), Docker (the Docker.raw VM disk image, 20-200GB that never auto-shrinks), node_modules sprawl across many projects (5-50GB), Android Studio AVDs + system images (often 100GB+), Rust target/ dirs (5-20GB each), and the long tail of package-manager caches (npm/yarn/pnpm/bun, Homebrew, pip/conda, Gradle/Maven, Go, Ruby, CocoaPods/SwiftPM) plus LLM model caches (HuggingFace/Ollama) and version-manager runtimes (nvm/asdf/pyenv/rbenv).\n\nThe single most important design principle for a cleanup product: distinguish \"caches that fully regenerate on next use\" (SAFE \u2014 just re-download/rebuild) from \"artifacts that are the only copy of something\" (RISKY \u2014 Archives needed for crash symbolication, AVD userdata, conda envs that take an hour to recreate). The second most important: many caches are SIP-protected or set read-only (CoreSimulator runtimes, Go module cache at 0444), so a naive `rm -rf` fails or errors \u2014 the product must use the right tool (`xcrun simctl runtime delete`, `go clean -modcache`) rather than raw deletion. Third: prune commands reclaim LOGICAL space inside a VM/store but do NOT shrink the physical file \u2014 Docker.raw is the canonical trap, where `docker system prune -a --volumes` frees space inside the Linux VM but the .raw file on the host stays bloated until you resize the disk image (which wipes everything).\n\nTwo notable 2025-2026 automation shifts the product should account for: Cargo 1.88+ now auto-GCs its global cache (~/.cargo registry), and Gradle 8+/Homebrew auto-clean on a schedule \u2014 so those caches self-limit somewhat, but per-project artifacts (target/, build/) and old-version leftovers still accumulate.",
+      "findings": [
+        {
+          "point": "Xcode DerivedData \u2014 biggest single quick win, always SAFE",
+          "detail": "Path: ~/Library/Developer/Xcode/DerivedData/ (one subfolder per project, plus ModuleCache.noindex). Typical size: 10-50GB; never auto-pruned by Xcode. Risk: SAFE \u2014 pure build cache; Xcode regenerates on next build (first build after deletion is slow). Method: delete contents (rm -rf ~/Library/Developer/Xcode/DerivedData/* ) or Xcode > Settings > Locations > click the arrow then trash the folder. Gotcha: delete the *contents*, not the DerivedData folder's parent; keep Xcode closed for the target project. Deleting also clears the index, so first reopen reindexes.",
+          "confidence": "high",
+          "sources": [
+            "https://www.cluttered.dev/blog/xcode-derived-data",
+            "https://dissectmac.com/blog/clean-xcode-derived-data",
+            "https://dev.to/nixeton/your-dev-tools-are-why-your-mac-is-full-heres-how-to-reclaim-50-100gb-3n8b"
+          ]
+        },
+        {
+          "point": "Xcode CoreSimulator runtimes + devices \u2014 large, SIP-protected, must use simctl",
+          "detail": "Paths: ~/Library/Developer/CoreSimulator/ (Devices/ = per-AVD data; Caches/ = downloadable runtime images; runtimes mounted under /Library/Developer/CoreSimulator/ are SIP-protected). Typical size: 20-150GB; each iOS runtime is ~5-8GB. Risk: SAFE for unavailable/duplicate devices; REVIEW for runtimes you still test against (re-download is multi-GB). Method: `xcrun simctl delete unavailable` (removes orphaned devices), list runtimes with `xcrun simctl runtime list`, delete with `xcrun simctl runtime delete <id>` or `xcrun simctl runtime delete --notUsedSinceDays N`; ~/Library/Developer/CoreSimulator/Caches can be rm -rf'd. Gotcha: do NOT rm -rf the runtime bundles directly \u2014 they are SIP/mount-protected and raw deletion fails; you MUST use simctl. Quit Simulator first.",
+          "confidence": "high",
+          "sources": [
+            "https://bysiber.github.io/cleardisk/blog/xcode-simulators-device-support-cleanup-mac.html",
+            "https://bleepingswift.com/blog/free-up-xcode-disk-space",
+            "https://dev.to/nixeton/your-dev-tools-are-why-your-mac-is-full-heres-how-to-reclaim-50-100gb-3n8b"
+          ]
+        },
+        {
+          "point": "Xcode iOS DeviceSupport \u2014 debug symbols per device/OS, mostly SAFE",
+          "detail": "Path: ~/Library/Developer/Xcode/iOS DeviceSupport/ (also watchOS/tvOS DeviceSupport siblings). Typical size: 10-40GB; one folder per (device, iOS build) pair, accumulates every time you connect a device on a new OS. Risk: SAFE for old iOS versions you no longer debug on real hardware; Xcode re-extracts symbols (slow, a few minutes) next time you attach that device/OS. Method: delete old version subfolders manually or rm -rf ~/Library/Developer/Xcode/iOS\\ DeviceSupport/*. Gotcha: keep the folder matching your current test device's exact OS build to avoid a long re-pair; safe to nuke everything if you can tolerate one slow re-attach.",
+          "confidence": "high",
+          "sources": [
+            "https://bysiber.github.io/cleardisk/blog/xcode-simulators-device-support-cleanup-mac.html",
+            "https://bleepingswift.com/blog/free-up-xcode-disk-space"
+          ]
+        },
+        {
+          "point": "Xcode Archives \u2014 RISKY, the one Xcode folder you should NOT blindly delete",
+          "detail": "Path: ~/Library/Developer/Xcode/Archives/ (dated subfolders of .xcarchive bundles). Typical size: 5-30GB. Risk: RISKY/REVIEW \u2014 .xcarchive bundles contain the dSYMs needed to symbolicate crash reports from shipped App Store builds; deleting them means you can never desymbolicate crashes for that release. Method: review in Xcode > Window > Organizer > Archives and delete only old/superseded builds; never script a blanket rm -rf. Gotcha: a cleanup tool must treat Archives differently from DerivedData \u2014 label REVIEW, surface build/version/date, and warn that dSYMs are irreplaceable if not uploaded elsewhere.",
+          "confidence": "high",
+          "sources": [
+            "https://bleepingswift.com/blog/free-up-xcode-disk-space",
+            "https://bysiber.github.io/cleardisk/blog/xcode-simulators-device-support-cleanup-mac.html"
+          ]
+        },
+        {
+          "point": "Docker.raw VM disk image \u2014 biggest gotcha on the whole list: prune does NOT shrink it",
+          "detail": "Path: ~/Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw (older builds used Docker.qcow2). Typical size: 20-200GB+; grows toward the configured 'Disk image size' (default ~64GB) and never auto-shrinks. Risk: REVIEW \u2014 contents (images/containers/volumes) regenerate, but volumes may hold the ONLY copy of local DB data. Method (logical reclaim, keeps the VM): `docker system prune` (stopped containers, dangling images, networks, build cache), `docker system prune -a` (all unused images), `docker system prune -a --volumes` (also unused volumes), `docker builder prune -a` (build cache). Check first with `docker system df -v` and `docker buildx du`. Method (physical reclaim of the .raw file): Docker Desktop > Settings > Resources > Disk image size, nudge the slider and Apply & Restart \u2014 this recreates a fresh empty .raw. Gotcha: prune frees space INSIDE the Linux VM but the host-side Docker.raw stays the same size; only resizing/recreating actually returns bytes to macOS, and that wipes ALL images/containers/volumes (including local databases). For Docker.raw, host space frees within seconds after resize; qcow2 frees via a background process after minutes.",
+          "confidence": "high",
+          "sources": [
+            "https://dissectmac.com/blog/shrink-docker-mac-disk",
+            "https://docs.docker.com/desktop/faqs/macfaqs/",
+            "https://bysiber.github.io/cleardisk/blog/docker-disk-space-cleanup-mac.html",
+            "https://gist.github.com/bysiber/c8e2ea5f670e4b49e0dc1cfcaf246053"
+          ]
+        },
+        {
+          "point": "node_modules sprawl \u2014 death by a thousand projects; npkill is the standard tool",
+          "detail": "Path: <every project>/node_modules/ (recursive; nested monorepo node_modules too). Typical size: 200-500MB per JS/React project, 5-50GB aggregate across a dev's repos. Risk: SAFE to delete in any project that has a lockfile (package-lock.json / yarn.lock / pnpm-lock.yaml) \u2014 reinstall reproduces it. Method: per-project `rm -rf node_modules` then reinstall; at scale use `npx npkill` (interactive TUI: scans from cwd, lists every node_modules with size, arrow+space/Del to wipe). Gotcha: a few installed *apps* ship a required node_modules \u2014 npkill flags these with a warning; never auto-delete node_modules that lacks an accompanying lockfile/package.json in its parent (could be a vendored runtime). Re-install needs network + time.",
+          "confidence": "high",
+          "sources": [
+            "https://github.com/voidcosmos/npkill",
+            "https://bysiber.github.io/cleardisk/blog/clean-node-modules-mac.html",
+            "https://dev.to/nixeton/nodemodules-is-why-your-mac-is-full-find-and-delete-all-of-them-jfk"
+          ]
+        },
+        {
+          "point": "npm / Yarn / pnpm / bun caches \u2014 global package caches, all SAFE",
+          "detail": "Paths: npm = ~/.npm/_cacache (and ~/.npm); Yarn Classic v1 = ~/Library/Caches/Yarn; Yarn Berry v2+ = ~/.yarn/berry/cache (or project .yarn/cache); pnpm content-addressable store = ~/Library/pnpm/store (older guides cite ~/.pnpm-store); bun = ~/.bun/install/cache. Typical size: 1-5GB each; combined with node_modules these caches reach 20-80GB. Risk: SAFE \u2014 all are redownloadable mirrors. Method: `npm cache clean --force` (force flag required); `yarn cache clean`; `pnpm store prune` (only removes store packages not referenced by ANY project \u2014 the safe, preferred approach); bun has NO built-in clean command as of early 2026, so `rm -rf ~/.bun/install/cache`. Gotcha: pnpm's store is hard-linked into projects \u2014 use `pnpm store prune`, not rm -rf, or you can break linked installs. Don't delete a project's local .yarn/cache if Yarn Berry zero-installs (committed cache) is in use.",
+          "confidence": "high",
+          "sources": [
+            "https://deepclean.app/blog/clear-npm-yarn-pnpm-cache-mac",
+            "https://freemac.space/en/blog/node-package-manager-cache-stores",
+            "https://bysiber.github.io/cleardisk/blog/npm-yarn-pnpm-cache-cleanup-mac.html"
+          ]
+        },
+        {
+          "point": "Android Studio: AVDs + SDK system images \u2014 can hit 100GB+, mixed risk",
+          "detail": "Paths: AVDs = ~/.android/avd/<name>.avd/ (userdata.img, system.img, sdcard etc.); SDK system images = ~/Library/Android/sdk/system-images/; SDK platforms/build-tools = ~/Library/Android/sdk/. Typical size: each AVD disk 6-20GB; each API system image 1.5-3GB; SDK overall 10-30GB; users report freeing 100GB+ combined with Xcode. Risk: REVIEW \u2014 deleting an AVD loses any app state/data inside it; system images re-download. Method (recommended): Android Studio > Tools > Device Manager (AVD Manager) > Delete emulator; SDK Manager > Show Package Details > untick unused System Images/platforms. Manual deletion of ~/.android/avd entries is safe only with Studio closed. Gotcha: do NOT wipe all of ~/.android \u2014 it can hold signing/debug keystores (~/.android/debug.keystore and release keys); back those up first. Wipe AVD user data via 'Wipe Data' instead of deleting the whole AVD if you just want space back.",
+          "confidence": "high",
+          "sources": [
+            "https://dissectmac.com/blog/android-emulator-cleanup",
+            "https://www.devsecopsnow.com/how-to-safely-free-disk-space-used-by-android-studio-sdk-and-emulator-latest-sdk-guide/",
+            "https://michd.me/jottings/android-clean-up-system-images/"
+          ]
+        },
+        {
+          "point": "Rust target/ dirs + ~/.cargo \u2014 per-project target is the hog; Cargo 1.88+ auto-GCs the global cache",
+          "detail": "Paths: per-project ./target/ (debug+release artifacts); global registry/cache = ~/.cargo/registry/ (cache/, src/, index/); git deps = ~/.cargo/git/. Typical size: target/ 1-20GB PER project (single biggest Rust hog); ~/.cargo registry 10-100GB aggregate if many crates. Risk: SAFE \u2014 everything regenerates; target rebuilds, registry re-downloads. Method: `cargo clean` inside each project (removes that target/); for global, install cargo-cache and run `cargo cache --autoclean`, or cargo-sweep to remove only artifacts unused for N days (`cargo sweep --time 30`). Gotcha: as of Rust 1.88 (2025) Cargo has automatic GC for its global cache, so manually nuking ~/.cargo/registry is rarely needed now \u2014 but per-project target/ dirs are NOT auto-cleaned and dominate Rust disk use; a tool should scan for target/ next to Carg.toml. Safe to rm -rf ~/.cargo/registry/cache and ~/.cargo/git/db (sources re-download).",
+          "confidence": "high",
+          "sources": [
+            "https://www.cluttered.dev/blog/rust-target-directory",
+            "https://bysiber.github.io/cleardisk/blog/rust-cargo-cache-cleanup-mac.html",
+            "https://heaths.dev/rust/2025/03/01/cleaning-up-rust.html",
+            "https://medium.com/@syntaxSavage/rusts-latest-release-just-cleaned-up-your-cargo-cache-automatically-e5f269fcefed"
+          ]
+        },
+        {
+          "point": "Go module cache + build cache \u2014 module cache is read-only (0444), so rm -rf errors; use go clean",
+          "detail": "Paths: module cache = ~/go/pkg/mod (override via $GOMODCACHE); build/test cache = ~/Library/Caches/go-build (override via $GOCACHE). Typical size: module cache 1-10GB+; build cache 1-5GB. Risk: SAFE \u2014 both regenerate. Method: `go clean -modcache` (wipes ~/go/pkg/mod), `go clean -cache` (wipes build cache). Gotcha: files in ~/go/pkg/mod are written read-only (mode 0444) on purpose, so a plain `rm -rf ~/go/pkg/mod` fails with 'permission denied' for many users \u2014 use `go clean -modcache` (or `chmod -R +w` first). A cleanup tool must special-case Go: invoke the toolchain, not raw delete.",
+          "confidence": "high",
+          "sources": [
+            "https://www.adityathebe.com/how-to-clean-go-build-cache/",
+            "https://github.com/golang/go/issues/27161",
+            "https://fig.io/manual/go/clean"
+          ]
+        },
+        {
+          "point": "Homebrew cache + old versions \u2014 auto-cleans every 30 days but cache still grows",
+          "detail": "Path: cache = ~/Library/Caches/Homebrew (and $(brew --cache)); old keg versions live under the Cellar (/opt/homebrew/Cellar on Apple Silicon, /usr/local/Cellar on Intel). Typical size: 2-10GB over months of installs/upgrades. Risk: SAFE \u2014 downloads are re-fetched, old versions are superseded. Method: `brew cleanup` (removes downloads + old versions >120 days), `brew cleanup --prune=all` (everything regardless of age), add `-s` to scrub even latest-version downloads, `brew cleanup -n` for dry-run; nuke download cache with `rm -rf $(brew --cache)/*`. Gotcha: since Homebrew 2.0 (2019) `brew cleanup` runs automatically every 30 days after upgrades, so it self-limits \u2014 but users who set HOMEBREW_NO_INSTALL_CLEANUP=1 accumulate indefinitely. `-s` forces re-download of current bottles next install.",
+          "confidence": "high",
+          "sources": [
+            "https://deepclean.app/blog/clean-homebrew-cache",
+            "https://mac.install.guide/homebrew/8",
+            "https://lucaberton.medium.com/a-guide-to-brew-cleanup-prune-all-keeping-your-homebrew-setup-lean-and-clean-00f65d724567"
+          ]
+        },
+        {
+          "point": "Python: conda envs (biggest), pip cache, venvs, pyenv, __pycache__",
+          "detail": "Paths: pip cache = ~/.cache/pip (older macOS guides also cite ~/Library/Caches/pip); conda pkg cache = ~/miniconda3/pkgs or ~/anaconda3/pkgs; conda envs = ~/miniconda3/envs/*; per-project venvs = ./venv or ./.venv; pyenv = ~/.pyenv/versions/*; bytecode = __pycache__/ + *.pyc everywhere. Typical size: forgotten conda envs 2-8GB EACH, pip cache 1-3GB, each venv 200MB-2GB, each pyenv version 50-200MB; 10-50GB+ aggregate. Risk: pip cache + __pycache__ = SAFE (regenerate). conda envs / venvs = REVIEW \u2014 they're the only copy of a resolved environment; recreating means a full reinstall (ML deps can take an hour). Method: `pip cache purge`; `conda clean --all` (dry-run first; removes only tarballs + unused extracted pkgs, does NOT touch any env's links \u2014 provably safe); delete dead venvs with rm -rf; remove __pycache__ with `find . -type d -name __pycache__ -exec rm -rf {} +`; pyenv `pyenv uninstall <ver>`. Tool: killpy (CLI) finds/deletes unused .venv/poetry/conda/pipenv/uv envs with size reporting. Gotcha: conda clean is safe (envs untouched), but DELETING an env folder is irreversible; flag envs REVIEW with last-used date.",
+          "confidence": "high",
+          "sources": [
+            "https://www.anaconda.com/blog/reclaim-disk-space-conda-clean",
+            "https://bysiber.github.io/cleardisk/blog/python-pip-cache-cleanup-mac.html",
+            "https://github.com/Tlaloc-Es/killpy",
+            "https://dev.to/nixeton/dont-let-conda-eat-your-hard-drive-python-environment-cleanup-for-mac-1oi8"
+          ]
+        },
+        {
+          "point": "Java/JVM: Gradle ~/.gradle, Maven ~/.m2, Ivy ~/.ivy2 \u2014 large, mostly SAFE",
+          "detail": "Paths: Gradle = ~/.gradle/caches/ (modules-2 deps, build-cache-*, transforms-*) + ~/.gradle/wrapper/dists/ (downloaded Gradle distros) + ~/.gradle/daemon/; Maven local repo = ~/.m2/repository/; Ivy = ~/.ivy2/cache/. Typical size: Gradle caches+wrapper+output 10-50GB; .m2 2-10GB; .ivy2 hundreds of MB-few GB. Risk: SAFE \u2014 all re-download/rebuild. Method: per-project `./gradlew clean` (build/ output); global `rm -rf ~/.gradle/caches/build-cache-*` and `rm -rf ~/.gradle/caches/transforms-*` (safest targeted), or rm -rf ~/.gradle/caches and ~/.gradle/wrapper to go aggressive; `rm -rf ~/.m2/repository`; `rm -rf ~/.ivy2/cache`. Gotcha: Gradle 8+ auto-evicts cache entries unused >30 days \u2014 but only for the CURRENT Gradle version; caches from older Gradle versions and old wrapper dists pile up forever, so wrapper/dists is worth scanning. ~/.m2 is shared by Gradle AND Maven; only nuke it if you don't rely on Maven offline. Deleting forces a full re-resolve on next build (network + time).",
+          "confidence": "high",
+          "sources": [
+            "https://bysiber.github.io/cleardisk/blog/gradle-cache-cleanup-mac.html",
+            "https://code2care.org/gradle/clear-gradle-cache-on-mac/",
+            "https://docs.cloudbees.com/d/kb-360055200412",
+            "https://callmeryan.medium.com/unveiling-the-gradle-secret-why-manual-cache-cleanup-isnt-always-necessary-be6460afb619"
+          ]
+        },
+        {
+          "point": "Apple dependency managers: CocoaPods, Carthage, SwiftPM \u2014 all SAFE caches",
+          "detail": "Paths: CocoaPods download cache = ~/Library/Caches/CocoaPods (+ ~/.cocoapods/repos spec mirror, can be large); per-project Pods/; Carthage = per-project Carthage/Build and Carthage/Checkouts; SwiftPM global cache = ~/Library/Caches/org.swift.swiftpm/ + per-project .build/. Typical size: combined 1-10GB depending on project count; SwiftPM cache 3-8GB. Risk: SAFE \u2014 every one is a mirror/build that regenerates. Method: CocoaPods `pod cache clean --all` (or per-pod `pod cache clean AFNetworking`); list with `pod cache list`; or rm -rf ~/Library/Caches/CocoaPods. Carthage: delete Carthage/Build + Carthage/Checkouts, rebuild with `carthage bootstrap`. SwiftPM: rm -rf ~/Library/Caches/org.swift.swiftpm and per-project .build/, restore with `swift package resolve`. Gotcha: per-project Pods/ and .build/ are regenerable but require re-running pod install / resolve (network); fine to delete, just costs rebuild time.",
+          "confidence": "high",
+          "sources": [
+            "https://bysiber.github.io/cleardisk/blog/cocoapods-cache-cleanup-mac.html",
+            "https://dev.to/nixeton/how-to-clean-up-xcode-and-free-30-50gb-on-your-mac-3ogh",
+            "https://docs.fastlane.tools/actions/clean_cocoapods_cache/"
+          ]
+        },
+        {
+          "point": "LLM model caches: HuggingFace + Ollama \u2014 huge, REVIEW (slow/large re-download)",
+          "detail": "Paths: HuggingFace hub = ~/.cache/huggingface/hub (override via HF_HUB_CACHE; whole HF tree via HF_HOME), older torch/transformers at ~/.cache/torch/transformers; Ollama models = ~/.ollama/models. Typical size: Ollama 5-15GB+ (each model 1-40GB+); HF hub can be tens of GB with multiple models/datasets. Risk: REVIEW \u2014 models regenerate only via large, slow re-downloads (often many GB over the network); not 'safe' in the convenience sense. Method: Ollama \u2014 `ollama list` to see sizes, `ollama rm <model>` to remove specific models (preferred over rm -rf so the manifest stays consistent), or du -sh ~/.ollama/models/* to triage. HuggingFace \u2014 `huggingface-cli delete-cache` (interactive TUI) or `pip install huggingface_hub[cli]` then `huggingface-cli scan-cache`; manual rm -rf of ~/.cache/huggingface/hub blobs. Gotcha: these are the most expensive to re-acquire of any cache here \u2014 a cleanup product should size-rank them, show last-access, and warn about re-download cost rather than treating them like a disposable build cache.",
+          "confidence": "high",
+          "sources": [
+            "https://docs.ollama.com/macos",
+            "https://carmelyne.com/the-ultimate-guide-move-ollama-model-storage-to-an-external-drive-on-macos-m1-m2-friendly/",
+            "https://huggingface.co/docs/datasets/cache",
+            "https://discuss.huggingface.co/t/how-do-i-change-the-cache-default-folder-for-hub/111034"
+          ]
+        },
+        {
+          "point": "Version-manager runtimes: nvm, asdf, pyenv, rbenv \u2014 many old versions accumulate",
+          "detail": "Paths: nvm = ~/.nvm/versions/node/*; asdf = ~/.asdf/installs/<tool>/<version>/ (+ ~/.asdf/downloads); pyenv = ~/.pyenv/versions/*; rbenv = ~/.rbenv/versions/* (gems live inside each version). Typical size: each Node version 80-200MB, each pyenv Python 50-200MB; a single ~/.rbenv/versions can reach 40GB from accumulated gems across versions. Risk: REVIEW \u2014 removing a runtime deletes everything built against it (global npm tools, gems); fine if unused. Method: nvm \u2014 `nvm uninstall <ver>`, or keep only current: `cd ~/.nvm/versions/node; ls -A | grep -v $(nvm current) | xargs rm -rf`; asdf \u2014 `asdf uninstall <tool> <version>`; pyenv \u2014 `pyenv uninstall <ver>`; rbenv \u2014 `rbenv uninstall <ver>` (also run `gem cleanup` per version to drop old gem versions). Gotcha: don't delete the version another project's .nvmrc/.tool-versions/.python-version/.ruby-version pins \u2014 that silently breaks those repos. Prefer the manager's uninstall over rm -rf so shims/symlinks stay consistent.",
+          "confidence": "high",
+          "sources": [
+            "https://dev.to/radomirperisic/how-to-clean-your-dev-junk-and-free-space-2a18",
+            "https://dtech.vision/guides/cleannodemodulesnvmandnpm/",
+            "https://ulysse.md/2022/02/01/Cleanup-Your-Ruby-Versions.html",
+            "https://mac.install.guide/faq/uninstall-asdf/"
+          ]
+        },
+        {
+          "point": "Ruby gems \u2014 gem cleanup removes superseded versions; rbenv versions multiply them",
+          "detail": "Paths: system/user gems = ~/.gem and the gems dir of each Ruby (e.g. ~/.rbenv/versions/<v>/lib/ruby/gems/...); Bundler installs may add vendor/bundle per project. Typical size: 10GB+ reclaimable across versions; a single rbenv versions tree can reach 40GB largely from gems. Risk: SAFE for old gem versions (`gem cleanup` keeps the newest of each); REVIEW for removing a whole Ruby version. Method: `gem cleanup` (removes old versions of all gems), `gem cleanup rails` (one gem), `gem cleanup --dry-run` to preview; loop `gem cleanup` across each rbenv-managed Ruby for a full sweep. Gotcha: never use sudo with rbenv (it manages permissions itself); `gem cleanup` keeps the latest version so it won't break current projects, but if a project's Gemfile.lock pins an OLD version, cleanup can remove it and force a bundle install.",
+          "confidence": "high",
+          "sources": [
+            "https://copyprogramming.com/howto/how-to-clean-up-or-remove-gems",
+            "https://ulysse.md/2022/02/01/Cleanup-Your-Ruby-Versions.html",
+            "https://philna.sh/blog/2018/05/27/spring-clean-your-dev-machine/"
+          ]
+        },
+        {
+          "point": "IDE caches & logs: VS Code / Cursor / JetBrains \u2014 old versions never cleaned",
+          "detail": "Paths: VS Code = ~/Library/Application Support/Code (Cache, CachedData, CachedExtensionVSIXs, logs, Service Worker) + ~/Library/Caches/com.microsoft.VSCode; Cursor mirrors this under .../Cursor; JetBrains caches = ~/Library/Caches/JetBrains/<Product><version>, logs = ~/Library/Logs/JetBrains, config/plugins under ~/Library/Application Support/JetBrains. Typical size: 5-30GB+ aggregate; 2-5GB per IDE, and each IDE *version* makes its own never-pruned folder. Risk: SAFE \u2014 caches/logs regenerate. Method: quit the app, then delete the Caches and Logs dirs (NOT the settings under Application Support if you want to keep config). JetBrains has built-in Help > Delete Leftover IDE Directories (auto-removes dirs untouched >180 days); Toolbox can auto-delete previous versions. Gotcha: keep ~/Library/Application Support/<IDE>/User (VS Code settings/keybindings/snippets) and JetBrains config \u2014 deleting those loses your setup; only Caches + Logs are throwaway.",
+          "confidence": "high",
+          "sources": [
+            "https://bysiber.github.io/cleardisk/blog/ide-cache-cleanup-mac.html",
+            "https://www.jetbrains.com/guide/go/tips/cleanup-unused-ide-directories/",
+            "https://code-cleaner.com/cursor-vscode-jetbrains-cache-cleaner-mac"
+          ]
+        },
+        {
+          "point": "~/Library/Developer in general \u2014 the umbrella for most Apple dev bloat",
+          "detail": "Path: ~/Library/Developer/ contains Xcode/ (DerivedData, Archives, iOS DeviceSupport, Products, UserData), CoreSimulator/ (devices + caches), XCTestDevices/, XCPGDevices/, Xcode/Products, and Shared/. Typical size: routinely 50-150GB on an active iOS dev machine \u2014 it is usually the #1 'System Data' culprit. Risk: MIXED \u2014 DerivedData/DeviceSupport/Caches SAFE, Archives RISKY (dSYMs), CoreSimulator runtimes need simctl. Method: treat per subfolder (see Xcode findings above); never rm -rf the whole ~/Library/Developer in one shot. Gotcha: a scanner should descend into ~/Library/Developer and classify each child by tier rather than reporting one giant number \u2014 the folder mixes throwaway caches with irreplaceable Archives.",
+          "confidence": "high",
+          "sources": [
+            "https://bleepingswift.com/blog/free-up-xcode-disk-space",
+            "https://www.swiftyplace.com/blog/how-to-clean-xcode-on-your-mac",
+            "https://medium.com/@iestebanvega1/how-i-freed-168-gb-of-system-data-on-my-mac-by-cleaning-android-studio-and-xcode-from-257-gb-80a3276d29ef"
+          ]
+        },
+        {
+          "point": ".DS_Store & log sprawl \u2014 tiny each, huge in count; SAFE",
+          "detail": "Paths: .DS_Store files in virtually every directory the Finder has visited; dev logs scattered across ~/Library/Logs, project-level *.log, npm/yarn debug logs in ~/.npm/_logs, CocoaPods/Xcode logs, etc. Typical size: each .DS_Store is a few KB but counts run into the tens of thousands; logs add up to hundreds of MB-GBs over time. Risk: SAFE \u2014 Finder regenerates .DS_Store; logs are diagnostic only. Method: `find . -name '.DS_Store' -type f -delete` (scope to a tree, or run from ~ for a full sweep); clear stale npm logs with `rm -rf ~/.npm/_logs/*`; truncate/delete old files in ~/Library/Logs. Gotcha: .DS_Store deletion is harmless but cosmetic-resetting (Finder window positions/icon arrangement reset); the real win is reducing inode/file-count noise and keeping them out of git (add to global gitignore). Don't recursively delete from / with sudo.",
+          "confidence": "high",
+          "sources": [
+            "https://macpaw.com/how-to/remove-ds-store-files-on-mac",
+            "https://mkyong.com/mac/how-to-delete-ds_store-files-on-macos/",
+            "https://philna.sh/blog/2018/05/27/spring-clean-your-dev-machine/"
+          ]
+        }
+      ],
+      "recommendations": [
+        "Build the cleanup tool around a three-tier safety model and surface it per item: SAFE = regenerates locally with no network or trivial re-download (DerivedData, build/target caches, npm/pip/Homebrew/Gradle caches, __pycache__, .DS_Store); REVIEW = regenerates but expensively or holds the only local copy (Docker volumes, conda envs, AVD userdata, LLM models, simulator runtimes still in use); RISKY = irreplaceable (Xcode Archives/dSYMs, signing keystores under ~/.android, the only copy of unpushed data). Default-select only SAFE; require explicit confirmation for REVIEW/RISKY.",
+        "Never use a blanket `rm -rf` engine. Several targets reject or break under raw deletion: CoreSimulator runtimes are SIP/mount-protected (use `xcrun simctl runtime delete` / `xcrun simctl delete unavailable`), the Go module cache is mode-0444 read-only (use `go clean -modcache`), pnpm's store is hard-linked into projects (use `pnpm store prune`), and Ollama models should go via `ollama rm` to keep manifests consistent. Map each category to its correct tool command and fall back to rm -rf only for plain caches.",
+        "Make the Docker.raw distinction a first-class UX moment: after running `docker system prune -a --volumes` show that host disk did NOT change and explain that only resizing the Disk image size (Settings > Resources) recreates the .raw and returns bytes to macOS \u2014 and that doing so destroys all images/containers/volumes. This is the single most common source of 'I cleaned Docker but my disk is still full' confusion.",
+        "Prioritize the scanner by expected payoff: descend ~/Library/Developer (Xcode + CoreSimulator), the Docker VM disk, ~/.android + ~/Library/Android, then recursively hunt per-project artifacts that dwarf global caches \u2014 node_modules, Rust target/, Gradle build/, Python .venv, Swift .build, Pods/. Pair each found artifact with its sibling lockfile/manifest to confirm it is regenerable before offering to delete.",
+        "Account for 2025-2026 auto-cleanup so you don't double-warn on self-limiting caches: Cargo 1.88+ auto-GCs ~/.cargo, Gradle 8+ evicts entries unused >30 days (current version only), Homebrew runs cleanup every 30 days, JetBrains can auto-delete dirs unused >180 days. Focus manual-cleanup messaging on the things that genuinely never self-prune: per-project target/build dirs, old version-manager runtimes, Xcode DeviceSupport/Archives, Docker.raw, and old Gradle wrapper distributions.",
+        "For LLM model caches and version-manager runtimes, show last-access time and re-acquisition cost (download size / rebuild time), not just on-disk size \u2014 these are the items users most regret deleting. Offer 'keep current + N most-recent' presets for nvm/asdf/pyenv/rbenv and 'keep models used in last 30 days' for Ollama/HuggingFace."
+      ]
+    },
+    "safety": {
+      "angle": "Data-safety and trust engineering for a macOS cleaner: documented harm cases, \"looks-like-junk-but-isn't\" categories with exact paths, delete UX, why one-click is dangerous, how reputable tools mitigate, APFS/dataless gotchas, and concrete DO/DON'T product rules.",
+      "summary": "Mac cleaners cause harm in three repeatable ways: (1) deleting user data that masquerades as junk (Photos originals/derivatives, Mail \"Downloads\" cache misidentified as the originals, MobileSync iOS backups, sandbox containers, license/activation caches, Xcode archive dSYMs), (2) deleting things that are technically \"regenerable\" but expensive or destructive to lose (auth tokens, app databases under Application Support/Containers), and (3) misreading APFS so the tool fights the OS \u2014 counting purgeable space / local Time Machine snapshots as \"reclaimable,\" failing to free space because a snapshot still references deleted files, and worst of all materializing (force-downloading) iCloud \"dataless\" placeholder files just by scanning them, which can silently consume gigabytes and even create an unrecoverable storage-debt state. The documented industry mitigations are a curated safety/exception database, per-OS/per-app rules, an ignore/exclusion list, defaulting risky categories OFF, never touching /System or /Library, routing deletions to Trash (not shred) by default, and not enumerating cloud-evicted files. A trustworthy cleaner must be conservative-by-default, scan without materializing, present severity tiers with a dry-run preview, route to Trash with undo, and exclude data stores by construction rather than by guesswork. Note CleanMyMac's Photo Junk is macOS 10.14-and-earlier only, so on modern macOS a cleaner should not touch the Photos library at all.",
+      "findings": [
+        {
+          "point": "Documented case: a cleaner deleted Photos Library originals and broke the library structure, requiring a full restore from backup",
+          "detail": "Apple Community reports describe CleanMyMac removing photo originals so Photos could no longer find them, breaking the non-destructive edit workflow (cannot 'revert to original'). Because the cleaner altered the library's internal package structure (e.g. removing originals and leaving edited derivatives), users could NOT simply drop missing image files back in \u2014 the only fix was restoring the entire .photoslibrary from a Time Machine backup. Apple explicitly warns that third-party apps offering to 'optimize' the Photos library will damage it: there is no supported way to purge previews/originals inside the library without corruption. Modern macOS (Catalina 10.15+) changed Photos internals; CleanMyMac's own 'Photo Junk' feature is documented as requiring macOS 10.14 or earlier, meaning on current macOS a cleaner has no safe in-library cleanup path at all. Product rule: never write to or delete inside *.photoslibrary; treat the entire package as opaque user data.",
+          "confidence": "high",
+          "sources": [
+            "https://discussions.apple.com/thread/8411740",
+            "https://discussions.apple.com/thread/253362438",
+            "https://discussions.apple.com/thread/8577003",
+            "https://macpaw.com/support/cleanmymac-x/knowledgebase/photo-junk"
+          ]
+        },
+        {
+          "point": "The 'derivatives' folder inside a Photos library is NOT free junk \u2014 deleting it cripples Photos",
+          "detail": "The derivatives folder (inside the Photos library package, formerly ~/Pictures/Photos Library.photoslibrary/resources/derivatives) holds the rendered thumbnails/previews for every photo. Deleting it forces Photos to regenerate everything, slowing the app dramatically or preventing it from working until rebuilt \u2014 and rebuilding is not free. A naive 'large folder of image-ish files' heuristic will flag this as junk. The only genuinely-safe Photos-adjacent cache historically was the iPod/Apple-TV Photo Cache and ~/Library/Containers/com.apple.cloudphotosd (a true cache separate from the library), and newer macOS often lacks even those. Rule: a folder being large and full of regenerable assets does NOT make it safe if regeneration degrades the app.",
+          "confidence": "high",
+          "sources": [
+            "https://discussions.apple.com/thread/8577003",
+            "https://www.macworld.com/article/228978/how-to-troubleshoot-a-swollen-photos-cache-folder.html"
+          ]
+        },
+        {
+          "point": "Mail 'Downloads' cache is safe, but the surrounding Mail data store is NOT \u2014 and the two are easy to confuse",
+          "detail": "Exact path of the safe-to-clear cache: ~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads. This holds throwaway copies created automatically when you double-click/Quick Look/right-click an attachment; deleting them does not remove the attachment from the actual email, and explicitly-saved attachments (File > Save Attachments) go elsewhere and are untouched. HOWEVER, the rest of the Mail container (the V-numbered Mail data, Envelope Index, the actual .emlx message bodies and attachments) is the live mail store; deleting it loses locally-cached mail and can force a full re-download or break Mail. A cleaner must whitelist ONLY the 'Mail Downloads' subpath, never the parent com.apple.mail container.",
+          "confidence": "high",
+          "sources": [
+            "https://www.macworld.com/article/223306/solving-the-mysteries-of-the-mail-downloads-folder.html",
+            "https://talk.tidbits.com/t/dont-let-mail-attachments-accumulate-and-waste-space/20865"
+          ]
+        },
+        {
+          "point": "MobileSync iOS device backups look like opaque junk but are irreplaceable user data",
+          "detail": "Path: ~/Library/Application Support/MobileSync/Backup/. These are local iPhone/iPad backups (often tens of GB), named by UDID hash (older ones suffixed with date), so in Finder they look like meaningless gibberish folders \u2014 exactly what a junk heuristic targets. They contain the only local copy of anything on the device not synced to iCloud or re-downloadable from the App Store; deleting them = permanent loss of that backup. Because MobileSync lives UNDER Application Support, a 'clean Application Support leftovers' feature is especially dangerous here. Rule: hard-exclude MobileSync/Backup; if surfaced at all, label it as 'iOS device backup', show device name + date, default OFF, and require explicit confirmation.",
+          "confidence": "high",
+          "sources": [
+            "https://www.macworld.com/article/232101/how-to-free-up-storage-by-deleting-itunes-backups-of-ios-devices.html",
+            "https://discussions.apple.com/thread/8040253",
+            "https://www.drbuho.com/wiki/application-support-folder-mac"
+          ]
+        },
+        {
+          "point": "~/Library/Application Support and ~/Library/Containers hold live app databases, not 'leftovers' \u2014 deleting them corrupts or guts apps",
+          "detail": "Application Support and the sandbox Containers/Group Containers folders store app databases, registration/license info, configuration, and primary user documents for sandboxed apps \u2014 not just cache. Deleting an app's Application Support subfolder while the app is still installed can corrupt it or prevent launch. Deleting a sandbox container ( ~/Library/Containers/<bundle id> ) removes user data, preferences, and documents the app relies on, causing data loss, crashes, or a reset-to-first-launch state. These are only safe to remove AFTER the parent app is uninstalled (the 'leftover removal' use case). Rule: never auto-delete anything under Application Support/Containers for an app that is still installed; tie removal to an uninstall flow, and treat sqlite/realm/leveldb/core-data stores as user data regardless of folder name.",
+          "confidence": "high",
+          "sources": [
+            "https://macpaw.com/how-to/delete-application-leftovers",
+            "https://iboysoft.com/wiki/application-support-folder-mac.html",
+            "https://appleinsider.com/inside/macos/tips/how-to-save-disk-space-in-macos-by-clearing-containers-folders"
+          ]
+        },
+        {
+          "point": "Deleting 'caches' can wipe license/activation state and auth tokens \u2014 technically regenerable, practically harmful",
+          "detail": "Adobe license info (e.g. cache.db and licensing data under /Library/Application Support/Adobe/) is sometimes stored cache-adjacent; clearing it drops the app back to trial mode and forces re-sign-in/re-entry of serials across Creative Cloud apps. Similarly, clearing an app's cache often deletes auth tokens: clearing Spotify's cache logs you out, and deleting the whole Spotify folder removes authentication tokens, forcing full re-login and breaking linked devices (Sonos, cars, speakers). The lesson: 'regenerable' is not the same as 'free to delete' \u2014 login state, license tokens, and device-link state are technically rebuildable but cost the user real friction or money. Rule: distinguish 'pure regenerable cache' (thumbnails, compiled shaders) from 'state caches' (tokens, licenses, sessions) and never lump them together; default state-bearing items OFF.",
+          "confidence": "high",
+          "sources": [
+            "https://helpx.adobe.com/download-install/kb/issue-deleting-license-info.html",
+            "https://leereid.wordpress.com/2013/02/13/everything-about-adobes-cache-db-well-not-quite/",
+            "https://setapp.com/how-to/clear-spotify-cache-on-mac",
+            "https://macpaw.com/how-to/clear-spotify-cache-mac"
+          ]
+        },
+        {
+          "point": "Xcode Archives contain the dSYMs needed to symbolicate shipped-app crash reports \u2014 deleting them is irreversible",
+          "detail": "DerivedData (~/Library/Developer/Xcode/DerivedData) is genuinely safe to delete: it is build output/index that fully regenerates (cost = one rebuild, 5\u201330 min). Archives (~/Library/Developer/Xcode/Archives) are different: each .xcarchive bundles the dSYM debug symbols for a build you shipped. If you delete the archive for a version live on TestFlight/App Store, you lose the ability to symbolicate incoming crash reports for that version, and archives CANNOT be regenerated for an already-shipped binary. A cleaner that lumps 'Xcode junk' together will silently destroy shipping infrastructure. Rule: treat DerivedData as safe-cache, but treat Archives as user data \u2014 never auto-select; if surfaced, warn about dSYM/crash-symbolication loss and default OFF.",
+          "confidence": "high",
+          "sources": [
+            "https://dev.to/nixeton/how-to-clean-up-xcode-and-free-30-50gb-on-your-mac-3ogh",
+            "https://www.cluttered.dev/blog/xcode-derived-data",
+            "https://www.skoumal.com/en/how-to-manually-symbolicate-crash-on-apple-platforms/"
+          ]
+        },
+        {
+          "point": "APFS purgeable space and local Time Machine snapshots are NOT reclaimable junk a cleaner should grab \u2014 macOS manages them automatically",
+          "detail": "On APFS, the large 'System'/'Other' segment in storage views is mostly purgeable space \u2014 primarily local Time Machine snapshots, which are change-catalogs (copy-on-write) not real copies. macOS auto-purges them when older than ~24h, when they grow too big, or when an app needs space. A cleaner that manually deletes snapshots fights the OS and can destroy a user's only recent local recovery point (snapshots are what let you undo bad changes). Crucially, this also explains a trust-destroying bug: after the cleaner deletes files, free space does NOT increase, because an existing snapshot still references the deleted blocks \u2014 users then think the cleaner did nothing (or lost their files). Rule: report purgeable/snapshot space transparently but never auto-delete snapshots; account for snapshots when claiming space freed, and never promise instant free-space gains.",
+          "confidence": "high",
+          "sources": [
+            "https://daisydiskapp.com/guide/4/en/Snapshots/",
+            "https://support.apple.com/en-us/102154",
+            "https://macpaw.com/how-to/purgeable-space-on-macos",
+            "https://mjtsai.com/blog/2024/03/19/clearing-space-on-your-mac/"
+          ]
+        },
+        {
+          "point": "Scanning iCloud 'dataless' placeholder files can force-download (materialize) them \u2014 silently consuming GB and risking unrecoverable storage debt",
+          "detail": "With iCloud Drive + 'Optimize Mac Storage', files are evicted to dataless placeholders: metadata-only stubs whose content lives only in iCloud. Per Apple's TN3150, ordinary access \u2014 stat() and getattrlist() \u2014 materializes intermediate folders, and naively requesting full attribute sets via getattrlistbulk() (or globbing with **) triggers downloads of every file just by enumerating. The dangers for a cleaner that scans the whole disk: (a) it silently downloads gigabytes of the user's cloud data, filling the disk it was meant to clean; (b) evicted files are not locally backed up by Time Machine/Spotlight, so mistaking a stub for a deletable cache loses the only-in-cloud copy; (c) worst case, if total cloud data exceeds free space, mass materialization creates a state that 'turning Optimize back off won't fix' \u2014 an unrecoverable storage-debt scenario. Rule: detect dataless files before reading them \u2014 check NSURLUbiquitousItemDownloadingStatusKey / isUbiquitousItemKey, request only minimal attributes in getattrlistbulk so unhydrated files stay unhydrated (they report size 0 and remain dataless), skip FileProvider/iCloud-managed locations, and NEVER open or hash a file's content during a scan.",
+          "confidence": "high",
+          "sources": [
+            "https://developer.apple.com/documentation/technotes/tn3150-getting-ready-for-data-less-files",
+            "https://mjtsai.com/blog/2023/05/11/getting-ready-for-dataless-files/",
+            "https://eclecticlight.co/2024/03/11/icloud-drive-in-sonoma-optimise-mac-storage-or-not/",
+            "https://developer.apple.com/forums/thread/756129",
+            "https://github.com/fish-shell/fish-shell/issues/8399"
+          ]
+        },
+        {
+          "point": "Trash vs permanent delete: route deletions to Trash by default; shred/secure-erase is for a narrow, explicit use case and is largely meaningless on SSDs",
+          "detail": "Moving to Trash only removes an access point \u2014 data is recoverable until Trash is emptied (and items auto-purge after 30 days), which gives users a real undo. Permanent/shred bypasses Trash; 'Secure Shred' additionally overwrites (1-pass / 7-pass DoD / 35-pass Gutmann) so files are unrecoverable. Two product implications: (1) a cleaner should default ALL removals to Trash so mistakes are reversible, reserving permanent/secure delete for an explicit, clearly-labeled privacy action the user opts into; (2) secure-overwrite on SSDs is essentially ineffective \u2014 wear-leveling writes the 'overwrite' to a new block, leaving the original recoverable \u2014 so don't advertise multi-pass shredding as a guarantee on modern Macs, and don't waste write cycles. Rule: Trash-by-default + visible undo; treat 'permanent' as a separate, confirmed, well-explained mode.",
+          "confidence": "high",
+          "sources": [
+            "https://macpaw.com/support/cleanmymac-x/knowledgebase/shredder",
+            "https://macpaw.com/how-to/secure-erase-files-on-macos",
+            "https://www.reed.edu/it/help/mac-secure-erase.html"
+          ]
+        },
+        {
+          "point": "Why 'one-click clean everything' is dangerous and largely unnecessary on modern macOS",
+          "detail": "One-click cleaners aggregate many heuristics and execute them without item-level review, so a single false positive (a misidentified cache, a Photos derivative, a license token) is deleted with everything else and the user never sees it coming \u2014 and review-then-clean is exactly the safety valve that prevents this. Critics note macOS already self-manages most of what cleaners target: APFS has immutable system volumes (since Catalina), automatic purgeable-space/cache eviction, and sandboxing that blocks user-space apps from touching core system dirs \u2014 so aggressive cleaning offers little real gain while adding risk. Many 'junk' detectors also inflate findings (reports of cleaners flagging 1000+ 'issues' on healthy Macs; analyses finding the bulk of flagged items were system-protected, app runtime assets, or already auto-cleaned), which both erodes trust and pressures users into destructive bulk actions. Rule: no blind one-click delete \u2014 scan is one-click, cleaning requires review (or at minimum, only the conservative tier auto-runs).",
+          "confidence": "medium",
+          "sources": [
+            "https://lifetips.alibaba.com/tech-efficiency/ccleaner-clears-crap-from-your-mac-in-one-click",
+            "https://discussions.apple.com/thread/255249088",
+            "https://discussions.apple.com/thread/256214797"
+          ]
+        },
+        {
+          "point": "How reputable tools mitigate: curated safety database, per-OS/per-app exception rules, hard-protected paths, ignore lists, and risky categories OFF by default",
+          "detail": "CleanMyMac's documented safety model is the reference pattern: (1) a continuously-updated Safety Database of cleaning rules + exceptions tailored to specific macOS versions and specific apps, so removal decisions are rule-driven not heuristic-guessed; (2) hard-protected locations it refuses to enter or delete \u2014 it won't touch /Library or /System/Library, and it blocks dropping critical folders (e.g. Documents) into the Shredder even if the user tries; (3) by default it only offers automatically-generated system/app data and removes no personal files unless the user explicitly chooses; (4) user-extensible Ignore Lists per module (System Junk, Mail Attachments, Uninstaller, Duplicates, etc.) so users can permanently exclude paths; (5) risky categories (e.g. local iCloud photo copies) are NOT selected by default and are labeled with the consequence ('you'll need internet to view these again'). For pricing/positioning context (2025): CleanMyMac Basic 1-Mac ~$9.95/mo, ~$47.50/yr, ~$119.95 one-time; Plus 1-Mac ~$15.95/mo, ~$71.40/yr, ~$195.95 one-time. Rule: ship a maintained allowlist/denylist keyed by OS version + bundle ID, hard-exclude system trees, default-OFF anything that needs network or loses state, and make exclusions user-editable and sticky.",
+          "confidence": "high",
+          "sources": [
+            "https://macpaw.com/support/cleanmymac/knowledgebase/cleanmymac-safety",
+            "https://macpaw.com/support/cleanmymac-x/knowledgebase/safety-database",
+            "https://macpaw.com/support/cleanmymac-x/knowledgebase/photo-junk",
+            "https://macpaw.com/cleanmymac"
+          ]
+        }
+      ],
+      "recommendations": [
+        "DO scan read-only and metadata-only: enumerate with getattrlistbulk requesting MINIMAL attributes, never open/read/hash file content during a scan, and check NSURLUbiquitousItemDownloadingStatusKey / isUbiquitousItemKey first so iCloud dataless files stay unhydrated. DON'T let a scan materialize cloud files or walk FileProvider/iCloud-managed paths.",
+        "DO maintain a curated, versioned safety database keyed by macOS version + app bundle ID (allowlist of known-safe cache paths, denylist of data stores). DON'T classify by heuristics like 'large folder of regenerable-looking files' or 'gibberish folder names' \u2014 that is exactly how MobileSync backups and Photos derivatives get destroyed.",
+        "DON'T ever touch: /System, /System/Library, /Library, the entire *.photoslibrary package (originals AND derivatives), ~/Library/Application Support/MobileSync/Backup, ~/Library/Developer/Xcode/Archives (dSYMs), or any sqlite/realm/leveldb/core-data store. DO hard-exclude these by construction, not by user vigilance.",
+        "DO only clean a known cache SUBPATH, never its parent: e.g. allow ~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads but never the parent com.apple.mail container; allow DerivedData but never Archives.",
+        "DON'T delete app data for an installed app. DO gate Application Support / Containers / Group Containers removal behind an explicit uninstall flow, and only remove leftovers for apps that are already gone.",
+        "DO separate 'pure regenerable cache' (thumbnails, shader caches, DerivedData) from 'state caches' (auth tokens, license/activation files, sessions) and default the state-bearing ones OFF with a plain-language consequence ('you will be signed out / need to re-enter your license').",
+        "DON'T do blind one-click delete. DO make Scan one-click but require a reviewable, item-level dry-run preview before any deletion; show exactly which paths, sizes, and the consequence per item.",
+        "DO present severity tiers: a conservative default tier (truly disposable caches/logs/trash) vs. an advanced tier that is opt-in, per-item, and consequence-labeled. DON'T let bulk 'select all' silently include advanced/risky items.",
+        "DO route every deletion to the Trash by default with a working Undo, and account for the 30-day Trash window. DON'T permanently delete or 'shred' by default; make secure-erase a separate, explicitly-confirmed mode, and don't advertise multi-pass overwrite as a guarantee on SSDs (wear-leveling defeats it).",
+        "DO give users a persistent, editable Ignore/Exclusion list per category, and never re-surface an excluded path. DON'T reset exclusions on update.",
+        "DON'T touch APFS purgeable space or local Time Machine snapshots \u2014 macOS auto-manages them and they are the user's local undo. DO surface them read-only as 'managed by macOS'.",
+        "DO account for snapshots/copy-on-write when reporting 'space freed': verify actual free-space delta and never promise instant gains, because a snapshot can still reference just-deleted blocks. DON'T claim X GB recovered if the blocks are still referenced.",
+        "DO require Full Disk Access transparently and explain why, log every action to an auditable, exportable history, and provide a one-click 'restore from Trash' for the last operation. DON'T act on paths the user can't see or review."
+      ]
+    },
+    "macosTech": {
+      "angle": "Technical feasibility and recommended architecture for a native SwiftUI macOS disk cleaner distributed outside the Mac App Store (Developer ID + notarized), covering disk-usage measurement, APFS purgeable/snapshot accounting, TCC/Full Disk Access, sandbox tradeoffs, safe delete, node_modules scanning, running shell tools, security-scoped bookmarks, and SMAppService helpers.",
+      "summary": "A full-disk cleaner CANNOT be App-Sandboxed and still do its job \u2014 this is the single most important architectural fact, and it dictates everything else. Ship as a non-sandboxed, Developer ID-signed, Hardened-Runtime, notarized app, and request Full Disk Access (TCC service kTCCServiceSystemPolicyAllFiles) which the sandbox would otherwise block. CleanMyMac itself ships the full-featured product outside the App Store for exactly this reason; its App Store build is feature-limited by the sandbox. For fast scanning, FileManager's URL enumerator with prefetched resource keys is the pragmatic high-performance choice (Foundation has heavily optimized the layer beneath it), while the genuinely fastest approach is the getattrlistbulk syscall with a work-stealing thread pool (~6.4x faster than du). Report \"real\" free space via volumeAvailableCapacityForImportantUsageKey (which accounts for purgeable space), not raw statfs/df. Delete via FileManager.trashItem(at:resultingItemURL:) \u2014 never removeItem. Run docker/brew via Process with absolute paths, never a shell string. Use SMAppService only if you need root operations. Detecting FDA has no official API \u2014 you must attempt to read a known protected file and check for EPERM/EACCES.",
+      "findings": [
+        {
+          "point": "A full-disk cleaner CANNOT be App-Sandboxed \u2014 ship non-sandboxed, Developer ID-signed, Hardened-Runtime, notarized. This is confirmed and load-bearing.",
+          "detail": "App Sandbox confines an app to its container and grants file access only through user-selected files (NSOpenPanel) or temporary-exception entitlements; it is mandatory for the Mac App Store but OPTIONAL for Developer ID distribution. Full Disk Access (FDA) and the sandbox are mutually exclusive \u2014 'Full Disk Access won't work with sandboxed apps because of the sandbox.' A cleaner that must enumerate ~/Library/Caches, ~/Library/Developer (Xcode), /private/var, other users' areas, etc. cannot do so sandboxed. Proof by existence: MacPaw ships the full CleanMyMac outside the App Store; the Mac App Store build exists but 'Apple's technical restrictions mean that it may not have the full range of features available when you buy CleanMyMac directly from MacPaw' \u2014 i.e. the sandbox strips features. Recommended posture: App Sandbox OFF, Hardened Runtime ON (required for notarization), notarize with the Developer ID Application certificate. Only add Hardened Runtime exception entitlements you actually need (e.g. com.apple.security.cs.disable-library-validation only if loading 3rd-party unsigned frameworks; avoid allow-unsigned-executable-memory/allow-jit unless required).",
+          "confidence": "high",
+          "sources": [
+            "https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox",
+            "https://macpaw.com/support/cleanmymac/knowledgebase/full-disk-access",
+            "https://blog.xojo.com/2024/08/22/macos-apps-from-sandboxing-to-notarization-the-basics/",
+            "https://developer.apple.com/documentation/security/hardened-runtime",
+            "https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.security.cs.disable-library-validation",
+            "https://macpaw.com/how-to/is-cleanmymac-safe"
+          ]
+        },
+        {
+          "point": "Fast disk-usage scanning: FileManager URL enumerator (with prefetched keys) is the pragmatic best; getattrlistbulk + thread pool is the genuine speed ceiling (~6.4x faster than du). du is slow because it does one lstat() per file.",
+          "detail": "du / naive scanners issue 400k+ individual lstat() syscalls \u2014 syscall overhead dominates. The fastest known macOS approach (Healey's 'dumac') calls the getattrlistbulk syscall, which batches readdir+stat into a 128KB buffer returning dozens-hundreds of entries per call; on a 409,500-file benchmark it hit 521ms vs du's 3.33s (6.4x) and diskus's 1.34s (2.58x), with syscalls ~91% of runtime. Best concurrency was a work-stealing pool (Rayon-style), NOT spawning a thread per call \u2014 that cut syscalls in half and context switches ~80% (1.2M->235k). Inode dedup (for hardlinks/clones) needs sharded locks keyed on (inode>>8)%N because APFS issues sequential inodes. BUT: in Tempel/Tsai's macOS tests, Foundation's high-level enumeratorAtURL actually beat raw fts_read/getattrlistbulk on local HFS+/APFS because 'the API underneath was SPECIFICALLY added to make the Foundation/CoreFoundation layer faster.' fts_open/fts_read/fts_close generally beats readdir/contentsOfDirectory but loses to getattrlistbulk on network volumes. APFS directory enumeration is ~5-6x slower than HFS+ and got ~15% slower again on Mojave+. RECOMMENDED: FileManager.enumerator(at:includingPropertiesForKeys:[.fileSizeKey,.totalFileAllocatedSizeKey,.isDirectoryKey,.fileResourceTypeKey], options:[.skipsHiddenFiles? no \u2014 cleaners want hidden],...) streaming results via AsyncStream with ~50ms UI-update throttling (the pattern MacDirStat uses). Drop to a getattrlistbulk C shim only if you need the absolute floor. Use totalFileAllocatedSizeKey (on-disk blocks) not fileSizeKey (logical) for accurate 'space reclaimed' numbers.",
+          "confidence": "high",
+          "sources": [
+            "https://healeycodes.com/maybe-the-fastest-disk-usage-program-on-macos",
+            "https://healeycodes.com/optimizing-my-disk-usage-program",
+            "https://mjtsai.com/blog/2019/04/22/performance-considerations-when-reading-directories-on-macos/",
+            "http://blog.tempel.org/2019/04/dir-read-performance.html",
+            "https://github.com/phalladar/MacDirStat",
+            "https://developer.apple.com/documentation/foundation/filemanager/directoryenumerator"
+          ]
+        },
+        {
+          "point": "Report 'real' free space with URLResourceValues key volumeAvailableCapacityForImportantUsageKey, NOT raw statfs/df \u2014 that key accounts for purgeable space the OS will reclaim on demand.",
+          "detail": "macOS layers a space-management system (the CacheDelete subsystem) over APFS that marks content (caches, Time Machine local snapshots) 'purgeable' and frees it automatically when space is needed; it is NOT counted as used. df/statfs and even Finder lag reality \u2014 Finder caches values and doesn't re-fetch after CacheDelete recomputes. Use URL(fileURLWithPath:'/').resourceValues(forKeys:) with: volumeAvailableCapacityForImportantUsageKey (10.13+, Int64 \u2014 space available for important resources, accounting for purgeable; what to show as 'free'), volumeAvailableCapacityForOpportunisticUsageKey (10.13+, safer/more conservative for opportunistic downloads), volumeAvailableCapacityKey (legacy, ignores purgeable), volumeTotalCapacityKey. Gate on volumeSupportsVolumeSizesKey first. For local APFS snapshots specifically: enumerate with `tmutil listlocalsnapshots /` (Time Machine creates hourly local snapshots \u2014 the main purgeable contributor); note listlocalsnapshots does NOT report per-snapshot reclaimable size. df reflects actively-allocated storage only after snapshots are deleted. Product implication: don't promise 'X GB free' from one number \u2014 distinguish truly free vs purgeable vs snapshot-held, and surface snapshots as a separate reclaim category (DaisyDisk does this).",
+          "confidence": "high",
+          "sources": [
+            "https://eclecticlight.co/2018/02/05/scripting-in-swift-checking-free-disk-space/",
+            "https://mjtsai.com/blog/2025/03/10/purgeable-disk-space/",
+            "https://daisydiskapp.com/guide/4/en/Snapshots/",
+            "https://eclecticlight.co/2020/04/09/where-did-all-that-free-space-go-on-my-apfs-disk/"
+          ]
+        },
+        {
+          "point": "Full Disk Access uses TCC service identifier kTCCServiceSystemPolicyAllFiles. There is NO official API to query or trigger it \u2014 you detect by attempting to read a known protected file and request by deep-linking the user to System Settings.",
+          "detail": "FDA is the TCC service 'kTCCServiceSystemPolicyAllFiles'. Apple provides no public API to read grant status (reading TCC.db directly is unsupported and not considered API). DETECTION pattern (what CleanMyMac/MacPaw's open-source PermissionsKit does): attempt to read several protected files and treat success as 'granted', checking multiple to avoid false negatives \u2014 files used: ~/Library/Safari/Bookmarks.plist, ~/Library/Safari/CloudTabs.db, /Library/Application Support/com.apple.TCC/TCC.db, /Library/Preferences/com.apple.TimeMachine.plist. open()/Data(contentsOf:) returning -1 with errno EPERM/EACCES => not granted; valid data => granted. Reading these does NOT itself raise a TCC prompt. Reliability caveat: the test can false-negative due to unrelated dir permissions (700 vs 755), so test several files. REQUEST pattern: there is no programmatic grant and NO completion callback \u2014 open the pane directly with URL 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles' (NSWorkspace.shared.open) and then POLL the detection check for the change. macOS Ventura+ may require the user to toggle/relaunch. CleanMyMac's in-app copy directs users: 'Open System Settings, click Privacy & Security, then select Full Disk Access' and grants to multiple components (main app + Health Monitor + Menu helper). Each separately-signed helper/login item needs its own FDA grant.",
+          "confidence": "high",
+          "sources": [
+            "https://github.com/MacPaw/PermissionsKit",
+            "https://developer.apple.com/forums/thread/114452",
+            "https://hacktricks.wiki/en/macos-hardening/macos-security-and-privilege-escalation/macos-security-protections/macos-tcc/index.html",
+            "https://macpaw.com/support/cleanmymac/knowledgebase/full-disk-access",
+            "https://ss64.com/mac/tccutil.html"
+          ]
+        },
+        {
+          "point": "Safe delete: use FileManager.trashItem(at:resultingItemURL:) exclusively. Never removeItem(at:) for user-facing cleanup.",
+          "detail": "trashItem(at:resultingItemURL:) moves a file to the user's Trash (recoverable, one-click restore) and returns the resulting Trash URL via an autoreleasing out-parameter (in Swift: `var trashURL: NSURL?; try fm.trashItem(at: url, resultingItemURL: &trashURL)`). This is the correct, reversible primitive for a cleaner \u2014 it preserves an undo path and matches user expectations. removeItem(at:)/removeItem(atPath:) is permanent and should be reserved (if ever) for transient app-internal temp files the user never sees. Note: items in the system Trash still occupy disk until the user empties it, so 'space reclaimed' messaging should account for that (offer an explicit 'Empty Trash' step or report 'moved to Trash'). On a non-sandboxed FDA app, trashItem works across the whole disk; trashing system-protected or other-user files may still fail with permission errors that you must surface gracefully.",
+          "confidence": "high",
+          "sources": [
+            "https://developer.apple.com/documentation/foundation/filemanager",
+            "https://developer.apple.com/documentation/foundation/filemanager/1408573-removeitem",
+            "https://github.com/khalilbenaz/cleanmac-pro"
+          ]
+        },
+        {
+          "point": "node_modules whole-disk scanning: the key optimization is to PRUNE \u2014 once a node_modules directory is found, record its size and do NOT descend into it (no recursing into nested node_modules). npkill is the reference implementation.",
+          "detail": "npkill scans the disk for every node_modules dir, reports size, and offers selective deletion; its performance comes from low-level traversal and treating each node_modules as a discrete target rather than continuing to descend. The critical algorithmic point for your scanner: when the enumerator hits a directory named 'node_modules', size it (sum totalFileAllocatedSize of contents) and skip its entire subtree \u2014 this avoids the pathological case of double-counting and re-walking deeply nested node_modules/.../node_modules. With FileManager.DirectoryEnumerator you call enumerator.skipDescendants() upon matching. Also pre-prune known-huge irrelevant trees (e.g., skip /System, /Volumes/<network>, .Trash, and ideally let users exclude paths \u2014 npkill supports an exclude list of comma-separated, quoted dirs). Same pattern generalizes to other dev caches worth targeting: ~/Library/Developer/Xcode/DerivedData, ~/Library/Caches, ~/.gradle, ~/.cargo, Docker.raw, .venv, target/, build/, Pods/. Scanning from '/' is expensive; default to $HOME and common dev roots, with full-disk opt-in.",
+          "confidence": "high",
+          "sources": [
+            "https://github.com/voidcosmos/npkill",
+            "https://npkill.js.org/",
+            "https://developer.apple.com/documentation/foundation/filemanager/directoryenumerator"
+          ]
+        },
+        {
+          "point": "Running docker/brew from Swift: use Foundation Process with an ABSOLUTE executableURL and an arguments array \u2014 never pass a shell command string. Don't assume $PATH; Homebrew binaries live at /opt/homebrew/bin (Apple Silicon) or /usr/local/bin (Intel). These cannot run from a sandboxed app.",
+          "detail": "Use Process (the modern NSTask): set process.executableURL = URL(fileURLWithPath: '/opt/homebrew/bin/brew'), process.arguments = ['cleanup','--prune=all'], wire stdout/stderr to Pipe(), call try process.run(), read pipe.fileHandleForReading.readDataToEndOfFile(), then process.waitUntilExit() and check terminationStatus. SECURITY rules: (1) Never use /bin/sh -c with an interpolated string \u2014 pass discrete arguments to avoid shell injection. (2) Resolve absolute paths; a GUI app launched from Finder has a minimal PATH that usually lacks /opt/homebrew/bin, so locate brew/docker explicitly (Apple Silicon /opt/homebrew/bin, Intel /usr/local/bin; docker CLI often /usr/local/bin/docker or ~/.docker symlinks). (3) docker/brew run as the user \u2014 no root needed; do NOT shell out for things with native APIs (free space, trashing). (4) A SANDBOXED app cannot spawn these \u2014 'docker commands may be outside of the sandbox' \u2014 reinforcing the non-sandboxed design. Avoid AuthorizationExecuteWithPrivileges/STPrivilegedTask (deprecated since 10.7). If you genuinely need root (rare for a cleaner \u2014 e.g., clearing system-owned caches), use an SMAppService daemon + XPC, not privileged shell-outs.",
+          "confidence": "high",
+          "sources": [
+            "https://scriptingosx.com/2019/12/build-a-macos-application-to-run-a-shell-command-with-xcode-and-swiftui/",
+            "https://gist.github.com/Seasons7/836d3676884a40c8c98a",
+            "https://github.com/sveinbjornt/STPrivilegedTask",
+            "https://rakiabensassi.substack.com/p/macos-for-developers-5-essential"
+          ]
+        },
+        {
+          "point": "Security-scoped bookmarks are primarily a SANDBOX mechanism. A non-sandboxed FDA cleaner generally does NOT need them \u2014 but plain bookmarkData() (without .withSecurityScope) is still useful to remember user-selected folders across launches.",
+          "detail": "Security-scoped bookmarks (url.bookmarkData(options: .withSecurityScope,...), resolve with URL(resolvingBookmarkData:options:[.withSecurityScope,.withoutUI],...), gate access with startAccessingSecurityScopedResource()/stopAccessingSecurityScopedResource()) exist to grant a SANDBOXED app persistent access beyond its container after the user picks a path via NSOpenPanel. They require the com.apple.security.files.user-selected.read-write entitlement plus com.apple.security.files.bookmarks.app-scope/document-scope. For a NON-sandboxed FDA app these are unnecessary for access (FDA already grants disk-wide reads); you'd use ordinary url.bookmarkData() (no security scope) purely to persist 'last scanned folders' robustly across renames/moves. Note Apple has had sandbox-escape CVEs in scoped bookmarks (CVE-2025-31191), another reason the non-sandboxed model is simpler here. If you ever DID ship a sandboxed companion (App Store SKU), scoped bookmarks + NSOpenPanel('Grant access to this folder') become mandatory and are the only way to reach arbitrary folders.",
+          "confidence": "high",
+          "sources": [
+            "https://developer.apple.com/documentation/security/accessing-files-from-the-macos-app-sandbox",
+            "https://swiftylion.com/articles/persist-and-retrieve-user-folders-access",
+            "https://www.appcoda.com/mac-apps-user-intent/",
+            "https://www.microsoft.com/en-us/security/blog/2025/05/01/analyzing-cve-2025-31191-a-macos-security-scoped-bookmarks-based-sandbox-escape/"
+          ]
+        },
+        {
+          "point": "SMAppService (macOS 13+) is the modern replacement for SMJobBless \u2014 needed only if your cleaner performs ROOT-level operations. For a user-space cleaner with FDA, you likely don't need a privileged helper at all.",
+          "detail": "SMAppService (macOS 13+) registers helpers that live INSIDE the app bundle (Contents/Library/LaunchDaemons/<plist>, Contents/Library/LaunchAgents/, Contents/MacOS/<helper executable>) rather than installing into /Library/PrivilegedHelperTools. Factory methods: SMAppService.daemon(plistName:), .agent(plistName:), .loginItem(identifier:); lifecycle: try service.register() / service.unregister(); status enum: .notRegistered/.enabled/.requiresApproval/.notFound. A daemon (root) registration triggers an admin auth prompt and the user must approve in System Settings > General > Login Items & Extensions; agents/login items just need toggling. App+helper must share a Developer ID team prefix and be notarized; the helper is code-signed and you communicate via XPC (NSXPCConnection). WHEN a cleaner needs this: clearing system-owned caches (/Library/Caches, /private/var/folders system entries), pruning files owned by root, or scheduled background cleanup. WHEN it doesn't: trashing user files, dev caches (~/Library, node_modules, DerivedData), and free-space reporting \u2014 all run fine in the main user-space process with FDA. Recommend: ship WITHOUT a privileged helper for v1; add an SMAppService daemon later only for specific root-only categories, and keep it minimal to ease notarization (Xcode archiving rejects bundles with stray embedded executables unless the helper is properly set up).",
+          "confidence": "high",
+          "sources": [
+            "https://developer.apple.com/documentation/servicemanagement/smappservice",
+            "https://theevilbit.github.io/posts/smappservice/",
+            "https://github.com/alienator88/HelperToolApp",
+            "https://dev.to/brysontyrrell/macos-apps-with-embedded-daemons-333a"
+          ]
+        },
+        {
+          "point": "Concrete sign/notarize/staple pipeline for Developer ID distribution, plus market pricing reference points.",
+          "detail": "Build with Hardened Runtime ON, App Sandbox OFF. Sign deepest-first then the app/dmg with the Developer ID Application cert: codesign --force --options runtime --timestamp --entitlements App.entitlements --sign 'Developer ID Application: Name (TEAMID)' <bundle>; verify: codesign -vvv --deep --strict <bundle> and spctl -a -vvv <bundle>. Notarize (notarytool, the modern tool; altool is retired): xcrun notarytool submit MyApp.dmg --apple-id <id> --password <app-specific-password> --team-id <TEAMID> --wait (or use a stored keychain profile via --keychain-profile). On success staple so it works offline: xcrun stapler staple MyApp.dmg (and staple the .app before packaging the dmg). Distribute the stapled DMG. Pricing benchmarks for a product spec: CleanMyMac Basic $9.95/mo or $47.50/yr, or one-time $119.95; Plus $15.95/mo / $71.40/yr / one-time $195.95 (subscription-led, Developer-ID/notarized, sold direct off macpaw.com). DaisyDisk is a one-time $9.99, 1 license for up to 5 personal Macs, 30-day money-back \u2014 the 'pay-once utility' counterpoint. This frames the two viable GTM models: subscription (CleanMyMac) vs one-time license (DaisyDisk).",
+          "confidence": "high",
+          "sources": [
+            "https://www.dolthub.com/blog/2024-10-22-how-to-publish-a-mac-desktop-app-outside-the-app-store/",
+            "https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution",
+            "https://developer.apple.com/documentation/security/hardened-runtime",
+            "https://macpaw.com/store/cleanmymac",
+            "https://daisydiskapp.com/support/pricing/"
+          ]
+        }
+      ],
+      "recommendations": [
+        "Ship NON-sandboxed: App Sandbox OFF, Hardened Runtime ON, Developer ID Application signature, notarytool submit --wait + stapler staple. A sandboxed full-disk cleaner is technically impossible (FDA and sandbox are mutually exclusive) \u2014 confirmed by CleanMyMac's feature-limited App Store build.",
+        "Architecture: a single user-space SwiftUI app process does 95% of the work (scan, size, trash, report). Add an SMAppService root daemon (XPC) ONLY later for system-owned caches. Do not build a privileged helper for v1.",
+        "Scanning engine: FileManager.enumerator(at:includingPropertiesForKeys:[.totalFileAllocatedSizeKey,.isDirectoryKey,.fileResourceTypeKey]) streamed through an AsyncStream with ~50ms UI throttle. Use totalFileAllocatedSize (on-disk blocks) for reclaim figures. Drop to a getattrlistbulk C shim + work-stealing pool only if you need the ~6x-over-du ceiling.",
+        "node_modules / dev caches: prune-on-match \u2014 on hitting a target dir (node_modules, DerivedData, .gradle, target, Pods), size it and call skipDescendants() to avoid re-walking nested copies. Default scan root = $HOME; full-disk is opt-in with a user-editable exclude list.",
+        "Free-space reporting: use volumeAvailableCapacityForImportantUsageKey (accounts for purgeable) as the headline 'free' number; never statfs/df raw. Surface APFS local snapshots (tmutil listlocalsnapshots /) and purgeable as separate, clearly-labeled reclaim categories.",
+        "Deletion: FileManager.trashItem(at:resultingItemURL:) only \u2014 preserves undo. Track resulting Trash URLs for an in-app 'Restore' and a separate explicit 'Empty Trash to reclaim space' action.",
+        "FDA UX: detect by test-reading several protected files (e.g. ~/Library/Safari/Bookmarks.plist, /Library/Preferences/com.apple.TimeMachine.plist) and treating EPERM/EACCES as 'not granted'; request by opening x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles and polling status (there is no callback). Mirror CleanMyMac's onboarding copy and grant each signed helper separately.",
+        "Shell-outs (docker/brew): Foundation Process with absolute executableURL (/opt/homebrew/bin on Apple Silicon, /usr/local/bin on Intel) and an arguments array \u2014 never /bin/sh -c with a string. These only work because the app is non-sandboxed.",
+        "GTM framing: decide subscription (CleanMyMac: $9.95/mo, $47.50/yr, $119.95 once) vs one-time license (DaisyDisk: $9.99, 5 Macs). A notarized direct-download DMG with a license-key activation fits either."
+      ]
+    },
+    "naming": {
+      "angle": "Positioning, pricing, and naming for a one-time-purchase, developer-focused Mac cleaner from a solo studio (Emotive Impact), wedged against bloated subscription incumbents (CleanMyMac) and the free open-source crowd.",
+      "summary": "The market splits cleanly into three camps and leaves an open lane in the middle. (1) Subscription incumbents: CleanMyMac is ~$39.95/yr for one Mac (legacy one-time licenses run ~$89.95+), and is widely criticized by power users as a bloated background-process suite that nags about RAM/malware and duplicates what macOS already does. (2) Cheap one-time generalists: DaisyDisk at $9.99 (visualizer only, doesn't clean caches) and Sensei at $59 one-time / $29/yr (3 Macs). (3) A fast-growing free/open-source developer-cleaner niche \u2014 DevCleaner, Pearcleaner, PureMac, MacSai, Cruft, Brisk \u2014 that proves developers actively want a focused, transparent, no-subscription, dev-cache-aware tool but mostly ships unpolished, abandonment-prone freeware (Pearcleaner development paused end of 2025). The wedge: a polished, paid-once, developer-native cleaner that targets the 60-300GB of dev bloat generic cleaners ignore (Xcode DerivedData, node_modules, Docker, Cargo, Gradle/Maven, simulators, IDE caches), with zero subscription, zero background daemons, and zero telemetry. Recommended price band: $25-39 one-time, single tier, ~3-Mac license. NOTE: several obvious names are already taken \u2014 \"Cruft\" (cruft.app, exact same dev-cache positioning), \"Brisk\" (GitHub Mac cleaner), \"Scrub\" and \"Pry\" (existing App Store apps), \"MacSweep\"/\"Tidy Up Mac\" (exist). The 10 names below were filtered against those collisions; do USPTO + domain checks before committing.",
+      "findings": [
+        {
+          "point": "CleanMyMac is now subscription-first at ~$39.95/yr (1 Mac); legacy one-time licenses are ~$89.95-$119.95 and exclude future major upgrades",
+          "detail": "MacPaw lists CleanMyMac annual at ~$39.95/yr for one Mac (~$3.33/mo equivalent), ~$54.95/yr for 2 Macs, ~$89.95/yr for 5 Macs. Older one-time/lifetime tiers were quoted at $89.95-$119.95 (Basic) and up to $195.95 (Plus), but the one-time price explicitly 'may not include additional major updates and features.' This is the price anchor and the thing power users resent paying recurringly 'to delete files.' Your one-time price undercuts this dramatically and removes the recurring-fee objection entirely.",
+          "confidence": "high",
+          "sources": [
+            "https://macpaw.com/store/cleanmymac",
+            "https://findstack.com/products/cleanmymac-x/pricing",
+            "https://www.getapp.com/operations-management-software/a/cleanmymac-x/pricing/"
+          ]
+        },
+        {
+          "point": "Power-user / developer distrust of CleanMyMac is real and specific: bloated background processes, nagging upsells, suspected false-positive malware alerts, duplicating native macOS features",
+          "detail": "Documented criticism: CleanMyMac 'lives in the menu bar constantly,' 'nags users about RAM usage and asks to scan for malware,' runs background Health Monitor processes, and is seen as duplicating macOS Storage/Activity Monitor. Apple Community threads report false malware alarms (suspected upsell tactic) and system freezes after updates. This is your messaging ammunition \u2014 position explicitly AGAINST the daemon/nag/upsell model: launches when you open it, does its job, quits.",
+          "confidence": "high",
+          "sources": [
+            "https://bundl.run/free-alternative-to/cleanmymac",
+            "https://discussions.apple.com/thread/254123674",
+            "https://macpaw.com/support/cleanmymac/knowledgebase/cleanmymac-processes"
+          ]
+        },
+        {
+          "point": "A dedicated developer-bloat niche exists and is validated: generic cleaners miss 60-300GB of dev caches across ~20+ ecosystems",
+          "detail": "Concrete dev-bloat targets generic cleaners ignore, with real paths/sizes: Xcode DerivedData ~/Library/Developer/Xcode/DerivedData (10-50GB), iOS Simulators (20-150GB), node_modules (10-60GB), Docker images/volumes/Docker.raw (10-50GB), Rust cargo target/ (5-30GB), Python venv/conda (5-20GB), Gradle/Maven (3-15GB), Homebrew cache (2-10GB), VS Code/JetBrains caches (2-10GB). DevCleaner ships scanners for 23 ecosystems. THIS is the sharpest wedge \u2014 be the cleaner that natively understands dev tools, not a generic junk-sweeper with a 'developer' checkbox.",
+          "confidence": "high",
+          "sources": [
+            "https://megacleaner.app/blog/cleanmymac-vs-megacleaner-developer-disk-cleaner/",
+            "https://devcleaner.app/",
+            "https://github.com/jemishavasoya/dev-cleaner"
+          ]
+        },
+        {
+          "point": "POSITIONING WEDGE (recommended one-liner): 'Reclaim 50+GB of dev-tool bloat in one click \u2014 buy it once, no subscription, no background daemons, no nags.'",
+          "detail": "Tighter alternatives to A/B test: (a) 'The Mac cleaner that actually understands your dev tools \u2014 Xcode, node_modules, Docker, simulators. One-time price, runs only when you open it.' (b) 'CleanMyMac for people who hate CleanMyMac: focused, fast, paid once.' The wedge combines three orthogonal advantages competitors can't all claim simultaneously: developer-native scanners (beats CleanMyMac/DaisyDisk), one-time price (beats CleanMyMac subscription), and polish + maintenance + safety (beats the free OSS tools, which are abandonment-prone \u2014 Pearcleaner's own dev paused work end of 2025). Lead with the dev angle because the free OSS crowd validated demand but left a quality/trust gap a paid solo studio can fill.",
+          "confidence": "high",
+          "sources": [
+            "https://bundl.run/free-alternative-to/cleanmymac",
+            "https://github.com/alienator88/Pearcleaner",
+            "https://megacleaner.app/blog/cleanmymac-vs-megacleaner-developer-disk-cleaner/"
+          ]
+        },
+        {
+          "point": "PRICING (recommended): $29 one-time, single tier, ~3-Mac license, with a free scan / paid clean trial. Acceptable band $25-39.",
+          "detail": "Competitive anchors: DaisyDisk $9.99 one-time (5 Macs, but visual-only \u2014 doesn't clean caches); Sensei $59 one-time or $29/yr (3 Macs); VaultSort $24.99 one-time vs $39.95/yr; CleanMyMac $39.95/yr. The free OSS tools (DevCleaner, Pearcleaner, PureMac, MacSai) set the floor at $0, so the paid pitch must be polish + safety + dev-native depth + active maintenance. $29 one-time sits below CleanMyMac's first-year subscription, reads as a 'fair, honest' price to the anti-subscription crowd, beats Sensei's $59 entry, and is high enough to signal quality over the $9.99 toys. Match DaisyDisk/Sensei's multi-Mac generosity (3 seats) since developers commonly run a laptop + desktop. Avoid a subscription entirely \u2014 it would forfeit the entire positioning. If recurring revenue is later needed, use paid major-version upgrades (the Sketch/Sublime model), never a recurring license.",
+          "confidence": "medium",
+          "sources": [
+            "https://daisydiskapp.com/",
+            "https://cindori.com/store/sensei",
+            "https://www.vaultsort.com/blog/cleanmymac-alternative-space-saver",
+            "https://macpaw.com/store/cleanmymac"
+          ]
+        },
+        {
+          "point": "NAME 1 \u2014 Husk",
+          "detail": "Rationale: a husk is the empty shell left after the kernel is removed \u2014 evokes stripping away dead weight/bloat, short and evocative like Vlume/Tapio. .com likely taken (common word) but huskapp.com / gethusk.com / husk.dev plausible. Trademark risk: MEDIUM \u2014 generic English word, several unrelated 'Husk' software products exist (e.g. a SaaS/CSS tool); clears as a Mac-cleaner mark but do a USPTO class-9/42 search.",
+          "confidence": "medium",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 2 \u2014 Strato",
+          "detail": "Rationale: from 'stratum/strata' (layers of accumulated cruft) and clean stratosphere/airy space; brandable two-syllable like LoudMix/Mixly. .com almost certainly taken (Strato AG is a large German hosting company) \u2014 use trystrato.com / strato.app. Trademark risk: HIGH on bare 'Strato' \u2014 STRATO is a well-known registered hosting/IT brand in the EU. Recommend a modifier or coinage (Stratoclean, Stratos) only after counsel; listed for sound, flagged as risky.",
+          "confidence": "low",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 3 \u2014 Vacuo",
+          "detail": "Rationale: Latin root of 'vacuum/empty' \u2014 implies reclaiming empty space; invented-feel, short, family-consistent. No Mac cleaner found under this name in searches. .com plausibly available or cheap (vacuo.app / vacuo.dev strong). Trademark risk: LOW-MEDIUM \u2014 'Vacuo' appears as a brand in unrelated fields (some beverage/industrial uses internationally); software class likely clear, verify USPTO.",
+          "confidence": "medium",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 4 \u2014 Vacate",
+          "detail": "Rationale: 'vacate the space' \u2014 clear cleaning/space verb, confident and memorable. No Mac cleaner found under this name (search surfaced only Tidy Up / Washing Machine for the adjacent 'reclaim' query). .com likely registered (real English word) \u2014 vacate.app / getvacate.com fallback. Trademark risk: MEDIUM \u2014 common word, used in legal/property SaaS contexts; software-utility class likely clear.",
+          "confidence": "medium",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 5 \u2014 Sweepr",
+          "detail": "Rationale: vowel-dropped 'sweeper' (Flickr/Tumblr style), directly hints at cleaning, short and brandable. CAUTION: an Irish customer-support automation company named 'Sweepr' (sweepr.com) exists \u2014 different category but same spelling. .com taken; sweepr.app / sweepr.dev possible. Trademark risk: MEDIUM-HIGH due to the existing Sweepr Technologies mark \u2014 consider Sweepo/Sweepkit instead. Note: avoid plain 'Sweep'/'MacSweep' \u2014 MacSweep.app already exists.",
+          "confidence": "medium",
+          "sources": [
+            "https://macsweep.app/",
+            "https://apps.apple.com/us/app/cleanup-storage-sweep-cleaner/id6472656455"
+          ]
+        },
+        {
+          "point": "NAME 6 \u2014 Pareo / Pare",
+          "detail": "Rationale: 'to pare down' = trim away excess \u2014 precise metaphor for cleaning bloat; 'Pareo' adds a brandable vowel ending matching Tapio. 'Pare' alone is a dictionary word (harder TM/domain); 'Pareo' is more ownable (note: 'pareo' is also a sarong garment \u2014 minor semantic clash, no software collision found). pareo.app / pare.dev plausible. Trademark risk: LOW-MEDIUM for software class.",
+          "confidence": "medium",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 7 \u2014 Derelict / Derel",
+          "detail": "Rationale: nods directly to Xcode 'DerivedData' (the #1 dev-bloat target) while meaning 'abandoned/leftover' \u2014 the orphaned caches you delete. Strong insider wink for developers. 'Derel' is a cleaner coinage; full 'Derelict' is evocative but long. derel.app / derelict.dev likely available. Trademark risk: LOW \u2014 uncommon as a software name; verify.",
+          "confidence": "medium",
+          "sources": [
+            "https://megacleaner.app/blog/cleanmymac-vs-megacleaner-developer-disk-cleaner/"
+          ]
+        },
+        {
+          "point": "NAME 8 \u2014 Reclaim / Reclaimr",
+          "detail": "Rationale: 'reclaim your disk space' is the literal job; instantly communicates value. CAUTION: very crowded \u2014 Intego's Washing Machine has a 'Reclaim' cycle, and Reclaim.ai is a well-known calendar startup (reclaim.com/.ai taken). Use the vowel-dropped 'Reclaimr' for ownability + family fit (Mixly/Vlume style). reclaimr.app possible. Trademark risk: HIGH on bare 'Reclaim', MEDIUM on 'Reclaimr'.",
+          "confidence": "medium",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html",
+            "https://www.intego.com/"
+          ]
+        },
+        {
+          "point": "NAME 9 \u2014 Spano / Spaze",
+          "detail": "Rationale: coined from 'space' (the thing you reclaim) \u2014 invented, .com-plausible, phonetically in-family with Tapio/Mixly. No Mac cleaner found under either spelling. spano.app / spaze.app likely available; 'Spaze' is an existing minor brand in a few markets so 'Spano' is safer. Trademark risk: LOW for software; verify spelling collisions.",
+          "confidence": "low",
+          "sources": [
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAME 10 \u2014 Cairn",
+          "detail": "Rationale: a cairn is a deliberate stack of stones \u2014 flips 'pile of junk' into 'curated, intentional stack,' implying safe/considered cleaning (anti-reckless-delete trust angle, which matters since users fear cleaners breaking their setup). Short, evocative, distinctly not a generic 'clean' word \u2014 strong brand-family fit. cairn.app / getcairn.com plausible (cairn.com likely taken \u2014 common word, used by Cairn Energy/Cairn Homes). Trademark risk: MEDIUM \u2014 multiple unrelated 'Cairn' companies (energy, publishing); software-utility class likely clear, verify USPTO.",
+          "confidence": "medium",
+          "sources": [
+            "https://github.com/alienator88/Pearcleaner",
+            "https://www.macworld.com/article/673271/best-mac-cleaner-tested-compared.html"
+          ]
+        },
+        {
+          "point": "NAMES TO AVOID \u2014 confirmed collisions in the exact category",
+          "detail": "Do NOT use: 'Cruft' (cruft.app is a private/native Mac developer-cache cleaner with the EXACT positioning you'd claim \u2014 direct collision); 'Brisk' (GitHub.com/GhassanKY/BRISK is a native macOS app cleaner / leftover scanner); 'Scrub' (multiple App Store apps incl. Scrub Web Browser, Scrub EXIF tool); 'Pry' (App Store app id846195114); 'MacSweep' (macsweep.app exists); 'Tidy Up' (Tidy Up Mac exists); 'Mole' (tw93/Mole terminal cleaner); 'Sensei'/'DaisyDisk'/'CleanMyMac'/'Pearcleaner'/'DevCleaner'/'PureMac'/'MacSai' (all live competitors). 'Lumber' is heavily used in unrelated App Store apps.",
+          "confidence": "high",
+          "sources": [
+            "https://cruft.app/",
+            "https://github.com/GhassanKY/BRISK",
+            "https://apps.apple.com/us/app/pry/id846195114",
+            "https://macsweep.app/",
+            "https://github.com/tw93/mole"
+          ]
+        },
+        {
+          "point": "Go-to-market note: trust and safety are the conversion lever, not feature count",
+          "detail": "Across the OSS alternatives the repeated promises are 'zero telemetry,' 'never touches system files,' 'shows exact paths and sizes so you can deselect before deleting,' and 'notarized.' For a paid app the trust bar is higher: ship Apple-notarized, document exactly what each scanner deletes (with paths), make every deletion reviewable/undoable, and state plainly 'no analytics, no account, no daemon.' That directly answers the developer distrust that pushed people off CleanMyMac, and justifies a paid price over free OSS by adding maintenance + safety guarantees the abandoned free tools can't promise.",
+          "confidence": "high",
+          "sources": [
+            "https://github.com/momenbasel/PureMac",
+            "https://github.com/iliyami/MacSai",
+            "https://pearcleaner.com/"
+          ]
+        }
+      ],
+      "recommendations": [
+        "Positioning one-liner to ship: 'Reclaim 50+GB of dev-tool bloat in one click. Buy once, no subscription, no background daemons, no nags.' Lead the landing page with concrete dev-cache targets (Xcode DerivedData, node_modules, Docker, simulators) and a live 'free scan / paid clean' that shows reclaimable GB before purchase.",
+        "Price at $29 one-time, single tier, 3-Mac license (band $25-39). No subscription. If recurring revenue is ever needed, use paid major-version upgrades, never a recurring license. This undercuts CleanMyMac's $39.95/yr and Sensei's $59 while staying clearly above the $9.99 toys.",
+        "Name shortlist to take to USPTO + domain checks, in priority order: Cairn (trust/safety angle), Vacuo (clean coinage), Derel/Derelict (developer wink at DerivedData), Husk, Vacate, Pareo, Spano. Treat Strato, Reclaim(r), and Sweepr as risky due to existing brands.",
+        "Hard-avoid list (confirmed same-category collisions): Cruft, Brisk, Scrub, Pry, MacSweep, Tidy Up, Mole \u2014 plus all named live competitors.",
+        "Differentiate on trust, not feature count: ship Apple-notarized, no telemetry, no account, no background daemon; make every deletion reviewable with exact paths and undoable. This is the explicit answer to why developers abandoned CleanMyMac and why they'd pay you over the free-but-abandoned OSS tools.",
+        "Before finalizing any name, run two checks I could not fully complete here: (1) USPTO TESS search in software classes 9/42, and (2) live domain availability for the .app/.dev/get<name>.com variants \u2014 several first-choice .coms are taken by unrelated firms."
+      ]
+    }
+  },
+  "audit": {
+    "bugs": [
+      {
+        "title": "AppleScript path injection in move_to_trash via unescaped f-string",
+        "severity": "critical",
+        "detail": "core/trash.py:29 interpolates the POSIX path directly into an AppleScript string literal: f'tell application \"Finder\" to delete (POSIX file \"{posix}\" as alias)'. Any path containing a double-quote breaks out of the literal. A file in ~/Downloads literally named 'evil\" & (do shell script \"...\") & \"x.dmg' produces a syntactically valid script that executes arbitrary AppleScript/shell as the user. Since filenames in Downloads are fully attacker-influenced (a malicious download), this is an arbitrary-code-execution path triggered by the user clicking 'Move to Trash'. Verified: the f-string yields '...POSIX file \"/Users/me/Downloads/evil\" & (do shell script \"echo pwned\") & \"x.dmg\" as alias'.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/trash.py",
+        "fix": "Do not build AppleScript by string interpolation. Pass the path as an argument, not inside the script: subprocess.run([\"osascript\", \"-e\", 'on run argv', '-e', 'tell application \"Finder\" to delete (POSIX file (item 1 of argv) as alias)', '-e', 'end run', posix]). Better, drop osascript entirely and call the native Foundation API (Cocoa NSFileManager trashItemAtURL / Swift FileManager.trashItem in the native app), which both escapes nothing and preserves Put Back."
+      },
+      {
+        "title": "Orphaned-app-data heuristic produces false positives on live app data",
+        "severity": "high",
+        "detail": "scanners/orphaned.py:62-77 flags any ~/Library/Application Support, Containers, and Group Containers folder whose name doesn't exactly match an installed CFBundleIdentifier. Verified failures with the owning apps INSTALLED: (1) human-named folders like 'Google' (Chrome's Application Support dir), 'Code', 'Steam' contain a dot test or no-dot suffix test that never matches a bundle id, so they are flagged 'No matching app installed'; (2) 'zoom.us' has a dot so it is compared by exact equality to bundle ids and fails (real id is us.zoom.xos); (3) Group Containers use team-id or group prefixes ('group.com.google.Chrome', 'ABCDE12345.com.google.Chrome') so exact match always fails. All flagged as orphans. They are Severity.REVIEW (not auto-selected), which limits accidental one-click deletion, but the label actively misinforms the user and invites bulk-select deletion of live app state (e.g. databases, license files).",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/orphaned.py",
+        "fix": "Match on bundle-id PREFIX, not equality: an installed id com.google.Chrome should claim folders named com.google.Chrome, com.google.Chrome.*, group.com.google.Chrome, and any <teamid>.com.google.Chrome. Strip leading team-id (10 alphanumerics) and 'group.' prefix before comparing, and treat a folder as claimed if any installed id startswith or contains the normalized name. Maintain an allowlist of human-named vendor folders ('Google','Mozilla','Microsoft','Steam', etc.) mapped to bundle prefixes. Only flag as orphan when confidence is high, and require last-modified age (e.g. untouched > 6 months) before suggesting."
+      },
+      {
+        "title": "Every directory is walked twice (size + mtime) \u2014 2x scan time and IO",
+        "severity": "high",
+        "detail": "dir_size() (core/fs.py:36) and latest_mtime() (core/fs.py:59) each do an independent full os.walk over the same tree. Every dir-yielding scanner calls both back-to-back per item: caches.py:48+50, dev_caches.py:54+56(latest_mtime arg), xcode.py:46+? (size then latest_mtime in the ScanItem ctor), browsers.py:42+? , orphaned.py:78+? , trash_scanner.py:30+? On large trees (Xcode DerivedData, npm cache, Maven .m2 with tens of thousands of files) this doubles wall-clock and disk IO. latest_mtime also re-stats every file a second time.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/fs.py",
+        "fix": "Add a single function dir_stats(path) -> (total_size, latest_mtime) that walks once and accumulates both, using os.scandir() with DirEntry.stat() (one syscall per entry, caches results) instead of Path.stat(). Replace the dir_size()+latest_mtime() pairs in all six scanners with one dir_stats() call. In the native app use a single FileManager enumerator / fts(3) walk."
+      },
+      {
+        "title": "No Full Disk Access detection or guidance",
+        "severity": "high",
+        "detail": "Scanners silently swallow PermissionError in dir_size (fs.py:54), latest_mtime (fs.py:76), and every iterdir/rglob (caches.py:37, orphaned.py:60, logs.py:27, etc.). On modern macOS, ~/Library/Caches, ~/Library/Containers, Safari data, and Mail/Messages are TCC-protected and unreadable without Full Disk Access. The app will report 0 B or partial sizes and the user has no idea the scan was crippled \u2014 it just looks like there's nothing to clean. This both undercounts recoverable space and can cause a delete to 'succeed' on a partial tree.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/fs.py",
+        "fix": "Distinguish PermissionError (EACCES/EPERM) from other OSErrors and surface it. Probe a known-protected path (e.g. ~/Library/Containers/com.apple.Safari or ~/Library/Application Support/com.apple.TCC) at startup; if unreadable, show a banner with a deep link to System Settings > Privacy & Security > Full Disk Access (open 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles'). Track per-item 'incomplete (permission denied)' state so sizes aren't silently wrong."
+      },
+      {
+        "title": "safe_under_home allowlists system /Library/Caches for deletion",
+        "severity": "high",
+        "detail": "core/fs.py:98-102 allowlists '/private/var/folders' and '/Library/Caches' (the root-level system cache, not the user's ~/Library/Caches). safe_under_home() is the sole guard used by both move_to_trash and permanent_delete (trash.py:20,61). Allowing the system-wide /Library/Caches means that if any scanner ever yields such a path (or a user adds one), permanent_delete would rmtree shared OS/daemon caches, which can destabilize the system and requires/encourages running with elevated privileges. No current scanner targets it, but the guard is meant to be the last line of defense and it is too permissive.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/fs.py",
+        "fix": "Remove '/Library/Caches' from the allowlist (user caches live under HOME and are already covered). Keep the guard strictly to HOME plus the process-owned temp dir. Also resolve symlinks before the check (already done) AND verify the resolved real path still passes after resolution to defeat symlink-escape. Add an absolute denylist for ~/Library/{Mail,Messages,Photos,Application Support/MobileSync,Keychains} and ~/Library/Containers/com.apple.* in addition to the existing forbidden set."
+      },
+      {
+        "title": "Installer scanner marks generic .xz/.bz2 archives as SAFE and pre-selects them",
+        "severity": "medium",
+        "detail": "scanners/installers.py:12 includes bare '.xz' and '.bz2' in INSTALLER_SUFFIXES, and matched items are yielded with severity SAFE and selected=True (installers.py:52-54). Verified: 'myphotos.xz', 'important_notes.bz2', 'data.xz' all match. Any compressed data backup older than installers_age_days (default 30) in ~/Downloads is pre-checked for trashing. These are frequently user data archives, not installers. Combined with the trash flow this is a likely false-positive deletion of real data.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/installers.py",
+        "fix": "Drop bare '.xz' and '.bz2' (and reconsider '.zip'/'.tar.gz', which are also common data archives). Restrict to disk-image/package installer types ('.dmg','.pkg','.iso'). For ambiguous archive types, downgrade to Severity.REVIEW and selected=False, and ideally confirm 'installer-likeness' (e.g. name matches a known app, or contains a .app/.pkg) before flagging."
+      },
+      {
+        "title": "Worker poll loop stops one cycle early, dropping the final DoneMessage handling path",
+        "severity": "medium",
+        "detail": "ui/app.py:210-220 _poll_worker drains the queue then schedules another poll only while self.worker.is_running(). The worker thread sets DoneMessage and then the thread exits; there is a race where is_running() becomes False before the last queued messages (final ItemMessage/CategoryDoneMessage/DoneMessage) are drained, so the next after() is never scheduled and those messages sit in the queue unprocessed \u2014 progressbar may never stop and buttons stay disabled. The broad 'except Exception: pass' at app.py:217 also hides queue/Tk errors.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/ui/app.py",
+        "fix": "After the worker is no longer running, drain the queue one final time before stopping the poll loop; or key the loop off having seen a DoneMessage rather than thread liveness. Catch only queue.Empty in the drain loop, not bare Exception."
+      },
+      {
+        "title": "Deletion summary counts/sizes are computed via path.exists() races and lose per-category accounting",
+        "severity": "medium",
+        "detail": "ui/app.py:429-454 _perform: (a) sets item.size = 0 to 'mark gone' then immediately rebuilds the category by filtering on item.path.exists() (app.py:448) \u2014 for move_to_trash the file is gone so it is dropped, but the sidebar total is recomputed from total_size which now reads the still-listed-but-zeroed items inconsistently; (b) it only ever operates on the CURRENT category's selected items (_selected_items reads self.current_category, app.py:378-382), so a user who selected items across multiple categories in the sidebar loses the other categories' selections on delete \u2014 only the visible category is acted on, silently. There is no cross-category 'Clean All'.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/ui/app.py",
+        "fix": "Operate over all categories' selected items, not just the current one (iterate self.categories.values()). Track success by catching the action's exceptions rather than re-probing exists() (which races and misreports network/permission cases). Recompute totals from the surviving item list after removal."
+      },
+      {
+        "title": "Docker sentinel item is RISKY but still counts toward 'Recoverable' total incorrectly handled / dead selection logic",
+        "severity": "low",
+        "detail": "dev_caches.py:84-93 yields a synthetic Docker info item with size=0, severity RISKY, path pointing at a non-existent sentinel ~/Library/Caches/.macsweep_docker_info. It cannot be selected (toggle blocks RISKY, app.py:313) and size 0 means it adds nothing to totals \u2014 fine \u2014 but it clutters the list, and if a user ever Reveals it, 'open -R' fails silently. More importantly it conflates 'information' with 'scan items' in the same model with no dedicated info/advice type.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/dev_caches.py",
+        "fix": "Introduce a distinct 'advice'/'info' item kind (or an is_actionable flag on ScanItem) instead of overloading a fake path + RISKY severity. Render advice rows separately so they aren't mistaken for deletable items."
+      },
+      {
+        "title": "latest_mtime/dir_size symlink handling and is_file() follow symlinks",
+        "severity": "low",
+        "detail": "core/fs.py:65 latest_mtime uses path.is_file() which follows symlinks; if the scanned root is itself a symlink to a file it returns that target's mtime, and for a symlinked dir it will os.walk the target (followlinks defaults False so it won't descend, but the top-level stat at line 61 follows the link). dir_size skips symlinked files (fs.py:49) but os.walk(followlinks=False) still lists symlinked subdirs' names without descending \u2014 acceptable, but size of a symlinked dir target is silently 0, which can under-report. Minor correctness/under-counting.",
+        "file": "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/fs.py",
+        "fix": "Use os.lstat / Path.is_symlink() checks consistently at the root, and decide deliberately whether to resolve and size symlink targets (and guard against symlink loops with a visited-inode set)."
+      }
+    ],
+    "reusableIP": [
+      {
+        "category": "Developer-cache target list (npm/pip/cargo/gradle/etc.) with per-target severity and remediation notes",
+        "notes": "High-value curated knowledge: 17 package-manager/build-tool cache locations with relative paths, a SAFE/REVIEW classification, and a human note that often names the proper CLI cleanup command (e.g. 'pnpm store prune', 'brew cleanup', 'docker system prune'). Port this table verbatim into the native app's data model. Note pnpm/Gradle/Maven/Deno are correctly marked REVIEW because they are content-addressed stores or local repos, not pure throwaway caches \u2014 that nuance is the valuable part. Also worth porting: the Docker 'system df' read-only advice pattern (report reclaimable space, never auto-delete).",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/dev_caches.py"
+        ]
+      },
+      {
+        "category": "Xcode/CoreSimulator junk targets with severity rationale",
+        "notes": "7 Xcode targets (DerivedData SAFE; iOS/watchOS/tvOS DeviceSupport, Archives, CoreSimulator Devices REVIEW) with concise rationale for each ('Build outputs Xcode rebuilds on demand', 'keep recent archives if you ship apps'). The whole-scanner short-circuit when ~/Library/Developer doesn't exist (skip if Xcode not installed) is good product behavior to keep. DerivedData being the one auto-selected SAFE target reflects real-world safety.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/xcode.py"
+        ]
+      },
+      {
+        "category": "Three-tier severity model (SAFE / REVIEW / RISKY) driving default selection and delete-ability",
+        "notes": "Clean, portable safety taxonomy: Severity enum gates UI behavior \u2014 SAFE may be pre-selected, REVIEW shown unchecked, RISKY never selectable/deletable (enforced in UI toggle and select-all). This 'review-first, never auto-delete risky' philosophy is the product's core trust mechanism and should anchor the native app. Selected-by-default policy lives per-scanner (xcode SAFE auto-selects, installers/logs/trash auto-select) which is a reasonable default-aggressiveness dial.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/item.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/ui/app.py"
+        ]
+      },
+      {
+        "category": "safe_under_home() last-line-of-defense path guard",
+        "notes": "Single chokepoint guard used by BOTH move_to_trash and permanent_delete: resolves the path, requires it under HOME (or a small allowlist), blocks HOME itself, and denylists ~/Library/Keychains, ~/.ssh, ~/Documents. The pattern (one authoritative guard all destructive ops must pass) is excellent and should be ported \u2014 but harden it per the bugs (drop system /Library/Caches from allowlist, expand denylist to Mail/Messages/Photos/MobileSync/Containers/com.apple.*, re-check after symlink resolution).",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/fs.py"
+        ]
+      },
+      {
+        "category": "Orphaned-app-data heuristic (bundle-id reconciliation against installed apps)",
+        "notes": "The CONCEPT is valuable: enumerate installed apps' CFBundleIdentifier from /Applications + ~/Applications Info.plist, then reconcile against ~/Library/{Application Support,Containers,Group Containers} to find leftover data for uninstalled apps. The exclusion of com.apple.* and known system folders (MobileSync, CrashReporter, iCloud) is good. The matching logic itself is buggy (see bugs) \u2014 port the data sources and the com.apple exclusion, but rewrite the matcher to use bundle-id prefix matching, strip team-id/'group.' prefixes, map human-named vendor folders, and require staleness before flagging.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/orphaned.py"
+        ]
+      },
+      {
+        "category": "Trash strategy: Finder 'Put Back'-preserving delete with manual fallback + typed-confirm for large permanent deletes",
+        "notes": "Two-tier delete strategy worth porting: prefer Finder-mediated trash (preserves the OS 'Put Back' restore metadata) and fall back to a manual move into ~/.Trash with timestamp de-duplication of name collisions (trash.py:_manual_trash). empty_trash() returns reclaimed bytes. UI requires typing 'DELETE' for permanent deletes over 1 GB (app.py:_ask_typed_confirm) \u2014 a good friction-for-destructive-action pattern. In the native app, replace osascript with FileManager.trashItem (gets Put Back for free and removes the injection risk) but keep the size-up-to-permanent fallback, name-collision handling, and reclaimed-bytes accounting.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/trash.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/ui/app.py"
+        ]
+      },
+      {
+        "category": "Browser-cache target list and cache-vs-state separation",
+        "notes": "Curated per-browser cache paths (Safari/Chrome/Firefox/Brave/Arc/Edge/Opera) including the tricky Chrome subpaths (Code Cache, GPUCache, Service Worker CacheStorage under Application Support, not just Library/Caches). Crucially, browsers are EXCLUDED from the generic App Caches scanner (caches.py EXCLUDE set) so they're handled by the dedicated, careful list \u2014 that 'route browsers to a specialist scanner' decision avoids nuking cookies/profile state and is worth keeping.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/browsers.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/caches.py"
+        ]
+      },
+      {
+        "category": "Pluggable scanner architecture (registry + base class + streaming worker)",
+        "notes": "Clean extensibility pattern: @register decorator collects scanner factories, discover() imports modules to self-register, each Scanner yields ScanItems lazily, and a background worker streams ProgressMessage/ItemMessage/CategoryStart/Done over a queue to a polling UI thread (cancellable via threading.Event). Settings singleton with type-coerced getters and per-category size/age thresholds + excluded_paths. The model (streaming results, cancel token, per-scanner thresholds) maps directly onto a Swift async-sequence / actor design.",
+        "paths": [
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/registry.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/scanners/base.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/ui/scan_worker.py",
+          "/Users/augustusedem/CLEANSTUFF/reference-prototype/macsweep/core/settings.py"
+        ]
+      }
+    ],
+    "gaps": [
+      "No tests whatsoever \u2014 the tests/ directory is empty. Safety-critical delete/guard logic (safe_under_home, trash escaping, orphaned matcher) has zero coverage. A cleaner that deletes files MUST have a tested safety harness.",
+      "No undo / restore tracking beyond relying on macOS Trash. Permanent delete is irreversible with only a typed-confirm gate. Competitive cleaners keep a removal log / quarantine so users can review and roll back what was cleaned.",
+      "No size accuracy via APFS awareness \u2014 uses logical st_size, ignores APFS clones/sparse files/compression and hardlinks (files counted multiple times). Reported 'recoverable' space will overstate actual freed space; competitors measure on-disk (allocated) size and dedup hardlinks.",
+      "No Full Disk Access onboarding/permission flow (see bug) \u2014 a native cleaner needs a first-run TCC prompt + Privacy settings deep-link, otherwise it silently sees almost nothing on a default macOS install.",
+      "No application uninstaller \u2014 finding orphaned data is only half the job; users expect 'drag app here / select app -> remove app + all its caches, prefs, containers, login items, launch agents'. There is no app-centric uninstall flow, only leftover-detection.",
+      "Missing high-value scan categories competitors ship: duplicate-file finder, large-folder/disk treemap visualization, mail/iMessage attachment cleanup, iOS device backups (~/Library/Application Support/MobileSync/Backup), language-file (.lproj) stripping, broken login items / launch agents, leftover kernel extensions, and Time Machine local snapshots (tmutil).",
+      "No scheduling / background monitoring / menu-bar agent \u2014 competitive utilities offer periodic scans, low-disk alerts, and a menu-bar quick-clean. This is a one-shot foreground Tk app.",
+      "No real packaging, signing, notarization, or sandbox/entitlements story \u2014 pyproject builds a console script only; there is no .app bundle, code signing, notarization, hardened runtime, or App Sandbox temporary-exception design. Required for distribution and for the FDA permission to even work.",
+      "No localization, accessibility (VoiceOver), or Retina/dark-mode-aware UI \u2014 the Tk 'aqua' theme with hardcoded hex colors won't adapt to macOS appearance; a native SwiftUI/AppKit rewrite is implied.",
+      "No safety net for files currently in use / open by other processes, no detection of iCloud-dataless (evicted) files (deleting a dataless placeholder can purge cloud-only data semantics), and no check for files inside .app bundles being referenced \u2014 large_files.py only skips paths containing '.app' by string match, which is brittle.",
+      "No per-item provenance / 'why is this safe to delete' explanation surfaced richly in UI beyond a one-line note, and no aggregated 'clean all categories' action \u2014 deletion is scoped to the currently viewed category only (see bug), so there's no single trusted one-click clean."
+    ]
+  },
+  "critique": {
+    "gaps": [
+      "SAFETY HOLE \u2014 `safeToTrash` HOME-confinement breaks legitimate dev targets. The spec's chokepoint guard 're-verify the resolved real path is under HOME and not in the denylist.' But several v1 targets are NOT under HOME: simulator runtimes live under `/Library/Developer/CoreSimulator` (spec even says SIP-protected), the Docker.raw advice card, system caches mentioned for v2, and per-project trees on external/secondary APFS volumes (`/Volumes/...`). A dev with repos on an external SSD (very common on 256/512 GB Macs \u2014 the exact target buyer) will have node_modules/target/ that the guard silently refuses to trash. The guard as written either blocks real targets or has to carve out exceptions that reintroduce the risk it exists to prevent. Needs an explicit per-scanner allowlist-of-roots model, not a single HOME check.",
+      "SAFETY HOLE \u2014 Trash on a different volume than the file is not free and can fail. `FileManager.trashItem` moving a file from an external/secondary APFS volume goes to that volume's `/Volumes/X/.Trashes/<uid>`, not `~/.Trash`. For a cross-volume move it is a copy+delete (slow, needs 2x transient space), and APFS clones/hardlinks are NOT preserved across volumes \u2014 so 'trash-not-delete' can momentarily DOUBLE disk usage on the volume you're trying to free, or fail with ENOSPC on a nearly-full disk (the literal scenario the app targets). The spec never addresses cross-volume trash, low-space trash failure, or that the 'reclaim' only lands after Empty Trash which itself needs the space to exist. This is a headline-promise failure: 'Reclaim 84 GB' then trashItem fails at 98% full.",
+      "SAFETY HOLE \u2014 node_modules 'SAFE iff sibling lockfile present' is wrong for monorepos and pnpm workspaces. In pnpm/yarn-workspace/npm-workspace monorepos the lockfile lives ONLY at the repo root, while `packages/*/node_modules` have no sibling lockfile. The spec's rule would mark every workspace package's node_modules as REVIEW (false alarm) OR, worse, the inverse heuristic could mark a vendored runtime as SAFE. Also misses: `node_modules/.bin` symlinks, `node_modules` containing patch-package patches or locally-linked (`npm link`) packages that do NOT regenerate from install. 'Regenerates' is materially false for `npm link`, `file:` deps, and patched packages.",
+      "SAFETY HOLE \u2014 Xcode DerivedData is labeled the #1 SAFE quick win, but DerivedData can hold the only copy of uncommitted state in some workflows (SwiftPM resolved-package state, `.swiftpm` user data, and crucially XCTest result bundles / coverage from CI-less local runs). More concretely, blanket-trashing DerivedData while Xcode is OPEN corrupts the live build and can crash Xcode mid-index. The spec never says 'require Xcode/Simulator/the relevant app be quit' as a hard gate for DerivedData, IDE caches, or CoreSimulator \u2014 it says it only for simctl/Simulator. Cleaning a live app's cache directory is a known corruption vector.",
+      "MISSING SAFETY GATE \u2014 no handling of in-use / locked files and partial-delete atomicity. Deleting a directory tree while a process holds files open (Docker daemon, a running dev server, a build) yields partially-deleted trees that DON'T regenerate cleanly and may leave the toolchain in a broken state requiring manual `rm -rf` + reinstall. The spec has no 'is this tool currently running?' check, no per-tree transactional semantics, and no recovery story for a half-trashed `~/.cargo` or `~/go/pkg/mod` (which is mode-0444 \u2014 trashItem may fail mid-tree leaving it half-gone).",
+      "DIFFERENTIATION GAP \u2014 the 'maintained safety database keyed by macOS version + bundle id' is asserted but has no maintenance mechanism, and the app ships with NO telemetry/account. A curated path database for dozens of toolchains rots fast (paths move every Xcode/Node/Docker release). With no telemetry, no crash reporting, and no auto-update in v1 (Sparkle is explicitly v2), a solo dev cannot detect when a path moved or a delete started failing in the field. The single biggest claimed moat over free OSS \u2014 'maintained, tested safety database' \u2014 has no operational plan and no update channel in v1. This is the differentiation's load-bearing wall and it's hollow.",
+      "MONETIZATION RISK \u2014 free-scan/paid-clean is trivially defeated and the audience knows it. The wedge buyer is a developer who, once shown 'DerivedData 35 GB, node_modules 9 GB' with exact paths in the free scan, can `rm -rf` those exact paths in 10 seconds for $0. The free tier hands the power-user the entire actionable output (paths + sizes + the correct CLI method, which the spec prints in every table) and asks them to pay $29 to run `trash` instead of `rm`. The very transparency that builds trust destroys the conversion lever for this specific audience. Pearcleaner/npkill being free and 'validating demand' cuts the other way \u2014 it proves this audience expects free.",
+      "PRICING/REVENUE RISK \u2014 $29 one-time with no recurring revenue, no telemetry, no account, against a category that demands continuous maintenance. GTM.md's own honest number is 100-400 units in 14 days. At $29 minus Polar MoR fees that is roughly $2.6k-$10k, one-time, to fund perpetual maintenance of a path database across an OS and a dozen ecosystems that change quarterly. The 'paid major-version upgrade' escape hatch (Sketch/Sublime model) is hand-waved to v2 and historically underperforms for utilities. The economics of 'maintained forever, one-time $29, no telemetry to even know it broke' do not close.",
+      "INFEASIBILITY \u2014 the FDA detection probe is partly wrong. The spec proposes test-reading `~/Library/Safari/Bookmarks.plist` AND `/Library/Preferences/com.apple.TimeMachine.plist` as FDA probes. Verified on this machine: `/Library/Preferences/com.apple.TimeMachine.plist` is `root:wheel 0644` and world-readable, so reading it succeeds WITHOUT Full Disk Access \u2014 it's a false-positive probe that will report FDA granted when it isn't. `~/Library/Safari/` is the correct TCC-gated probe; the TimeMachine path should be dropped. Also: `~/Library/Caches` itself is NOT FDA-gated (it's user-owned 0700) \u2014 many dev caches under `~/.npm`, `~/.cargo`, `~/go` are plain user dirs needing no FDA at all, so the 'everything needs FDA' framing overstates the permission wall and may push an unnecessary scary prompt.",
+      "INFEASIBILITY/UNDER-SPEC \u2014 shelling out to `docker`, `brew`, `pnpm`, `go`, `simctl`, `xcrun` from a notarized non-sandboxed GUI app is fragile and under-specified. Issues the spec ignores: (1) these tools may be installed via asdf/mise/Homebrew/Volta with shims that only resolve under the user's interactive shell init \u2014 an absolute `/opt/homebrew/bin/pnpm` may not exist (pnpm via corepack, node via nvm, etc.); the spec's 'absolute executableURL' assumption fails for shimmed toolchains. (2) `xcrun simctl`/`runtime delete` can hang or prompt; no timeout/cancellation contract is specified beyond the prototype's 8s. (3) Running `docker system prune -a --volumes` from a GUI tool is itself a data-loss vector (named volumes = local DB data) \u2014 offering it behind a checkbox is exactly the 'reckless cleaner' behavior the brand promises to avoid.",
+      "MISSING CLEANING CATEGORIES (developer) \u2014 notable omissions a power-user will immediately list: Android SDK/AVD system images + emulator (`~/Library/Android/sdk`, `~/.android/avd` \u2014 10-40 GB, huge for RN/Flutter/mobile devs), Flutter/Dart pub cache (`~/.pub-cache`, `~/.gradle` Flutter artifacts), Xcode beta/multiple-version installs and old Command Line Tools, `~/Library/Developer/CoreSimulator/Caches/dyld` specifically, Carthage (`~/Library/Caches/org.carthage.CarthageKit`), `.swiftpm` and SPM artifact cache vs the one listed, Bazel (`~/.cache/bazel`, can be 50+ GB), ccache, Nix store (`/nix` \u2014 explicitly NOT user-deletable, a trap), Composer (`~/.composer/cache`), NuGet (`~/.nuget`), `.dotnet`, Sourcetree/Tower repo caches, Postman/Insomnia, TablePlus, and Electron app caches (Slack/Discord/Notion/VS Code each cache GBs). The 'developer-native depth' wedge has visible holes.",
+      "MISSING CLEANING CATEGORIES (general/Apple) \u2014 the biggest real-world space hogs on the target 256/512 GB Macs are barely addressed: (1) `~/Library/Group Containers/...group.com.apple.notes`, Photos library bloat, and especially **Mail downloads / attachments** (deferred to v2) \u2014 often 20-80 GB. (2) Time Machine local snapshots are listed as read-only 'managed by macOS', but on a capacity-constrained Mac thinning local snapshots (`tmutil thinlocalsnapshots`) is frequently THE single biggest reclaim and the #1 cause of the 'System Data' the positioning explicitly promises to explain \u2014 surfacing it read-only under-delivers on the stated wedge. (3) iCloud Drive 'Optimize Storage' evicted-then-redownloaded files and `~/Library/Caches/CloudKit`. (4) Sleepimage/swap, old iOS .ipsw firmware in `~/Library/iTunes`."
+    ],
+    "risks": [
+      "DATA-LOSS, HIGH: The cross-volume trash + low-disk-space failure mode (trashItem copy+delete needs transient 2x space; clones not preserved across volumes; ENOSPC on a near-full disk) can lose data or strand a half-moved tree precisely when the user is most desperate. The 'always Trash, recoverable' safety promise quietly does not hold across volumes or near capacity \u2014 and 'near capacity' is the product's entire reason to exist.",
+      "DATA-LOSS, HIGH: `safeToTrash`'s single HOME-confinement rule is in direct conflict with v1 targets that live outside HOME (simulator runtimes under /Library, repos on /Volumes external SSDs, Docker.raw). Whatever carve-out makes those work reintroduces exactly the over-permissive guard called out as prototype BUG-002. There is no specified reconciliation; this is the most likely place a real deletion of real data slips through.",
+      "DATA-LOSS, MEDIUM: Cleaning DerivedData / CoreSimulator / IDE caches while the owning app (Xcode, Simulator, VS Code) is RUNNING corrupts live state. Spec gates only simctl on 'quit Simulator first' and never generalizes the running-process check. A locked/open file mid-tree-trash leaves a partially-deleted toolchain that does not regenerate.",
+      "REGENERATION-CLAIM RISK, MEDIUM: Multiple SAFE items do NOT actually regenerate cleanly \u2014 `npm link`/`file:`/patch-package node_modules, monorepo workspace packages (lockfile-at-root heuristic misfires), and `.venv`/conda envs that are the only copy of a resolved environment. Mislabeling these SAFE/pre-checked breaks builds and erodes the trust that is the brand's only moat. One viral 'Cairn nuked my monorepo' post ends the product.",
+      "TRUST/LEGAL RISK, MEDIUM: Offering `docker system prune -a --volumes` (destroys named volumes = local DB data) and any blanket DerivedData/cache sweep means a single mislabeled-SAFE incident produces real, irreversible loss for a vocal, technical audience that will publish it. For a solo studio whose entire positioning is 'the safe one,' this is existential reputational risk with no telemetry to even detect it happening in the field.",
+      "MONETIZATION RISK, HIGH: Free-scan-shows-exact-paths-and-CLI / paid-clean is self-defeating for power users who can `rm -rf` the revealed paths for free; combined with $29-one-time / no-telemetry / no-recurring-revenue against a category needing perpetual quarterly maintenance, the unit economics (100-400 units per GTM.md) do not fund the maintenance the differentiation depends on.",
+      "INFEASIBILITY RISK, MEDIUM: Verified false-positive in the FDA probe (`/Library/Preferences/com.apple.TimeMachine.plist` is world-readable, so it reports FDA-granted when it isn't); plus brittle absolute-path assumptions for shimmed toolchains (corepack/nvm/asdf/mise/Volta) mean docker/pnpm/node/brew invocations will fail or no-op on a large fraction of real dev setups, silently undercounting or erroring the headline reclaim figure.",
+      "DIFFERENTIATION RISK, MEDIUM: The 'maintained, tested safety database' moat over free OSS has no maintenance/update mechanism in v1 (no telemetry, no crash reporting, Sparkle auto-update deferred to v2). A path database that cannot be observed or updated in the field rots into the same 'abandonment-prone' state the spec criticizes Pearcleaner/DevCleaner for.",
+      "SCOPE/COMPETITIVE RISK, LOW-MEDIUM: Visible category gaps (Android SDK/AVD, Bazel, Nix-as-a-trap, pub-cache, Mail attachments, TM local-snapshot thinning) undercut both the 'developer-native depth' claim and the 'explain System Data' general-user promise; reviewers comparing against CleanMyMac/OmniDiskSweeper will list these immediately.",
+      "NAMING/IP RISK, LOW-MEDIUM: 'Cairn' is self-flagged MEDIUM TM risk and the spec hasn't run the USPTO class-9/42 + domain checks it prescribes; shipping the brand before clearing it risks a forced rename after launch SEO/Product Hunt equity is built."
+    ],
+    "missingFeatures": [
+      "Cross-volume and low-disk-space trash strategy: detect target volume, fall back behavior when trash would exceed free space, and an honest 'this needs N GB free to safely trash' precondition before promising reclaim.",
+      "A 'tool is currently running' / open-file guard before cleaning any app-owned cache (Xcode, Simulator, Docker daemon, VS Code, JetBrains, running dev servers), with a quit-first prompt.",
+      "An update + integrity channel for the safety path database (even without telemetry): a signed remote JSON the app fetches so moved/renamed paths and new toolchains can ship without a full app update; plus opt-in crash/error reporting so field failures are detectable.",
+      "Monorepo/workspace-aware regeneration model for node_modules/.venv (root-lockfile detection, pnpm workspace globs, npm/yarn workspaces) instead of a sibling-lockfile-only heuristic; detection of npm link / file: / patch-package as non-regenerable.",
+      "Missing dev categories: Android SDK + AVD images, Flutter/pub-cache, Bazel, ccache, Carthage, Composer, NuGet/.dotnet, Electron-app caches, multiple-Xcode + old Command Line Tools, .ipsw firmware.",
+      "Time Machine local-snapshot thinning as an actionable (not read-only) reclaim with explicit consequences \u2014 it's frequently the single largest reclaim on capacity-constrained Macs and central to the promised 'System Data' explainer.",
+      "Correct, verified FDA detection probe set (drop the world-readable TimeMachine plist; use only genuinely TCC-gated paths) plus per-scanner declaration of which categories actually need FDA vs. plain user dirs.",
+      "A conversion mechanic that survives a power-user audience: e.g. gate the time-saving/automation/Dev-Project-Explorer batch operations behind paid while keeping single-item clean limited, rather than revealing exact paths+CLI for free then charging for `trash` vs `rm`.",
+      "Defined timeout, cancellation, and failure-recovery contract for every shelled-out tool (simctl/docker/brew/pnpm/go), including shim-resolution (corepack/nvm/asdf/mise/Volta) rather than assuming an absolute Homebrew path.",
+      "A rollback/quarantine story beyond 'Restore from Trash' for partially-completed multi-tree operations, and verification that reclaimed bytes actually materialized (free-space delta) before declaring success."
+    ]
+  }
+}

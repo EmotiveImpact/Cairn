@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- ===== Identity ===== -->
+    <key>CFBundleIdentifier</key>
+    <string>com.emotiveimpact.cairn</string>
+    <key>CFBundleName</key>
+    <string>Cairn</string>
+    <key>CFBundleDisplayName</key>
+    <string>Cairn</string>
+    <key>CFBundleExecutable</key>
+    <string>Cairn</string>
+    <key>CFBundleIconFile</key>
+    <string>Cairn</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+
+    <!-- ===== Versioning ===== -->
+    <key>CFBundleShortVersionString</key>
+    <string>1.0.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <key>NSHighResolutionCapable</key>
+    <true/>
+
+    <!-- ===== Windowed app (real window + Dock icon) ===== -->
+    <!-- NOTE: deliberately NO LSUIElement — Cairn is a normal foreground app,
+         not a menu-bar agent. -->
+</dict>
+</plist>
