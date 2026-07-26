@@ -25,6 +25,17 @@ enum SafetyCheck {
         // sanity: a real cache target must still be cleanable
         let ok = home.appendingPathComponent("Library/Caches/some-app")
         print(SafePaths.evaluate(ok, allowedRoots: [home]).isAllowed ? "✅ cache still cleanable" : "❌ cache wrongly blocked")
+
+        // A build with the local Pro unlock still switched on must never ship —
+        // it would hand every customer Pro without a key.
+        if LicenseConfig.devProUnlock {
+            print("❌ DEV PRO UNLOCK IS ON — run: defaults delete com.emotiveimpact.cairn cairn.devPro")
+            fails += 1
+        } else {
+            print("✅ dev Pro unlock off")
+        }
+
         print(fails == 0 ? "\nALL SAFETY CHECKS PASSED" : "\n\(fails) SAFETY FAILURES")
+        if fails > 0 { exit(1) }
     }
 }

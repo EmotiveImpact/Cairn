@@ -62,7 +62,14 @@ struct AppShell: View {
     @State private var dupStore = DuplicateStore()
     @State private var appStore = AppInventoryStore()
     @StateObject private var license = LicenseManager()
-    @State private var section: NavSection = .dashboard
+    /// `Cairn --section=duplicates` opens straight onto a page. Used to profile
+    /// each screen in isolation (and to grab screenshots) without clicking.
+    @State private var section: NavSection = {
+        guard let arg = CommandLine.arguments.first(where: { $0.hasPrefix("--section=") }),
+              let s = NavSection(rawValue: String(arg.dropFirst("--section=".count)))
+        else { return .dashboard }
+        return s
+    }()
     @State private var showReview = false
     @State private var celebration: ScanStore.CleanSummary?
     @State private var fdaBannerDismissed = false
@@ -119,6 +126,34 @@ struct AppShell: View {
                let last = store.lastScanDate,
                Date().timeIntervalSince(last) > 7 * 86_400 {
                 store.startScan(includeExternalVolumes: !AppSettings.shared.ignoreExternalDrives)
+            }
+        }
+        // Records RSS + what the app was doing, to ~/Library/Logs/Cairn-memory.log.
+        // Local only. This is how a runaway spike gets traced to the page and scan
+        // that caused it, instead of being guessed at after the fact.
+        .task {
+            MemoryWatch.start {
+                var parts = ["page=\(section.rawValue)"]
+                if store.isScanning { parts.append("smartScan=\(Int(store.scanProgress * 100))%") }
+                if dupStore.isScanning { parts.append("duplicates=scanning") }
+                if appStore.isScanning { parts.append("apps=scanning") }
+                if healthStore.isScanning { parts.append("health=scanning") }
+                parts.append("items=\(store.buckets.reduce(0) { $0 + $1.items.count })")
+                parts.append("dupGroups=\(dupStore.groups.count)")
+                return parts.joined(separator: "  ")
+            }
+        }
+        // `Cairn --cycle-sections` walks the sidebar automatically. Navigation is
+        // the one thing a single-page launch can't exercise, and it's where the
+        // runaway memory shows up in real use.
+        .task {
+            guard CommandLine.arguments.contains("--cycle-sections") else { return }
+            let all = NavSection.allCases
+            var i = 0
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                i += 1
+                section = all[i % all.count]
             }
         }
     }

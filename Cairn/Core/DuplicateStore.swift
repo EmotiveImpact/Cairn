@@ -226,6 +226,8 @@ final class DuplicateStore {
         // user-initiated priority — it starved the UI and froze navigation for the
         // whole scan. Detaching guarantees it runs off-main, below the UI.
         scanTask = Task.detached(priority: .utility) { [weak self] in
+            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            defer { ScanGate.shared.release() }
             let result = await Self.findDuplicates(
                 roots: roots, minSize: minSize, cap: cap, skipDirNames: skip,
                 onProgress: { hashed, candidates in

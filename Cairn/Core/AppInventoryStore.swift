@@ -121,6 +121,8 @@ final class AppInventoryStore {
         lastError = nil
         progress = "Reading installed apps…"
         scanTask = Task { [weak self] in
+            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            defer { ScanGate.shared.release() }
             await self?.run(box: box)
         }
     }

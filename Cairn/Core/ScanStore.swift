@@ -243,6 +243,8 @@ final class ScanStore {
         let external = includeExternalVolumes
         let granted = fdaGranted
         scanTask = Task { [weak self] in
+            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            defer { ScanGate.shared.release() }
             await self?.run(scanners: scanners, includeExternal: external, fdaGranted: granted)
         }
     }

@@ -108,6 +108,9 @@ struct ProPill: View {
     }
 
     private var label: String {
+        // Unmistakable while the local dev unlock is on, so a dev build is never
+        // mistaken for a real licence.
+        if LicenseConfig.devProUnlock { return "Cairn Pro · DEV" }
         if license.isPro { return "Cairn Pro" }
         if license.isInTrial { return "Trial · \(license.trialDaysRemaining)d left" }
         return "Upgrade to Pro"

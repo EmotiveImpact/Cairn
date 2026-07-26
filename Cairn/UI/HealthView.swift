@@ -15,18 +15,32 @@ struct HealthView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 24) {
-                headerBlock
-                ShieldBadge(healthy: store.isHealthy)
-                content
+            VStack(spacing: 0) {
+                // Health used to wear a centred header over the old purple
+                // AmbientBackground, which made it read as a different app from
+                // every other page. Same full-bleed hero as the rest now.
+                PageHero(title: "Health", subtitle: subtitle) {
+                    Button { store.rescan() } label: {
+                        Label("Rescan", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(WhiteButtonStyle())
+                    .disabled(store.isScanning)
+                    if !store.isHealthy && !store.allFixable.isEmpty {
+                        Button { fixAllConfirm = true } label: {
+                            Label("Fix all", systemImage: "wrench.and.screwdriver.fill")
+                        }
+                        .buttonStyle(WhiteButtonStyle())
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 16) {
+                    lastScanRow
+                    ShieldBadge(healthy: store.isHealthy).frame(maxWidth: .infinity)
+                    content
+                }
+                .heroPageContent()
             }
-            .frame(maxWidth: 720)
-            .frame(maxWidth: .infinity)
-            .padding(.horizontal, 28)
-            .padding(.vertical, 32)
         }
-        .background(AmbientBackground())
-        .overlay(alignment: .topTrailing) { lastScanCard.padding(28) }
         .task {
             guard !didStart else { return }
             didStart = true
@@ -50,27 +64,6 @@ struct HealthView: View {
         }
     }
 
-    // MARK: - Header
-
-    private var headerBlock: some View {
-        VStack(spacing: 10) {
-            Text("HEALTH")
-                .font(.system(size: 10, weight: .black)).tracking(1.6)
-                .foregroundStyle(Brand.blue)
-            Text("Keeping your Mac healthy and running its best.")
-                .font(.system(size: 28, weight: .bold))
-                .foregroundStyle(Brand.textPrimary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(subtitle)
-                .font(.system(size: 14))
-                .foregroundStyle(Brand.textSecondary)
-                .multilineTextAlignment(.center)
-                .frame(maxWidth: 480)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-    }
-
     private var subtitle: String {
         if store.isScanning { return "Checking your Mac for issues that can be safely fixed." }
         if store.isHealthy { return "Everything looks great — nothing needs fixing right now." }
@@ -78,27 +71,16 @@ struct HealthView: View {
         return "We found \(n) issue\(n == 1 ? "" : "s") that can be safely reviewed and fixed."
     }
 
-    // MARK: - Last Scan card
+    // MARK: - Last scan
 
-    private var lastScanCard: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("LAST SCAN").font(.system(size: 9, weight: .black)).tracking(1).foregroundStyle(Brand.textMuted)
-            HStack(spacing: 6) {
-                if store.isScanning {
-                    ProgressView().controlSize(.small)
-                    Text("Scanning…").font(.system(size: 12, weight: .semibold)).foregroundStyle(Brand.textSecondary)
-                } else {
-                    Text(lastScanText).font(.system(size: 12, weight: .semibold)).foregroundStyle(Brand.textSecondary)
-                }
-                Button { store.rescan() } label: {
-                    Image(systemName: "arrow.clockwise").font(.system(size: 11, weight: .semibold)).foregroundStyle(Brand.blue)
-                }
-                .buttonStyle(.plain)
-                .disabled(store.isScanning)
-                .help("Re-scan")
-            }
+    /// Rescan now lives in the hero, so this is just the quiet status line.
+    private var lastScanRow: some View {
+        HStack(spacing: 6) {
+            if store.isScanning { ProgressView().controlSize(.small) }
+            Text(store.isScanning ? "Checking…" : "Last checked \(lastScanText)")
+                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            Spacer()
         }
-        .cairnCard(10, radius: 10)
     }
 
     private var lastScanText: String {

@@ -8,12 +8,96 @@ struct SectionView: View {
     var onReview: () -> Void
 
     private var buckets: [ScanStore.Bucket] { section.buckets(store) }
+    private var shown: [ScanStore.Bucket] {
+        buckets.filter { !$0.items.isEmpty }.sorted { $0.totalSize > $1.totalSize }
+    }
+    private var total: Int64 { buckets.reduce(0) { $0 + $1.totalSize } }
 
     var body: some View {
         ScrollView {
-            CategoryResults(store: store, buckets: buckets, title: section.title, onReview: onReview)
-                .padding(28)
+            VStack(spacing: 0) {
+                PageHero(title: section.title,
+                         subtitle: subtitle,
+                         progress: total > 0 ? 1 : 0.02,
+                         value: total,
+                         caption: "Reclaimable",
+                         footnote: shown.isEmpty ? "\(buckets.count) categories" : "\(shown.count) with results") {
+                    Button { for b in buckets { store.selectAllSafe(in: b.id) } } label: {
+                        Label("Select all safe", systemImage: "checklist")
+                    }
+                    .buttonStyle(WhiteButtonStyle())
+                    .disabled(shown.isEmpty)
+                    Button { store.rescan() } label: {
+                        Label("Rescan", systemImage: "arrow.clockwise")
+                    }
+                    .buttonStyle(WhiteButtonStyle())
+                }
+                content.heroPageContent()
+            }
         }
+    }
+
+    /// Says what this pillar actually covers, so the page explains itself.
+    private var subtitle: String {
+        switch section {
+        case .ai:
+            return "Model weights, embeddings and agent caches. Large, rebuildable, and re-downloaded on demand — your conversations are never touched."
+        case .creative:
+            return "Render caches, previews, proxies and scratch files left behind by your creative tools."
+        default:
+            return "Reclaimable space in this category."
+        }
+    }
+
+    @ViewBuilder private var content: some View {
+        if store.isScanning && shown.isEmpty {
+            LoadingState(label: "Scanning \(section.title.lowercased())…")
+                .cairnCard(0)
+        } else if !store.hasScanned {
+            EmptyState(icon: section.icon,
+                       title: "No scan yet",
+                       caption: "Run a scan to see what \(section.title) is holding on to.",
+                       tint: Brand.blue)
+                .cairnCard(0)
+        } else if shown.isEmpty {
+            EmptyState(icon: "checkmark.circle.fill",
+                       title: "Nothing to clean here",
+                       caption: "Cairn found no reclaimable space in \(section.title). You're tidy.",
+                       tint: Brand.safeCyan)
+                .cairnCard(0)
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(shown) { bucket in
+                    CategoryDisclosure(store: store, bucketID: bucket.id)
+                }
+                cleanBar
+            }
+        }
+    }
+
+    /// The one primary action on the page, anchored under the list.
+    private var cleanBar: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(store.selectedCount > 0
+                     ? "\(store.selectedCount) selected · \(Fmt.size(store.selectedTotal))"
+                     : "Nothing selected")
+                    .font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textPrimary)
+                Text("Everything goes to the Trash — you can put it back.")
+                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            }
+            Spacer()
+            Button("Select none") { for b in buckets { store.selectNone(in: b.id) } }
+                .buttonStyle(GhostButtonStyle())
+                .disabled(store.selectedCount == 0)
+            Button(action: onReview) {
+                Text(store.selectedCount > 0 ? "Review & Clean \(Fmt.size(store.selectedTotal))" : "Review & Clean")
+            }
+            .buttonStyle(BrandButtonStyle(enabled: store.selectedCount > 0))
+            .disabled(store.selectedCount == 0)
+        }
+        .padding(14)
+        .background(CardBackground(level: .low))
     }
 }
 

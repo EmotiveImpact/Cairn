@@ -20,6 +20,19 @@ enum LicenseConfig {
     /// Where buyers without a key purchase Cairn Pro (domain TBD pre-launch).
     static let purchaseURL = URL(string: "https://getcairn.app/#pricing")!
     static let price = "£95"
+
+    /// DEV ONLY — unlocks Pro locally so Pro-gated screens can be built and
+    /// reviewed without a real key. Off unless explicitly switched on for this
+    /// user on this Mac:
+    ///
+    ///     defaults write com.emotiveimpact.cairn cairn.devPro -bool true
+    ///     defaults delete com.emotiveimpact.cairn cairn.devPro     # turn back off
+    ///
+    /// No code path enables this by default, so a shipped build is never Pro
+    /// without a key. `--safetycheck` FAILS while it is on, so a build with it
+    /// left enabled can't pass the release gate. The UI also shows a DEV PRO
+    /// badge, so it can never be mistaken for a real licence.
+    static var devProUnlock: Bool { UserDefaults.standard.bool(forKey: "cairn.devPro") }
 }
 
 // MARK: - Device identity
@@ -205,6 +218,7 @@ final class LicenseManager: ObservableObject {
         trialStart = TrialStore.startDate()
         stored = LicenseStore.load()
         if let s = stored, s.granted, Date().timeIntervalSince(s.lastValidated) < LicenseConfig.offlineGrace { isPro = true }
+        if LicenseConfig.devProUnlock { isPro = true }
         recompute()
         Task { await refresh() }
     }
@@ -247,6 +261,8 @@ final class LicenseManager: ObservableObject {
 
     func refresh() async {
         defer { recompute() }
+        // Never let a network round-trip revoke the local dev unlock.
+        if LicenseConfig.devProUnlock { isPro = true; return }
         guard let s = stored else { isPro = false; return }
         do {
             let granted = try await client.validate(key: s.key, activationID: s.activationID)

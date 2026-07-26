@@ -12,30 +12,29 @@ struct SettingsPage: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Settings").font(.system(size: 24, weight: .bold)).foregroundStyle(Brand.textPrimary)
-                    Text("Customize Cairn to keep your Mac clean, safe, and optimized.")
-                        .font(.system(size: 14)).foregroundStyle(Brand.textSecondary)
-                }
+            VStack(spacing: 0) {
+                // Same full-bleed hero every other page wears, so Settings doesn't
+                // read as a different app.
+                PageHero(title: "Settings",
+                         subtitle: "Customize Cairn to keep your Mac clean, safe and fast. Everything saves automatically and stays on this Mac.")
 
-                ProStatusCard(license: license)
+                VStack(alignment: .leading, spacing: 16) {
+                    ProStatusCard(license: license)
 
-                HStack(alignment: .top, spacing: 16) {
-                    VStack(spacing: 16) { general; smartScan; safety; notifications }.frame(maxWidth: .infinity)
-                    VStack(spacing: 16) { developerTools; ignoredLocations; restoreBin; aboutCard }.frame(maxWidth: .infinity)
-                }
+                    HStack(alignment: .top, spacing: 16) {
+                        VStack(spacing: 16) { general; smartScan; safety; notifications }.frame(maxWidth: .infinity)
+                        VStack(spacing: 16) { developerTools; ignoredLocations; restoreBin; aboutCard }.frame(maxWidth: .infinity)
+                    }
 
-                HStack(spacing: 8) {
-                    Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                    Text("Your settings are saved automatically and stay on this Mac.")
-                        .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.fill").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                        Text("Your settings are saved automatically and stay on this Mac.")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    }
+                    .padding(.top, 2)
                 }
-                .padding(.top, 2)
+                .heroPageContent()
             }
-            .padding(Space.page)
-            .frame(maxWidth: Brand.contentMaxWidth, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
     }
 

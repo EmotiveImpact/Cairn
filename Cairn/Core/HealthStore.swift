@@ -101,6 +101,8 @@ final class HealthStore {
         lastResult = nil
         let scanner = HealthScanner()
         scanTask = Task { [weak self] in
+            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            defer { ScanGate.shared.release() }
             let result = await scanner.run { msg in
                 Task { @MainActor in self?.progressText = msg }
             }
