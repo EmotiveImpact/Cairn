@@ -15,6 +15,13 @@ struct CairnMain {
             SelfTest.run()
             return
         }
+        // `cairn status|scan|clean|categories` — the CLI. Checked before the
+        // SwiftUI lifecycle so no window server is ever touched.
+        let args = Array(CommandLine.arguments.dropFirst())
+        if let first = args.first, CLI.commands.contains(first) {
+            CLI.run(args)
+            return
+        }
         CairnApp.main()
     }
 }

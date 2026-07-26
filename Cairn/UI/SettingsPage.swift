@@ -9,6 +9,29 @@ struct SettingsPage: View {
     @Bindable private var s = AppSettings.shared
     @ObservedObject var license: LicenseManager
     @State private var showAbout = false
+    @State private var cliInstalled = FileManager.default.fileExists(atPath: "/usr/local/bin/cairn")
+
+    /// Symlinks the app's own binary as `cairn`, the way VS Code installs `code`.
+    /// /usr/local/bin usually isn't writable without admin rights, so on failure
+    /// we hand the user the exact command instead of failing silently.
+    private func installCLI() {
+        guard let binary = Bundle.main.executableURL else { return }
+        let target = URL(fileURLWithPath: "/usr/local/bin/cairn")
+        let fm = FileManager.default
+        try? fm.removeItem(at: target)
+        do {
+            try fm.createSymbolicLink(at: target, withDestinationURL: binary)
+            cliInstalled = true
+        } catch {
+            let command = "sudo mkdir -p /usr/local/bin && sudo ln -sf '\(binary.path)' /usr/local/bin/cairn"
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(command, forType: .string)
+            let alert = NSAlert()
+            alert.messageText = "Command copied"
+            alert.informativeText = "Installing needs admin rights. The install command is on your clipboard — paste it into Terminal."
+            alert.runModal()
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -113,6 +136,11 @@ struct SettingsPage: View {
             toggleRow("Include simulators", "Remove iOS Simulator data.", $s.includeSimulators)
             div
             actionRow("Exclude folders", "Add folders to exclude from scans.", button: "Manage…") { addFolder() }
+            div
+            actionRow("Command line tool",
+                      cliInstalled ? "`cairn` is installed — try `cairn status`."
+                                   : "Use Cairn from the terminal: scan, clean, and script it.",
+                      button: cliInstalled ? "Reinstall" : "Install…") { installCLI() }
         }
     }
 
