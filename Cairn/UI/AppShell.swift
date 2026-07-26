@@ -120,6 +120,11 @@ struct AppShell: View {
         .onAppear {
             store.loadSnapshot()
             store.loadRemovalLog()
+            StorageHistory.record()   // one free-space sample a day, for the forecast
+            // Watch for dev tools quitting. Does nothing unless the setting is on
+            // AND Pro is unlocked — the guard lives at the point of use so a trial
+            // expiring mid-session can't leave a trigger armed.
+            SmartTriggers.shared.start(store: store, isProUnlocked: { proEnabled })
             // Honor "Auto Scan Weekly": refresh a stale (>7-day-old) scan on open.
             // Never fires on first run — landing idle stays the first impression.
             if AppSettings.shared.autoScanWeekly, store.phase == .idle,

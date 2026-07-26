@@ -100,6 +100,14 @@ struct SettingsPage: View {
 
     private var developerTools: some View {
         card("chevron.left.forwardslash.chevron.right", "Developer Tools") {
+            toggleRow("Clean when I quit a dev app",
+                      license.isUnlocked
+                        ? "When you quit Xcode, Cursor or Android Studio, Cairn sweeps that tool's regenerable caches to the Trash."
+                        : "Pro — when you quit Xcode, Cursor or Android Studio, Cairn sweeps that tool's regenerable caches to the Trash.",
+                      $s.cleanOnQuitDevApp)
+                .disabled(!license.isUnlocked)
+                .opacity(license.isUnlocked ? 1 : 0.55)
+            div
             toggleRow("Include developer caches", "Clean Xcode, CocoaPods, and other caches.", $s.includeDeveloperCaches)
             div
             toggleRow("Include simulators", "Remove iOS Simulator data.", $s.includeSimulators)

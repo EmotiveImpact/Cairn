@@ -236,6 +236,8 @@ struct DashboardView: View {
             Divider().overlay(Brand.border)
             freeSpaceRow
             Divider().overlay(Brand.border)
+            forecastRow
+            Divider().overlay(Brand.border)
             fdaRow
             Divider().overlay(Brand.border)
             statusRow("checkmark.shield", "Privacy Protection", "Local-only", ok: true)
@@ -252,6 +254,15 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, minHeight: 290, alignment: .top)
         .cairnCard(16)
+    }
+
+    /// Where the disk is heading, not just where it is. Reads a cached projection
+    /// off 90 days of daily samples — no scanning, no filesystem walk.
+    @ViewBuilder private var forecastRow: some View {
+        let f = StorageHistory.summary()
+        // Both symbols ship in macOS 13+; a name that doesn't exist renders blank.
+        statusRow(f.urgent ? "chart.line.uptrend.xyaxis" : "chart.xyaxis.line",
+                  "Storage Trend", f.text, ok: !f.urgent)
     }
 
     /// Free space, told honestly. A near-full disk makes macOS thrash (no room for

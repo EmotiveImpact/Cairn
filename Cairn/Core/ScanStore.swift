@@ -450,6 +450,47 @@ final class ScanStore {
 
     // MARK: - Cleaning
 
+    /// Smart Triggers entry point: scan ONE category and clean only what is
+    /// unambiguously safe to remove without asking.
+    ///
+    /// Deliberately far stricter than a user-driven clean. Automatic removal has
+    /// no human in the loop, so it takes only items that are SAFE, regenerable,
+    /// and go to the Trash — never `.tool` (which shells out) or `.emptyTrash`
+    /// (which is permanent), and never anything needing a running daemon. Returns
+    /// bytes reclaimed. Everything still flows through `clean`, so the removal
+    /// log, Restore Bin and lifetime total stay correct.
+    func autoClean(categoryID: String) async -> Int64 {
+        guard let scanner = ScannerRegistry.all().first(where: { $0.info.id == categoryID }) else { return 0 }
+
+        await ScanGate.shared.acquire()
+        let found = Collector()
+        let ctx = ScanContext(
+            fdaGranted: FullDiskAccess.isGranted(),
+            includeExternalVolumes: false,
+            minSizeBytes: 5 * 1024 * 1024,
+            emit: { found.add($0) },
+            progress: { _ in },
+            isCancelled: { false }
+        )
+        await scanner.scan(ctx)
+        ScanGate.shared.release()
+
+        let candidates = found.items.filter { item in
+            guard item.severity == .safe, item.isRegenerable, !item.requiresRunning else { return false }
+            if case .trash = item.cleanMethod { return true }
+            return false
+        }
+        guard !candidates.isEmpty else { return 0 }
+        return await clean(candidates, proEnabled: true).bytes
+    }
+
+    /// Thread-safe sink for a one-off scanner run.
+    private final class Collector: @unchecked Sendable {
+        private let lock = NSLock()
+        private(set) var items: [ScanItem] = []
+        func add(_ item: ScanItem) { lock.lock(); items.append(item); lock.unlock() }
+    }
+
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and accumulates reclaimed bytes.
     func clean(_ items: [ScanItem], proEnabled: Bool) async -> CleanSummary {

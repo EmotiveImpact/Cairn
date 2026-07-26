@@ -49,6 +49,10 @@ final class AppSettings {
     var smartRecommendations: Bool { didSet { d.set(smartRecommendations, forKey: "cairn.smartRecommendations") } }
 
     // Developer Tools
+    /// Smart Triggers — clean a tool's regenerable caches when you quit it.
+    /// Pro-gated at the point of use, and only ever touches SAFE + regenerable
+    /// items that go to the Trash.
+    var cleanOnQuitDevApp: Bool { didSet { d.set(cleanOnQuitDevApp, forKey: "cairn.cleanOnQuitDevApp") } }
     var includeDeveloperCaches: Bool { didSet { d.set(includeDeveloperCaches, forKey: "cairn.includeDeveloperCaches") } }
     var includeSimulators: Bool { didSet { d.set(includeSimulators, forKey: "cairn.includeSimulators") } }
 
@@ -65,6 +69,7 @@ final class AppSettings {
         askBeforeDeleting = b("cairn.askBeforeDeleting", true)
         createRestoreSnapshot = b("cairn.createRestoreSnapshot", true)
         ignoreExternalDrives = b("cairn.ignoreExternalDrives", true)
+        cleanOnQuitDevApp = b("cairn.cleanOnQuitDevApp", false)   // opt-in: it deletes without asking
         protectSystemFiles = b("cairn.protectSystemFiles", true)
         skipOpenFiles = b("cairn.skipOpenFiles", true)
         secureDeletion = b("cairn.secureDeletion", false)
