@@ -5,6 +5,8 @@ struct SmartScanView: View {
     var onReview: () -> Void
     var onMissionReview: () -> Void
     @State private var showMap = false
+    /// Stable anchor for the elapsed-time TimelineView (see note below).
+    @State private var timelineAnchor = Date()
 
     var body: some View {
         if store.isScanning {
@@ -53,7 +55,10 @@ struct SmartScanView: View {
             HStack {
                 Text("Smart Scan").font(.system(size: 15, weight: .semibold)).foregroundStyle(Brand.textPrimary)
                 Spacer()
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                // `from: .now` re-evaluated per render created a NEW schedule every
+                // frame, which invalidated the view, which re-rendered… an infinite
+                // loop that pinned the main thread during scans. Anchor the start.
+                TimelineView(.periodic(from: timelineAnchor, by: 1)) { _ in
                     HStack(spacing: 10) {
                         metaStat("ELAPSED", elapsed)
                         metaStat("PROGRESS", "\(Int(store.scanProgress * 100))%")

@@ -91,7 +91,14 @@ struct AppShell: View {
             }
             if let celebration { CelebrationOverlay(summary: celebration, store: store) { self.celebration = nil } }
         }
-        .frame(minWidth: 1040, minHeight: 720)
+        // NO minimum-width frame here. The sidebar is a hard `.frame(width: 250)`
+        // and the content area declares `.frame(minWidth: 820)` — together they
+        // require 1070pt. Declaring 1040 here made those constraints mutually
+        // unsatisfiable, so near the minimum width AppKit re-solved the layout
+        // forever: 100% main thread, RSS climbing ~45MB/s, navigation frozen
+        // app-wide, and no view body ever re-evaluating (it was layout, not
+        // render). The window owns the floor instead — see AppDelegate, which
+        // sets minSize to exactly 250 + 820.
         .focusEffectDisabled()   // no blue keyboard-focus outline on nav rows / buttons
         .sheet(isPresented: $showReview) {
             ReviewSheet(store: store, proEnabled: proEnabled,
@@ -260,6 +267,19 @@ private struct NavRow: View {
 
 struct DeviceCard: View {
     let store: ScanStore
+
+    // CRITICAL: never read live disk values from this body.
+    //
+    // These used to call `DeviceInfo.available` / `.usedFraction` directly, and the
+    // storage bar's width (inside a GeometryReader) therefore depended on free
+    // space. Free space fluctuates constantly — especially on a nearly-full disk —
+    // so layout read the disk, got a different number, re-laid out, read again…
+    // an infinite layout-feedback loop that pinned the main thread at 100% CPU and
+    // froze navigation across the entire app. The values are snapshotted into
+    // @State and refreshed on a slow timer instead.
+    @State private var freeBytes: Int64 = 0
+    @State private var usedFraction: Double = 0
+
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
@@ -270,21 +290,33 @@ struct DeviceCard: View {
             Text(DeviceInfo.specLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
             Text(DeviceInfo.storageLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
 
-            // Storage bar
+            // Storage bar — driven by the snapshot, never a live read.
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
                     Capsule().fill(Brand.border)
                     Capsule().fill(Brand.brand)
-                        .frame(width: geo.size.width * DeviceInfo.usedFraction)
+                        .frame(width: max(0, geo.size.width * usedFraction))
                 }
             }
             .frame(height: 6)
             .padding(.top, 2)
 
-            Text("\(Fmt.size(DeviceInfo.available)) available")
+            Text("\(Fmt.size(freeBytes)) available")
                 .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
         }
         .cairnCard(14)
+        .task(id: "deviceStats") {
+            while !Task.isCancelled {
+                let free = DeviceInfo.available
+                let frac = DeviceInfo.usedFraction
+                // Only publish a real change, so tiny fluctuations don't redraw.
+                if abs(frac - usedFraction) > 0.001 || abs(free - freeBytes) > 50_000_000 {
+                    freeBytes = free
+                    usedFraction = frac
+                }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)   // 5s
+            }
+        }
     }
 
     /// A render for THIS Mac's model if we ship one (`mac-macmini.png`,

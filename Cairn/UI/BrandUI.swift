@@ -15,9 +15,20 @@ import AppKit
 /// `onHover` costs nothing and cannot feed back into layout.
 struct PointerCursor: ViewModifier {
     func body(content: Content) -> some View {
-        content.onHover { inside in
-            if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
-        }
+        // Currently a NO-OP, deliberately. Two implementations of the pointing-hand
+        // cursor each caused a runaway main-thread loop:
+        //
+        //  1. An NSViewRepresentable installing an NSTrackingArea in
+        //     `updateTrackingAreas()` — mutating tracking areas triggers layout,
+        //     which calls `updateTrackingAreas()` again.
+        //  2. `onHover { NSCursor.pointingHand.push() / .pop() }` — pushing a cursor
+        //     provokes an AppKit cursor-update, which SwiftUI surfaces as another
+        //     hover change, which pushes again. With ten always-visible sidebar rows
+        //     this pinned the CPU at 100% and froze navigation app-wide.
+        //
+        // The call sites are kept so the intent (and the fix location) is obvious.
+        // Revisit with `.onContinuousHover` and a single owner for cursor state.
+        content
     }
 }
 extension View { func pointerCursor() -> some View { modifier(PointerCursor()) } }

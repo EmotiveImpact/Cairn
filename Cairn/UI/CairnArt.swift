@@ -5,7 +5,12 @@ struct CairnLogo: View {
     var size: CGFloat = 34
 
     var body: some View {
-        VStack(spacing: -size * 0.012) {
+        // NOTE: spacing must not be negative. A negative-spacing VStack whose
+        // children overlap, wrapped in a fixed `.frame` and a `.shadow`, made
+        // SwiftUI's layout oscillate — it re-measured forever, pinning the main
+        // thread at 100% CPU and freezing navigation across the whole app (the
+        // logo sits in the always-visible sidebar). Positive spacing is stable.
+        VStack(spacing: size * 0.03) {
             Capsule().fill(Brand.blue.opacity(0.48)).frame(width: size * 0.24, height: size * 0.085)
             Capsule().fill(Brand.blue.opacity(0.60)).frame(width: size * 0.36, height: size * 0.10)
             Capsule().fill(Brand.blue.opacity(0.74)).frame(width: size * 0.48, height: size * 0.12)
@@ -14,7 +19,6 @@ struct CairnLogo: View {
                 .frame(width: size * 0.66, height: size * 0.16)
         }
         .frame(width: size, height: size)
-        .shadow(color: Brand.blue.opacity(0.16), radius: size * 0.08, y: size * 0.03)
     }
 }
 
