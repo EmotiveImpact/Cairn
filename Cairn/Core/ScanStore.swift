@@ -150,6 +150,7 @@ final class ScanStore {
               let data = try? Data(contentsOf: Self.snapshotURL),
               let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         lastSnapshot = snap
+        ReclaimStats.shared.reclaimableBytes = snap.buckets.reduce(Int64(0)) { $0 + $1.bytes }
     }
 
     private func saveSnapshot() {
@@ -159,6 +160,7 @@ final class ScanStore {
         }
         let snap = Snapshot(date: Date(), buckets: snaps)
         lastSnapshot = snap
+        ReclaimStats.shared.reclaimableBytes = snaps.reduce(Int64(0)) { $0 + $1.bytes }
         if let data = try? JSONEncoder().encode(snap) { try? data.write(to: Self.snapshotURL, options: .atomic) }
     }
 
@@ -518,6 +520,7 @@ final class ScanStore {
             buckets[b].removeItems { cleanedIDs.contains($0.id) }
         }
         movedToTrashBytes += summary.bytes
+        ReclaimStats.shared.recordClean(bytes: summary.bytes)   // lifetime total
         lastCleanSummary = summary
         appendRemovals(logEntries)
         // Re-save the snapshot so the cached dashboard reflects post-clean totals
@@ -536,6 +539,12 @@ final class ScanStore {
             restored.insert(entry.trash.path)
         }
         if !restored.isEmpty {
+            // Take the bytes back off the lifetime total before dropping the
+            // entries, so the headline number only counts space actually kept.
+            let restoredBytes = removalLog
+                .filter { $0.trashPath.map(restored.contains) ?? false }
+                .reduce(Int64(0)) { $0 + $1.bytes }
+            ReclaimStats.shared.recordRestore(bytes: restoredBytes)
             removalLog.removeAll { $0.trashPath.map(restored.contains) ?? false }
             saveRemovalLog()
         }

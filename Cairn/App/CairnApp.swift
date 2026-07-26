@@ -26,6 +26,7 @@ struct CairnApp: App {
     // setting change re-evaluated the App body, rebuilt `AppShell`, and reset its
     // @State stores — silently restarting every scan (runaway CPU + memory).
     @AppStorage("cairn.showMenuBarItem") private var showMenuBarItem = true
+    @StateObject private var reclaim = ReclaimStats.shared
 
     /// Writes through only on a REAL change — see the note on MenuBarExtra below.
     private var menuBarInserted: Binding<Bool> {
@@ -72,8 +73,18 @@ struct CairnApp: App {
         // into the gigabytes and the whole app froze. No view body ever
         // re-evaluated, which is why it looked like a render bug rather than a
         // scene bug. This binding drops no-op writes, which breaks the cycle.
-        MenuBarExtra("Cairn", systemImage: "mountain.2.fill", isInserted: menuBarInserted) {
+        // Shows the reclaimable total at a glance, which is what makes a menu bar
+        // item worth having. The value comes from `ReclaimStats` rather than the
+        // scan engine, so the App scene never depends on a store — reading a
+        // rarely-changing published Int is safe here; it was MenuBarExtra WRITING
+        // its own binding on every update that caused the freeze, not reading.
+        MenuBarExtra(isInserted: menuBarInserted) {
             MenuBarContent()
+        } label: {
+            Image(systemName: "mountain.2.fill")
+            if reclaim.reclaimableBytes > 0 {
+                Text(Fmt.size(reclaim.reclaimableBytes))
+            }
         }
     }
 }

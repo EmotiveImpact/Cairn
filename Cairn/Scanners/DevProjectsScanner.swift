@@ -88,17 +88,28 @@ struct DevProjectsScanner: CairnScanner {
         let tSize = Date()
         ctx.progress("Measuring \(candidates.count) project artifacts…")
         let limit = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
-        var i = 0
-        while i < candidates.count {
-            if ctx.isCancelled() { return }
-            let chunk = candidates[i..<min(i + limit, candidates.count)]
-            await withTaskGroup(of: ScanItem?.self) { group in
-                for c in chunk {
+
+        // Sliding window, NOT fixed chunks. Artifact sizes are wildly uneven — a
+        // 50k-file node_modules next to a 200-file one — and the old code awaited
+        // a whole chunk before starting the next, so every core sat idle waiting
+        // for that chunk's slowest tree. A new task starts the instant one
+        // finishes, which keeps all cores busy for the whole pass.
+        await withTaskGroup(of: ScanItem?.self) { group in
+            var next = 0
+            while next < min(limit, candidates.count) {
+                let c = candidates[next]
+                group.addTask { evaluate(target: c.target, dir: c.dir, parent: c.parent, ctx: ctx) }
+                next += 1
+            }
+            for await item in group {
+                if let item { ctx.emit(item) }
+                if ctx.isCancelled() { group.cancelAll(); break }
+                if next < candidates.count {
+                    let c = candidates[next]
+                    next += 1
                     group.addTask { evaluate(target: c.target, dir: c.dir, parent: c.parent, ctx: ctx) }
                 }
-                for await item in group { if let item { ctx.emit(item) } }
             }
-            i += limit
         }
         debugLog("sized \(candidates.count) candidates in \(ms(since: tSize))ms")
     }

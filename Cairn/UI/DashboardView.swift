@@ -8,6 +8,7 @@ struct DashboardView: View {
     var onReview: () -> Void
 
     @State private var disk: DiskUsage?
+    @ObservedObject private var reclaim = ReclaimStats.shared
 
     var body: some View {
         ScrollView {
@@ -223,6 +224,12 @@ struct DashboardView: View {
                 Spacer()
             }
             .padding(.bottom, 8)
+            // The running total is the first thing on the card on purpose: it's
+            // what proves the app was worth buying, every time it's opened.
+            statusRow("arrow.down.circle.fill", "Reclaimed with Cairn",
+                      reclaim.lifetimeBytes > 0 ? Fmt.size(reclaim.lifetimeBytes) : "Nothing yet",
+                      ok: reclaim.lifetimeBytes > 0)
+            Divider().overlay(Brand.border)
             statusRow("externaldrive", "Disk Health", "Good", ok: true)
             Divider().overlay(Brand.border)
             statusRow("waveform.path.ecg", "Performance", "Optimal", ok: true)
