@@ -161,6 +161,12 @@ struct AppShell: View {
         .onChange(of: store.isCleaning) { _, cleaning in
             if !cleaning && !previewMode { Task { await control.refreshCapacity(force: true) } }
         }
+        // A Finder or Terminal cleanup can happen while Cairn is in the
+        // background. Re-read only the cheap volume-capacity metadata on return;
+        // never start a whole-machine scan or infer which app caused the change.
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            if !previewMode { Task { await control.refreshCapacity() } }
+        }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
         .onAppear {
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }

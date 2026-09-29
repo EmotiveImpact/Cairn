@@ -12,6 +12,7 @@ The pre-existing native app and PRD were preserved in local baseline commit `ae9
 - Activity now offers a manual review sheet for an interrupted action. Two explicit location checks precede acknowledgement; the journal keeps the outcome marked unknown and never replays the action. A failed acknowledgement leaves the safety block in place.
 - Journal compaction preserves reviewed uncertain entries. If the bounded record fills with them, cleanup stops rather than silently discarding their evidence.
 - Make room now filters ineligible results before its display cap and ranks equal-capability options deterministically. A fixture places a valid candidate after 120 larger blocked findings.
+- When Cairn becomes active again after Finder or Terminal use, it rechecks internal available capacity without starting a file scan. Overview and Make room use that same live reading; Make room also offers Check space, shows the check time and remaining target, and labels any change since opening the plan as an observation rather than crediting Cairn or a particular deletion. The live chart endpoint can update before the five-minute archive interval.
 - Optional reserve alerts are off by default, can be paused, poll available capacity at most roughly every five minutes while Cairn runs, require two low readings and use hysteresis. They remove nothing.
 - `AGENTS.md` records the requested test cadence: complete a coherent change, then run its build and suites together. The baseline commit contains this instruction.
 
@@ -22,7 +23,7 @@ The pre-existing native app and PRD were preserved in local baseline commit `ae9
 | Debug SwiftPM build after the source-identity and private-record changes | Pass; cache-access and existing deprecated Security API warnings | `checks/debug-build.txt` |
 | Safety fixtures | Pass | `checks/safetycheck.txt` |
 | Reliability fixtures, including journal interruption/corruption, replacement-inode refusal and private record permissions | 0 failures | `checks/reliabilitycheck.txt` |
-| Workspace fixtures, including volume/scope/partial changes, goal arithmetic and reserve-alert hysteresis | 0 failures | `checks/workspacecheck.txt` |
+| Workspace fixtures, including manual capacity rechecks, volume/scope/partial changes, goal arithmetic and reserve-alert hysteresis | 0 failures | `checks/workspacecheck.txt` |
 | Hash/copy footprint and cancellation | Pass; 6 MiB peak footprint growth in this isolated fixture | `checks/hashmemorycheck.txt` |
 | 72-request synthetic scan load | 0 failures; 24.7 MiB sampled RSS peak; 32 ms maximum heartbeat gap | `checks/loadcheck.txt` |
 | Native sample-only workspace capture | 16 routes captured at 1120 × 740; Overview, Changes and Make room visually inspected at 1024 × 680 through the UI | `native-preview/` |
@@ -34,7 +35,8 @@ One isolated QA launch initially started without `--preview-ui` because the desk
 ## Remaining gates, not claims of completion
 
 - M1 is partial: the bounded JSON prototype has no SQLite migration, injectable clock/probe/volume identity, root-level measurements or hard-link/clone accounting. It preserves rather than imports the legacy history.
-- M2 has real native captures and minimum-size visual inspection for Overview, Changes and Make room, but the new interrupted-action sheet was only compiled and fixture-tested, not visually inspected. VoiceOver, Reduce Motion and long-name matrices remain. The specialist screens keep their existing style and behaviour.
+- M2 has real native captures and minimum-size visual inspection for the earlier Overview, Changes and Make room layouts, but the new manual capacity controls and interrupted-action sheet were only compiled and fixture-tested, not visually inspected. VoiceOver, Reduce Motion and long-name matrices remain. The specialist screens keep their existing style and behaviour.
+- The Finder-return activation notification and a real manual deletion were not exercised end to end in this checkpoint. The new workspace fixtures use synthetic readings and do not claim that any personal file was removed or that the available-space API changes immediately after every macOS deletion.
 - M3 is a review-only goal journey. It has no validated immediate-reclaim adapter and cannot promise to achieve an unmet target by moving files to Trash or copying to an SSD. Typed per-action capabilities and full plan snapshot/version contracts remain to be completed.
 - M4 has a common durable intent/outcome record, app/health source-replacement checks and an in-app manual acknowledgement of uncertain actions. Acknowledgement records no verified filesystem outcome and does not recreate a missing Put Back record. Live writer races, journal crash boundaries, investigation of a missing Trash path and real mutation/restore flows need further fixture and controlled-environment testing. The existing removal log remains the Put Back source.
 - M5 is capacity polling and alert suppression only. Bounded FSEvents dirty-root observation, event-drop reconciliation, sleep/wake and notification-denial tests remain. No unattended cleanup is armed.

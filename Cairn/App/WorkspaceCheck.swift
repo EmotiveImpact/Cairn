@@ -62,6 +62,21 @@ enum WorkspaceCheck {
         check(SpaceGoal.shortfall(available: nil, target: 30_000_000_000) == nil && !SpaceGoal.reached(available: nil, target: 30_000_000_000), "Unknown capacity never meets a goal")
         check(SpaceGoal.shortfall(available: 12_000_000_000, target: 30_000_000_000) == 18_000_000_000 && !SpaceGoal.reached(available: 12_000_000_000, target: 30_000_000_000), "Candidate or Trash file sizes never credit an unmeasured goal")
         check(SpaceGoal.reached(available: 31_000_000_000, target: 30_000_000_000), "Already-met goal needs no cleanup")
+        let beforeManual = CapacityReading(date: Date(timeIntervalSince1970: 100), volumeID: "internal-A", available: 12_000_000_000, total: 500_000_000_000)
+        let afterManual = CapacityReading(date: Date(timeIntervalSince1970: 200), volumeID: "internal-A", available: 18_000_000_000, total: 500_000_000_000)
+        check(SpaceGoal.observedChange(from: beforeManual, to: afterManual) == 6_000_000_000 &&
+              SpaceGoal.shortfall(available: afterManual.available, target: 30_000_000_000) == 12_000_000_000,
+              "A manual capacity increase updates the remaining goal without attributing the cause")
+        check(SpaceGoal.observedChange(from: beforeManual, to: .init(date: Date(timeIntervalSince1970: 200), volumeID: "internal-B", available: 18_000_000_000, total: 500_000_000_000)) == nil,
+              "A replacement volume cannot create false manual progress")
+        check(SpaceGoal.observedChange(from: beforeManual, to: .init(date: Date(timeIntervalSince1970: 200), volumeID: "internal-A", available: 8_000_000_000, total: 500_000_000_000)) == -4_000_000_000,
+              "A capacity decrease remains negative after a manual recheck")
+        check(SpaceGoal.observedChange(from: afterManual, to: beforeManual) == nil,
+              "An older reading cannot reverse the manual progress baseline")
+        check(CapacitySeries.visible(stored: [beforeManual], current: afterManual).map(\.available) == [12_000_000_000, 18_000_000_000],
+              "A fresh Finder return reading appears before the five-minute archive interval")
+        check(CapacitySeries.visible(stored: [beforeManual], current: .init(date: Date(timeIntervalSince1970: 200), volumeID: "internal-B", available: 18_000_000_000, total: 500_000_000_000)).count == 1,
+              "Visible capacity history does not connect different internal volumes")
         let firstLow = CapacityReading(date: Date(timeIntervalSince1970: 100), volumeID: "internal-A", available: 12_000_000_000, total: 500_000_000_000)
         let secondLow = CapacityReading(date: Date(timeIntervalSince1970: 500), volumeID: "internal-A", available: 11_000_000_000, total: 500_000_000_000)
         check(ReserveAlertPolicy.decide(current: secondLow, previous: firstLow, target: 30_000_000_000, alreadyAlerted: false) == .alert,

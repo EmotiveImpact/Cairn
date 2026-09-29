@@ -40,11 +40,16 @@ struct MakeRoomWorkspace: View {
     var onOpen: (NavSection) -> Void
     @Bindable private var settings = AppSettings.shared
     @State private var selected = Set<UUID>()
+    @State private var startingCapacity: CapacityReading?
+    @State private var checkingSpace = false
     private let preview = CommandLine.arguments.contains("--preview-ui")
 
     private var available: Int64? { preview ? 9_900_000_000 : control.currentAvailable }
     private var target: Int64 { Int64(settings.goalGB) * 1_000_000_000 }
     private var shortfall: Int64? { SpaceGoal.shortfall(available: available, target: target) }
+    private var observedChange: Int64? {
+        preview ? nil : SpaceGoal.observedChange(from: startingCapacity, to: control.current)
+    }
     private var actions: [ScanItem] {
         if preview { return Self.sampleActions }
         guard store.phase == .finished, !store.includeExternalVolumes else { return [] }
@@ -76,6 +81,11 @@ struct MakeRoomWorkspace: View {
                             Text("CURRENTLY AVAILABLE").font(.system(size: 10)).tracking(0.7).foregroundStyle(Brand.textMuted)
                             Text(available.map(Fmt.size) ?? "Unavailable")
                                 .font(.system(size: 28, weight: .regular)).monospacedDigit()
+                            Button { checkSpace() } label: {
+                                Label(checkingSpace ? "Checking…" : "Check space", systemImage: "arrow.clockwise")
+                            }
+                            .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Brand.deepBlue)
+                            .disabled(preview || checkingSpace)
                         }
                         Image(systemName: "arrow.right").foregroundStyle(Brand.textMuted)
                         VStack(alignment: .leading, spacing: 7) {
@@ -85,11 +95,21 @@ struct MakeRoomWorkspace: View {
                         }
                         Spacer()
                         if let shortfall {
-                            Text(shortfall == 0 ? "Target met now" : "\(Fmt.size(shortfall)) short")
+                            Text(shortfall == 0 ? "Target met now" : "\(Fmt.size(shortfall)) still needed")
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundStyle(shortfall == 0 ? Brand.safeCyan : Brand.amber)
+                        } else {
+                            Text("Space unavailable").font(.system(size: 14)).foregroundStyle(Brand.amber)
                         }
                     }.padding(.top, 28)
+                    if !preview, let checked = control.lastChecked {
+                        Text("Available space checked at \(checked.formatted(date: .omitted, time: .shortened)). Return from Finder or press Check space to update it.")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted).padding(.top, 12)
+                    }
+                    if let observedChange, observedChange != 0 {
+                        Text("\(Fmt.size(abs(observedChange))) \(observedChange > 0 ? "more" : "less") available since opening this plan. Other Mac activity may also affect this reading.")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textSecondary).padding(.top, 8)
+                    }
                     Text("This is a final available-space target. Copying to an SSD or moving files to Trash does not by itself free internal space.")
                         .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                         .padding(.top, 15).fixedSize(horizontal: false, vertical: true)
@@ -144,7 +164,11 @@ struct MakeRoomWorkspace: View {
             }.font(.system(size: 12)).padding(.horizontal, 20).frame(height: 64)
                 .background(Brand.deepPanel)
         }.background(Brand.background).foregroundStyle(Brand.textPrimary)
-            .task { if !preview { await control.refreshCapacity() } }
+            .task {
+                guard !preview else { return }
+                await control.refreshCapacity()
+                if startingCapacity == nil { startingCapacity = control.current }
+            }
             .onChange(of: store.isCleaning) { _, running in
                 if !running && !preview { Task { await control.refreshCapacity(force: true) } }
             }
@@ -156,6 +180,14 @@ struct MakeRoomWorkspace: View {
         case .trash: return "Trash · recoverable"
         case .tool: return "Tool · review elsewhere"
         default: return "Review only"
+        }
+    }
+    private func checkSpace() {
+        guard !preview, !checkingSpace else { return }
+        checkingSpace = true
+        Task {
+            await control.refreshCapacity(force: true)
+            checkingSpace = false
         }
     }
     private static let sampleActions: [ScanItem] = [

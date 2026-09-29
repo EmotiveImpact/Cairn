@@ -7,7 +7,6 @@ struct OverviewWorkspace: View {
     let control: StorageControl
     var search: String
     var onOpen: (NavSection) -> Void
-    @State private var volume: Volumes.Info?
     @State private var period = 7
     @State private var showHistory = false
     @State private var selectedDate: Date?
@@ -46,9 +45,12 @@ struct OverviewWorkspace: View {
         return changes.filter { $0.delta > 0 }.max { $0.delta < $1.delta }
     }
     private var externalDrive: StorageDrive? { preview ? (CommandLine.arguments.contains("--preview-empty-overview") ? nil : Self.sampleDrive) : storage.drives.first(where: \.external) }
-    private var lowSpace: Bool { volume.map { $0.totalCapacity > 0 && Double($0.availableImportant) / Double($0.totalCapacity) < 0.05 } ?? false }
+    private var displayedCapacity: CapacityReading? { preview ? Self.sampleHistory.last : control.current }
+    private var lowSpace: Bool {
+        displayedCapacity.map { $0.total > 0 && Double($0.available) / Double($0.total) < 0.05 } ?? false
+    }
     private var storageHeadline: String {
-        guard volume != nil else { return "Checking available storage." }
+        guard displayedCapacity != nil else { return "Checking available storage." }
         return lowSpace ? "Your Mac needs more room." : "Room for what’s next."
     }
     var body: some View {
@@ -73,17 +75,17 @@ struct OverviewWorkspace: View {
             }.padding(30).frame(maxWidth: 980, alignment: .leading).frame(maxWidth: .infinity)
         }.background(Color(hex: 0x191D21)).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
-        .task { if !preview { await control.refreshCapacity() }; await refreshMeasurements(); if !preview { await storage.refresh() } }
+        .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
-        .onChange(of: store.isScanning) { _, running in if !running { Task { await refreshMeasurements() } } }
+        .onChange(of: store.isScanning) { _, running in if !running && !preview { Task { await control.refreshCapacity() } } }
         .sheet(isPresented: $showHistory) {
-            CairnDialog(title: "Available-space history", subtitle: "Daily readings · collected when Cairn opens", height: 540) {
+            CairnDialog(title: "Available-space history", subtitle: "Capacity readings collected while Cairn runs", height: 540) {
                 VStack(alignment: .leading, spacing: 18) {
                 Picker("Period", selection: $period) { Text("7 days").tag(7); Text("30 days").tag(30) }.pickerStyle(.segmented).frame(width: 180)
                 historySection
                 if let delta = historyDelta { Text("\(Fmt.size(abs(delta))) \(delta < 0 ? "less" : "more") available over \(historyDays) days").font(.system(size: 14)) }
-                Text("Daily readings collected when Cairn opens. Category scans do not explain every change in disk space.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                Text("Cairn checks available space while it runs and when you return to it. Category scans do not explain every change in disk space.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 ScrollView { VStack(spacing: 0) { ForEach(points.reversed(), id: \.date) { point in
                     HStack { Text(point.date, format: .dateTime.day().month(.abbreviated).year()); Spacer(); Text(Fmt.size(point.available)).monospacedDigit() }.font(.system(size: 12)).padding(.vertical, 9)
                 } } }
@@ -99,7 +101,7 @@ struct OverviewWorkspace: View {
                     Text("THIS MAC").font(.system(size: 11, weight: .regular)).tracking(0.7).foregroundStyle(Brand.textMuted)
                     Text(storageHeadline)
                         .font(.system(size: 24, weight: .regular))
-                    Text(volume == nil ? "Reading your internal drive…" : lowSpace ? "Internal storage is running low" : "Available space on your internal drive")
+                    Text(displayedCapacity == nil ? "Reading your internal drive…" : lowSpace ? "Internal storage is running low" : "Available space on your internal drive")
                         .font(.system(size: 12, weight: .regular)).foregroundStyle(lowSpace ? Brand.amber : Brand.textMuted)
                 }
                 Spacer()
@@ -114,7 +116,7 @@ struct OverviewWorkspace: View {
                 }
             }
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(volume.map { Fmt.size($0.availableImportant) } ?? "—").font(.system(size: 46, weight: .regular)).tracking(-1.6).monospacedDigit()
+                Text(displayedCapacity.map { Fmt.size($0.available) } ?? "—").font(.system(size: 46, weight: .regular)).tracking(-1.6).monospacedDigit()
                 Text("available").font(.system(size: 18, weight: .regular)).foregroundStyle(Brand.textMuted)
             }.padding(.top, 22)
             if !preview, let date = store.lastScanDate {
@@ -236,13 +238,6 @@ struct OverviewWorkspace: View {
     private func scan() {
         if store.isScanning { store.cancel() }
         else { store.startScan(includeExternalVolumes: !AppSettings.shared.ignoreExternalDrives) }
-    }
-    private func refreshMeasurements() async {
-        if preview {
-            volume = Volumes.Info(url: URL(fileURLWithPath: "/"), name: "Macintosh HD", totalCapacity: 500_000_000_000, availableImportant: 9_900_000_000)
-        } else {
-            volume = await Task.detached { Volumes.info(for: FileScan.volumeURL(of: FileScan.home)) }.value
-        }
     }
     private static let sampleHistory: [CapacityReading] = [28.4, 26.8, 23.2, 24.1, 18.6, 14.3, 9.9].enumerated().map { index, gb in
         CapacityReading(date: Date().addingTimeInterval(Double(index - 6) * 86_400), volumeID: "SAMPLE", available: Int64(gb * 1e9), total: 500_000_000_000)

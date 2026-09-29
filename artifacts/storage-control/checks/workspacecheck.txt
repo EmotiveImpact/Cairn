@@ -25,6 +25,12 @@ PASS Goal calculates measured shortfall
 PASS Unknown capacity never meets a goal
 PASS Candidate or Trash file sizes never credit an unmeasured goal
 PASS Already-met goal needs no cleanup
+PASS A manual capacity increase updates the remaining goal without attributing the cause
+PASS A replacement volume cannot create false manual progress
+PASS A capacity decrease remains negative after a manual recheck
+PASS An older reading cannot reverse the manual progress baseline
+PASS A fresh Finder return reading appears before the five-minute archive interval
+PASS Visible capacity history does not connect different internal volumes
 PASS Reserve alert needs two spaced low readings
 PASS Already-sent reserve alert does not repeat
 PASS Rapid low readings do not trigger an alert storm

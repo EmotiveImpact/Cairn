@@ -59,6 +59,22 @@ struct CandidateChange: Identifiable {
     var id: String { category.id }
 }
 
+/// Display the latest live capacity check even if the five-minute persistence
+/// interval has not elapsed. A manual Finder change should update the chart
+/// immediately without writing an extra history file on every activation.
+enum CapacitySeries {
+    static func visible(stored: [CapacityReading], current: CapacityReading?) -> [CapacityReading] {
+        guard let volumeID = current?.volumeID ?? stored.last?.volumeID else { return [] }
+        var result = stored.filter { $0.volumeID == volumeID }
+        if let current, let last = result.last {
+            if current.date > last.date && current.available != last.available { result.append(current) }
+        } else if let current {
+            result.append(current)
+        }
+        return result
+    }
+}
+
 enum CandidateComparison {
     static func changes(_ readings: [CandidateReading]) -> [CandidateChange] {
         guard readings.count >= 2 else { return [] }
@@ -91,6 +107,13 @@ enum SpaceGoal {
     }
     static func reached(available: Int64?, target: Int64) -> Bool {
         shortfall(available: available, target: target) == 0
+    }
+    /// A signed change in available space, never attributed to a particular
+    /// deletion. Only readings from the same internal volume can be compared.
+    static func observedChange(from start: CapacityReading?, to current: CapacityReading?) -> Int64? {
+        guard let start, let current, start.volumeID == current.volumeID,
+              start.date < current.date else { return nil }
+        return current.available - start.available
     }
 }
 
@@ -138,8 +161,7 @@ enum ReserveAlertPolicy {
 
     var changes: [CandidateChange] { CandidateComparison.changes(candidates) }
     var latestCapacity: [CapacityReading] {
-        guard let id = current?.volumeID ?? capacity.last?.volumeID else { return [] }
-        return capacity.filter { $0.volumeID == id }
+        CapacitySeries.visible(stored: capacity, current: current)
     }
     var currentAvailable: Int64? { current?.available }
     var reserveBytes: Int64 { Int64(AppSettings.shared.reserveGB) * 1_000_000_000 }
@@ -194,6 +216,9 @@ enum ReserveAlertPolicy {
             if error == nil { error = "Internal storage is unavailable. No capacity change was recorded." }
             return
         }
+        // Concurrent activation/manual refreshes can finish out of order.
+        // Keep the newest observation rather than reverting the visible number.
+        if let current, current.date > reading.date { return }
         current = reading
         if error?.hasPrefix("Internal storage is unavailable") == true { error = nil }
         guard error == nil else { return }
