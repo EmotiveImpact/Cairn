@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// The "Reclaimed X GB" completion moment — subtle reward, with Undo.
+/// Legacy completion surface: report affected file sizes, never claimed savings.
 struct CelebrationOverlay: View {
     let summary: ScanStore.CleanSummary
     let store: ScanStore
@@ -10,11 +10,11 @@ struct CelebrationOverlay: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     private var subtitle: String {
-        let rec = summary.recoverableCount, perm = summary.permanentCount
+        let rec = summary.recoverableCount, perm = summary.toolCount
         if perm > 0 && rec == 0 {
-            return "\(perm) item\(perm == 1 ? "" : "s") permanently removed"
+            return "\(perm) item\(perm == 1 ? "" : "s") tool actions completed"
         } else if perm > 0 {
-            return "\(rec) moved to Trash · \(perm) permanently removed"
+            return "\(rec) moved to Trash · \(perm) tool actions completed"
         }
         return "\(rec) item\(rec == 1 ? "" : "s") moved to the Trash — recoverable"
     }
@@ -28,7 +28,7 @@ struct CelebrationOverlay: View {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 62)).foregroundStyle(Brand.brand)
                         .symbolEffect(.bounce, value: appeared)
                 }
-                Text("Reclaimed \(Fmt.size(summary.bytes))")
+                Text("\(Fmt.size(summary.bytes)) affected")
                     .font(.system(size: 30, weight: .bold, design: .rounded)).monospacedDigit()
                     .foregroundStyle(Brand.textPrimary)
                     .contentTransition(.numericText())
@@ -36,7 +36,7 @@ struct CelebrationOverlay: View {
                     .font(.subheadline).foregroundStyle(Brand.textSecondary)
                 HStack(spacing: 10) {
                     if !summary.restorable.isEmpty {
-                        Button("Undo") { store.undoLast(); onDismiss() }.buttonStyle(GhostButtonStyle())
+                        Button("Undo") { Task { await store.undoLast(); onDismiss() } }.buttonStyle(GhostButtonStyle())
                     }
                     Button("Done") { onDismiss() }.buttonStyle(BrandButtonStyle())
                 }

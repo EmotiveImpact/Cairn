@@ -24,21 +24,63 @@ final class ScanGate: @unchecked Sendable {
 
     private let lock = NSLock()
     private var busy = false
-    private var waiters: [CheckedContinuation<Void, Never>] = []
+    private struct Waiter {
+        let id: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
+    private var waiters: [Waiter] = []
+    // A cancellation may arrive before withCheckedContinuation registers its
+    // waiter. Track that narrow interval so no cancelled request is stranded.
+    private var starting = Set<UUID>()
+    private var cancelledWhileStarting = Set<UUID>()
 
-    /// Suspends until this caller owns the gate. Always pair with `release()`.
-    func acquire() async {
+    /// Returns true only when this caller owns the gate. Pair a true result with
+    /// `release()` in defer; a false result has no lease and must return at once.
+    func acquire() async -> Bool {
+        let id = UUID()
+        begin(id)
+
+        let granted = await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                starting.remove(id)
+                if cancelledWhileStarting.remove(id) != nil || Task.isCancelled {
+                    lock.unlock()
+                    continuation.resume(returning: false)
+                } else if !busy {
+                    busy = true
+                    lock.unlock()
+                    continuation.resume(returning: true)
+                } else {
+                    // Register before unlocking so release cannot miss us.
+                    waiters.append(Waiter(id: id, continuation: continuation))
+                    lock.unlock()
+                }
+            }
+        } onCancel: {
+            lock.lock()
+            if starting.contains(id) {
+                cancelledWhileStarting.insert(id)
+                lock.unlock()
+            } else if let index = waiters.firstIndex(where: { $0.id == id }) {
+                let waiter = waiters.remove(at: index)
+                lock.unlock()
+                waiter.continuation.resume(returning: false)
+            } else {
+                // Already granted or rejected; acquire() resolves the race.
+                lock.unlock()
+            }
+        }
+        // Cancellation can race a release after the waiter has been popped.
+        // Hand the lease onward here instead of starting cancelled disk work.
+        if granted && Task.isCancelled { release(); return false }
+        return granted
+    }
+
+    private func begin(_ id: UUID) {
         lock.lock()
-        if !busy {
-            busy = true
-            lock.unlock()
-            return
-        }
-        // Enqueue BEFORE unlocking, so a release racing us can't be missed.
-        await withCheckedContinuation { continuation in
-            waiters.append(continuation)
-            lock.unlock()
-        }
+        starting.insert(id)
+        lock.unlock()
     }
 
     /// Hands the gate to the next waiter, or marks it free.
@@ -50,7 +92,7 @@ final class ScanGate: @unchecked Sendable {
         } else {
             let next = waiters.removeFirst()
             lock.unlock()
-            next.resume()
+            next.continuation.resume(returning: true)
         }
     }
 }

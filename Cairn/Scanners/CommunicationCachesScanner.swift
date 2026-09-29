@@ -4,11 +4,9 @@ import Foundation
 /// scanner — these apps stash their throwaway caches under `Application Support`
 /// (and a couple of log/updater dirs) instead of the canonical caches root.
 ///
-/// HARD RULE: we only ever touch *cache* subpaths — never login state, accounts,
-/// preferences, message history or any other app data. Every target here is a
-/// pure throwaway cache that the owning app recreates on next launch → SAFE,
-/// pre-selected, trashed, but blocked until the owning app quits
-/// (requiresQuitBundleIDs). All targets live in plain user dirs
+/// Only narrowly identified transient caches are selectable. Service Worker,
+/// offline media, logs, updater and unknown app subfolders are advice only;
+/// their names do not prove that all contents are disposable. All targets live in plain user dirs
 /// (`~/Library/...`) → no Full Disk Access needed.
 struct CommunicationCachesScanner: CairnScanner {
     let info = CategoryInfo(
@@ -79,27 +77,32 @@ struct CommunicationCachesScanner: CairnScanner {
             for child in directorySubdirs(of: figmaDesktop) {
                 if ctx.isCancelled() { return }
                 guard child.lastPathComponent.lowercased().contains("cache") else { continue }
-                emitCache(at: child, app: "Figma", quit: Self.figmaBundleIDs, ctx: ctx)
+                emitCache(at: child, app: "Figma", quit: Self.figmaBundleIDs, ctx: ctx,
+                          manualOnly: true)
             }
         }
     }
 
     // MARK: - Helpers
 
-    /// Emit a SAFE, regenerable, pre-selectable cache item blocked until the
-    /// owning app quits. Missing / below-threshold paths are dropped by makeItem.
-    private func emitCache(at url: URL, app: String, quit: [String], ctx: ScanContext) {
+    /// Missing / below-threshold paths are dropped by makeItem.
+    private func emitCache(at url: URL, app: String, quit: [String], ctx: ScanContext,
+                           manualOnly: Bool = false) {
         guard FileScan.exists(url) else { return }
         ctx.progress("\(app) cache")
+        let uncertain = manualOnly || url.path.contains("CacheStorage")
+            || url.path.contains("PersistentCache") || url.path.contains("Group Containers")
+            || url.path.contains("/Logs/") || url.path.contains("AutoUpdater")
         if let item = makeItem(
             at: url,
-            severity: .safe,
+            severity: uncertain ? .review : .safe,
             minSize: ctx.minSizeBytes,
-            isRegenerable: true,
+            isRegenerable: !uncertain,
             requiresQuitBundleIDs: quit,
-            cleanMethod: .trash,
-            note: "\(app) cache — recreated on launch",
-            selectedIfSafe: true,
+            cleanMethod: uncertain ? .adviceOnly : .trash,
+            note: uncertain ? "\(app) app storage may include offline or diagnostic data; inspect before manual removal" :
+                "\(app) transient cache — recreated on launch",
+            selectedIfSafe: !uncertain,
             maxFiles: Self.maxCacheFiles
         ) {
             ctx.emit(item)

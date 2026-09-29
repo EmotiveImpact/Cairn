@@ -36,7 +36,6 @@ enum StorageHistory {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileScan.home.appendingPathComponent("Library/Application Support", isDirectory: true)
         let dir = base.appendingPathComponent("Cairn", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("storage-history.json")
     }
 
@@ -59,6 +58,7 @@ enum StorageHistory {
         }
         if samples.count > maxSamples { samples = Array(samples.suffix(maxSamples)) }
         if let data = try? JSONEncoder().encode(samples) {
+            try? FileManager.default.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
             try? data.write(to: fileURL, options: .atomic)
         }
     }

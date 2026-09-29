@@ -10,6 +10,8 @@ import Foundation
 /// bundle-id PREFIX match so a folder is claimed by any installed app whose
 /// bundle id it is a prefix of (or vice-versa, on a dotted boundary).
 ///
+/// Name matching cannot prove a folder is disposable: it may contain database
+/// files, conversations, or work sessions. These findings are advice only.
 /// Reading another app's data folders to size them needs Full Disk Access.
 struct OrphanedAppDataScanner: CairnScanner {
     let info = CategoryInfo(
@@ -63,6 +65,7 @@ struct OrphanedAppDataScanner: CairnScanner {
 
             for child in children {
                 if ctx.isCancelled() { return }
+                if SafePaths.protectedSessionReason(child) != nil { continue }
 
                 // Only consider directories (a per-app folder).
                 let isDir = (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
@@ -86,8 +89,8 @@ struct OrphanedAppDataScanner: CairnScanner {
                     severity: .review,
                     minSize: ctx.minSizeBytes,
                     isRegenerable: false,
-                    cleanMethod: .trash,
-                    note: "No installed app matches '\(name)' (stale >6mo) — review before removing",
+                    cleanMethod: .adviceOnly,
+                    note: "No installed app matches '\(name)' (stale >6mo). This folder may still hold valuable app data; inspect and back it up before any manual action.",
                     selectedIfSafe: false
                 ) else { continue }
 

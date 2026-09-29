@@ -38,6 +38,9 @@ extension CairnScanner {
         selectedIfSafe: Bool = false,
         maxFiles: Int = .max
     ) -> ScanItem? {
+        // Never inspect or advertise conversation stores as cleanup candidates,
+        // even when a broad cache scanner enumerates their parent directory.
+        guard SafePaths.protectedSessionReason(url) == nil else { return nil }
         guard FileScan.exists(url) else { return nil }
         let stats = FileScan.measure(url, maxFiles: maxFiles)
         if stats.allocatedSize < minSize && !cleanMethod.isPaid { return nil }
@@ -69,4 +72,60 @@ enum ScanEvent {
     case progress(String, String)        // categoryID, message
     case finishedCategory(String)
     case done
+}
+
+
+/// Bounded delivery and an explicit producer lifetime. Cancelling a consumer
+/// alone does not await a detached task, so the gate owner must call stopAndWait.
+struct ScanEventPipeline {
+    let stream: AsyncStream<ScanEvent>
+    let overflow = CancelBox()
+    private let worker: Task<Void, Never>
+
+    init(scanners: [CairnScanner], fdaGranted: Bool, includeExternal: Bool,
+         minSize: Int64, bufferLimit: Int = 2048) {
+        let (stream, continuation) = AsyncStream.makeStream(of: ScanEvent.self,
+            bufferingPolicy: .bufferingOldest(max(1, bufferLimit)))
+        self.stream = stream
+        let overflow = self.overflow
+        let emit: @Sendable (ScanEvent) -> Void = { event in
+            guard !overflow.isCancelled else { return }
+            if case .dropped = continuation.yield(event) { overflow.cancel() }
+        }
+        worker = Task.detached(priority: .userInitiated) {
+            await withTaskGroup(of: Void.self) { group in
+                let limit = max(2, min(4, ProcessInfo.processInfo.activeProcessorCount - 2))
+                var iterator = scanners.makeIterator()
+                func schedule() {
+                    guard !Task.isCancelled, !overflow.isCancelled, let scanner = iterator.next() else { return }
+                    group.addTask {
+                        guard !Task.isCancelled, !overflow.isCancelled else { return }
+                        emit(.started(scanner.info.id))
+                        let throttle = ProgressThrottle()
+                        let context = ScanContext(fdaGranted: fdaGranted,
+                            includeExternalVolumes: includeExternal, minSizeBytes: minSize,
+                            emit: { emit(.item($0)) },
+                            progress: { if throttle.shouldPublish() { emit(.progress(scanner.info.id, $0)) } },
+                            isCancelled: { Task.isCancelled || overflow.isCancelled })
+                        await scanner.scan(context)
+                        emit(.finishedCategory(scanner.info.id))
+                    }
+                }
+                for _ in 0..<limit { schedule() }
+                while await group.next() != nil {
+                    if overflow.isCancelled { group.cancelAll() }
+                    schedule()
+                }
+            }
+            emit(.done)
+            continuation.finish()
+        }
+        let worker = self.worker
+        continuation.onTermination = { _ in worker.cancel() }
+    }
+
+    func stopAndWait() async {
+        worker.cancel()
+        await worker.value
+    }
 }

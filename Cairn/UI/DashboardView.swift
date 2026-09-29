@@ -226,9 +226,9 @@ struct DashboardView: View {
             .padding(.bottom, 8)
             // The running total is the first thing on the card on purpose: it's
             // what proves the app was worth buying, every time it's opened.
-            statusRow("arrow.down.circle.fill", "Reclaimed with Cairn",
-                      reclaim.lifetimeBytes > 0 ? Fmt.size(reclaim.lifetimeBytes) : "Nothing yet",
-                      ok: reclaim.lifetimeBytes > 0)
+            statusRow("arrow.down.circle.fill", "Recorded file-size estimates",
+                      reclaim.lifetimeAffectedBytes > 0 ? Fmt.size(reclaim.lifetimeAffectedBytes) : "Nothing yet",
+                      ok: reclaim.lifetimeAffectedBytes > 0)
             Divider().overlay(Brand.border)
             statusRow("externaldrive", "Disk Health", "Good", ok: true)
             Divider().overlay(Brand.border)

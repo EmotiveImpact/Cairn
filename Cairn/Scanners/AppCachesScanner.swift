@@ -1,7 +1,7 @@
 import Foundation
 
-/// General application caches under `~/Library/Caches`. Each direct child folder
-/// is an app's reclaimable cache that the app recreates on next launch (SPEC §3.3).
+/// General application cache candidates under `~/Library/Caches`. A directory
+/// named "cache" may still contain recovery state, so these need individual review.
 /// Browser, IDE, container and dev-tool caches that also land here are deliberately
 /// EXCLUDED — they are owned by the dedicated dev/browser/IDE scanners so we never
 /// double-count or apply the wrong clean method. Reads `~/Library/Caches`, which
@@ -10,7 +10,7 @@ struct AppCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "app-caches",
         title: "Application Caches",
-        subtitle: "Per-app caches in ~/Library/Caches — apps recreate these",
+        subtitle: "Review per-app cache folders in ~/Library/Caches",
         systemImage: "app.badge.fill",
         group: .general,
         requiresFDA: true
@@ -76,19 +76,20 @@ struct AppCachesScanner: CairnScanner {
             guard (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true else { continue }
 
             let name = child.lastPathComponent
+            if SafePaths.protectedSessionReason(child) != nil { continue }
             if isExcluded(name) { continue }
 
             ctx.progress(name)
 
             if let item = makeItem(
                 at: child,
-                severity: .safe,
+                severity: .review,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: true,
+                isRegenerable: false,
                 requiresQuitBundleIDs: bundleIDs(for: name),
-                cleanMethod: .trash,
-                note: "Cache for \(name) — apps recreate this",
-                selectedIfSafe: true
+                cleanMethod: .adviceOnly,
+                note: "Unclassified cache for \(name). It may hold recovery or work data; inspect its contents before any manual removal.",
+                selectedIfSafe: false
             ) {
                 ctx.emit(item)
             }

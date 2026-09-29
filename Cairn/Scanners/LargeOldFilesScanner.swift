@@ -52,26 +52,28 @@ struct LargeOldFilesScanner: CairnScanner {
     /// subdirectories up to `maxDepth`, and never descends into bundles or
     /// follows symlinks.
     private func walk(_ dir: URL, depth: Int, ctx: ScanContext) {
-        guard let children = FileScan.children(of: dir) else { return }
+        autoreleasepool {
+            guard let children = FileScan.children(of: dir) else { return }
 
-        for child in children {
-            if ctx.isCancelled() { return }
+            for child in children {
+                if ctx.isCancelled() { return }
 
-            let rv = try? child.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
-            if rv?.isSymbolicLink == true { continue }          // never follow symlinks
+                let rv = try? child.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey])
+                if rv?.isSymbolicLink == true { continue }          // never follow symlinks
 
-            if rv?.isDirectory == true {
-                // Bundles (`*.app`, `*.photoslibrary`) are opaque — skip entirely.
-                if Self.opaqueBundleExtensions.contains(child.pathExtension.lowercased()) { continue }
-                // Recurse into plain directories, bounded by maxDepth.
-                if depth < Self.maxDepth {
-                    walk(child, depth: depth + 1, ctx: ctx)
+                if rv?.isDirectory == true {
+                    // Bundles (`*.app`, `*.photoslibrary`) are opaque — skip entirely.
+                    if Self.opaqueBundleExtensions.contains(child.pathExtension.lowercased()) { continue }
+                    // Recurse into plain directories, bounded by maxDepth.
+                    if depth < Self.maxDepth {
+                        walk(child, depth: depth + 1, ctx: ctx)
+                    }
+                    continue
                 }
-                continue
-            }
 
-            // A regular file — evaluate it.
-            evaluate(child, ctx: ctx)
+                // A regular file — evaluate it.
+                evaluate(child, ctx: ctx)
+            }
         }
     }
 

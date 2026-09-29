@@ -2,6 +2,7 @@ import Foundation
 import Observation
 import CryptoKit
 import AppKit
+import Darwin
 
 /// Rate-limits background progress callbacks so they can't flood the main actor.
 /// Called from the scanning thread; cheap and lock-guarded.
@@ -57,39 +58,184 @@ struct DupGroup: Identifiable {
 
 // MARK: - Hashing helper
 
-/// Streamed content fingerprinting. Reads in 1 MB chunks so multi-GB files never
-/// load whole into memory. Very large files (> 200 MB) are fingerprinted by their
-/// size + first 4 MB + last 4 MB (a fast, collision-safe-enough heuristic for the
-/// purpose of *candidate* matching — a full byte-compare could be layered later).
+/// Full streamed SHA-256. Even large files must be read in their entirety: matching
+/// edges do not prove that the middle of two files is identical.
 enum DupHash {
     static let chunk = 1 << 20            // 1 MB
-    static let bigFileThreshold: Int64 = 200 << 20   // 200 MB
-    static let edgeBytes = 4 << 20         // 4 MB head + 4 MB tail
 
-    /// SHA-256 hex digest, or `nil` if the file can't be opened / the task is cancelled.
-    static func fingerprint(_ url: URL, size: Int64) -> String? {
+    struct Identity: Equatable, Sendable {
+        let device: UInt64
+        let inode: UInt64
+        let size: Int64
+        let modifiedSeconds: Int64
+        let modifiedNanoseconds: Int64
+        let changedSeconds: Int64
+        let changedNanoseconds: Int64
+    }
+
+    struct Fingerprint: Sendable {
+        let digest: String
+        let identity: Identity
+    }
+
+    private static func identity(_ info: stat) -> Identity {
+        Identity(device: UInt64(info.st_dev), inode: UInt64(info.st_ino),
+                 size: Int64(info.st_size),
+                 modifiedSeconds: Int64(info.st_mtimespec.tv_sec),
+                 modifiedNanoseconds: Int64(info.st_mtimespec.tv_nsec),
+                 changedSeconds: Int64(info.st_ctimespec.tv_sec),
+                 changedNanoseconds: Int64(info.st_ctimespec.tv_nsec))
+    }
+
+    /// lstat refuses a newly substituted symlink instead of following it.
+    private static func pathIdentity(_ url: URL) -> Identity? {
+        var info = stat()
+        guard lstat(url.path, &info) == 0,
+              (info.st_mode & 0o170000) == 0o100000 else { return nil }
+        return identity(info)
+    }
+
+    static func unchanged(_ url: URL, since fingerprint: Fingerprint) -> Bool {
+        pathIdentity(url) == fingerprint.identity
+    }
+
+    /// Returns nil if the file changes while read, cannot be read, or work is cancelled.
+    static func fingerprint(_ url: URL, shouldCancel: () -> Bool = { false }) -> Fingerprint? {
+        guard let before = pathIdentity(url) else { return nil }
         guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
         defer { try? handle.close() }
+        var opened = stat()
+        guard fstat(handle.fileDescriptor, &opened) == 0,
+              identity(opened) == before else { return nil }
         var hasher = SHA256()
-
-        if size > bigFileThreshold {
-            // Fast path: size + head + tail.
-            withUnsafeBytes(of: size.littleEndian) { hasher.update(bufferPointer: $0) }
-            if let head = try? handle.read(upToCount: edgeBytes) { hasher.update(data: head) }
-            if (try? handle.seek(toOffset: UInt64(max(0, size - Int64(edgeBytes))))) != nil,
-               let tail = try? handle.read(upToCount: edgeBytes) {
-                hasher.update(data: tail)
+        var readBytes: Int64 = 0
+        do {
+            while true {
+                if Task.isCancelled || shouldCancel() { return nil }
+                // FileHandle bridges autoreleased NSData. A Swift loop scope
+                // alone does not release those buffers on a long-lived worker.
+                let count = try autoreleasepool { () -> Int in
+                    guard let data = try handle.read(upToCount: chunk), !data.isEmpty else { return 0 }
+                    hasher.update(data: data)
+                    return data.count
+                }
+                if count == 0 { break }
+                readBytes += Int64(count)
             }
-            return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        } catch {
+            return nil
         }
+        var ended = stat()
+        guard !Task.isCancelled, readBytes == before.size,
+              fstat(handle.fileDescriptor, &ended) == 0,
+              identity(ended) == before,
+              pathIdentity(url) == before else { return nil }
+        return Fingerprint(digest: hasher.finalize().map { String(format: "%02x", $0) }.joined(),
+                           identity: before)
+    }
+}
 
-        // Full streamed digest.
-        while !Task.isCancelled {
-            guard let data = try? handle.read(upToCount: chunk), !data.isEmpty else { break }
-            hasher.update(data: data)
+/// Immutable removal plan passed off the main actor. A fresh full hash of the
+/// chosen keeper and each selected copy is required before each Trash move.
+private struct DupRemovalFile: Sendable {
+    let id: UUID
+    let url: URL
+    let resolvedURL: URL
+    let estimatedBytes: Int64
+}
+
+private struct DupRemovalPlan: Sendable {
+    let name: String
+    let scannedDigest: String
+    let keeper: DupRemovalFile?
+    let selected: [DupRemovalFile]
+}
+
+private struct DupRemovalBatch: Sendable {
+    var trashed = 0
+    var failed = 0
+    var bytes: Int64 = 0
+    var errors: [String] = []
+    var removedIDs: Set<UUID> = []
+    var history: [ScanStore.RemovalLogEntry] = []
+}
+
+private enum DupRemovalEngine {
+    private static let permittedRoots = ["Downloads", "Documents", "Desktop", "Pictures", "Movies"]
+        .map { FileScan.home.appendingPathComponent($0).resolvingSymlinksInPath().standardizedFileURL.path }
+
+    /// Duplicate removal needs Documents/Pictures, so it cannot use SafePaths'
+    /// general cleaner rule (which deliberately forbids Documents). Apply the
+    /// shared session guard and every applicable system/user exclusion here.
+    private static func permitted(_ file: DupRemovalFile, excludedPaths: [String]) -> Bool {
+        let original = file.url.standardizedFileURL
+        let resolved = file.url.resolvingSymlinksInPath().standardizedFileURL
+        let path = resolved.path
+        guard resolved == file.resolvedURL.standardizedFileURL,
+              SafePaths.protectedSessionReason(original) == nil,
+              SafePaths.protectedSessionReason(resolved) == nil,
+              permittedRoots.contains(where: { root in
+                  SafePaths.isUnder(original.path, root) && original.path != root
+                      && SafePaths.isUnder(path, root) && path != root
+              }),
+              !SafePaths.denyAbsolutePrefixes.contains(where: { SafePaths.isUnder(path, $0) }),
+              !SafePaths.denyComponents.contains(where: { denied in
+                  resolved.pathComponents.contains { $0.lowercased().hasSuffix(denied.lowercased()) }
+              }),
+              !excludedPaths.contains(where: { excluded in
+                  SafePaths.isUnder(original.path, excluded) || SafePaths.isUnder(path, excluded)
+              }) else { return false }
+        return true
+    }
+
+    static func run(_ plans: [DupRemovalPlan], excludedPaths: [String]) -> DupRemovalBatch {
+        var result = DupRemovalBatch()
+        let fm = FileManager.default
+
+        for plan in plans {
+            if Task.isCancelled { break }
+            guard let keeper = plan.keeper, permitted(keeper, excludedPaths: excludedPaths),
+                  let keeperHash = DupHash.fingerprint(keeper.url),
+                  keeperHash.digest == plan.scannedDigest else {
+                result.failed += plan.selected.count
+                result.errors.append("\(plan.name): keeper changed or is protected — rescan before removal")
+                continue
+            }
+
+            for file in plan.selected {
+                if Task.isCancelled { break }
+                guard FileScan.exists(file.url) else {
+                    // The copy vanished independently; remove the stale row, but
+                    // never report its bytes as reclaimed by Cairn.
+                    result.removedIDs.insert(file.id)
+                    continue
+                }
+                guard permitted(file, excludedPaths: excludedPaths), file.url != keeper.url,
+                      let copyHash = DupHash.fingerprint(file.url),
+                      copyHash.digest == plan.scannedDigest,
+                      DupHash.unchanged(keeper.url, since: keeperHash),
+                      DupHash.unchanged(file.url, since: copyHash),
+                      permitted(keeper, excludedPaths: excludedPaths),
+                      permitted(file, excludedPaths: excludedPaths) else {
+                    result.failed += 1
+                    result.errors.append("\(file.url.lastPathComponent): changed, protected, or no verified keeper — rescan")
+                    continue
+                }
+                do {
+                    var trashedURL: NSURL?
+                    try fm.trashItem(at: file.url, resultingItemURL: &trashedURL)
+                    result.history.append(ScanStore.RemovalLogEntry(name: file.url.lastPathComponent, originalPath: file.url.path, trashPath: (trashedURL as URL?)?.path, bytes: file.estimatedBytes, date: Date(), category: "duplicates"))
+                    result.trashed += 1
+                    result.bytes += file.estimatedBytes
+                    result.removedIDs.insert(file.id)
+                } catch {
+                    result.failed += 1
+                    result.errors.append("\(file.url.lastPathComponent): \((error as NSError).localizedDescription)")
+                }
+            }
         }
-        if Task.isCancelled { return nil }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        if Task.isCancelled { result.errors.append("Duplicate removal stopped; remaining copies were left in place") }
+        return result
     }
 }
 
@@ -103,6 +249,9 @@ enum DupHash {
 @MainActor
 @Observable
 final class DuplicateStore {
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var prepareRemoval: () -> Bool = { false }
+
     enum Phase: Equatable { case idle, scanning, finished, cancelled }
     enum SortOrder: String, CaseIterable, Identifiable {
         case size = "Size", count = "Count", name = "Name", newest = "Newest"
@@ -115,6 +264,8 @@ final class DuplicateStore {
     private(set) var hashedCount: Int = 0
     private(set) var candidateCount: Int = 0
     private(set) var progressText: String = ""
+    private(set) var wasLimited = false
+    private(set) var isRemoving = false
     var sortOrder: SortOrder = .size
     var searchQuery: String = ""
 
@@ -124,6 +275,7 @@ final class DuplicateStore {
     private let skipDirNames: Set<String> = ["node_modules", "Library", ".git", ".Trash"]
 
     nonisolated(unsafe) private var scanTask: Task<Void, Never>?
+    private var scanGeneration = UUID()
 
     deinit { scanTask?.cancel() }
 
@@ -192,6 +344,7 @@ final class DuplicateStore {
     }
 
     func rescan() {
+        guard !isRemoving else { return }
         cancel()
         groups = []
         hashedCount = 0
@@ -201,14 +354,24 @@ final class DuplicateStore {
     }
 
     func cancel() {
+        scanGeneration = UUID()
         scanTask?.cancel()
         scanTask = nil
         if phase == .scanning { phase = .cancelled }
     }
 
+    func cancelAndWait() async {
+        let worker = scanTask
+        cancel()
+        await worker?.value
+    }
+
     private func start() {
         phase = .scanning
-        progressText = "Scanning folders…"
+        wasLimited = false
+        progressText = "Waiting for other disk work to finish…"
+        let generation = UUID()
+        scanGeneration = generation
         let roots = self.roots
         let minSize = self.minSize
         let cap = self.candidateCap
@@ -226,13 +389,19 @@ final class DuplicateStore {
         // user-initiated priority — it starved the UI and froze navigation for the
         // whole scan. Detaching guarantees it runs off-main, below the UI.
         scanTask = Task.detached(priority: .utility) { [weak self] in
-            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            guard await ScanGate.shared.acquire() else { return }
             defer { ScanGate.shared.release() }
+            guard !Task.isCancelled else { return }
+            await MainActor.run { [weak self] in
+                guard self?.scanGeneration == generation else { return }
+                self?.progressText = "Scanning folders…"
+            }
             let result = await Self.findDuplicates(
                 roots: roots, minSize: minSize, cap: cap, skipDirNames: skip,
                 onProgress: { hashed, candidates in
                     guard throttle.shouldPublish() else { return }
                     Task { @MainActor [weak self] in
+                        guard self?.scanGeneration == generation else { return }
                         self?.hashedCount = hashed
                         self?.candidateCount = candidates
                         self?.progressText = "Hashing \(hashed) of \(candidates) candidate files…"
@@ -240,11 +409,12 @@ final class DuplicateStore {
                 }
             )
             await MainActor.run { [weak self] in
-                guard let self else { return }
+                guard let self, self.scanGeneration == generation else { return }
                 if Task.isCancelled { self.phase = .cancelled; return }
-                self.groups = result
+                self.groups = result.groups
+                self.wasLimited = result.limited
                 self.phase = .finished
-                self.progressText = ""
+                self.progressText = result.limited ? "Comparison reached its safety limit. Results cover only the files checked." : ""
             }
         }
     }
@@ -252,6 +422,7 @@ final class DuplicateStore {
     // MARK: Selection
 
     func toggle(_ copyID: UUID) {
+        guard !isRemoving else { return }
         for gi in groups.indices {
             if let fi = groups[gi].files.firstIndex(where: { $0.id == copyID }) {
                 if groups[gi].files[fi].isKeeper { return }   // can't stage the keeper
@@ -263,6 +434,7 @@ final class DuplicateStore {
 
     /// Make `copyID` the keeper of its group; clear that copy's selection.
     func setKeeper(_ copyID: UUID, in groupID: UUID) {
+        guard !isRemoving else { return }
         guard let gi = groups.firstIndex(where: { $0.id == groupID }) else { return }
         for fi in groups[gi].files.indices {
             let isNew = groups[gi].files[fi].id == copyID
@@ -273,6 +445,7 @@ final class DuplicateStore {
 
     /// Keep the recommended (canonical/oldest) copy, stage all others for removal.
     func keepBest(_ groupID: UUID) {
+        guard !isRemoving else { return }
         guard let gi = groups.firstIndex(where: { $0.id == groupID }) else { return }
         let keeperID = Self.recommendedKeeperID(groups[gi].files)
         for fi in groups[gi].files.indices {
@@ -284,6 +457,7 @@ final class DuplicateStore {
 
     /// Select every non-keeper copy across all groups.
     func autoSelectRecommended() {
+        guard !isRemoving else { return }
         for gi in groups.indices {
             for fi in groups[gi].files.indices {
                 groups[gi].files[fi].selected = !groups[gi].files[fi].isKeeper
@@ -292,6 +466,7 @@ final class DuplicateStore {
     }
 
     func clearSelection() {
+        guard !isRemoving else { return }
         for gi in groups.indices {
             for fi in groups[gi].files.indices { groups[gi].files[fi].selected = false }
         }
@@ -307,58 +482,48 @@ final class DuplicateStore {
 
     struct RemovalResult { var trashed = 0; var failed = 0; var bytes: Int64 = 0; var errors: [String] = [] }
 
-    /// Trash every selected (non-keeper) copy via `FileManager.trashItem` (recoverable),
-    /// then drop emptied groups and groups that fall below 2 copies.
+    /// Rehash the keeper and selected files off-main before each recoverable Trash
+    /// move. A scan result is never enough evidence to remove a possibly changed file.
     @discardableResult
-    func removeSelected() -> RemovalResult {
-        var result = RemovalResult()
-        let fm = FileManager.default
-
+    func removeSelected() async -> RemovalResult {
+        guard prepareRemoval() else { return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]) }
+        guard !isRemoving else {
+            return RemovalResult(trashed: 0, failed: 1, bytes: 0,
+                                 errors: ["Duplicate removal is already running"])
+        }
+        let plans: [DupRemovalPlan] = groups.compactMap { group in
+            let selected = group.files.filter { $0.selected && !$0.isKeeper }
+            guard !selected.isEmpty else { return nil }
+            func planned(_ file: DupFile) -> DupRemovalFile {
+                DupRemovalFile(id: file.id, url: file.url, resolvedURL: file.resolvedURL,
+                               estimatedBytes: file.size)
+            }
+            let keeper = group.files.first { $0.isKeeper && !$0.selected }.map(planned)
+            return DupRemovalPlan(name: group.name, scannedDigest: group.hash,
+                                  keeper: keeper, selected: selected.map(planned))
+        }
+        guard !plans.isEmpty else { return RemovalResult() }
+        isRemoving = true
+        defer { isRemoving = false }
+        guard await ScanGate.shared.acquire() else { return RemovalResult() }
+        defer { ScanGate.shared.release() }
+        let excludedPaths = SafePaths.userExcluded
+        let worker = Task.detached(priority: .utility) {
+            DupRemovalEngine.run(plans, excludedPaths: excludedPaths)
+        }
+        let batch = await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
         for gi in groups.indices {
-            let group = groups[gi]
-            let toRemove = group.files.filter { $0.selected && !$0.isKeeper }
-            let toKeep = group.files.filter { !($0.selected && !$0.isKeeper) }
-            guard !toRemove.isEmpty else { continue }
-
-            // CRITICAL SAFETY: never trash every copy — at least one must remain on
-            // disk. Guards the case where no keeper is set or the keeper is gone.
-            guard toKeep.contains(where: { FileScan.exists($0.resolvedURL) }) else {
-                result.failed += toRemove.count
-                result.errors.append("\(group.name): kept — removing these would leave no surviving copy")
-                continue
-            }
-
-            var survivors = toKeep
-            for file in toRemove {
-                guard FileScan.exists(file.resolvedURL) else { result.bytes += file.size; continue } // already gone
-                // Defense-in-depth: never trash a system path or anything inside a
-                // photo library, even if it somehow matched. (We deliberately DON'T
-                // apply the cleaner's Documents denylist here — deduping the user's
-                // own Documents/Pictures is exactly what they asked for.)
-                let p = file.resolvedURL.resolvingSymlinksInPath().standardizedFileURL.path
-                let systemProtected = SafePaths.denyAbsolutePrefixes.contains { p == $0 || p.hasPrefix($0 + "/") }
-                    || SafePaths.denyComponents.contains { p.contains($0) }
-                guard !systemProtected else {
-                    result.failed += 1
-                    result.errors.append("\(file.name): blocked by safety policy")
-                    survivors.append(file)
-                    continue
-                }
-                do {
-                    try fm.trashItem(at: file.resolvedURL, resultingItemURL: nil)
-                    result.trashed += 1
-                    result.bytes += file.size
-                } catch {
-                    result.failed += 1
-                    result.errors.append("\(file.name): \((error as NSError).localizedDescription)")
-                    survivors.append(file)
-                }
-            }
-            groups[gi].files = survivors
+            groups[gi].files.removeAll { batch.removedIDs.contains($0.id) }
         }
         // Drop groups that no longer have at least 2 copies.
         groups.removeAll { $0.count < 2 }
-        return result
+        onRemovals?(batch.history)
+        return RemovalResult(trashed: batch.trashed, failed: batch.failed,
+                             bytes: batch.bytes, errors: batch.errors)
     }
 
     // MARK: Keeper policy
@@ -384,33 +549,43 @@ final class DuplicateStore {
 
     // MARK: Engine (off the main actor)
 
-    private nonisolated static func findDuplicates(
+    struct Discovery {
+        var groups: [DupGroup]
+        var limited: Bool
+    }
+    nonisolated static func findDuplicates(
         roots: [URL],
         minSize: Int64,
         cap: Int,
         skipDirNames: Set<String>,
         onProgress: @escaping (_ hashed: Int, _ candidates: Int) -> Void
-    ) async -> [DupGroup] {
+    ) async -> Discovery {
 
         // Pass 1 — bounded walk, bucket candidates by exact byte size.
         struct Candidate { let url: URL; let size: Int64; let modified: Date; let volume: URL? }
         var bySize: [Int64: [Candidate]] = [:]
         // Cap Pass-1 retention so a media-heavy home can't balloon `bySize`.
-        let walkCap = 300_000
+        let walkCap = cap
         var appended = 0
+        var examined = 0
+        var limited = false
         let fm = FileManager.default
         let keys: Set<URLResourceKey> = [.isRegularFileKey, .isSymbolicLinkKey, .isDirectoryKey,
                                          .isUbiquitousItemKey, .fileSizeKey, .totalFileAllocatedSizeKey,
                                          .contentModificationDateKey, .volumeURLKey, .isPackageKey]
 
         outer: for root in roots {
-            if Task.isCancelled { return [] }
+            if Task.isCancelled { return Discovery(groups: [], limited: true) }
             guard let en = fm.enumerator(at: root, includingPropertiesForKeys: Array(keys),
                                          options: [], errorHandler: { _, _ in true }) else { continue }
-            for case let url as URL in en {
-                if Task.isCancelled { return [] }
+            while true {
+                if Task.isCancelled { return Discovery(groups: [], limited: true) }
                 var stop = false
+                var ended = false
                 autoreleasepool {   // keep RAM flat while walking huge media folders
+                    guard let url = en.nextObject() as? URL else { ended = true; return }
+                    examined += 1
+                    if examined > 300_000 { stop = true; limited = true; return }
                     guard let v = try? url.resourceValues(forKeys: keys) else { return }
                     if v.isSymbolicLink == true { en.skipDescendants(); return }
                     if v.isUbiquitousItem == true { en.skipDescendants(); return }   // iCloud stub
@@ -424,7 +599,7 @@ final class DuplicateStore {
                         return
                     }
                     guard v.isRegularFile == true else { return }
-                    let size = Int64(v.totalFileAllocatedSize ?? v.fileSize ?? 0)
+                    let size = Int64(v.fileSize ?? 0)
                     guard size >= minSize else { return }
                     // Defer resolvingSymlinksInPath() to Pass-2 — only the handful of
                     // files that land in a duplicate group need a resolved URL.
@@ -432,8 +607,9 @@ final class DuplicateStore {
                         url: url, size: size,
                         modified: v.contentModificationDate ?? .distantPast, volume: v.volume))
                     appended += 1
-                    if appended >= walkCap { stop = true }
+                    if appended >= walkCap { stop = true; limited = true }
                 }
+                if ended { break }
                 if stop { break outer }   // retention cap hit — verify what we have
             }
         }
@@ -450,16 +626,16 @@ final class DuplicateStore {
         var groups: [DupGroup] = []
         var hashed = 0
         for cluster in clusters {
-            if Task.isCancelled { return groups }
+            if Task.isCancelled { return Discovery(groups: groups, limited: true) }
             if hashed >= cap { break }
             var byHash: [String: [Candidate]] = [:]
             for cand in cluster {
-                if Task.isCancelled { return groups }
+                if Task.isCancelled { return Discovery(groups: groups, limited: true) }
                 if hashed >= cap { break }
-                guard let h = DupHash.fingerprint(cand.url, size: cand.size) else { continue }
+                guard let h = DupHash.fingerprint(cand.url) else { continue }
                 hashed += 1
                 if hashed % 64 == 0 { onProgress(hashed, totalCandidates) }
-                byHash[h, default: []].append(cand)
+                byHash[h.digest, default: []].append(cand)
             }
             for (hash, members) in byHash where members.count > 1 {
                 var files = members.map {
@@ -481,6 +657,6 @@ final class DuplicateStore {
             }
         }
         onProgress(hashed, totalCandidates)
-        return groups
+        return Discovery(groups: groups, limited: limited)
     }
 }

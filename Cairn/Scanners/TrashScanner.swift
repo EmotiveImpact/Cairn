@@ -36,11 +36,11 @@ struct TrashScanner: CairnScanner {
                 if ctx.isCancelled() { return }
                 if let item = makeItem(
                     at: child,
-                    severity: .safe,
+                    severity: .review,
                     minSize: 1,                       // show everything in Trash
-                    cleanMethod: .emptyTrash,
-                    note: "In Trash — emptying reclaims this space now",
-                    selectedIfSafe: true
+                    cleanMethod: .adviceOnly,
+                    note: "In Trash — review and empty with Finder after checking recoverable data",
+                    selectedIfSafe: false
                 ) {
                     ctx.emit(item)
                 }

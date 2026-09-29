@@ -1,0 +1,13 @@
+Hash pass 1: footprint 9 MiB; RSS 16 MiB; completed true
+Hash pass 2: footprint 9 MiB; RSS 16 MiB; completed true
+Hash pass 3: footprint 9 MiB; RSS 16 MiB; completed true
+Hash pass 4: footprint 10 MiB; RSS 17 MiB; completed true
+Hash pass 5: footprint 10 MiB; RSS 17 MiB; completed true
+Hash pass 6: footprint 10 MiB; RSS 17 MiB; completed true
+Hash pass 7: footprint 10 MiB; RSS 17 MiB; completed true
+Hash pass 8: footprint 10 MiB; RSS 17 MiB; completed true
+HASH MEMORY: baseline 3 MiB; peak 10 MiB; growth 6 MiB; retained results: one digest
+HASH MEMORY PASSED
+Copy pass 1: footprint 10 MiB; verified true
+Copy pass 2: footprint 11 MiB; verified true
+COPY MEMORY / HASH CORRECTNESS / CANCELLATION / MID-READ CHANGE PASSED

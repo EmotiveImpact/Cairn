@@ -1,0 +1,13 @@
+# Cairn next-pass review — 28 September 2026
+
+Scope: current native sample Overview, sidebar/titlebar, and logo source assets. No implementation changes, real scans, or personal-data operations.
+
+1. Overview — visually coherent, but status hierarchy needs correction. Current sample screenshot shows “A little room to breathe” beside a low-storage warning at 9.9 GB. Source confirms the reassuring heading is used for every available volume regardless of low-space state. Recommend capacity-appropriate heading and one clear primary next action.
+2. Search/navigation — sidebar hierarchy is readable; Activity & Recovery is visibly truncated. Current accessibility state shows an mp3 search returning “No matching growth”; source confirms Overview search filters category changes, not files. Recommend an explicit contextual search label now; broader file/app search only when supported by measured indexes. Collapsed children are correctly absent from accessibility after disclosure tests in the preceding pass; this review did not re-test motion or keyboard navigation.
+3. Branding — current native screenshot places the small blue cairn beside Cairn in the topbar, between the window-control reservation and section title. CairnArt.swift draws four capsules; the inspected Cairn.icns asset uses four white ellipses on a blue/cyan gradient. The source and packaged ICNS hashes match. They are related but not a single shared master geometry. Recommend a deliberate sidebar-aligned brand area, a workspace-aligned title, and consistent master artwork with distinct monochrome toolbar and full-colour Dock treatments.
+
+Emerging direction: a storage control centre with clear status, grounded next steps, and visible operation/recovery history. A persistent operation indicator should reflect all stores, not only the general scanner; AppShell’s current statusBar reads general ScanStore state. Keep this separate from claims of continuous monitoring, complete growth attribution, or safe directory relocation: these are not established by the current UI.
+
+Release priority: live scan cancellation, controlled cleanup/restore, unplug/reconnect and long-duration behavior remain release gates in BUILD_STATUS.md. Earlier isolated checks do not establish live production reliability.
+
+Evidence: current native screenshot shown inline during this review; current AX search state; source inspection; extracted /tmp/cairn-current-icon.png. Screenshot saving was blocked by automatic approval review because the helper could request Screen Recording access; no permission was changed or workaround attempted. Existing native screenshot remained available. No complete accessibility or frame-by-frame animation audit claimed.

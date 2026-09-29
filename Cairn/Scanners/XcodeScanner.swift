@@ -4,7 +4,7 @@ import Foundation
 /// DerivedData rebuilds on demand → SAFE. DeviceSupport debug symbols re-extract
 /// on the next device attach → REVIEW. Archives hold the only local dSYMs used to
 /// symbolicate shipped crashes → never trashable, advice-only / RISKY. Simulator
-/// caches are regenerable; the Devices store is pruned via `simctl`, never rm.
+/// caches are regenerable; Devices may hold app databases and is advice-only.
 /// These live under plain user dirs (0700) → no Full Disk Access needed.
 struct XcodeScanner: CairnScanner {
     let info = CategoryInfo(
@@ -112,18 +112,13 @@ struct XcodeScanner: CairnScanner {
             ctx.emit(item)
         }
 
-        // 5) CoreSimulator/Devices — ONE REVIEW item, pruned via simctl (never rm,
-        //    since active devices hold real installed-app state). Size the dir.
+        // 5) CoreSimulator/Devices — advice only. Even an unavailable device can
+        //    hold app data that is not safely reconstructable. Size the dir.
         if ctx.isCancelled() { return }
         ctx.progress("Simulator devices")
         let devices = coreSimulator.appendingPathComponent("Devices")
         if FileScan.exists(devices) {
             let stats = FileScan.measure(devices)
-            let prune = ToolCommand(
-                tool: "xcrun",
-                arguments: ["simctl", "delete", "unavailable"],
-                display: "xcrun simctl delete unavailable"
-            )
             ctx.emit(ScanItem(
                 url: devices,
                 allocatedSize: stats.allocatedSize,
@@ -131,11 +126,11 @@ struct XcodeScanner: CairnScanner {
                 latestModified: stats.latestModified,
                 categoryID: info.id,
                 severity: .review,
-                isRegenerable: true,
+                isRegenerable: false,
                 requiresQuitBundleIDs: [simulatorBundleID],
                 requiresRunning: false,
-                cleanMethod: .tool(prune),
-                note: "Unavailable/old simulator devices — removed via simctl",
+                cleanMethod: .adviceOnly,
+                note: "Simulator devices may hold installed-app data and databases. Inspect and back them up before any manual deletion.",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: devices),
                 selected: false

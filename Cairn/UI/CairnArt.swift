@@ -1,24 +1,23 @@
 import SwiftUI
 
-/// The brand mark — a balanced stack of pebble capsules (a cairn), blue→teal.
+/// The established Cairn toolbar mark. Keep its blue tone fixed; the colourful
+/// application tile belongs in the Dock, not inside the window chrome.
 struct CairnLogo: View {
     var size: CGFloat = 34
-
+    var monochrome = false
     var body: some View {
-        // NOTE: spacing must not be negative. A negative-spacing VStack whose
-        // children overlap, wrapped in a fixed `.frame` and a `.shadow`, made
-        // SwiftUI's layout oscillate — it re-measured forever, pinning the main
-        // thread at 100% CPU and freezing navigation across the whole app (the
-        // logo sits in the always-visible sidebar). Positive spacing is stable.
-        VStack(spacing: size * 0.03) {
-            Capsule().fill(Brand.blue.opacity(0.48)).frame(width: size * 0.24, height: size * 0.085)
-            Capsule().fill(Brand.blue.opacity(0.60)).frame(width: size * 0.36, height: size * 0.10)
-            Capsule().fill(Brand.blue.opacity(0.74)).frame(width: size * 0.48, height: size * 0.12)
-            Capsule()
-                .fill(LinearGradient(colors: [Brand.blue, Brand.cyan], startPoint: .leading, endPoint: .trailing))
-                .frame(width: size * 0.66, height: size * 0.16)
-        }
-        .frame(width: size, height: size)
+        VStack(spacing: size * 0.035) {
+            stone(width: 0.24, height: 0.12)
+            stone(width: 0.40, height: 0.15)
+            stone(width: 0.56, height: 0.18)
+            stone(width: 0.74, height: 0.23)
+        }.frame(width: size, height: size)
+    }
+    private func stone(width: CGFloat, height: CGFloat) -> some View {
+        Ellipse()
+            .fill(monochrome ? AnyShapeStyle(Color.black) : AnyShapeStyle(
+                LinearGradient(colors: [Color(red: 0.57, green: 0.79, blue: 0.98), Brand.blue], startPoint: .topLeading, endPoint: .bottomTrailing)))
+            .frame(width: size * width, height: size * height)
     }
 }
 
@@ -73,6 +72,7 @@ struct HeroBanner: View {
                 Image(nsImage: img)
                     .resizable()
                     .scaledToFill()
+                    .opacity(0.12)
                     // Top-align the crop so the image's WHITE sky sits behind the
                     // title (not the bluer middle), and the cairn stays visible below.
                     .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
@@ -81,7 +81,7 @@ struct HeroBanner: View {
                 HeroIllustration()
             }
         }
-        .background(Color.white)
+        .background(Brand.background)
         .allowsHitTesting(false)
     }
 }
@@ -99,7 +99,7 @@ struct HeroIllustration: View {
         GeometryReader { proxy in
             let w = proxy.size.width, h = proxy.size.height
             ZStack {
-                LinearGradient(colors: [Color(hex: 0xF2F8FF), Color(hex: 0xDCEAFF)],
+                LinearGradient(colors: [Brand.background, Brand.deepPanel],
                                startPoint: .top, endPoint: .bottom)
 
                 MountainLayer(drop: 0.16).fill(Brand.blue.opacity(0.16))

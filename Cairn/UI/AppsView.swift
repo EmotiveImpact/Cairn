@@ -33,7 +33,7 @@ struct AppsView: View {
     var body: some View {
         VStack(spacing: 0) {
             PageHero(title: "Apps",
-                     subtitle: "Uninstall apps and every file they left behind. Bundle first, so nothing is orphaned.",
+                     subtitle: "Review installed apps. App support and personal data stay in place.",
                      progress: store.unusedReclaimable > 0 ? 1 : 0.02,
                      value: store.unusedReclaimable,
                      caption: "Reclaimable",
@@ -220,9 +220,9 @@ struct AppsView: View {
     private func row(_ app: AppEntry) -> some View {
         HStack(spacing: 0) {
             Group {
-                if app.isSystem {
+                if !app.isRemovable {
                     Image(systemName: "lock.fill").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                        .help("System app — protected")
+                        .help("Protected app — Cairn will not remove its conversation or system data")
                 } else {
                     Image(systemName: app.selected ? "checkmark.square.fill" : "square")
                         .font(.system(size: 15)).foregroundStyle(app.selected ? Brand.blue : Brand.textMuted)
@@ -237,11 +237,11 @@ struct AppsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Text(app.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
-                        if app.isSystem { tag("System", Brand.textMuted) }
+                        if !app.isRemovable { tag("Protected", Brand.textMuted) }
                         else if app.isIntel { tag("Intel", Brand.amber) }
                     }
                     if app.hasLeftovers {
-                        Text("+ \(Fmt.size(app.componentsSize)) in support & leftover files")
+                        Text("\(Fmt.size(app.componentsSize)) in associated data stays on your Mac")
                             .font(.system(size: 10)).foregroundStyle(Brand.textMuted).lineLimit(1)
                     } else {
                         Text("v\(app.version)").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
@@ -262,7 +262,7 @@ struct AppsView: View {
         .background(app.selected ? Brand.blue.opacity(0.05) : .clear)
         .contentShape(Rectangle())
         .onTapGesture { store.toggle(app.id) }.pointerCursor()
-        .opacity(app.isSystem ? 0.55 : 1)
+        .opacity(app.isRemovable ? 1 : 0.65)
     }
 
     private func tag(_ text: String, _ color: Color) -> some View {
@@ -286,7 +286,7 @@ struct AppsView: View {
         let bundle = sel.reduce(Int64(0)) { $0 + $1.size }
         let support = sel.reduce(Int64(0)) { $0 + $1.supportSize }
         let leftover = sel.reduce(Int64(0)) { $0 + $1.leftoverSize }
-        let total = bundle + support + leftover
+        let total = bundle
 
         return VStack(alignment: .leading, spacing: 16) {
             Text("What will be removed").font(.system(size: 15, weight: .semibold)).foregroundStyle(Brand.textPrimary)
@@ -294,15 +294,15 @@ struct AppsView: View {
             VStack(spacing: 0) {
                 breakdownRow("Applications", "\(sel.count) app\(sel.count == 1 ? "" : "s")", bundle, "app.fill", Brand.blue)
                 Divider().overlay(Brand.border).padding(.leading, 40)
-                breakdownRow("Support Files", "Application Support, Containers", support, "folder.fill", Brand.cyan)
+                breakdownRow("Support Files", "Kept on this Mac", support, "folder.fill", Brand.cyan)
                 Divider().overlay(Brand.border).padding(.leading, 40)
-                breakdownRow("Leftover Files", "Caches, Preferences, Logs", leftover, "doc.on.doc.fill", Brand.purple)
+                breakdownRow("Other App Data", "Kept on this Mac", leftover, "doc.on.doc.fill", Brand.purple)
             }
             .cairnCard(0)
 
             VStack(spacing: 6) {
                 HStack {
-                    Text("Total").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textPrimary)
+                    Text("Bundle to Trash").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textPrimary)
                     Spacer()
                     Text(Fmt.size(total)).font(.system(size: 16, weight: .bold)).foregroundStyle(Brand.blue)
                 }
@@ -315,7 +315,7 @@ struct AppsView: View {
             Button { confirming = true } label: {
                 VStack(spacing: 2) {
                     Label("Uninstall Selected (\(sel.count))", systemImage: "trash")
-                    if total > 0 { Text("\(Fmt.size(total)) will be freed").font(.system(size: 10)).opacity(0.85) }
+                    if total > 0 { Text("\(Fmt.size(total)) to Trash; space frees when Trash is emptied").font(.system(size: 10)).opacity(0.85) }
                 }
                 .frame(maxWidth: .infinity)
             }
@@ -346,12 +346,12 @@ struct AppsView: View {
         VStack(alignment: .leading, spacing: 9) {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield.fill").foregroundStyle(Brand.safeCyan).font(.system(size: 13))
-                Text("Safe Removal").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textPrimary)
+                Text("Removal boundaries").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textPrimary)
             }
             ForEach([
-                "Everything is moved to the Trash — you can Put Back anything.",
+                "Only the selected app bundle moves to Trash.",
                 "Running apps are quit automatically before removal.",
-                "Only the app bundle and its own support files are touched.",
+                "Support files, conversations, preferences and projects stay in place.",
                 "System apps are protected and can't be selected.",
             ], id: \.self) { line in
                 HStack(alignment: .top, spacing: 7) {
@@ -375,8 +375,7 @@ struct AppsView: View {
     }
 }
 
-/// Final confirmation before trashing. Lists every app + its associated-file
-/// footprint and warns about any running app that must quit first.
+/// Final confirmation before trashing app bundles. Associated data is retained.
 struct UninstallConfirmSheet: View {
     let apps: [AppEntry]
     var onCancel: () -> Void
@@ -395,7 +394,7 @@ struct UninstallConfirmSheet: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Uninstall \(apps.count) app\(apps.count == 1 ? "" : "s")?")
                         .font(.system(size: 18, weight: .bold)).foregroundStyle(Brand.textPrimary)
-                    Text("\(Fmt.size(total)) will be moved to the Trash — recoverable via Put Back.")
+                    Text("\(Fmt.size(total)) in app bundles moves to Trash. Support data stays.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
                 }
                 Spacer()
@@ -410,7 +409,7 @@ struct UninstallConfirmSheet: View {
                             FileIcon(url: app.url, size: 26)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text(app.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary)
-                                Text("\(app.associated.count) associated file\(app.associated.count == 1 ? "" : "s")")
+                                Text("\(app.associated.count) associated location\(app.associated.count == 1 ? "" : "s") kept")
                                     .font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                             }
                             Spacer()

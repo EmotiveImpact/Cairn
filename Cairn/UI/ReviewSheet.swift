@@ -14,7 +14,8 @@ struct ReviewSheet: View {
     @State private var confirmDestructive = false
     @State private var destructiveConfirmText = ""
 
-    private var items: [ScanItem] { store.selectedItems() }
+    @State private var items: [ScanItem] = []
+    @State private var freeBytes: Int64?
     private var total: Int64 { items.reduce(0) { $0 + $1.allocatedSize } }
     private var runningBlockers: [String] {
         let ids = items.flatMap { $0.requiresQuitBundleIDs }
@@ -22,59 +23,38 @@ struct ReviewSheet: View {
     }
     private var paidItems: [ScanItem] { items.filter { $0.cleanMethod.isPaid } }
     private var paidTotal: Int64 { paidItems.reduce(0) { $0 + $1.allocatedSize } }
-    /// What a clean will ACTUALLY reclaim: everything for Pro, free-method items
-    /// only otherwise (tool cleans are skipped without Pro).
+    /// Estimated size of eligible inputs, never a promise of released capacity.
     private var effectiveTotal: Int64 { proEnabled ? total : total - paidTotal }
     private var destructiveItems: [ScanItem] {
         items.filter { if case .tool(let c) = $0.cleanMethod { return c.destroysData } else { return false } }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider().overlay(Brand.border)
-
+        CairnDialog(title: cleaning ? "Cleanup in progress" : "Review cleanup", subtitle: "\(items.count) items · about \(Fmt.size(total)) affected. Trash items can be restored while present; tool actions cannot.", height: 540) {
             ScrollView {
-                LazyVStack(spacing: 2) {
+                VStack(alignment: .leading, spacing: 16) {
+                    if cleaning { CairnStateView(kind: .scanning, title: "Applying reviewed actions", message: "Keep Cairn open. Each result will be recorded in Activity & Recovery.", compact: true) }
                     ForEach(items) { item in
-                        HStack(spacing: 10) {
-                            SeverityDot(severity: item.severity)
-                            Text(item.url.lastPathComponent).font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Brand.textPrimary).lineLimit(1)
-                            if item.cleanMethod.isPaid { Text("via tool").font(.system(size: 10)).foregroundStyle(Brand.purple) }
-                            if case .emptyTrash = item.cleanMethod { Text("permanent").font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.danger) }
-                            Spacer()
-                            Text(Fmt.size(item.allocatedSize)).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack { Text(item.url.lastPathComponent).font(.system(size: 13, weight: .medium)); Spacer(); Text(Fmt.size(item.allocatedSize)).font(.system(size: 12)).monospacedDigit() }
+                            Text(item.resolvedURL.path).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                            if case .tool(let command) = item.cleanMethod { Text(command.display).font(.system(size: 12, design: .monospaced)).textSelection(.enabled) }
+                            Divider()
                         }
-                        .padding(.horizontal, 16).padding(.vertical, 6)
                     }
+                    warnings
                 }
-                .padding(.vertical, 8)
             }
-            .frame(maxHeight: 280)
-
-            Divider().overlay(Brand.border)
-            warnings
-            footer
-        }
-        .frame(width: 560)
-        .background(Brand.surfaceElevated)
-    }
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("Review & Clean").font(.system(size: 17, weight: .bold)).foregroundStyle(Brand.textPrimary)
-            Text("\(items.count) items · \(Fmt.size(total)) — moved to the Trash (recoverable) unless noted.")
-                .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-        }
-        .padding(16)
+        } actions: { footer }
+        .interactiveDismissDisabled(cleaning)
+        .task { items = store.selectedItems(); freeBytes = await Task.detached { Volumes.homeFree() }.value }
     }
 
     @ViewBuilder private var warnings: some View {
         VStack(alignment: .leading, spacing: 8) {
             if !runningBlockers.isEmpty {
                 warn(Brand.amber, "lock.fill", "Quit first: \(runningBlockers.joined(separator: ", "))",
-                     "These apps own selected caches — cleaning while they run can corrupt state.")
+                     "Cairn will skip their caches while they are running. Close the apps and retry.")
             }
             if !paidItems.isEmpty && !proEnabled {
                 warn(Brand.purple, "star.fill", "\(paidItems.count) items need Pro",
@@ -85,42 +65,39 @@ struct ReviewSheet: View {
                     Text("I understand \(destructiveItems.count) destructive item(s) (e.g. docker volumes) can't be undone")
                         .font(.system(size: 11)).foregroundStyle(Brand.danger)
                 }
-                .toggleStyle(.checkbox)
+                .toggleStyle(.checkbox).disabled(cleaning)
             }
             HStack(spacing: 6) {
                 Image(systemName: "internaldrive").foregroundStyle(Brand.textMuted).font(.system(size: 11))
-                Text("Free on this volume after Empty Trash: \(Fmt.size(Volumes.homeFree() + total))")
+                Text("Available on this Mac now: \(freeBytes.map(Fmt.size) ?? "measuring…"). Moving files to Trash does not release their space.")
                     .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
     }
 
     private var footer: some View {
         HStack {
-            Button("Cancel") { dismiss() }.buttonStyle(GhostButtonStyle())
-            Spacer()
+            Button("Cancel") { dismiss() }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction).disabled(cleaning)
             if cleaning {
                 ProgressView().controlSize(.small)
             }
             if !proEnabled && paidTotal > 0 {
                 Button { onUpgrade(); dismiss() } label: { Text("Unlock \(Fmt.size(paidTotal)) with Pro →") }
-                    .buttonStyle(GhostButtonStyle())
+                    .buttonStyle(ControlPanelButtonStyle()).disabled(cleaning)
             }
             Button {
                 Task { await runClean() }
             } label: {
-                Text(cleaning ? "Cleaning…" : "Clean \(Fmt.size(effectiveTotal))")
+                Text(cleaning ? "Cleaning…" : "Run reviewed cleanup")
             }
-            .buttonStyle(BrandButtonStyle(enabled: canClean))
+            .buttonStyle(ControlPanelButtonStyle(primary: true))
             .disabled(!canClean)
         }
-        .padding(16)
     }
 
     private var canClean: Bool {
-        !cleaning && !items.isEmpty && effectiveTotal > 0 && (destructiveItems.isEmpty || confirmDestructive)
+        !cleaning && !store.isScanning && !store.isCleaning && !items.isEmpty && effectiveTotal > 0 && (destructiveItems.isEmpty || confirmDestructive)
     }
 
     private func warn(_ color: Color, _ icon: String, _ title: String, _ sub: String) -> some View {

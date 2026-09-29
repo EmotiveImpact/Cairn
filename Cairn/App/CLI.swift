@@ -46,14 +46,14 @@ enum CLI {
             printJSON([
                 "freeBytes": free,
                 "totalBytes": total,
-                "lifetimeReclaimedBytes": lifetime,
+                "lifetimeAffectedEstimateBytes": lifetime,
                 "trend": trend.text,
             ])
             return
         }
         print("Free space   \(Fmt.size(free)) of \(Fmt.size(total))")
         print("Trend        \(trend.text)")
-        print("Reclaimed    \(Fmt.size(lifetime)) with Cairn, all time")
+        print("Affected     \(Fmt.size(lifetime)) in recorded file-size estimates; not space freed")
     }
 
     private static func scan(json: Bool, category: String?) {
@@ -78,7 +78,7 @@ enum CLI {
             return
         }
 
-        guard !items.isEmpty else { print("Nothing reclaimable found."); return }
+        guard !items.isEmpty else { print("No measured candidates found."); return }
         let byCategory = Dictionary(grouping: items, by: { $0.categoryID })
         for (id, entries) in byCategory.sorted(by: { bytes(of: $0.value) > bytes(of: $1.value) }) {
             print("\n▸ \(id) — \(Fmt.size(bytes(of: entries)))")
@@ -88,7 +88,7 @@ enum CLI {
             }
             if entries.count > 10 { print("   … and \(entries.count - 10) more") }
         }
-        print("\nTotal reclaimable: \(Fmt.size(total)) across \(items.count) items")
+        print("\nTotal measured candidates: \(Fmt.size(total)) across \(items.count) items")
     }
 
     private static func clean(category: String?, dryRun: Bool, confirmed: Bool) {
@@ -114,23 +114,17 @@ enum CLI {
             return
         }
 
-        let rootsByCategory = Dictionary(
-            ScannerRegistry.all().map { ($0.info.id, $0.allowedRoots) },
-            uniquingKeysWith: { a, _ in a }
-        )
-        var reclaimed: Int64 = 0
-        var failed = 0
-        for item in candidates {
-            let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
-            let outcome = Cleaner.clean(item, allowedRoots: roots, proEnabled: true)
-            if outcome.error != nil { failed += 1 } else { reclaimed += outcome.bytesAffected }
+        // Use the same recovery logging and running-owner guards as the app.
+        Task { @MainActor in
+            let store = ScanStore()
+            let summary = await store.clean(candidates, proEnabled: false)
+            print("Moved to Trash: \(summary.accounting.trashCount) items · \(Fmt.size(summary.accounting.trashBytes)) estimated file size. These files still occupy disk space.")
+            print("Recovery recorded for \(summary.recoverableCount) items.")
+            for change in summary.capacityChanges { print("\(change.name): \(change.changeText). This change is not attributable solely to Cairn.") }
+            for error in summary.errors { print("Skipped: \(error)") }
+            exit(summary.failed == 0 && summary.errors.isEmpty ? 0 : 1)
         }
-        // Keep the GUI's headline number honest about work done from the terminal.
-        if reclaimed > 0 {
-            let previous = Int64(UserDefaults.standard.integer(forKey: "cairn.lifetimeReclaimedBytes"))
-            UserDefaults.standard.set(Int(previous + reclaimed), forKey: "cairn.lifetimeReclaimedBytes")
-        }
-        print("Reclaimed \(Fmt.size(reclaimed)) — moved to the Trash.\(failed > 0 ? " \(failed) failed." : "")")
+        RunLoop.main.run()
     }
 
     private static func categories() {
@@ -143,8 +137,8 @@ enum CLI {
         print("""
         cairn — reclaim disk space, safely.
 
-          cairn status                     free space, trend, lifetime reclaimed
-          cairn scan [--category <id>]     find reclaimable space
+          cairn status                     available capacity, trend, affected-size estimates
+          cairn scan [--category <id>]     measure cleanup candidates
           cairn clean --safe [--yes]       clean safe items (Trash, recoverable)
           cairn categories                 list scanner ids
 

@@ -12,9 +12,26 @@ import Foundation
 /// and is capped so it can't grow without bound. Nothing is sent anywhere — the
 /// no-telemetry promise still holds.
 enum MemoryWatch {
+    /// Includes compressed memory charged to the process; RSS alone can fall
+    /// while the process is exhausting memory and forcing compression/swap.
+    static func footprintBytes() -> UInt64 {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), $0, &count)
+            }
+        }
+        return result == KERN_SUCCESS ? info.phys_footprint : 0
+    }
     private static let logURL = FileManager.default
         .homeDirectoryForCurrentUser
         .appendingPathComponent("Library/Logs/Cairn-memory.log")
+
+    // AppShell can be reconstructed when its window is reopened. Keep exactly
+    // one recorder, and refresh the provider to reflect the current shell.
+    @MainActor private static var recorder: Task<Void, Never>?
+    @MainActor private static var stateProvider: (@MainActor () -> String)?
 
     /// Resident size of this process, in bytes.
     static func residentBytes() -> UInt64 {
@@ -34,22 +51,31 @@ enum MemoryWatch {
     /// `state` describes what the app is doing, evaluated on the main actor.
     @MainActor
     static func start(state: @escaping @MainActor () -> String) {
-        Task {
+        stateProvider = state
+        guard recorder == nil else { return }
+        recorder = Task {
             var lastLoggedMB = 0
             var tick = 0
             append("──── session start \(stamp()) ────")
             while !Task.isCancelled {
-                let mb = Int(residentBytes() / 1_048_576)
+                let mb = Int(footprintBytes() / 1_048_576)
                 let moved = abs(mb - lastLoggedMB) >= 100
                 let heartbeat = tick % 20 == 0          // 20 × 3s = 60s
                 if moved || heartbeat || mb > 2048 {
-                    append("\(stamp())  RSS \(mb) MB  \(state())")
+                    append("\(stamp())  footprint \(mb) MB  RSS \(residentBytes() / 1_048_576) MB  \(stateProvider?() ?? "window=closed")")
                     lastLoggedMB = mb
                 }
                 tick += 1
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
             }
         }
+    }
+
+    @MainActor
+    static func stop() {
+        recorder?.cancel()
+        recorder = nil
+        stateProvider = nil
     }
 
     private static func stamp() -> String {

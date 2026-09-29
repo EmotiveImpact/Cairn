@@ -59,86 +59,100 @@ struct StoredLicense: Codable {
     var granted: Bool
 }
 
-enum LicenseStore {
-    private static let service = "com.emotiveimpact.cairn.license"
-    private static let account = "primary"
-
-    static func load() -> StoredLicense? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let license = try? JSONDecoder().decode(StoredLicense.self, from: data)
-        else { return nil }
-        return license
-    }
-
-    static func save(_ license: StoredLicense) {
-        guard let data = try? JSONEncoder().encode(license) else { return }
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(base as CFDictionary)
-        var add = base
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
-    }
-
-    static func clear() {
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(base as CFDictionary)
+/// A locked/unavailable or malformed record is never treated as absent.
+/// No read may show a system prompt while the window is being constructed.
+enum LicenseStorageError: LocalizedError {
+    case keychain(OSStatus), malformed
+    var errorDescription: String? {
+        switch self {
+        case .keychain: return "Cairn could not access its saved license in Keychain. Your saved records were left intact. Unlock your login keychain, then retry."
+        case .malformed: return "The saved license record could not be read. It was left intact; contact support before replacing it."
+        }
     }
 }
 
-/// Trial start, persisted in the Keychain so it survives reinstall.
-enum TrialStore {
-    private static let service = "com.emotiveimpact.cairn.license"
-    private static let account = "trial"
-
-    static func startDate() -> Date {
-        if let existing = load() { return existing }
-        let now = Date(); save(now); return now
+enum LicenseKeychain {
+    private static func query(_ account: String) -> [String: Any] {
+        [kSecClass as String: kSecClassGenericPassword,
+         kSecAttrService as String: "com.emotiveimpact.cairn.license",
+         kSecAttrAccount as String: account,
+         kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
     }
-    private static func load() -> Date? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
+    static func read<T: Decodable>(_ account: String, as: T.Type,
+                                  fetch: (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus = SecItemCopyMatching) throws -> T? {
+        var query = query(account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
-              let data = item as? Data,
-              let seconds = try? JSONDecoder().decode(Double.self, from: data)
-        else { return nil }
-        return Date(timeIntervalSince1970: seconds)
+        let status = fetch(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw LicenseStorageError.keychain(status) }
+        guard let data = item as? Data, let value = try? JSONDecoder().decode(T.self, from: data) else { throw LicenseStorageError.malformed }
+        return value
     }
-    private static func save(_ date: Date) {
-        guard let data = try? JSONEncoder().encode(date.timeIntervalSince1970) else { return }
-        let base: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: account,
-        ]
-        SecItemDelete(base as CFDictionary)
-        var add = base
-        add[kSecValueData as String] = data
-        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
-        SecItemAdd(add as CFDictionary, nil)
+    static func write<T: Encodable>(_ account: String, value: T, onlyIfAbsent: Bool = false,
+                                   update: (CFDictionary, CFDictionary) -> OSStatus = SecItemUpdate,
+                                   add: (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus = SecItemAdd) throws {
+        let data = try JSONEncoder().encode(value)
+        let base = query(account)
+        if !onlyIfAbsent {
+            let status = update(base as CFDictionary, [kSecValueData as String: data] as CFDictionary)
+            if status == errSecSuccess { return }
+            guard status == errSecItemNotFound else { throw LicenseStorageError.keychain(status) }
+        }
+        var addition = base
+        addition[kSecValueData as String] = data
+        addition[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        let status = add(addition as CFDictionary, nil)
+        guard status == errSecSuccess else { throw LicenseStorageError.keychain(status) }
+    }
+    static func clear(_ account: String) throws {
+        let status = SecItemDelete(query(account) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else { throw LicenseStorageError.keychain(status) }
+    }
+}
+
+enum LicenseStore {
+    static func load() throws -> StoredLicense? { try LicenseKeychain.read("primary", as: StoredLicense.self) }
+    static func save(_ license: StoredLicense) throws { try LicenseKeychain.write("primary", value: license) }
+    static func clear() throws { try LicenseKeychain.clear("primary") }
+}
+
+enum TrialStore {
+    static func startDate() throws -> Date {
+        if let seconds = try LicenseKeychain.read("trial", as: Double.self) { return Date(timeIntervalSince1970: seconds) }
+        let now = Date()
+        do { try LicenseKeychain.write("trial", value: now.timeIntervalSince1970, onlyIfAbsent: true) }
+        catch LicenseStorageError.keychain(let status) where status == errSecDuplicateItem {
+            // Another process created it after our read. Never reset its date.
+            guard let seconds = try LicenseKeychain.read("trial", as: Double.self) else { throw LicenseStorageError.malformed }
+            return Date(timeIntervalSince1970: seconds)
+        }
+        return now
+    }
+}
+
+struct LocalLicenseState {
+    let trialStart: Date
+    let license: StoredLicense?
+}
+
+/// Serial off-main queue bounds outstanding Keychain work even if macOS stalls.
+/// The watchdog below reports a slow read; it never spawns replacement reads.
+enum LicenseStorageWorker {
+    private static let queue = DispatchQueue(label: "dev.cairn.license-storage", qos: .utility)
+    static func run<T>(_ work: @escaping () throws -> T) async throws -> T {
+        try await withCheckedThrowingContinuation { continuation in
+            queue.async {
+                do { continuation.resume(returning: try work()) }
+                catch { continuation.resume(throwing: error) }
+            }
+        }
+    }
+    static func load() throws -> LocalLicenseState {
+        // Read the existing key before attempting creation of a missing trial.
+        let license = try LicenseStore.load()
+        return LocalLicenseState(trialStart: try TrialStore.startDate(), license: license)
     }
 }
 
@@ -172,14 +186,15 @@ struct PolarClient {
         return ((json["status"] as? String) ?? "") == "granted"
     }
 
-    func deactivate(key: String, activationID: String) async {
+    func deactivate(key: String, activationID: String) async throws {
         let body: [String: Any] = ["key": key, "organization_id": organizationID, "activation_id": activationID]
-        _ = try? await post("/v1/customer-portal/license-keys/deactivate", body)
+        _ = try await post("/v1/customer-portal/license-keys/deactivate", body)
     }
 
     private func post(_ path: String, _ body: [String: Any]) async throws -> [String: Any] {
         var req = URLRequest(url: base.appendingPathComponent(path))
         req.httpMethod = "POST"
+        req.timeoutInterval = 20
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await session.data(for: req)
@@ -210,17 +225,58 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var isBusy = false
     @Published var lastError: String?
 
+    @Published private(set) var hasRequestedStorage = false
+    @Published private(set) var isLoading = false
+    @Published private(set) var storageMessage: String?
     private let client = PolarClient(organizationID: LicenseConfig.organizationID)
-    private let trialStart: Date
+    private var trialStart = Date.distantPast
     private var stored: StoredLicense?
+    private let loadLocal: () throws -> LocalLicenseState
+    private let checkOnline: Bool
+    private let honorDevUnlock: Bool
 
-    init() {
-        trialStart = TrialStore.startDate()
-        stored = LicenseStore.load()
-        if let s = stored, s.granted, Date().timeIntervalSince(s.lastValidated) < LicenseConfig.offlineGrace { isPro = true }
-        if LicenseConfig.devProUnlock { isPro = true }
-        recompute()
-        Task { await refresh() }
+    init(loadLocal: @escaping () throws -> LocalLicenseState = LicenseStorageWorker.load,
+         automatic: Bool = false, checkOnline: Bool = true, honorDevUnlock: Bool = true) {
+        self.loadLocal = loadLocal
+        self.checkOnline = checkOnline
+        self.honorDevUnlock = honorDevUnlock
+        guard !CommandLine.arguments.contains("--preview-ui"), automatic else { return }
+        // Return immediately. Neither Security nor network APIs run in init.
+        Task { await reloadStorage() }
+    }
+
+    /// Only the licence settings surface requests a check. Returning to the
+    /// view never queues another Security read after a slow or failed attempt.
+    func loadIfNeeded() async {
+        guard !hasRequestedStorage, !CommandLine.arguments.contains("--preview-ui") else { return }
+        await reloadStorage()
+    }
+
+    func reloadStorage() async {
+        guard !isLoading, !isBusy else { return }
+        hasRequestedStorage = true
+        isLoading = true
+        storageMessage = nil
+        let watchdog = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            guard !Task.isCancelled, let self, self.isLoading else { return }
+            self.storageMessage = "The saved license is taking longer to read. You can leave Settings and keep using Cairn; this check will continue in the background."
+        }
+        defer { watchdog.cancel(); isLoading = false }
+        do {
+            let state = try await LicenseStorageWorker.run(loadLocal)
+            trialStart = state.trialStart
+            stored = state.license
+            isPro = state.license.map { $0.granted && Date().timeIntervalSince($0.lastValidated) < LicenseConfig.offlineGrace } ?? false
+            if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true }
+            storageMessage = nil
+            recompute()
+            if checkOnline { await refreshStoredLicense() }
+        } catch {
+            storageMessage = error.localizedDescription
+            // Preserve any already loaded state. Do not create a new trial or
+            // replace a saved license after a failed read.
+        }
     }
 
     var hasKey: Bool { stored != nil }
@@ -235,14 +291,14 @@ final class LicenseManager: ObservableObject {
     @discardableResult
     func activate(key rawKey: String) async -> Bool {
         let key = rawKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else { return false }
+        guard !key.isEmpty, hasRequestedStorage, !isBusy, !isLoading, storageMessage == nil else { return false }
         isBusy = true; lastError = nil
         defer { isBusy = false }
         do {
             let activationID = try await client.activate(key: key)
             let granted = try await client.validate(key: key, activationID: activationID)
             let license = StoredLicense(key: key, activationID: activationID, lastValidated: Date(), granted: granted)
-            LicenseStore.save(license); stored = license
+            try await LicenseStorageWorker.run { try LicenseStore.save(license) }; stored = license
             isPro = granted; recompute()
             if !granted { lastError = "This license is not active." }
             return granted
@@ -253,23 +309,39 @@ final class LicenseManager: ObservableObject {
     }
 
     func deactivate() async {
-        guard let s = stored else { return }
-        isBusy = true; defer { isBusy = false }
-        await client.deactivate(key: s.key, activationID: s.activationID)
-        LicenseStore.clear(); stored = nil; isPro = false; recompute()
+        guard let s = stored, !isBusy, !isLoading else { return }
+        isBusy = true; lastError = nil; defer { isBusy = false }
+        do {
+            try await client.deactivate(key: s.key, activationID: s.activationID)
+            isPro = false; recompute()
+            do {
+                try await LicenseStorageWorker.run { try LicenseStore.clear() }
+                stored = nil
+            } catch { storageMessage = error.localizedDescription; throw error }
+        } catch { lastError = error.localizedDescription }
     }
 
     func refresh() async {
+        guard !isBusy, !isLoading else { return }
+        isBusy = true; defer { isBusy = false }
+        await refreshStoredLicense()
+    }
+
+    private func refreshStoredLicense() async {
         defer { recompute() }
         // Never let a network round-trip revoke the local dev unlock.
-        if LicenseConfig.devProUnlock { isPro = true; return }
+        if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true; return }
         guard let s = stored else { isPro = false; return }
         do {
             let granted = try await client.validate(key: s.key, activationID: s.activationID)
             var u = s; u.granted = granted; u.lastValidated = Date()
-            LicenseStore.save(u); stored = u; isPro = granted
+            stored = u; isPro = granted
+            do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
+            catch { storageMessage = error.localizedDescription }
         } catch let e as PolarClient.PolarError where e.isDefinitiveRejection {
-            isPro = false; var u = s; u.granted = false; LicenseStore.save(u); stored = u
+            isPro = false; var u = s; u.granted = false; stored = u
+            do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
+            catch { storageMessage = error.localizedDescription }
         } catch {
             isPro = (s.granted && Date().timeIntervalSince(s.lastValidated) < LicenseConfig.offlineGrace)
         }

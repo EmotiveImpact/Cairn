@@ -4,8 +4,8 @@ import Foundation
 /// you browse (SPEC §3.x). These live in plain user dirs (`~/Library/Caches`,
 /// `~/Library/Application Support`) → no Full Disk Access needed. We touch ONLY
 /// cache subpaths; cookies, profiles, history, and `Login Data` are never
-/// surfaced. Each is SAFE (regenerable) and pre-selected once its owning browser
-/// is quit.
+/// surfaced. Known transient caches are SAFE once their owner is closed;
+/// Service Worker storage and caches without a verified owner are advice only.
 struct BrowserCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "browser-caches",
@@ -57,15 +57,17 @@ struct BrowserCachesScanner: CairnScanner {
             if ctx.isCancelled() { return }
             let url = FileScan.home.appendingPathComponent(t.rel)
             ctx.progress(t.browser)
+            let uncertain = t.rel.contains("Service Worker/CacheStorage") || t.bundleID.isEmpty
             if let item = makeItem(
                 at: url,
-                severity: .safe,
+                severity: uncertain ? .review : .safe,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: true,
+                isRegenerable: !uncertain,
                 requiresQuitBundleIDs: t.bundleID.isEmpty ? [] : [t.bundleID],
-                cleanMethod: .trash,
-                note: "\(t.browser) web cache — re-downloaded as you browse",
-                selectedIfSafe: true
+                cleanMethod: uncertain ? .adviceOnly : .trash,
+                note: uncertain ? "\(t.browser) storage may include offline site data; inspect it before manual removal" :
+                    "\(t.browser) web cache — re-downloaded as you browse",
+                selectedIfSafe: !uncertain
             ) {
                 ctx.emit(item)
             }

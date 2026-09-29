@@ -75,23 +75,22 @@ struct AmbientBackground: View {
 /// the studio press-scale. `prominent` makes it full-width and a touch larger for
 /// hero/footer CTAs. This is the single primary-CTA identity across the app.
 struct BrandButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
     var enabled: Bool = true
     var prominent: Bool = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: prominent ? 15 : 14, weight: .semibold))
+            .font(.system(size: prominent ? 14 : 13, weight: .semibold))
             .foregroundStyle(.white)
-            .padding(.horizontal, prominent ? 22 : 18)
-            .padding(.vertical, prominent ? 13 : 10)
+            .padding(.horizontal, prominent ? 20 : 14)
+            .padding(.vertical, prominent ? 11 : 8)
             .frame(maxWidth: prominent ? .infinity : nil)
             .background(
-                RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous)
-                    .fill(Brand.brand).opacity(enabled ? 1 : 0.45)
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(enabled && isEnabled ? AnyShapeStyle(Brand.brand) : AnyShapeStyle(Brand.surfaceSubtle))
             )
-            .shadow(color: Brand.blue.opacity(enabled ? (configuration.isPressed ? 0.18 : 0.28) : 0),
-                    radius: configuration.isPressed ? 5 : 10, y: configuration.isPressed ? 2 : 4)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.12)))
+            .opacity(enabled && isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.48)
             .pointerCursor()
     }
 }
@@ -127,7 +126,7 @@ struct WhiteButtonStyle: ButtonStyle {
             .foregroundStyle(Brand.textPrimary)
             .padding(.horizontal, 18).padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous).fill(.white)
+                RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous).fill(Brand.surfaceElevated)
                     .overlay(RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous).stroke(Brand.inputBorder, lineWidth: 1))
             )
             .shadow(color: Brand.shadowColor.opacity(0.05), radius: 6, y: 2)

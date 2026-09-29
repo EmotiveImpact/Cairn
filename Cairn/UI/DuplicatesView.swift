@@ -155,9 +155,11 @@ struct DuplicatesView: View {
         .confirmationDialog("Move \(store.selectedCopyCount) duplicate\(store.selectedCopyCount == 1 ? "" : "s") to the Trash?",
                             isPresented: $confirmRemove, titleVisibility: .visible) {
             Button("Move \(Fmt.size(store.selectedBytes)) to Trash", role: .destructive) {
-                let r = store.removeSelected()
-                lastResult = r
-                showResult = true
+                Task {
+                    let r = await store.removeSelected()
+                    lastResult = r
+                    showResult = true
+                }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -166,7 +168,7 @@ struct DuplicatesView: View {
         .alert("Moved to Trash", isPresented: $showResult, presenting: lastResult) { _ in
             Button("OK", role: .cancel) {}
         } message: { r in
-            Text("Trashed \(r.trashed) duplicate\(r.trashed == 1 ? "" : "s") · \(Fmt.size(r.bytes)) reclaimed."
+            Text("Moved \(r.trashed) duplicate\(r.trashed == 1 ? "" : "s") to Trash · \(Fmt.size(r.bytes)) recoverable."
                  + (r.failed > 0 ? "\n\(r.failed) could not be removed." : ""))
         }
     }
@@ -359,12 +361,12 @@ struct DuplicatesView: View {
                 .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textSecondary)
             Spacer()
             Button {
-                if AppSettings.shared.askBeforeDeleting { confirmRemove = true }
-                else { let r = store.removeSelected(); lastResult = r; showResult = true }
+                confirmRemove = true
             } label: {
-                Text("Move \(grouped(store.selectedCopyCount)) to Trash →")
+                Text(store.isRemoving ? "Checking copies…" : "Review \(grouped(store.selectedCopyCount)) copies →")
             }
             .buttonStyle(BrandButtonStyle())
+            .disabled(store.isRemoving)
         }
         .padding(.horizontal, 28).padding(.vertical, 14)
         .background(Brand.surfaceElevated)

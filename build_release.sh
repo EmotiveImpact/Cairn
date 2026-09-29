@@ -31,6 +31,7 @@ cp "$BIN" "$APP/Contents/MacOS/${APP_NAME}"
 cp "${APP_NAME}/Info.plist" "$APP/Contents/Info.plist"
 [ -d "$BUNDLE" ] && cp -R "$BUNDLE" "$APP/Contents/Resources/"
 [ -f "${APP_NAME}/Resources/${APP_NAME}.icns" ] && cp "${APP_NAME}/Resources/${APP_NAME}.icns" "$APP/Contents/Resources/"
+[ -f "${APP_NAME}/Resources/CairnMark.png" ] && cp "${APP_NAME}/Resources/CairnMark.png" "$APP/Contents/Resources/"
 [ -f "${APP_NAME}/Resources/hero.png" ] && cp "${APP_NAME}/Resources/hero.png" "$APP/Contents/Resources/"
 for m in "${APP_NAME}"/Resources/mac-*.png; do [ -f "$m" ] && cp "$m" "$APP/Contents/Resources/"; done
 

@@ -6,8 +6,7 @@ import Foundation
 ///  • MODEL STORES — multi-gigabyte downloaded weights (Ollama, Hugging Face,
 ///    PyTorch, LM Studio, Whisper, GPT4All, Stable Diffusion / ComfyUI, local
 ///    embeddings). These are expensive to re-download (the only local copy of a
-///    multi-GB weight is genuinely costly to reacquire) → REVIEW, never
-///    pre-selected. Trees can be huge, so sizing is file-capped and the size is
+///    multi-GB weight may be unique or costly to reacquire) → advice only. Trees can be huge, so sizing is file-capped and the size is
 ///    surfaced as a lower bound ("(partial size)" auto-appended by makeItem).
 ///  • APP CACHES — Electron/Chromium caches for AI desktop apps (Claude,
 ///    Windsurf). Pure throwaway caches recreated on launch → SAFE, pre-selected,
@@ -39,7 +38,7 @@ struct AICachesScanner: CairnScanner {
     /// An app-cache target: (home-relative path, app display name, owning bundle ids).
     private struct AppCache { let rel: String; let app: String; let bundleIDs: [String] }
 
-    // MARK: - Model stores (REVIEW · trash · never pre-selected)
+    // MARK: - Model stores (advice only)
 
     private var modelStores: [ModelStore] {
         [
@@ -67,7 +66,7 @@ struct AICachesScanner: CairnScanner {
         ]
     }
 
-    // MARK: - Generated media (REVIEW · trash · never pre-selected)
+    // MARK: - Generated media (advice only)
 
     private var generatedMedia: [GeneratedMedia] {
         [
@@ -111,9 +110,9 @@ struct AICachesScanner: CairnScanner {
                 at: url,
                 severity: .review,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: store.note,
+                isRegenerable: false,
+                cleanMethod: .adviceOnly,
+                note: store.note + " — may include custom or unique weights; back up before any manual move or removal",
                 selectedIfSafe: false,
                 maxFiles: modelMaxFiles
             ) {
@@ -121,8 +120,7 @@ struct AICachesScanner: CairnScanner {
             }
         }
 
-        // Generated media — AI-rendered outputs holding the only local copy →
-        // REVIEW, never pre-selected (re-render to restore).
+        // Generated media can be the only exact copy. Show size, never delete.
         for media in generatedMedia {
             if ctx.isCancelled() { return }
             let url = FileScan.home.appendingPathComponent(media.rel)
@@ -131,9 +129,9 @@ struct AICachesScanner: CairnScanner {
                 at: url,
                 severity: .review,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: media.note,
+                isRegenerable: false,
+                cleanMethod: .adviceOnly,
+                note: media.note + " — may be the only exact copy; back up before manual changes",
                 selectedIfSafe: false,
                 maxFiles: modelMaxFiles
             ) {

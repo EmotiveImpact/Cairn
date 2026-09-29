@@ -1,0 +1,17 @@
+warning: /Users/augustusedem/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/augustusedem/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/augustusedem/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'cairn-native': failed storing manifest for 'cairn-native' in cache: attempt to write a readonly database
+[0/1] Planning build
+Building for debugging...
+[0/5] Write sources
+[1/5] Write swift-version--58304C5D6DBC2206.txt
+[3/9] Emitting module Cairn
+[4/9] Compiling Cairn AppShell.swift
+[5/9] Compiling Cairn ControlPanelButtonStyle.swift
+[6/9] Compiling Cairn OverviewWorkspace.swift
+[7/10] Compiling Cairn LibraryWorkspaces.swift
+[7/10] Write Objects.LinkFileList
+[8/10] Linking Cairn
+[9/10] Applying Cairn
+Build complete! (7.18s)

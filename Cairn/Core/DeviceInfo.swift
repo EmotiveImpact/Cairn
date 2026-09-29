@@ -17,11 +17,16 @@ enum DeviceInfo {
     // bodies (sidebar card, dashboard, status rows) on EVERY redraw — during a
     // live scan that was hundreds of disk calls per second on the main thread,
     // which showed up as UI lag. Cache it and refresh at most once a second.
+    // The dashboard also reads these from a detached task; protect the shared
+    // cache so that task cannot race SwiftUI's main-thread reads or invalidation.
+    private static let volumeLock = NSLock()
     private static var _bootVolume: Volumes.Info?
     private static var _bootVolumeAt: TimeInterval = 0
     private static let volumeTTL: TimeInterval = 1.0
 
     static var bootVolume: Volumes.Info? {
+        volumeLock.lock()
+        defer { volumeLock.unlock() }
         let now = Date().timeIntervalSinceReferenceDate
         if let cached = _bootVolume, now - _bootVolumeAt < volumeTTL { return cached }
         let home = FileManager.default.homeDirectoryForCurrentUser
@@ -32,7 +37,11 @@ enum DeviceInfo {
     }
 
     /// Force the next read to re-measure (call after a clean reclaims space).
-    static func invalidateVolumeCache() { _bootVolumeAt = 0 }
+    static func invalidateVolumeCache() {
+        volumeLock.lock()
+        _bootVolumeAt = 0
+        volumeLock.unlock()
+    }
 
     static var totalCapacity: Int64 { bootVolume?.totalCapacity ?? 0 }
     static var available: Int64 { bootVolume?.availableImportant ?? 0 }

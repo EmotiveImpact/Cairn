@@ -9,8 +9,13 @@ struct DirStats {
     /// bound and the UI must say "incomplete (permission denied)" rather than
     /// presenting an undercount as complete (prototype BUG-003).
     var permissionDenied: Bool = false
-    /// True if measurement stopped at `maxFiles` — size is a lower bound ("≥").
+    /// True if measurement stopped at a file/entry/time limit or was cancelled;
+    /// the size is a lower bound ("≥"), never an exact reclaim estimate.
     var truncated: Bool = false
+    /// A cancelled measurement is incomplete and must not be treated as exact.
+    var cancelled: Bool = false
+    /// The monotonic per-tree time budget expired while measuring this item.
+    var timedOut: Bool = false
 }
 
 /// Filesystem measurement. ONE enumerator pass accumulates on-disk allocated
@@ -19,6 +24,13 @@ struct DirStats {
 /// "Optimize Mac Storage" files just to size them (prototype BUG-007).
 enum FileScan {
     static let home = FileManager.default.homeDirectoryForCurrentUser
+
+    // A default `.max` from older scanners must not become an unbounded tree walk
+    // on a Mac with a huge cache or an external volume. Both caps produce partial
+    // sizes (DirStats.truncated), which makeItem labels for review.
+    private static let hardFileLimit = 100_000
+    private static let hardEntryLimit = 250_000
+    private static let defaultMeasureSeconds: TimeInterval = 4
 
     private static let sizeKeys: Set<URLResourceKey> = [
         .totalFileAllocatedSizeKey,   // on-disk, incl. metadata/blocks
@@ -33,15 +45,28 @@ enum FileScan {
 
     /// Measure a single directory (or file) tree in one walk. `maxFiles` caps the
     /// number of files counted so one pathological tree can't dominate a scan
-    /// (BUG-014); when hit, `truncated` is set and the size is a lower bound.
-    static func measure(_ url: URL, maxFiles: Int = .max) -> DirStats {
+    /// (BUG-014). The hard entry cap also bounds trees with very many directories
+    /// or tiny/non-regular files. The monotonic deadline bounds slow I/O across
+    /// all callers; cancellation and every cap mark the result incomplete.
+    static func measure(_ url: URL, maxFiles: Int = .max,
+                        maxDuration: TimeInterval = defaultMeasureSeconds) -> DirStats {
+        autoreleasepool { measureTree(url, maxFiles: maxFiles, maxDuration: maxDuration) }
+    }
+
+    private static func measureTree(_ url: URL, maxFiles: Int, maxDuration: TimeInterval) -> DirStats {
         var stats = DirStats()
         let fm = FileManager.default
+        if Task.isCancelled { stats.cancelled = true; stats.truncated = true; return stats }
+        let fileLimit = min(max(1, maxFiles), hardFileLimit)
+        let deadline = ProcessInfo.processInfo.systemUptime + max(0.05, maxDuration)
 
         // Symlink? Never follow; don't count (the target is sized via its own root).
         let rv = try? url.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey,
                                                     .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
                                                     .fileSizeKey, .contentModificationDateKey, .isUbiquitousItemKey])
+        if ProcessInfo.processInfo.systemUptime >= deadline {
+            stats.timedOut = true; stats.truncated = true; return stats
+        }
         if rv?.isSymbolicLink == true { return stats }
 
         if rv?.isDirectory != true {
@@ -66,23 +91,35 @@ enum FileScan {
                 return true // keep going; record the gap
             }
         ) else { return stats }
+        if ProcessInfo.processInfo.systemUptime >= deadline {
+            stats.timedOut = true; stats.truncated = true; return stats
+        }
 
-        for case let item as URL in enumerator {
-            // autoreleasepool per item: enumerating huge trees otherwise piles up
-            // autoreleased URL/resourceValues objects until the runloop drains —
-            // a classic multi-GB memory spike on large scans.
+        var examined = 0
+        while true {
             var stop = false
+            // nextObject itself creates autoreleased NSURL objects. Keeping it
+            // outside this pool retains every visited URL for the entire scan.
             autoreleasepool {
+                if Task.isCancelled { stats.cancelled = true; stats.truncated = true; stop = true; return }
+                if ProcessInfo.processInfo.systemUptime >= deadline { stats.timedOut = true; stats.truncated = true; stop = true; return }
+                guard let item = enumerator.nextObject() as? URL else { stop = true; return }
+                examined += 1
+                if examined > hardEntryLimit { stats.truncated = true; stop = true; return }
                 guard let v = try? item.resourceValues(forKeys: sizeKeys) else { return }
-                if v.isSymbolicLink == true { return }
+                if v.isSymbolicLink == true { enumerator.skipDescendants(); return }
                 if v.isUbiquitousItem == true { enumerator.skipDescendants(); return }
-                if v.isDirectory == true { return } // count only leaf bytes
+                if v.isDirectory == true { return }
                 stats.allocatedSize += allocated(from: v)
                 stats.fileCount += 1
                 if let mod = v.contentModificationDate, mod > stats.latestModified { stats.latestModified = mod }
-                if stats.fileCount >= maxFiles { stats.truncated = true; stop = true }
+                if stats.fileCount >= fileLimit { stats.truncated = true; stop = true }
             }
             if stop { break }
+        }
+        if !stats.truncated && ProcessInfo.processInfo.systemUptime >= deadline {
+            stats.timedOut = true
+            stats.truncated = true
         }
         return stats
     }

@@ -7,6 +7,30 @@ import AppKit
 @main
 struct CairnMain {
     static func main() {
+        if CommandLine.arguments.contains("--hashmemorycheck") {
+            Task { await HashMemoryCheck.run() }
+            RunLoop.main.run()
+            return
+        }
+        if CommandLine.arguments.contains("--readonlycheck") {
+            Task { @MainActor in await ReadOnlyScanCheck.run() }
+            RunLoop.main.run()
+            return
+        }
+        if CommandLine.arguments.contains("--loadcheck") {
+            Task { @MainActor in await LoadCheck.run() }
+            RunLoop.main.run()
+            return
+        }
+        if CommandLine.arguments.contains("--reliabilitycheck") {
+            Task { @MainActor in await ReliabilityCheck.run() }
+            RunLoop.main.run()
+            return
+        }
+        if CommandLine.arguments.contains("--workspacecheck") {
+            WorkspaceCheck.run()
+            return
+        }
         if CommandLine.arguments.contains("--safetycheck") {
             SafetyCheck.run()
             return
@@ -28,19 +52,6 @@ struct CairnMain {
 
 struct CairnApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
-    // Deliberately @AppStorage, NOT @Bindable AppSettings.shared. Binding the
-    // whole settings object here put it in the App's dependency set, so ANY
-    // setting change re-evaluated the App body, rebuilt `AppShell`, and reset its
-    // @State stores — silently restarting every scan (runaway CPU + memory).
-    @AppStorage("cairn.showMenuBarItem") private var showMenuBarItem = true
-    @StateObject private var reclaim = ReclaimStats.shared
-
-    /// Writes through only on a REAL change — see the note on MenuBarExtra below.
-    private var menuBarInserted: Binding<Bool> {
-        Binding(get: { showMenuBarItem },
-                set: { if $0 != showMenuBarItem { showMenuBarItem = $0 } })
-    }
-
     var body: some Scene {
         // Single `Window` (not `WindowGroup`): one AppShell, one set of stores/
         // scans/caches. A second window would mean a second full scan + duplicate
@@ -48,9 +59,10 @@ struct CairnApp: App {
         Window("Cairn", id: "main") {
             AppShell()
                 .background(Brand.background)
-                .preferredColorScheme(.light)
+            .preferredColorScheme(.dark)
         }
-        .windowStyle(.hiddenTitleBar)
+        .windowStyle(.titleBar)
+        .windowToolbarStyle(.unified)
         // CRITICAL: do NOT use `.contentMinSize` together with a `.frame(minWidth:
         // minHeight:)` on the content. That makes AppKit re-derive the WINDOW's
         // minimum size from SwiftUI's content layout on every pass: the content
@@ -61,70 +73,90 @@ struct CairnApp: App {
         // app-wide. The size floor is set ONCE on the NSWindow in AppDelegate
         // instead, which cannot feed back into layout.
         .windowResizability(.automatic)
-        .defaultSize(width: 1240, height: 820)
+        .defaultSize(width: 1120, height: 740)
         .commands {
+            CairnFindCommands()
+            CommandGroup(after: .toolbar) {
+                if CommandLine.arguments.contains("--preview-ui") && CommandLine.arguments.contains("--preview-menu") {
+                    Button("Preview status menu") { CairnMenuBar.shared.presentPreviewMenu() }
+                }
+            }
             CommandGroup(replacing: .newItem) {}   // no "New Window"
         }
 
-        // Honors Settings → "Show menu bar item": quick access to Cairn from the
-        // menu bar; the toggle inserts/removes it live.
-        // Honors Settings → "Show menu bar item": quick access to Cairn from the
-        // menu bar; the toggle inserts/removes it live.
-        //
-        // CRITICAL: `isInserted` must NOT be bound directly to @AppStorage.
-        // MenuBarExtra writes the current value back on every scene update, and
-        // @AppStorage treats every write as a change — so the scene re-evaluated,
-        // which re-created the MenuBarExtra, which wrote again… an endless loop.
-        // It pinned the main thread at 100% CPU and re-constructed AppShell (and
-        // therefore all four scan stores) on every pass, so RSS climbed ~45 MB/s
-        // into the gigabytes and the whole app froze. No view body ever
-        // re-evaluated, which is why it looked like a render bug rather than a
-        // scene bug. This binding drops no-op writes, which breaks the cycle.
-        // Shows the reclaimable total at a glance, which is what makes a menu bar
-        // item worth having. The value comes from `ReclaimStats` rather than the
-        // scan engine, so the App scene never depends on a store — reading a
-        // rarely-changing published Int is safe here; it was MenuBarExtra WRITING
-        // its own binding on every update that caused the freeze, not reading.
-        MenuBarExtra(isInserted: menuBarInserted) {
-            MenuBarContent()
-        } label: {
-            Image(systemName: "mountain.2.fill")
-            if reclaim.reclaimableBytes > 0 {
-                Text(Fmt.size(reclaim.reclaimableBytes))
-            }
-        }
-    }
-}
-
-private struct MenuBarContent: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button("Open Cairn") {
-            NSApp.activate(ignoringOtherApps: true)
-            openWindow(id: "main")
-        }
-        Divider()
-        Button("Quit Cairn") { NSApp.terminate(nil) }
     }
 }
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows { MenuBarRoute.shared.openWindow?() }
+        return true
+    }
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard CairnMenuBar.shared.scanStatus().operationBusy else { return .terminateNow }
+        MenuBarRoute.shared.openWindow?()
+        let alert = NSAlert()
+        alert.messageText = "An operation is still in progress"
+        alert.informativeText = "Finish or cancel the operation in Cairn before quitting. Your files and recovery records need time to finish safely."
+        alert.addButton(withTitle: "Return to Cairn")
+        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }), window.attachedSheet == nil {
+            alert.beginSheetModal(for: window)
+        }
+        return .terminateCancel
+    }
     func applicationDidFinishLaunching(_ notification: Notification) {
+        CairnMenuBar.shared.setVisible(AppSettings.shared.showMenuBarItem)
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
         // The window's size floor, set once. See the note in `body` — deriving it
         // from content layout (`.contentMinSize`) is what caused the render loop.
         for window in NSApp.windows where window.styleMask.contains(.titled) {
-            // 250 (fixed sidebar) + 820 (content minWidth). Must stay >= that sum,
-            // or the layout constraints are unsatisfiable and AppKit spins
-            // re-solving them forever — see the note in AppShell.body.
-            window.minSize = NSSize(width: 1070, height: 720)
+            let preview = CommandLine.arguments.contains("--preview-ui")
+            let visible = (window.screen ?? NSScreen.main)?.visibleFrame
+            window.minSize = NSSize(width: min(1024, visible?.width ?? 1024), height: min(680, visible?.height ?? 680))
+            // Restore once, outside SwiftUI layout. Preview never overwrites the live frame.
+            let restored = !preview && window.setFrameUsingName("CairnMainWindow.v2")
+            if !restored {
+                window.setContentSize(NSSize(width: min(1120, visible?.width ?? 1120), height: min(740, visible?.height ?? 740)))
+                window.center()
+            }
+            if let visible {
+                var frame = window.frame
+                frame.size.width = min(frame.width, visible.width)
+                frame.size.height = min(frame.height, visible.height)
+                frame.origin.x = max(visible.minX, min(frame.origin.x, visible.maxX - frame.width))
+                frame.origin.y = max(visible.minY, min(frame.origin.y, visible.maxY - frame.height))
+                window.setFrame(frame, display: true)
+            }
+            if !preview { window.setFrameAutosaveName("CairnMainWindow.v2") }
+
         }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        if CommandLine.arguments.contains("--preview-ui") { return !CommandLine.arguments.contains("--preview-menu") }
         // Stay alive in the menu bar when the user keeps the menu bar item on.
-        !AppSettings.shared.showMenuBarItem
+        return !AppSettings.shared.showMenuBarItem
+    }
+}
+
+private struct CairnFindKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+extension FocusedValues {
+    var cairnFind: (() -> Void)? {
+        get { self[CairnFindKey.self] }
+        set { self[CairnFindKey.self] = newValue }
+    }
+}
+private struct CairnFindCommands: Commands {
+    @FocusedValue(\.cairnFind) private var find
+    var body: some Commands {
+        CommandGroup(after: .textEditing) {
+            Button("Find in Results") { find?() }
+                .keyboardShortcut("f", modifiers: .command).disabled(find == nil)
+        }
     }
 }

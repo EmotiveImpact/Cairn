@@ -26,7 +26,13 @@ final class AppSettings {
             } catch { /* not fatal — surface nothing, macOS shows its own UI in Settings */ }
         }
     }
-    var showMenuBarItem: Bool { didSet { d.set(showMenuBarItem, forKey: "cairn.showMenuBarItem") } }
+    var showMenuBarItem: Bool { didSet {
+        guard oldValue != showMenuBarItem else { return }
+        d.set(showMenuBarItem, forKey: "cairn.showMenuBarItem")
+        CairnMenuBar.shared.setVisible(showMenuBarItem)
+    } }
+
+    var showSidebarFocus: Bool { didSet { d.set(showSidebarFocus, forKey: "cairn.showSidebarFocus") } }
 
     // Smart Scan
     var autoScanWeekly: Bool { didSet { d.set(autoScanWeekly, forKey: "cairn.autoScanWeekly") } }
@@ -65,9 +71,10 @@ final class AppSettings {
         excludedPaths = ud.stringArray(forKey: "cairn.excludedPaths") ?? []
         openAtLogin = b("cairn.openAtLogin", false)
         showMenuBarItem = b("cairn.showMenuBarItem", true)
+        showSidebarFocus = b("cairn.showSidebarFocus", false)
         autoScanWeekly = b("cairn.autoScanWeekly", true)
         askBeforeDeleting = b("cairn.askBeforeDeleting", true)
-        createRestoreSnapshot = b("cairn.createRestoreSnapshot", true)
+        createRestoreSnapshot = b("cairn.createRestoreSnapshot", false)
         ignoreExternalDrives = b("cairn.ignoreExternalDrives", true)
         cleanOnQuitDevApp = b("cairn.cleanOnQuitDevApp", false)   // opt-in: it deletes without asking
         protectSystemFiles = b("cairn.protectSystemFiles", true)

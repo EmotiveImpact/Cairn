@@ -8,10 +8,8 @@ import Foundation
 /// reports them only as aggregate purgeable space), so every item here carries an
 /// unknown (0) allocatedSize and is surfaced for explicit REVIEW — never pre-selected.
 ///
-/// Discovery: `tmutil listlocalsnapshots /`. Thinning a snapshot via
-/// `tmutil deletelocalsnapshots <date>` only shrinks the LOCAL rollback window; it
-/// never touches networked or external-disk Time Machine backups. `tmutil` lives in
-/// `/usr/bin` and operates on plain snapshot tokens → no Full Disk Access needed.
+/// Discovery: `tmutil listlocalsnapshots /`. Snapshots are recovery points, so
+/// Cairn lists them for context but never deletes them.
 struct TimeMachineSnapshotsScanner: CairnScanner {
     let info = CategoryInfo(
         id: "tm-snapshots",
@@ -56,16 +54,10 @@ struct TimeMachineSnapshotsScanner: CairnScanner {
             selected: false
         ))
 
-        // One actionable item per snapshot. Size is not directly knowable → 0.
+        // One advice item per snapshot. Size is not directly knowable → 0.
         for token in tokens {
             if ctx.isCancelled() { return }
             ctx.progress(token)
-
-            let thin = ToolCommand(
-                tool: "tmutil",
-                arguments: ["deletelocalsnapshots", token],
-                display: "tmutil deletelocalsnapshots \(token)"
-            )
 
             // Snapshot path is on "/" (the data volume); use it for volume-aware UI.
             let displayURL = URL(fileURLWithPath: "/.snapshots/com.apple.TimeMachine.\(token).local")
@@ -81,8 +73,8 @@ struct TimeMachineSnapshotsScanner: CairnScanner {
                 isRegenerable: false,
                 requiresQuitBundleIDs: [],
                 requiresRunning: false,
-                cleanMethod: .tool(thin),
-                note: "Local Time Machine snapshot from \(token) — thinning reduces your local rollback window but does not affect networked/disk backups",
+                cleanMethod: .adviceOnly,
+                note: "Local Time Machine recovery point from \(token). Manage snapshots with macOS or Time Machine after checking your backup state.",
                 permissionDenied: false,
                 volumeURL: FileScan.volumeURL(of: snapshotRoot),
                 selected: false

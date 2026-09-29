@@ -13,10 +13,9 @@ final class CancelBox: @unchecked Sendable {
     func cancel() { lock.lock(); flag = true; lock.unlock() }
 }
 
-/// One installed application as a removable entity: the `.app` bundle plus every
-/// associated support / cache / preference / container / log file we can key to
-/// its bundle id. Selecting an app selects the whole set; uninstalling trashes
-/// all of it (recoverable).
+/// One installed application, with associated data shown for context. Selecting
+/// an app moves only its `.app` bundle to Trash; support, cache, preferences,
+/// containers and logs remain where they are.
 struct AppEntry: Identifiable {
     let id = UUID()
     var name: String
@@ -34,14 +33,19 @@ struct AppEntry: Identifiable {
     var isSystem: Bool                // /System/Applications — shown, never removable
     var selected: Bool = false
 
-    /// Total reclaimable bytes for this app (bundle + all associated files).
-    var totalSize: Int64 { size + supportSize + leftoverSize }
+    /// Reclaimable under the conservative default: the app bundle only.
+    /// Associated data can contain projects, settings or conversations.
+    var totalSize: Int64 { size }
 
     /// Combined support + leftover bytes (everything outside the bundle itself).
     var componentsSize: Int64 { supportSize + leftoverSize }
 
     /// Removable = a real third-party / user app we can safely trash.
-    var isRemovable: Bool { !isSystem }
+    var isRemovable: Bool {
+        let id = bundleID.lowercased()
+        return !isSystem && !id.contains("openai")
+            && !["codex", "chatgpt"].contains(name.lowercased())
+    }
 
     /// Unused = never opened, or last opened more than 3 months ago.
     var isUnused: Bool {
@@ -52,7 +56,7 @@ struct AppEntry: Identifiable {
     /// Large = bundle bigger than 1 GB.
     var isLarge: Bool { size > 1_000_000_000 }
 
-    /// Has associated leftover/support files we can also remove.
+    /// Has associated data to disclose in the inspector; it is not removed.
     var hasLeftovers: Bool { !associated.isEmpty }
 }
 
@@ -63,6 +67,10 @@ struct AppEntry: Identifiable {
 @MainActor
 @Observable
 final class AppInventoryStore {
+    private(set) var isUninstalling = false
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var prepareRemoval: () -> Bool = { false }
+
     private(set) var apps: [AppEntry] = []
     private(set) var isScanning = false
     private(set) var hasScanned = false
@@ -107,22 +115,28 @@ final class AppInventoryStore {
     // MARK: - Lifecycle
 
     /// Start the scan once. Safe to call from `.task`/`onAppear` repeatedly.
+    private(set) var wasCancelled = false
+
     func scanIfNeeded() {
+        guard !wasCancelled else { return }
         guard !hasScanned, !isScanning else { return }
         rescan()
     }
 
     func rescan() {
+        guard !isUninstalling else { return }
         cancelBox?.cancel()          // stop any in-flight off-main walk
         scanTask?.cancel()
         let box = CancelBox()
         cancelBox = box
+        wasCancelled = false
         isScanning = true
         lastError = nil
         progress = "Reading installed apps…"
         scanTask = Task { [weak self] in
-            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            guard await ScanGate.shared.acquire() else { return }
             defer { ScanGate.shared.release() }
+            guard !Task.isCancelled else { return }
             await self?.run(box: box)
         }
     }
@@ -131,7 +145,7 @@ final class AppInventoryStore {
         cancelBox?.cancel()
         scanTask?.cancel()
         scanTask = nil
-        if isScanning { isScanning = false }
+        if isScanning { wasCancelled = true; isScanning = false }
     }
 
     // MARK: - Scan
@@ -190,6 +204,7 @@ final class AppInventoryStore {
                 for entry in indexed {
                     let candidate = normalize(entry.name)
                     guard !candidate.isEmpty, dottedPrefixMatch(candidate, bundleID) else { continue }
+                    guard SafePaths.protectedSessionReason(entry.url) == nil else { continue }
                     let s = FileScan.measure(entry.url, maxFiles: 20_000).allocatedSize
                     associated.append(entry.url)
                     if entry.isSupport { support += s } else { leftover += s }
@@ -377,7 +392,7 @@ final class AppInventoryStore {
     var unusedCount: Int { apps.filter { $0.isRemovable && $0.isUnused }.count }
     var removableCount: Int { apps.filter { $0.isRemovable }.count }
 
-    // MARK: - Uninstall (recoverable — everything goes to the Trash)
+    // MARK: - Uninstall (only app bundles move to Trash)
 
     struct UninstallSummary {
         var trashedApps = 0
@@ -385,46 +400,55 @@ final class AppInventoryStore {
         var bytes: Int64 = 0
         var errors: [String] = []
         var quit: [String] = []
+        var history: [ScanStore.RemovalLogEntry] = []
     }
 
-    /// Quit each selected app if running, then trash its bundle and every
-    /// associated `~/Library` file. SAFETY: a path is only trashed if it is a
-    /// `*.app` under one of the user app roots, or anything under `~/Library`.
-    /// Everything else is refused. All moves are recoverable via the Trash.
+    /// Require selected apps to be closed, then trash only bundles that have
+    /// actually exited. Associated `~/Library` files stay untouched. The path
+    /// guard permits only known app-bundle locations.
     @discardableResult
     func uninstall(_ entries: [AppEntry]) async -> UninstallSummary {
-        // 1) Quit running apps first.
-        let runningIDs = entries.map { $0.bundleID }.filter { !$0.isEmpty }
-        let toQuit = RunningApps.runningNow(amongst: runningIDs)
-        var summary = UninstallSummary()
-        if !toQuit.isEmpty {
-            summary.quit = RunningApps.displayNames(for: toQuit)
-            RunningApps.requestQuit(toQuit)
-            // Give apps a moment to terminate before we move their bundles.
-            try? await Task.sleep(nanoseconds: 600_000_000)
-        }
+        guard prepareRemoval() else { return UninstallSummary(failed: entries.count, errors: ["Recovery history is unavailable. No application was removed."]) }
+        guard !isUninstalling, !isScanning else { return UninstallSummary(failed: entries.count, errors: ["Finish the current application operation first."]) }
+        isUninstalling = true
+        defer { isUninstalling = false }
+        guard await ScanGate.shared.acquire() else { return UninstallSummary(failed: entries.count, errors: ["Removal cancelled before starting."]) }
+        defer { ScanGate.shared.release() }
 
-        // 2) Trash bundle + associated files off-main; accumulate the result there.
+        // The user closes applications themselves to preserve unsaved work.
+        let runningIDs = entries.map { $0.bundleID }.filter { !$0.isEmpty }
+        let stillRunning = Set(RunningApps.runningNow(amongst: runningIDs))
+        let summary = UninstallSummary()
+
+        // 2) Trash bundles off-main. Support data is never included implicitly.
         struct Batch { var done: Set<UUID> = []; var summary: UninstallSummary }
         let batch = await Task.detached(priority: .userInitiated) { () -> Batch in
             var b = Batch(summary: summary)
             for app in entries {
+                if stillRunning.contains(app.bundleID) {
+                    b.summary.failed += 1
+                    b.summary.errors.append("\(app.name): still running; close it before uninstalling")
+                    continue
+                }
+                // Refuse agent/conversation hosts even if a stale UI selection
+                // or an internal caller supplied an AppEntry directly.
+                guard app.isRemovable else {
+                    b.summary.failed += 1
+                    b.summary.errors.append("\(app.name): protected application")
+                    continue
+                }
                 // All-or-nothing: trash the bundle FIRST. If that fails (busy /
                 // perms / relaunched), bail BEFORE touching the app's data so we
                 // never orphan ~/Library files for a still-installed app.
-                let (bundleOK, bundleBytes) = Self.trash(app.url)
+                let (bundleOK, bundleBytes, trashURL) = Self.trash(app.url)
                 guard bundleOK else {
                     b.summary.failed += 1
                     b.summary.errors.append("\(app.name): could not move to Trash — left untouched")
                     continue
                 }
-                var moved = bundleBytes
-                for url in app.associated {
-                    let (ok, bytes) = Self.trash(url)
-                    if ok { moved += bytes }
-                }
+                b.summary.history.append(ScanStore.RemovalLogEntry(name: app.name, originalPath: app.url.path, trashPath: trashURL?.path, bytes: bundleBytes, date: Date(), category: "apps"))
                 b.summary.trashedApps += 1
-                b.summary.bytes += moved
+                b.summary.bytes += bundleBytes
                 b.done.insert(app.id)
             }
             return b
@@ -432,21 +456,22 @@ final class AppInventoryStore {
 
         // 3) Remove uninstalled apps from the list.
         apps.removeAll { batch.done.contains($0.id) }
+        onRemovals?(batch.summary.history)
         return batch.summary
     }
 
     /// Trash a single path IF it passes the conservative app-uninstall guard.
     /// Returns (success, bytesMoved). Recoverable via Finder's Put Back.
-    private nonisolated static func trash(_ url: URL) -> (Bool, Int64) {
+    private nonisolated static func trash(_ url: URL) -> (Bool, Int64, URL?) {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-        guard isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0) }
+        guard isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0, nil) }
         let bytes = FileScan.measure(resolved, maxFiles: 40_000).allocatedSize
         do {
             var out: NSURL?
             try FileManager.default.trashItem(at: resolved, resultingItemURL: &out)
-            return (true, bytes)
+            return (true, bytes, out as URL?)
         } catch {
-            return (false, 0)
+            return (false, 0, nil)
         }
     }
 
@@ -457,6 +482,8 @@ final class AppInventoryStore {
     nonisolated static func isUninstallSafe(_ resolved: URL) -> Bool {
         let path = resolved.standardizedFileURL.path
         if path == "/" || path.isEmpty { return false }
+        if ["codex", "chatgpt"].contains(resolved.deletingPathExtension().lastPathComponent.lowercased()) { return false }
+        if SafePaths.protectedSessionReason(resolved) != nil { return false }
         let home = FileScan.home.path
         if resolved.standardizedFileURL == FileScan.home.standardizedFileURL { return false }
 
@@ -473,6 +500,7 @@ final class AppInventoryStore {
         //     / contacts & photo data) that an over-eager id match could reach.
         let lib = (home as NSString).appendingPathComponent("Library")
         if path != lib && path.hasPrefix(lib + "/") {
+            guard SafePaths.evaluate(resolved, allowedRoots: [URL(fileURLWithPath: lib)]).isAllowed else { return false }
             let protectedSubpaths = [
                 "Library/Keychains", "Library/Mail", "Library/Messages",
                 "Library/Application Support/MobileSync",

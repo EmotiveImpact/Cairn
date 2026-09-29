@@ -5,7 +5,8 @@ import Foundation
 /// the host is meaningless: the only honest reclaim is `docker … prune`, run
 /// while the daemon is up. We size with the read-only `docker system df` and then
 /// surface graduated, individually-checked prune actions ordered safest →
-/// destructive. The host `Docker.raw` is advice-only — pruning frees space INSIDE
+/// destructive. Container layers and volumes are advice only because they may
+/// hold the only copy of application or database state. The host `Docker.raw` is advice-only — pruning frees space INSIDE
 /// the VM but the sparse host image only shrinks on a manual disk resize.
 struct DockerScanner: CairnScanner {
     let info = CategoryInfo(
@@ -82,9 +83,10 @@ struct DockerScanner: CairnScanner {
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
             command: ToolCommand(tool: "docker", arguments: ["container", "prune", "-f"],
-                                 display: "docker container prune"),
+                                 display: "docker container prune", destroysData: true),
             allocated: reclaim.containers,
-            note: "Removes exited containers — running containers are untouched"
+            note: "Stopped containers may contain unrecoverable writable-layer data. Inspect them in Docker before any manual removal.",
+            actionable: false
         ))
 
         if ctx.isCancelled() { return }
@@ -98,7 +100,8 @@ struct DockerScanner: CairnScanner {
                                  display: "docker system prune -a --volumes",
                                  destroysData: true),
             allocated: reclaim.total,
-            note: "Deletes ALL unused images, build cache, networks AND named volumes — volume data is unrecoverable"
+            note: "Deletes unused images, build cache, networks and named volumes; volume data may be unrecoverable. Cairn will not run this command.",
+            actionable: false
         ))
 
         if ctx.isCancelled() { return }
@@ -138,16 +141,17 @@ struct DockerScanner: CairnScanner {
         severity: Severity,
         command: ToolCommand,
         allocated: Int64,
-        note: String
+        note: String,
+        actionable: Bool = true
     ) -> ScanItem {
         ScanItem(
             url: url,
             allocatedSize: max(0, allocated),
             categoryID: info.id,
             severity: severity,
-            isRegenerable: true,
+            isRegenerable: actionable,
             requiresRunning: true,
-            cleanMethod: .tool(command),
+            cleanMethod: actionable ? .tool(command) : .adviceOnly,
             note: "\(label) — \(note)",
             volumeURL: FileScan.volumeURL(of: FileScan.home)
         )

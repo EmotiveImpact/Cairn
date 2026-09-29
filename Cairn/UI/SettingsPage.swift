@@ -1,5 +1,32 @@
 import SwiftUI
 import AppKit
+import Darwin
+
+/// Never replace an unrelated command at /usr/local/bin/cairn. lstat also sees
+/// dangling symlinks, which FileManager.fileExists(atPath:) would miss.
+enum CLIInstallPolicy {
+    enum TargetState: Equatable { case absent, ownedLink, conflict }
+
+    static let target = URL(fileURLWithPath: "/usr/local/bin/cairn")
+
+    static func state(at target: URL, for binary: URL) -> TargetState {
+        var metadata = stat()
+        guard lstat(target.path, &metadata) == 0 else {
+            return errno == ENOENT ? .absent : .conflict
+        }
+        guard (metadata.st_mode & 0o170000) == 0o120000,
+              let destination = try? FileManager.default.destinationOfSymbolicLink(atPath: target.path) else {
+            return .conflict
+        }
+        let linked = URL(fileURLWithPath: destination, relativeTo: target.deletingLastPathComponent())
+            .resolvingSymlinksInPath().standardizedFileURL
+        return linked == binary.resolvingSymlinksInPath().standardizedFileURL ? .ownedLink : .conflict
+    }
+
+    static func quoteForShell(_ value: String) -> String {
+        "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+}
 
 /// Full Settings page (content section), matching the mockup layout — General /
 /// Smart Scan / Safety / Notifications on the left; Developer Tools / Ignored
@@ -9,26 +36,52 @@ struct SettingsPage: View {
     @Bindable private var s = AppSettings.shared
     @ObservedObject var license: LicenseManager
     @State private var showAbout = false
-    @State private var cliInstalled = FileManager.default.fileExists(atPath: "/usr/local/bin/cairn")
+    @State private var cliInstalled = Bundle.main.executableURL.map {
+        CLIInstallPolicy.state(at: CLIInstallPolicy.target, for: $0) == .ownedLink
+    } ?? false
 
     /// Symlinks the app's own binary as `cairn`, the way VS Code installs `code`.
     /// /usr/local/bin usually isn't writable without admin rights, so on failure
     /// we hand the user the exact command instead of failing silently.
     private func installCLI() {
         guard let binary = Bundle.main.executableURL else { return }
-        let target = URL(fileURLWithPath: "/usr/local/bin/cairn")
+        let target = CLIInstallPolicy.target
         let fm = FileManager.default
-        try? fm.removeItem(at: target)
+        switch CLIInstallPolicy.state(at: target, for: binary) {
+        case .ownedLink:
+            cliInstalled = true
+            return
+        case .conflict:
+            let alert = NSAlert()
+            alert.messageText = "CLI name already in use"
+            alert.informativeText = "A different file already exists at /usr/local/bin/cairn. Cairn left it unchanged. Review that file before installing the command."
+            alert.runModal()
+            return
+        case .absent:
+            break
+        }
         do {
             try fm.createSymbolicLink(at: target, withDestinationURL: binary)
             cliInstalled = true
         } catch {
-            let command = "sudo mkdir -p /usr/local/bin && sudo ln -sf '\(binary.path)' /usr/local/bin/cairn"
+            // Another process may have created the path after our first check.
+            if CLIInstallPolicy.state(at: target, for: binary) == .ownedLink {
+                cliInstalled = true
+                return
+            }
+            if CLIInstallPolicy.state(at: target, for: binary) == .conflict {
+                let alert = NSAlert()
+                alert.messageText = "CLI name already in use"
+                alert.informativeText = "A different file now exists at /usr/local/bin/cairn. Cairn left it unchanged."
+                alert.runModal()
+                return
+            }
+            let command = "sudo mkdir -p /usr/local/bin && sudo ln -s \(CLIInstallPolicy.quoteForShell(binary.path)) /usr/local/bin/cairn"
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(command, forType: .string)
             let alert = NSAlert()
             alert.messageText = "Command copied"
-            alert.informativeText = "Installing needs admin rights. The install command is on your clipboard — paste it into Terminal."
+            alert.informativeText = "Installing needs admin rights. The command on your clipboard only creates a new link; it will fail if another file appears there."
             alert.runModal()
         }
     }
@@ -77,7 +130,7 @@ struct SettingsPage: View {
         card("scope", "Smart Scan") {
             toggleRow("Auto Scan Weekly", "Automatically run Smart Scan every week.", $s.autoScanWeekly)
             div
-            toggleRow("Ask Before Deleting", "Ask for confirmation before removing files.", $s.askBeforeDeleting)
+            toggleRow("Confirm Large File Removal", "Show an extra prompt before moving a file from Large Files to Trash.", $s.askBeforeDeleting)
             div
             toggleRow("Create Restore Snapshot", "Create a snapshot before major cleanup operations.", $s.createRestoreSnapshot)
             div
@@ -93,7 +146,9 @@ struct SettingsPage: View {
             div
             alwaysOnRow("Skip Open Files", "Apps that own a cache are quit before it's cleaned.")
             div
-            alwaysOnRow("Recoverable Removal", "Everything goes to the Trash first — Put Back anytime.")
+            alwaysOnRow("Conversation Protection", "Codex and ChatGPT sessions are excluded from cleanup.")
+            div
+            alwaysOnRow("Recoverable Cleanup", "Cleanup uses Trash; permanent Trash removal is disabled in Cairn.")
         }
     }
 
@@ -188,11 +243,7 @@ struct SettingsPage: View {
 
     private var restoreBin: some View {
         card("trash.fill", "Restore Bin") {
-            dropdownRow("Keep removals listed for", "Recoverable items stay here so you can put them back.",
-                        current: "\(s.restoreBinKeepDays) Days", options: ["7 Days", "30 Days", "90 Days"]) { v in
-                s.restoreBinKeepDays = Int(v.split(separator: " ").first.map(String.init) ?? "30") ?? 30
-                store.pruneRemovalLog()
-            }
+            alwaysOnRow("Removal History", "Cairn keeps the removal record. Put Back works while the item remains in macOS Trash.")
             div
             if store.removalLog.isEmpty {
                 Text("No recent removals. Items you clean appear here so you can Put Back anything moved to the Trash.")
@@ -222,7 +273,7 @@ struct SettingsPage: View {
             }
             Spacer(minLength: 8)
             if entry.recoverable {
-                Button("Put Back") { _ = store.restoreFromLog(entry) }.buttonStyle(GhostButtonStyle())
+                Button("Put Back") { Task { _ = await store.restoreFromLog(entry) } }.buttonStyle(GhostButtonStyle())
             } else {
                 Text("Permanent").font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
             }

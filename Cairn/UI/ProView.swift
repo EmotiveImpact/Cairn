@@ -12,7 +12,7 @@ struct ProStatusCard: View {
             HStack(spacing: 9) {
                 IconTile(systemImage: "sparkles", tint: Brand.purple, size: 30, glyphScale: 0.5)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(license.isPro ? "Cairn Pro" : "Upgrade to Cairn Pro")
+                    Text("Cairn Pro")
                         .font(.system(size: 14, weight: .semibold)).foregroundStyle(Brand.textPrimary)
                     Text(statusLine).font(.system(size: 11)).foregroundStyle(statusColor)
                 }
@@ -22,7 +22,15 @@ struct ProStatusCard: View {
             Divider().overlay(Brand.border)
 
             VStack(alignment: .leading, spacing: 10) {
-                if !license.isPro {
+                if license.isLoading {
+                    HStack { ProgressView().controlSize(.small); Text("Checking saved license…").font(.system(size: 12)) }
+                }
+                if let message = license.storageMessage {
+                    Text(message).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Check again") { Task { await license.reloadStorage() } }
+                        .buttonStyle(ControlPanelButtonStyle()).disabled(license.isLoading || license.isBusy)
+                }
+                if license.hasRequestedStorage && !license.isLoading && license.storageMessage == nil && !license.isPro {
                     ForEach(proFeatures, id: \.self) { f in
                         HStack(alignment: .top, spacing: 8) {
                             Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Brand.purple)
@@ -41,7 +49,7 @@ struct ProStatusCard: View {
                                 Image(systemName: "key.fill").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                                 TextField("Paste your license key", text: $key)
                                     .textFieldStyle(.plain).font(.system(size: 12))
-                                    .onSubmit { if !key.isEmpty && !license.isBusy { Task { _ = await license.activate(key: key) } } }
+                                    .onSubmit { if !key.isEmpty && !license.isBusy && !license.isLoading { Task { _ = await license.activate(key: key) } } }
                             }
                             .padding(.horizontal, 10).padding(.vertical, 8)
                             .background(RoundedRectangle(cornerRadius: Brand.rSm, style: .continuous).fill(Brand.surfaceSubtle)
@@ -49,23 +57,24 @@ struct ProStatusCard: View {
                                     .stroke(license.lastError == nil ? Brand.inputBorder : Brand.danger.opacity(0.6), lineWidth: 1)))
                             Button("Activate") { Task { _ = await license.activate(key: key) } }
                                 .buttonStyle(BrandButtonStyle(enabled: !key.isEmpty && !license.isBusy))
-                                .disabled(key.isEmpty || license.isBusy)
+                                .disabled(key.isEmpty || license.isBusy || license.isLoading || license.storageMessage != nil)
                         }
                         if let err = license.lastError {
                             Text(err).font(.system(size: 11)).foregroundStyle(Brand.danger)
                         }
                     }
-                } else {
+                } else if license.isPro {
                     HStack {
                         Text("Licensed on this Mac · thank you!").font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
                         Spacer()
-                        Button("Deactivate") { Task { await license.deactivate() } }.buttonStyle(GhostButtonStyle())
+                        Button("Deactivate") { Task { await license.deactivate() } }.buttonStyle(GhostButtonStyle()).disabled(license.isBusy || license.isLoading)
                     }
                 }
             }
             .padding(16)
         }
         .background(CardBackground())
+        .task { await license.loadIfNeeded() }
     }
 
     private var proFeatures: [String] {
@@ -75,6 +84,9 @@ struct ProStatusCard: View {
          "One-time purchase — no subscription, ever"]
     }
     private var statusLine: String {
+        if !license.hasRequestedStorage { return "Your license is checked here when needed" }
+        if license.isLoading { return "Checking saved license · Cairn remains available" }
+        if license.storageMessage != nil { return "Saved license unavailable · free features available" }
         if license.isPro { return "Active — all features unlocked" }
         if license.isInTrial { return "Free trial — \(license.trialDaysRemaining) day\(license.trialDaysRemaining == 1 ? "" : "s") left, all features unlocked" }
         return "Free — Pro features locked"

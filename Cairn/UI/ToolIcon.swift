@@ -25,6 +25,7 @@ struct IconTile: View {
 /// icon (Xcode, Docker, VS Code…) → a real file icon → a tasteful tinted SF tile.
 struct ToolIcon: View {
     var bundleID: String? = nil
+    var bundledAsset: String? = nil
     var fileURL: URL? = nil
     var systemImage: String = "shippingbox.fill"
     var tint: Color = Brand.blue
@@ -45,6 +46,9 @@ struct ToolIcon: View {
     }
 
     private func resolve() {
+        if let name = bundledAsset, let url = Bundle.main.url(forResource: name, withExtension: "svg"), let icon = NSImage(contentsOf: url) {
+            resolved = icon; return
+        }
         if let b = bundleID, let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: b) {
             resolved = IconCache.shared.icon(for: url); return
         }
@@ -60,9 +64,10 @@ extension ToolIcon {
     static func forCategory(_ id: String, size: CGFloat = 34) -> ToolIcon {
         switch id {
         case "xcode":        return ToolIcon(bundleID: "com.apple.dt.Xcode", systemImage: "hammer.fill", tint: Brand.blue, size: size)
-        case "docker":       return ToolIcon(bundleID: "com.docker.docker", systemImage: "shippingbox.fill", tint: Color(hex: 0x2496ED), size: size)
+        case "docker":       return ToolIcon(bundleID: "com.docker.docker", bundledAsset: "tool-docker", systemImage: "shippingbox.fill", tint: Color(hex: 0x2496ED), size: size)
         case "ide-caches":   return ToolIcon(bundleID: "com.microsoft.VSCode", systemImage: "chevron.left.forwardslash.chevron.right", tint: Color(hex: 0x2496ED), size: size)
-        case "android":      return ToolIcon(bundleID: "com.google.android.studio", systemImage: "candybarphone", tint: Color(hex: 0x3DDC84), size: size)
+        case "android":      return ToolIcon(bundleID: "com.google.android.studio", bundledAsset: "tool-android", systemImage: "candybarphone", tint: Color(hex: 0x3DDC84), size: size)
+        case "npm": return ToolIcon(bundledAsset: "tool-npm", systemImage: "shippingbox.fill", tint: Color(hex: 0xCB3837), size: size)
         case "dev-caches":   return ToolIcon(systemImage: "shippingbox.fill", tint: Color(hex: 0xCB3837), size: size)
         case "dev-projects": return ToolIcon(systemImage: "folder.fill", tint: Brand.blue, size: size)
         case "runtimes":     return ToolIcon(systemImage: "cube.fill", tint: Color(hex: 0x3776AB), size: size)

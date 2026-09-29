@@ -87,7 +87,7 @@ struct DevProjectsScanner: CairnScanner {
         //    BUG-014). Each measure is file-capped. Emit as each completes.
         let tSize = Date()
         ctx.progress("Measuring \(candidates.count) project artifacts…")
-        let limit = max(2, ProcessInfo.processInfo.activeProcessorCount - 1)
+        let limit = min(3, max(1, ProcessInfo.processInfo.activeProcessorCount / 2))
 
         // Sliding window, NOT fixed chunks. Artifact sizes are wildly uneven — a
         // 50k-file node_modules next to a 200-file one — and the old code awaited
@@ -139,45 +139,47 @@ struct DevProjectsScanner: CairnScanner {
                 return
             }
 
-            guard let children = try? fm.contentsOfDirectory(
-                at: dir,
-                includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
-                options: []
-            ) else { continue }
+            autoreleasepool {
+                guard let children = try? fm.contentsOfDirectory(
+                    at: dir,
+                    includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
+                    options: []
+                ) else { return }
 
-            // Game-engine / Flutter project roots: capture their (regenerable)
-            // build dirs and don't descend into them. Gated by marker siblings so
-            // a generic "Library"/"build"/"Saved" folder isn't misread (and ~/Library
-            // is never a Unity root, so it stays pruned below).
-            let childNames = Set(children.map { $0.lastPathComponent })
-            var capturedHere = Set<String>()
-            func capture(_ marker: Bool, _ tag: String, _ subdirs: [String]) {
-                guard marker else { return }
-                for sub in subdirs where childNames.contains(sub) {
-                    candidates.append(Candidate(target: tag, dir: dir.appendingPathComponent(sub), parent: dir))
-                    capturedHere.insert(sub)
+                // Game-engine / Flutter project roots: capture their (regenerable)
+                // build dirs and don't descend into them. Gated by marker siblings so
+                // a generic "Library"/"build"/"Saved" folder isn't misread (and ~/Library
+                // is never a Unity root, so it stays pruned below).
+                let childNames = Set(children.map { $0.lastPathComponent })
+                var capturedHere = Set<String>()
+                func capture(_ marker: Bool, _ tag: String, _ subdirs: [String]) {
+                    guard marker else { return }
+                    for sub in subdirs where childNames.contains(sub) {
+                        candidates.append(Candidate(target: tag, dir: dir.appendingPathComponent(sub), parent: dir))
+                        capturedHere.insert(sub)
+                    }
                 }
-            }
-            capture(childNames.contains("Assets") && childNames.contains("ProjectSettings"),
-                    "fw-unity", ["Library", "Temp", "Logs", "obj"])
-            capture(childNames.contains(where: { $0.hasSuffix(".uproject") }),
-                    "fw-unreal", ["Saved", "Intermediate", "DerivedDataCache"])
-            capture(childNames.contains("pubspec.yaml"),
-                    "fw-flutter", ["build", ".dart_tool"])
+                capture(childNames.contains("Assets") && childNames.contains("ProjectSettings"),
+                        "fw-unity", ["Library", "Temp", "Logs", "obj"])
+                capture(childNames.contains(where: { $0.hasSuffix(".uproject") }),
+                        "fw-unreal", ["Saved", "Intermediate", "DerivedDataCache"])
+                capture(childNames.contains("pubspec.yaml"),
+                        "fw-flutter", ["build", ".dart_tool"])
 
-            for child in children {
-                let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
+                for child in children {
+                    let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                    guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
 
-                let name = child.lastPathComponent
-                if capturedHere.contains(name) { continue }   // already captured as a framework artifact
+                    let name = child.lastPathComponent
+                    if capturedHere.contains(name) { continue }   // already captured as a framework artifact
 
-                if Self.targetNames.contains(name) {
-                    candidates.append(Candidate(target: name, dir: child, parent: dir))
-                    continue   // prune — never descend into a matched target
+                    if Self.targetNames.contains(name) {
+                        candidates.append(Candidate(target: name, dir: child, parent: dir))
+                        continue   // prune — never descend into a matched target
+                    }
+                    if Self.skipNames.contains(name) { continue }
+                    if depth + 1 < maxDepth { stack.append((child, depth + 1)) }
                 }
-                if Self.skipNames.contains(name) { continue }
-                if depth + 1 < maxDepth { stack.append((child, depth + 1)) }
             }
         }
     }

@@ -165,7 +165,7 @@ struct ScanRing: View {
     var body: some View {
         ZStack {
             // Solid white centre so the value reads clearly over the hero artwork.
-            Circle().fill(.white).padding(5.5)
+            Circle().fill(Brand.surfaceElevated).padding(5.5)
                 .shadow(color: Brand.blue.opacity(0.10), radius: 14, y: 3)
             Circle().stroke(Brand.border, lineWidth: 11)
             Circle()

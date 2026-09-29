@@ -1,0 +1,8 @@
+Hash pass 1: footprint 68 MiB; RSS 75 MiB; completed true
+Hash pass 2: footprint 132 MiB; RSS 139 MiB; completed true
+Hash pass 3: footprint 196 MiB; RSS 203 MiB; completed true
+Hash pass 4: footprint 260 MiB; RSS 267 MiB; completed true
+Hash pass 5: footprint 324 MiB; RSS 331 MiB; completed true
+Hash pass 6: footprint 388 MiB; RSS 395 MiB; completed false
+HASH MEMORY: baseline 3 MiB; peak 388 MiB; growth 384 MiB; retained results: one digest
+HASH MEMORY FAILED

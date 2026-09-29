@@ -42,6 +42,10 @@ struct HealthGroup: Identifiable {
 @MainActor
 @Observable
 final class HealthStore {
+    private(set) var isFixing = false
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var prepareRemoval: () -> Bool = { false }
+
     /// Number of distinct system-health checks Cairn runs (launch agents, orphaned
     /// app data, broken login items, corrupted preferences, permission issues).
     static let checkCount = 5
@@ -56,6 +60,7 @@ final class HealthStore {
     var lastResult: FixResult?
 
     nonisolated(unsafe) private var scanTask: Task<Void, Never>?
+    private var scanGeneration = UUID()
 
     deinit { scanTask?.cancel() }
 
@@ -89,34 +94,52 @@ final class HealthStore {
 
     /// Run the health scan once. Guard at the call site (view) so it only fires
     /// on first appearance.
+    private(set) var wasCancelled = false
+
     func scanIfNeeded() {
+        guard !wasCancelled else { return }
         guard phase == .idle else { return }
         rescan()
     }
 
     func rescan() {
+        guard !isFixing else { return }
         scanTask?.cancel()
+        let generation = UUID()
+        scanGeneration = generation
+        wasCancelled = false
         phase = .scanning
         progressText = "Checking your Mac's health…"
         lastResult = nil
         let scanner = HealthScanner()
         scanTask = Task { [weak self] in
-            await ScanGate.shared.acquire()          // see ScanGate: one heavy scan at a time
+            guard await ScanGate.shared.acquire() else { return }
             defer { ScanGate.shared.release() }
+            guard let self, !Task.isCancelled else { return }
+            let progressStore = self
             let result = await scanner.run { msg in
-                Task { @MainActor in self?.progressText = msg }
+                Task { @MainActor in
+                    guard progressStore.scanGeneration == generation, !Task.isCancelled else { return }
+                    progressStore.progressText = msg
+                }
             }
             await MainActor.run {
-                guard let self, !Task.isCancelled else { return }
+                guard self.scanGeneration == generation, !Task.isCancelled else { return }
                 self.groups = result
                 self.phase = .finished
                 self.lastScanAt = Date()
                 self.progressText = ""
+                self.scanTask = nil
             }
         }
     }
 
-    func cancel() { scanTask?.cancel(); scanTask = nil }
+    func cancel() {
+        scanGeneration = UUID()
+        scanTask?.cancel()
+        scanTask = nil
+        if phase == .scanning { wasCancelled = true; phase = .idle; progressText = "" }
+    }
 
     // MARK: - Fixing (Trash only — recoverable)
 
@@ -127,6 +150,13 @@ final class HealthStore {
 
     /// Trash a specific set of fixable issues (used by Fix All after confirm).
     func fix(items: [HealthIssue]) async {
+        guard prepareRemoval() else { lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]); return }
+        guard !isFixing, !isScanning else { return }
+        isFixing = true
+        defer { isFixing = false }
+        guard await ScanGate.shared.acquire() else { return }
+        defer { ScanGate.shared.release() }
+
         let targets = items.compactMap { issue -> (id: UUID, url: URL)? in
             guard issue.fixable, let url = issue.url else { return nil }
             return (issue.id, url)
@@ -148,6 +178,7 @@ final class HealthStore {
                 return cleaned.contains(u.resolvingSymlinksInPath().standardizedFileURL.path)
             }
         }
+        onRemovals?(outcome.history)
         lastResult = FixResult(trashed: outcome.trashed, failed: outcome.failed,
                                bytes: outcome.bytes, errors: outcome.errors)
     }
@@ -166,6 +197,7 @@ enum HealthTrash {
         var bytes: Int64 = 0
         var errors: [String] = []
         var cleanedURLs: [URL] = []
+        var history: [ScanStore.RemovalLogEntry] = []
     }
 
     static func trashAll(_ urls: [URL]) -> Outcome {
@@ -173,7 +205,7 @@ enum HealthTrash {
         for url in urls {
             let resolved = url.resolvingSymlinksInPath()
             // Recoverable, but still gate on the global safety chokepoint.
-            let verdict = SafePaths.evaluate(resolved, allowedRoots: [FileScan.home])
+            let verdict = SafePaths.evaluate(url, allowedRoots: [FileScan.home])
             guard verdict.isAllowed else {
                 out.failed += 1
                 if case .reject(let why) = verdict {
@@ -181,11 +213,15 @@ enum HealthTrash {
                 }
                 continue
             }
+            guard SafePaths.evaluateContents(resolved).isAllowed else {
+                out.failed += 1; out.errors.append("Protected or unreadable contents: \(url.lastPathComponent)"); continue
+            }
             guard FileScan.exists(resolved) else { out.cleanedURLs.append(url); continue } // already gone
             let size = FileScan.measure(resolved).allocatedSize
             var resulting: NSURL?
             do {
                 try FileManager.default.trashItem(at: resolved, resultingItemURL: &resulting)
+                out.history.append(ScanStore.RemovalLogEntry(name: url.lastPathComponent, originalPath: url.path, trashPath: (resulting as URL?)?.path, bytes: size, date: Date(), category: "health"))
                 out.trashed += 1
                 out.bytes += size
                 out.cleanedURLs.append(url)
@@ -208,21 +244,27 @@ private struct HealthScanner: Sendable {
     private let staleAge: TimeInterval = 60 * 60 * 24 * 182
 
     func run(progress: @escaping @Sendable (String) -> Void) async -> [HealthGroup] {
+        if Task.isCancelled { return [] }
         progress("Checking launch agents…")
         let launchAgents = scanLaunchAgents()
 
+        if Task.isCancelled { return [] }
         progress("Checking app data…")
         let orphaned = scanOrphanedAppData()
 
+        if Task.isCancelled { return [] }
         progress("Checking login items…")
         let loginItems = scanBrokenLoginItems()
 
+        if Task.isCancelled { return [] }
         progress("Checking preferences…")
         let prefs = scanCorruptedPreferences()
 
+        if Task.isCancelled { return [] }
         progress("Checking permissions…")
         let permissions = scanPermissionIssues()
 
+        if Task.isCancelled { return [] }
         return [
             HealthGroup(id: "launch-agents",
                         title: "Old Launch Agents",
@@ -233,7 +275,7 @@ private struct HealthScanner: Sendable {
                         title: "Orphaned App Data",
                         subtitle: "Leftover support files from apps you've since removed",
                         systemImage: "folder.badge.questionmark",
-                        items: orphaned, actionable: true),
+                        items: orphaned, actionable: false),
             HealthGroup(id: "login-items",
                         title: "Broken Login Items",
                         subtitle: "Startup items that reference a missing app — review only",
@@ -262,6 +304,7 @@ private struct HealthScanner: Sendable {
         guard FileScan.exists(dir), let children = FileScan.children(of: dir) else { return [] }
         var issues: [HealthIssue] = []
         for plistURL in children where plistURL.pathExtension == "plist" {
+            if Task.isCancelled { return issues }
             guard let data = try? Data(contentsOf: plistURL),
                   let obj = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
                   let dict = obj as? [String: Any] else { continue }
@@ -308,6 +351,8 @@ private struct HealthScanner: Sendable {
                                             "CloudDocs", "AddressBook", "Knowledge", "com.apple.TCC"]
         var issues: [HealthIssue] = []
         for child in children {
+            if Task.isCancelled { return issues }
+            if SafePaths.protectedSessionReason(child) != nil { continue }
             let isDir = (try? child.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
             guard isDir else { continue }
             let name = child.lastPathComponent
@@ -330,8 +375,8 @@ private struct HealthScanner: Sendable {
             issues.append(HealthIssue(
                 title: name,
                 url: child,
-                detail: "No installed app matches this folder · \(Fmt.size(stats.allocatedSize)), last used \(Fmt.age(max(0, age / 86_400))) ago",
-                fixable: true
+                detail: "No installed app matches this folder · \(Fmt.size(stats.allocatedSize)). This can contain irreplaceable app data; inspect only.",
+                fixable: false
             ))
         }
         return issues
@@ -343,8 +388,10 @@ private struct HealthScanner: Sendable {
                      FileScan.home.appendingPathComponent("Applications"),
                      URL(fileURLWithPath: "/System/Applications")]
         for root in roots {
+            if Task.isCancelled { return ids }
             guard FileScan.exists(root), let children = FileScan.children(of: root) else { continue }
             for app in children where app.pathExtension == "app" {
+                if Task.isCancelled { return ids }
                 let plist = app.appendingPathComponent("Contents/Info.plist")
                 guard let data = try? Data(contentsOf: plist),
                       let obj = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil),
@@ -406,6 +453,7 @@ private struct HealthScanner: Sendable {
         // The legacy structure nests session items; walk any "Name"+"Alias"/path-ish
         // leaves defensively without assuming a rigid schema.
         func walk(_ any: Any) {
+            if Task.isCancelled { return }
             if let d = any as? [String: Any] {
                 if let name = d["Name"] as? String,
                    let path = (d["Path"] as? String) ?? (d["URL"] as? String) {
@@ -434,6 +482,7 @@ private struct HealthScanner: Sendable {
         guard FileScan.exists(dir), let children = FileScan.children(of: dir) else { return [] }
         var issues: [HealthIssue] = []
         for url in children where url.pathExtension == "plist" {
+            if Task.isCancelled { return issues }
             // Skip zero-byte placeholders (cfprefsd writes these transiently).
             let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0
             if size == 0 { continue }
@@ -463,8 +512,10 @@ private struct HealthScanner: Sendable {
         ]
         var issues: [HealthIssue] = []
         for dir in configDirs {
+            if Task.isCancelled { return issues }
             guard FileScan.exists(dir), let children = FileScan.children(of: dir) else { continue }
             for url in children {
+                if Task.isCancelled { return issues }
                 guard let perms = (try? url.resourceValues(forKeys: [.fileSecurityKey]))?.fileSecurity,
                       let mode = posixPermissions(of: url) else { continue }
                 _ = perms

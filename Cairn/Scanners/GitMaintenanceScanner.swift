@@ -4,10 +4,9 @@ import Foundation
 /// directory-only DFS (mirroring DevProjectsScanner's traversal) looking for
 /// two things:
 ///
-///   1. Bloated `.git` directories (>= 200 MB) — surfaced as a `.tool` item that
-///      runs `git gc --prune=now`, which compacts history and drops unreachable
-///      objects WITHOUT losing any commits. Never deletes the repo. The `.git`
-///      dir is pruned from the walk once matched.
+///   1. Large `.git` directories (>= 200 MB) — advice only. Git objects can be
+///      recovery data, so Cairn never runs garbage collection for the user.
+///      The `.git` dir is pruned from the walk once matched.
 ///   2. Abandoned project roots (a dir directly containing `.git`,
 ///      `package.json`, `Cargo.toml`, or a `*.xcodeproj`/`*.xcworkspace`) whose
 ///      contents haven't been touched in 180+ days — surfaced as an
@@ -85,101 +84,99 @@ struct GitMaintenanceScanner: CairnScanner {
                 return
             }
 
-            guard let children = try? fm.contentsOfDirectory(
-                at: dir,
-                includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
-                options: []
-            ) else { continue }
+            autoreleasepool {
+                guard let children = try? fm.contentsOfDirectory(
+                    at: dir,
+                    includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
+                    options: []
+                ) else { return }
 
-            // Pre-scan children once: collect directory names + the dir subset we
-            // may descend into. This lets us detect a project root cheaply.
-            var childNames: Set<String> = []
-            var subdirs: [URL] = []
-            var dotGitDir: URL?
-            for child in children {
-                let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                let name = child.lastPathComponent
-                childNames.insert(name)
-                guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
-                if name == ".git" {
-                    dotGitDir = child
-                    continue   // never descend into .git
+                // Pre-scan children once: collect directory names + the dir subset we
+                // may descend into. This lets us detect a project root cheaply.
+                var childNames: Set<String> = []
+                var subdirs: [URL] = []
+                var dotGitDir: URL?
+                for child in children {
+                    let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
+                    let name = child.lastPathComponent
+                    childNames.insert(name)
+                    guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
+                    if name == ".git" {
+                        dotGitDir = child
+                        continue   // never descend into .git
+                    }
+                    subdirs.append(child)
                 }
-                subdirs.append(child)
-            }
 
-            // 1) Bloated .git → git gc suggestion.
-            if let gitDir = dotGitDir {
-                ctx.progress("Sizing .git in \(dir.lastPathComponent)")
-                let stats = FileScan.measure(gitDir, maxFiles: gitMaxFiles)
-                if stats.allocatedSize >= gitBloatFloor {
-                    let project = dir.lastPathComponent
-                    var note = "Large .git for \(project) — 'git gc' compacts history safely (no commits lost)"
-                    if stats.truncated { note += " · large (partial size)" }
-                    let item = ScanItem(
-                        url: gitDir,
-                        allocatedSize: stats.allocatedSize,
-                        itemCount: stats.fileCount,
-                        latestModified: stats.latestModified,
-                        categoryID: info.id,
-                        severity: .review,
-                        isRegenerable: false,
-                        requiresQuitBundleIDs: [],
-                        requiresRunning: false,
-                        cleanMethod: .tool(ToolCommand(
-                            tool: "git",
-                            arguments: ["-C", dir.path, "gc", "--prune=now"],
-                            display: "git gc --prune=now"
-                        )),
-                        note: note,
-                        permissionDenied: stats.permissionDenied,
-                        volumeURL: FileScan.volumeURL(of: gitDir),
-                        selected: false
-                    )
-                    ctx.emit(item)
-                }
-            }
-
-            // 2) Project-root detection.
-            let isProjectRoot = isProjectRoot(childNames: childNames)
-            if isProjectRoot {
-                if abandonedEmitted < maxAbandonedAdvice,
-                   let modified = (try? dir.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
-                    let ageDays = max(0, Date().timeIntervalSince(modified) / 86_400)
-                    if ageDays >= abandonedAfterDays {
-                        let name = dir.lastPathComponent
+                // 1) Large .git → inspect manually, never automatic maintenance.
+                if let gitDir = dotGitDir {
+                    ctx.progress("Sizing .git in \(dir.lastPathComponent)")
+                    let stats = FileScan.measure(gitDir, maxFiles: gitMaxFiles)
+                    if stats.allocatedSize >= gitBloatFloor {
+                        let project = dir.lastPathComponent
+                        var note = "Large .git for \(project) (\(Fmt.size(stats.allocatedSize))) — inspect with Git before changing it; unreachable objects may be recovery data"
+                        if stats.truncated { note += " · large (partial size)" }
                         let item = ScanItem(
-                            url: dir,
-                            allocatedSize: 0,
-                            itemCount: 0,
-                            latestModified: modified,
+                            url: gitDir,
+                            allocatedSize: stats.allocatedSize,
+                            itemCount: stats.fileCount,
+                            latestModified: stats.latestModified,
                             categoryID: info.id,
                             severity: .review,
                             isRegenerable: false,
                             requiresQuitBundleIDs: [],
                             requiresRunning: false,
                             cleanMethod: .adviceOnly,
-                            note: "Abandoned project '\(name)' — last touched \(Fmt.age(ageDays)); consider archiving",
-                            permissionDenied: false,
-                            volumeURL: FileScan.volumeURL(of: dir),
+                            note: note,
+                            permissionDenied: stats.permissionDenied,
+                            volumeURL: FileScan.volumeURL(of: gitDir),
                             selected: false
                         )
                         ctx.emit(item)
-                        abandonedEmitted += 1
                     }
                 }
-                // A detected project root is not descended into further: its build
-                // artifacts / nested repos are covered by other scanners.
-                continue
-            }
 
-            // 3) Otherwise descend into subdirectories (depth-bounded, pruning
-            //    hidden/system trees).
-            if depth + 1 < maxDepth {
-                for sub in subdirs {
-                    let name = sub.lastPathComponent
-                    if Self.skipNames.contains(name) { continue }
-                    stack.append((sub, depth + 1))
+                // 2) Project-root detection.
+                let isProjectRoot = isProjectRoot(childNames: childNames)
+                if isProjectRoot {
+                    if abandonedEmitted < maxAbandonedAdvice,
+                       let modified = (try? dir.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                        let ageDays = max(0, Date().timeIntervalSince(modified) / 86_400)
+                        if ageDays >= abandonedAfterDays {
+                            let name = dir.lastPathComponent
+                            let item = ScanItem(
+                                url: dir,
+                                allocatedSize: 0,
+                                itemCount: 0,
+                                latestModified: modified,
+                                categoryID: info.id,
+                                severity: .review,
+                                isRegenerable: false,
+                                requiresQuitBundleIDs: [],
+                                requiresRunning: false,
+                                cleanMethod: .adviceOnly,
+                                note: "Abandoned project '\(name)' — last touched \(Fmt.age(ageDays)); consider archiving",
+                                permissionDenied: false,
+                                volumeURL: FileScan.volumeURL(of: dir),
+                                selected: false
+                            )
+                            ctx.emit(item)
+                            abandonedEmitted += 1
+                        }
+                    }
+                    // A detected project root is not descended into further: its build
+                    // artifacts / nested repos are covered by other scanners.
+                    return
+                }
+
+                // 3) Otherwise descend into subdirectories (depth-bounded, pruning
+                //    hidden/system trees).
+                if depth + 1 < maxDepth {
+                    for sub in subdirs {
+                        let name = sub.lastPathComponent
+                        if Self.skipNames.contains(name) { continue }
+                        stack.append((sub, depth + 1))
+                    }
                 }
             }
         }

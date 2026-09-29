@@ -1,0 +1,20 @@
+warning: /Users/augustusedem/Library/org.swift.swiftpm/configuration is not accessible or not writable, disabling user-level cache features.
+warning: /Users/augustusedem/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
+warning: /Users/augustusedem/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
+warning: 'cairn-native': failed storing manifest for 'cairn-native' in cache: attempt to write a readonly database
+Building for debugging...
+[0/4] Write sources
+[1/4] Write swift-version--58304C5D6DBC2206.txt
+[3/6] Compiling Cairn ReliabilityCheck.swift
+/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:41:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
+ 39 |         rejects("Locked Keychain is an error, not a new trial") {
+ 40 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
+ 41 |                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
+    |                                                                                                `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
+ 42 |                 return errSecInteractionNotAllowed
+ 43 |             })
+[4/6] Emitting module Cairn
+[4/7] Write Objects.LinkFileList
+[5/7] Linking Cairn
+[6/7] Applying Cairn
+Build complete! (3.69s)

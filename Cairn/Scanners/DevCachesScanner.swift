@@ -7,7 +7,7 @@ struct DevCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "dev-caches",
         title: "Developer Caches",
-        subtitle: "npm, yarn, pnpm, pip, cargo, go, gradle, Homebrew…",
+        subtitle: "Time-limited inventory of npm, yarn, pnpm, pip, cargo, go and more. Partial sizes are lower bounds.",
         systemImage: "shippingbox.fill",
         group: .developer,
         requiresFDA: false
@@ -54,21 +54,69 @@ struct DevCachesScanner: CairnScanner {
     }
 
     func scan(_ ctx: ScanContext) async {
-        for t in targets {
+        // Many package caches contain hundreds of thousands of tiny files. A
+        // per-tree limit alone still allows the whole category to run for minutes.
+        let budget: TimeInterval = 18
+        let deadline = ProcessInfo.processInfo.systemUptime + budget
+        let list = targets
+        for (index, t) in list.enumerated() {
             if ctx.isCancelled() { return }
+            let remaining = deadline - ProcessInfo.processInfo.systemUptime
+            if remaining <= 0 {
+                ctx.progress("Developer cache time limit reached; remaining locations were not measured")
+                // An advice row for a REAL unmeasured cache path keeps the partial
+                // category visible even if no earlier target met the size floor.
+                for pending in list[index...] {
+                    let path = FileScan.home.appendingPathComponent(pending.rel)
+                    if SafePaths.protectedSessionReason(path) == nil && FileScan.exists(path) {
+                        ctx.emit(ScanItem(
+                            url: path, allocatedSize: 0, categoryID: info.id,
+                            severity: .review, isRegenerable: false,
+                            cleanMethod: .adviceOnly,
+                            note: "Scan paused at the 18-second limit. This and later cache paths were not measured; run another scan to review them.",
+                            selected: false
+                        ))
+                        break
+                    }
+                }
+                return
+            }
             let url = FileScan.home.appendingPathComponent(t.rel)
             ctx.progress(t.label)
-            if let item = makeItem(
-                at: url,
-                severity: t.sev,
-                minSize: ctx.minSizeBytes,
-                isRegenerable: true,
-                cleanMethod: t.method,
-                note: "\(t.label) — \(t.note)",
-                selectedIfSafe: true
-            ) {
+            if let item = measureTarget(t, at: url, ctx: ctx,
+                                        maxDuration: min(4, remaining)) {
                 ctx.emit(item)
             }
         }
+    }
+
+    private func measureTarget(_ target: Target, at url: URL, ctx: ScanContext,
+                               maxDuration: TimeInterval) -> ScanItem? {
+        guard SafePaths.protectedSessionReason(url) == nil else { return nil }
+        guard FileScan.exists(url) else { return nil }
+        let stats = FileScan.measure(url, maxDuration: maxDuration)
+        if ctx.isCancelled() || stats.cancelled { return nil }
+        // A timed-out tree may have exceeded the floor even when its measured
+        // prefix did not. Show the lower bound rather than silently hiding it.
+        if stats.allocatedSize < ctx.minSizeBytes && !target.method.isPaid && !stats.truncated { return nil }
+
+        let partial = stats.truncated || stats.permissionDenied
+        let method: CleanMethod = partial && stats.allocatedSize == 0 ? .adviceOnly : target.method
+        let note = "\(target.label) — \(target.note)" +
+            (partial ? " · Partial size (lower bound); review before cleaning" : "")
+        return ScanItem(
+            url: url,
+            allocatedSize: stats.allocatedSize,
+            itemCount: stats.fileCount,
+            latestModified: stats.latestModified,
+            categoryID: info.id,
+            severity: partial ? .review : target.sev,
+            isRegenerable: true,
+            cleanMethod: method,
+            note: note,
+            permissionDenied: stats.permissionDenied,
+            volumeURL: FileScan.volumeURL(of: url),
+            selected: !partial && target.sev == .safe && method.isActionable
+        )
     }
 }
