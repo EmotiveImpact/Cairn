@@ -3,12 +3,14 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, makeRoom, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: return "Overview"
+        case .changes: return "Changes"
+        case .makeRoom: return "Make room"
         case .smartScan: return "Smart Scan"
         case .general: return "General Cleanup"
         case .browsers: return "Browsers"
@@ -29,6 +31,8 @@ enum NavSection: String, CaseIterable, Identifiable {
     var icon: String {
         switch self {
         case .dashboard: return "house"
+        case .changes: return "chart.xyaxis.line"
+        case .makeRoom: return "plus.circle"
         case .smartScan: return "scope"
         case .general: return "sparkles"
         case .browsers: return "globe"
@@ -75,6 +79,7 @@ struct AppShell: View {
     @State private var dupStore = DuplicateStore()
     @State private var appStore = AppInventoryStore()
     @State private var storageStore = StorageTransferStore()
+    @State private var control = StorageControl.shared
     @StateObject private var license = LicenseManager()
     /// `Cairn --section=duplicates` opens straight onto a page. Used to profile
     /// each screen in isolation (and to grab screenshots) without clicking.
@@ -86,6 +91,8 @@ struct AppShell: View {
     }()
     @State private var sidebarVisibility: NavigationSplitViewVisibility = .all
     @State private var showReview = false
+    @State private var goalReviewPending = false
+    @State private var goalReceiptRunID: UUID?
     private struct CompletionPresentation: Identifiable { let id = UUID(); let summary: ScanStore.CleanSummary }
     @State private var celebration: CompletionPresentation?
     @State private var pendingSummary: ScanStore.CleanSummary?
@@ -130,11 +137,14 @@ struct AppShell: View {
         }
         .background(Brand.background)
         .sheet(isPresented: $showReview, onDismiss: {
+            goalReviewPending = false
             if let pendingSummary { celebration = CompletionPresentation(summary: pendingSummary); self.pendingSummary = nil }
         }) {
             ReviewSheet(store: store, proEnabled: proEnabled,
                         onDone: { summary in
                             pendingSummary = summary
+                            if goalReviewPending { goalReceiptRunID = store.lastCleanRunID }
+                            goalReviewPending = false
                         },
                         onUpgrade: { showReview = false; preferencesTab = "License"; section = .settings })
         }
@@ -148,6 +158,9 @@ struct AppShell: View {
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
         .focusedSceneValue(\.cairnFind, supportsResultFilter ? { showResultFilter = true; searchFocused = true } : nil)
         .onChange(of: section) { _, _ in developerSearch = ""; searchFocused = false; showResultFilter = false; showDeveloperInspector = false }
+        .onChange(of: store.isCleaning) { _, cleaning in
+            if !cleaning && !previewMode { Task { await control.refreshCapacity(force: true) } }
+        }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
         .onAppear {
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }
@@ -158,6 +171,13 @@ struct AppShell: View {
             guard !previewMode else { return }
             store.loadSnapshot()
             store.loadRemovalLog()
+            store.onCompletedScan = { [weak store, weak control] in
+                Task {
+                    guard let store, let control else { return }
+                    await control.refreshCapacity()
+                    control.recordCompletedScan(store)
+                }
+            }
             storageStore.load()
             appStore.onRemovals = { [store] in store.appendRemovals($0) }
             dupStore.onRemovals = { [store] in store.appendRemovals($0) }
@@ -166,6 +186,7 @@ struct AppShell: View {
             dupStore.prepareRemoval = { [store] in store.prepareRemovalLog() }
             healthStore.prepareRemoval = { [store] in store.prepareRemovalLog() }
             StorageHistory.record()   // one free-space sample a day, for the forecast
+            control.start()             // bounded capacity history; alerts only when opted in
             // Watch for dev tools quitting. Does nothing unless the setting is on
             // AND Pro is unlocked — the guard lives at the point of use so a trial
             // expiring mid-session can't leave a trigger armed.
@@ -249,6 +270,8 @@ struct AppShell: View {
         MenuBarRoute.shared.pending = nil
         switch request.action {
         case .overview: section = .dashboard
+        case .changes: section = .changes
+        case .makeRoom: section = .makeRoom
         case .activity: section = .activity
         case .results: section = .smartScan
         case .storage(let id): storageDriveID = id; section = .storage
@@ -267,7 +290,7 @@ struct AppShell: View {
     /// System toolbar owns window controls, title alignment and the sidebar
     /// toggle. No hand-positioned window controls or brand spacer.
     @ToolbarContentBuilder private var workspaceToolbar: some ToolbarContent {
-        if section != .settings && section != .activity && section != .storage && section != .dashboard {
+        if section != .settings && section != .activity && section != .storage && section != .dashboard && section != .changes && section != .makeRoom {
             ToolbarItem(placement: .primaryAction) {
                 Button(action: rescanCurrentSection) {
                     Label(currentScanning ? "Stop scan" : "Rescan", systemImage: currentScanning ? "stop.circle" : "arrow.clockwise")
@@ -276,7 +299,7 @@ struct AppShell: View {
                 .disabled(previewMode || store.isCleaning || appStore.isUninstalling || dupStore.isRemoving || healthStore.isFixing)
             }
         }
-        if section != .settings && section != .dashboard && section != .storage {
+        if section != .settings && section != .dashboard && section != .storage && section != .changes && section != .makeRoom {
             ToolbarItem(placement: .primaryAction) {
                 Button { showDeveloperInspector.toggle() } label: {
                     Label(showDeveloperInspector ? "Hide details" : "Details", systemImage: "sidebar.right")
@@ -287,7 +310,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .storage, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -335,8 +358,7 @@ struct AppShell: View {
         HStack(spacing: 8) {
             Text("Cairn")
             Text("·")
-            Text(previewMode ? "Visual preview · sample data · disk actions disabled" :
-                 (store.isScanning ? "Scanning…" : store.phase == .cancelled ? "Scan stopped · partial results" : (store.hasScanned ? "Scan complete · ready to review" : "Ready to scan")))
+            Text(previewMode ? "Visual preview · sample data · disk actions disabled" : operationStatus)
             Spacer()
             Image(systemName: "lock.shield").foregroundStyle(Brand.textMuted)
             Text("Review before removal")
@@ -344,6 +366,22 @@ struct AppShell: View {
         .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
         .padding(.horizontal, 20).frame(height: 31)
         .background(Brand.deepPanel)
+    }
+
+    private var operationStatus: String {
+        if store.isCleaning { return "Cleaning reviewed items…" }
+        if store.isRestoring { return "Restoring recorded item…" }
+        if storageStore.checkingCopy { return "Verifying external copy…" }
+        if storageStore.busy { return "Copying to external storage…" }
+        if dupStore.isRemoving { return "Removing reviewed duplicate…" }
+        if dupStore.isScanning { return "Scanning duplicates…" }
+        if appStore.isUninstalling { return "Removing reviewed app…" }
+        if appStore.isScanning { return "Scanning apps…" }
+        if healthStore.isFixing { return "Applying reviewed fix…" }
+        if healthStore.isScanning { return "Checking health…" }
+        if store.isScanning { return store.progressText.isEmpty ? "Scanning…" : store.progressText }
+        if store.phase == .cancelled { return "Scan stopped · partial results" }
+        return store.hasScanned ? "Scan complete · ready to review" : "Ready to scan"
     }
 
     private var fdaBanner: some View {
@@ -366,7 +404,20 @@ struct AppShell: View {
     @ViewBuilder private var content: some View {
         switch section {
         case .dashboard:
-            OverviewWorkspace(store: store, storage: storageStore, search: developerSearch, onOpen: { section = $0 })
+            OverviewWorkspace(store: store, storage: storageStore, control: control,
+                              search: developerSearch, onOpen: { section = $0 })
+        case .changes:
+            ChangesWorkspace(control: control, store: store, search: developerSearch,
+                             onOpen: { section = $0 })
+        case .makeRoom:
+            MakeRoomWorkspace(store: store, control: control, receiptRunID: goalReceiptRunID,
+                onBack: { section = .dashboard },
+                onScan: { store.startScan(includeExternalVolumes: false) },
+                onReview: { ids in
+                    store.clearSelection()
+                    store.select { item, _ in ids.contains(item.id) }
+                    if store.selectedCount > 0 { goalReviewPending = true; showReview = true }
+                }, onOpen: { section = $0 })
         case .smartScan, .general, .browsers, .developer, .ai, .creative, .largeFiles:
             DeveloperCleanupView(store: store, section: section, proEnabled: proEnabled,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
@@ -419,6 +470,7 @@ struct NavSidebar: View {
             ScrollView {
                 VStack(spacing: 4) {
                     NavRow(item: .dashboard, section: $section)
+                    NavRow(item: .changes, section: $section)
                     SidebarDisclosure(title: "Clean", icon: "paintbrush", items: cleanItems, section: $section)
                     SidebarDisclosure(title: "Files", icon: "doc.on.doc", items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)

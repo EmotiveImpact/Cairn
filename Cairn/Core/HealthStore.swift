@@ -43,7 +43,7 @@ struct HealthGroup: Identifiable {
 @Observable
 final class HealthStore {
     private(set) var isFixing = false
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
     var prepareRemoval: () -> Bool = { false }
 
     /// Number of distinct system-health checks Cairn runs (launch agents, orphaned
@@ -151,6 +151,11 @@ final class HealthStore {
     /// Trash a specific set of fixable issues (used by Fix All after confirm).
     func fix(items: [HealthIssue]) async {
         guard prepareRemoval() else { lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]); return }
+        guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
+            lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0,
+                                   errors: [ActionJournal.shared.error ?? "Action journal unavailable. Nothing was removed."])
+            return
+        }
         guard !isFixing, !isScanning else { return }
         isFixing = true
         defer { isFixing = false }
@@ -178,9 +183,9 @@ final class HealthStore {
                 return cleaned.contains(u.resolvingSymlinksInPath().standardizedFileURL.path)
             }
         }
-        onRemovals?(outcome.history)
-        lastResult = FixResult(trashed: outcome.trashed, failed: outcome.failed,
-                               bytes: outcome.bytes, errors: outcome.errors)
+        let logged = onRemovals?(outcome.history) ?? outcome.history.isEmpty
+        lastResult = FixResult(trashed: outcome.trashed, failed: outcome.failed + (logged ? 0 : 1),
+                               bytes: outcome.bytes, errors: outcome.errors + (logged ? [] : ["Recovery history could not be saved. The action journal retains the paths; further cleanup is blocked."]))
     }
 }
 
@@ -218,6 +223,11 @@ enum HealthTrash {
             }
             guard FileScan.exists(resolved) else { out.cleanedURLs.append(url); continue } // already gone
             let size = FileScan.measure(resolved).allocatedSize
+            guard let actionID = ActionJournal.shared.begin(path: resolved.path, category: "health") else {
+                out.failed += 1
+                out.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; health cleanup stopped")
+                return out
+            }
             var resulting: NSURL?
             do {
                 try FileManager.default.trashItem(at: resolved, resultingItemURL: &resulting)
@@ -225,9 +235,18 @@ enum HealthTrash {
                 out.trashed += 1
                 out.bytes += size
                 out.cleanedURLs.append(url)
+                guard ActionJournal.shared.finish(actionID, succeeded: true, trashPath: (resulting as URL?)?.path) else {
+                    out.failed += 1
+                    out.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; health cleanup stopped")
+                    return out
+                }
             } catch {
                 out.failed += 1
                 out.errors.append("\(url.lastPathComponent): \((error as NSError).localizedDescription)")
+                guard ActionJournal.shared.finish(actionID, succeeded: false, trashPath: nil, detail: error.localizedDescription) else {
+                    out.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; health cleanup stopped")
+                    return out
+                }
             }
         }
         return out

@@ -168,6 +168,36 @@ import Darwin
             let source = root.appendingPathComponent("export.zip")
             let content = Data(repeating: 0x5a, count: 4 * 1024 * 1024)
             try content.write(to: source)
+            let replaceable = root.appendingPathComponent("replaceable.bin")
+            try Data("old candidate".utf8).write(to: replaceable)
+            let scanned = ScanItem(url: replaceable, allocatedSize: 13, categoryID: "fixture", severity: .safe)
+            let originalIdentity = scanned.sourceIdentity
+            try fm.moveItem(at: replaceable, to: root.appendingPathComponent("old-candidate.bin"))
+            try Data("new important content".utf8).write(to: replaceable)
+            let replaced = Cleaner.clean(scanned, allowedRoots: [root], proEnabled: true)
+            check(originalIdentity != nil && !replaced.ok && replaced.error?.contains("changed since scanning") == true,
+                  "Reviewed Trash action refuses a different inode at the same path")
+            check(try Data(contentsOf: replaceable) == Data("new important content".utf8), "Replacement content remains untouched")
+            let intentURL = root.appendingPathComponent("fixture-action-journal.json")
+            let intentJournal = ActionJournal(url: intentURL)
+            check(intentJournal.prepare(), "Fresh action journal permits an isolated fixture")
+            let pendingID = intentJournal.begin(path: replaceable.path, category: "fixture")
+            check(pendingID != nil, "Intent is durable before a filesystem action")
+            let interruptedJournal = ActionJournal(url: intentURL)
+            check(!interruptedJournal.prepare() && interruptedJournal.recent.first?.state == .pending,
+                  "Relaunch sees uncertain intent and blocks replay")
+            if let pendingID {
+                check(intentJournal.finish(pendingID, succeeded: false, trashPath: nil, detail: "fixture refused"),
+                      "Failure outcome is durably recorded")
+            }
+            check(ActionJournal(url: intentURL).prepare(), "Completed failure no longer blocks unrelated reviewed work")
+            let corruptIntent = root.appendingPathComponent("corrupt-action-journal.json")
+            let keepIntent = Data("preserve corrupt intent".utf8)
+            try keepIntent.write(to: corruptIntent)
+            let corruptActionBlocked = !ActionJournal(url: corruptIntent).prepare()
+            let corruptIntentPreserved = try Data(contentsOf: corruptIntent) == keepIntent
+            check(corruptActionBlocked && corruptIntentPreserved,
+                  "Corrupt action journal is retained and blocks mutation")
             let good = try ArchiveCopy.copy(source: source, directory: root.appendingPathComponent("good"), cancel: CancelBox(), destinationValid: { true }, progress: { _ in })
             let verified = try ArchiveCopy.verify(source: source, destination: good.0, bytes: good.1, digest: good.2, cancel: CancelBox(), destinationValid: { true })
             check(verified.1 == good.2, "Existing verified copy can be checked again")

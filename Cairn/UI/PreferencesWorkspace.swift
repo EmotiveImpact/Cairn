@@ -8,7 +8,7 @@ struct PreferencesWorkspace: View {
     @Binding var tab: String
     @State private var message = ""
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private let tabs = ["General", "Scanning", "Protection", "Excluded locations", "License", "About & CLI"]
+    private let tabs = ["General", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
     var body: some View {
         CairnWorkspace(title: "Preferences", subtitle: preview ? "Preview · changes disabled" : "Saved on this Mac", inspectorVisible: false) {
             VStack(spacing: 0) {
@@ -44,6 +44,32 @@ struct PreferencesWorkspace: View {
             option("Extra large-file confirmation", "Request an additional confirmation for large file removal.", $settings.askBeforeDeleting)
             option("Local snapshot before cleanup", "Ask Time Machine for a local snapshot. Cleanup stops if the request fails; a snapshot is not an external backup.", $settings.createRestoreSnapshot)
             option("Recommendations", "Show relevant cleanup suggestions from measured results.", $settings.smartRecommendations)
+        case "Monitoring":
+            option("Space reserve alerts", "Check available space while Cairn is running and alert when it remains below your chosen reserve. Nothing is removed.", $settings.reserveEnabled)
+                .onChange(of: settings.reserveEnabled) { _, enabled in
+                    if enabled && !preview {
+                        settings.reservePaused = false
+                        Notify.requestAuth()
+                        StorageControl.shared.start()
+                        Task { await StorageControl.shared.refreshCapacity() }
+                    }
+                }
+            if settings.reserveEnabled {
+                option("Pause alerts", "Keep your target but stop background checks and notifications until resumed.", $settings.reservePaused)
+            }
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Reserve target").font(.system(size: 13, weight: .medium))
+                    Text("An alert threshold, not storage held aside by macOS.").font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                }
+                Spacer()
+                Stepper("\(settings.reserveGB) GB", value: $settings.reserveGB, in: 5...500, step: 5)
+                    .frame(width: 150)
+            }.padding(.vertical, 18)
+            fixed("How it works", "Cairn checks capacity roughly every five minutes while it is open. It never clears files in the background. If Cairn is closed, monitoring stops until it runs again.")
+            if let checked = StorageControl.shared.lastChecked {
+                fixed("Last checked", checked.formatted(date: .abbreviated, time: .shortened))
+            }
         case "Protection":
             fixed("Conversation storage", "Known Codex and ChatGPT session, state and support locations are excluded.")
             fixed("System files & credentials", "Protected by the shared safety guard at scan and action time.")
@@ -98,13 +124,37 @@ struct RecoveryWorkspace: View {
     @State private var confirm = false
     @State private var plan: ScanStore.RemovalLogEntry?
     @State private var availableTrash: Set<UUID> = []
+    @State private var actionJournal: [ActionJournal.Entry] = []
     private let preview = CommandLine.arguments.contains("--preview-ui")
     @State private var samples = [ScanStore.RemovalLogEntry(name: "Build output", originalPath: "~/Library/Developer/Xcode/DerivedData/Sample", trashPath: "~/.Trash/Sample", bytes: 2_300_000_000, date: Date(), category: "xcode"), ScanStore.RemovalLogEntry(name: "Tool-managed cache", originalPath: "Tool command", trashPath: nil, bytes: 400_000_000, date: Date().addingTimeInterval(-86400), category: "dev-caches")]
     private var entries: [ScanStore.RemovalLogEntry] { (preview ? samples : store.removalLog).filter { search.isEmpty || ($0.name + $0.originalPath).localizedCaseInsensitiveContains(search) } }
+    private var needsManualReview: [ActionJournal.Entry] {
+        let recordedPaths = Set(store.removalLog.compactMap(\.trashPath))
+        return actionJournal.filter { entry in
+            entry.state == .pending || (entry.state == .succeeded && entry.trashPath.map { !recordedPaths.contains($0) } == true)
+        }
+    }
     private var inspected: ScanStore.RemovalLogEntry? { entries.first { $0.id == focused } ?? entries.first }
     var body: some View {
         CairnWorkspace(title: "Activity  ›  Recovery", subtitle: "\(entries.count) records", inspectorVisible: inspectorVisible) {
             VStack(spacing: 0) {
+                if !preview, let journalError = ActionJournal.shared.error {
+                    CairnStateView(kind: .attention, title: "Action journal needs attention", message: journalError, compact: true)
+                        .padding(14)
+                }
+                if !needsManualReview.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("ACTION NEEDS MANUAL REVIEW").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(Brand.amber)
+                        Text("A move may have been interrupted or its recovery record may be missing. Cairn will not replay it. Check the original and Trash locations before further cleanup.")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
+                        ForEach(needsManualReview.prefix(5)) { entry in
+                            Text("\(entry.state == .pending ? "Uncertain" : "Recovery record missing") · \(entry.path)")
+                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                        }
+                        Button("Show action journal") { NSWorkspace.shared.activateFileViewerSelecting([ActionJournal.shared.location]) }
+                            .buttonStyle(ControlPanelButtonStyle())
+                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                }
                 WorkspaceColumns(leading: "Operation", trailing: "Estimate · recovery")
                 if !message.isEmpty { CairnStateView(kind: restoreSucceeded ? .completed : .attention, title: restoreSucceeded ? "Item restored" : "Restore could not finish", message: message, compact: true) }
                 if entries.isEmpty { WorkspaceEmpty(title: "No recorded operations", message: "Reviewed cleanups appear here with their original path and recorded Trash location.", icon: "clock.arrow.circlepath") }
@@ -134,5 +184,6 @@ struct RecoveryWorkspace: View {
         guard !preview else { availableTrash = Set(samples.filter(\.recoverable).map(\.id)); return }
         let records = store.removalLog
         availableTrash = await Task.detached { Set(records.filter { $0.recoverable && $0.trashPath.map { FileManager.default.fileExists(atPath: $0) } ?? false }.map(\.id)) }.value
+        actionJournal = await Task.detached(priority: .utility) { ActionJournal.shared.recent }.value
     }
 }

@@ -58,6 +58,10 @@ enum Cleaner {
         guard item.url.resolvingSymlinksInPath().standardizedFileURL == item.resolvedURL.standardizedFileURL else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The location changed since scanning. Run a fresh scan.")
         }
+        guard let scanned = item.sourceIdentity,
+              let current = SourceIdentity.read(item.resolvedURL), scanned == current else {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "The file at this location changed since scanning. Run a fresh scan.")
+        }
         let verdict = SafePaths.evaluate(item.url, allowedRoots: allowedRoots)
         guard verdict.isAllowed else {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,

@@ -4,7 +4,7 @@ import Observation
 
 /// Routes menu actions to the existing window. The menu never owns a scanner.
 @MainActor @Observable final class MenuBarRoute {
-    enum Action: Equatable { case overview, scan, stop, results, activity, storage(String?), preferences(String) }
+    enum Action: Equatable { case overview, changes, makeRoom, scan, stop, results, activity, storage(String?), preferences(String) }
     struct Request: Equatable { let id = UUID(); let action: Action }
     static let shared = MenuBarRoute()
     var pending: Request?
@@ -28,6 +28,16 @@ struct MenuScanStatus {
 }
 
 enum MenuStorageSummary {
+    static func change(current: Int64?, volumeID: String?, readings: [CapacityReading], now: Date = Date()) -> String {
+        guard let current, let volumeID, !volumeID.isEmpty,
+              let previous = readings.filter({ $0.volumeID == volumeID && $0.date < Calendar.current.startOfDay(for: now) })
+                .max(by: { $0.date < $1.date }) else { return "Volume-aware history is still building" }
+        let delta = current - previous.available
+        let from = previous.date.formatted(date: .abbreviated, time: .omitted)
+        if abs(delta) < 1_000_000 { return "Available space is steady since \(from)" }
+        return "\(Fmt.size(abs(delta))) \(delta < 0 ? "less" : "more") available since \(from)"
+    }
+
     static func change(current: Int64?, samples: [StorageHistory.Sample], now: Date = Date()) -> String {
         guard let current, let previous = samples.filter({ $0.date < Calendar.current.startOfDay(for: now) }).max(by: { $0.date < $1.date }) else {
             return "Daily history is still building"
@@ -56,6 +66,8 @@ enum MenuStorageSummary {
     private var drivesRead = false
     private var capacityRow: NSMenuItem?
     private var changeRow: NSMenuItem?
+    private var reserveRow: NSMenuItem?
+    private var pauseRow: NSMenuItem?
     private var drivesRow: NSMenuItem?
     private var preview: Bool { CommandLine.arguments.contains("--preview-ui") }
 
@@ -138,12 +150,13 @@ enum MenuStorageSummary {
 
     private func refresh() {
         guard !preview, refreshTask == nil else { return }
+        let history = StorageControl.shared.latestCapacity
         // Only volume metadata and Cairn's small saved history; no directory walks
         // or diskutil processes. One in-flight task even after repeated menu opens.
         refreshTask = Task {
             let reading = await Task.detached(priority: .utility) {
                 let home = FileManager.default.homeDirectoryForCurrentUser
-                let info = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+                let info = try? home.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeAvailableCapacityForImportantUsageKey])
                 let free = info?.volumeAvailableCapacityForImportantUsage
                 let keys: Set<URLResourceKey> = [.volumeUUIDStringKey, .volumeNameKey, .volumeIsLocalKey, .volumeIsInternalKey, .volumeIsReadOnlyKey, .volumeAvailableCapacityForImportantUsageKey]
                 let locality: Set<URLResourceKey> = [.volumeIsLocalKey, .volumeIsInternalKey]
@@ -154,7 +167,7 @@ enum MenuStorageSummary {
                     return Drive(id: values.volumeUUIDString ?? url.path, name: values.volumeName ?? url.lastPathComponent,
                                  available: values.volumeAvailableCapacityForImportantUsage, readOnly: values.volumeIsReadOnly != false)
                 }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                return Reading(available: free, change: MenuStorageSummary.change(current: free, samples: StorageHistory.load()), drives: drives)
+                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: info?.volumeUUIDString, readings: history), drives: drives)
             }.value
             available = reading.available
             change = reading.change
@@ -171,6 +184,7 @@ enum MenuStorageSummary {
         heading(preview ? "STORAGE · SAMPLE DATA" : "STORAGE")
         capacityRow = info("Reading storage…")
         changeRow = info(change)
+        reserveRow = AppSettings.shared.reserveEnabled ? info("Reading your chosen reserve…") : nil
         menu.addItem(.separator())
         let status = scanStatus()
         action(status.scanning ? "Stop scan" : "Scan Mac", symbol: status.scanning ? "stop.circle" : "magnifyingglass", key: "r", route: status.scanning ? .stop : .scan,
@@ -183,6 +197,17 @@ enum MenuStorageSummary {
         if status.operationBusy { info("An operation is in progress") }
         else if status.otherScanBusy { info("Another scan is running") }
         action("Recent activity", symbol: "clock.arrow.circlepath", route: .activity)
+        action("Changes…", symbol: "chart.xyaxis.line", route: .changes)
+        action("Make room…", symbol: "plus.circle", route: .makeRoom)
+        if AppSettings.shared.reserveEnabled {
+            pauseRow = NSMenuItem(title: "", action: #selector(toggleReservePause), keyEquivalent: "")
+            pauseRow?.target = self
+            pauseRow?.isEnabled = !preview
+            if let pauseRow { menu.addItem(pauseRow) }
+        } else {
+            pauseRow = nil
+            action("Set up space alerts…", symbol: "bell", route: .preferences("Monitoring"))
+        }
         menu.addItem(.separator())
         drivesRow = NSMenuItem(title: "External drives", action: nil, keyEquivalent: "")
         drivesRow?.image = symbol("externaldrive")
@@ -227,6 +252,15 @@ enum MenuStorageSummary {
             ])
         }
         changeRow?.title = change
+        if let reserveRow {
+            let settings = AppSettings.shared
+            if settings.reservePaused { reserveRow.title = "Space alerts paused · target \(settings.reserveGB) GB" }
+            else if let available {
+                let gap = max(0, Int64(settings.reserveGB) * 1_000_000_000 - available)
+                reserveRow.title = gap == 0 ? "Chosen reserve met · \(settings.reserveGB) GB" : "\(Fmt.size(gap)) below chosen reserve"
+            } else { reserveRow.title = "Chosen reserve · \(settings.reserveGB) GB · reading unavailable" }
+        }
+        pauseRow?.title = AppSettings.shared.reservePaused ? "Resume space alerts" : "Pause space alerts"
         capacityRow?.toolTip = "Available capacity includes space macOS may reclaim.\(readAt.map { " Read at \($0.formatted(date: .omitted, time: .shortened))." } ?? "")"
         let submenu = NSMenu()
         submenu.autoenablesItems = false
@@ -279,5 +313,10 @@ enum MenuStorageSummary {
         let status = scanStatus()
         guard !status.operationBusy && !status.scanning && !status.otherScanBusy else { return }
         NSApp.terminate(nil)
+    }
+    @objc private func toggleReservePause() {
+        guard !preview, AppSettings.shared.reserveEnabled else { return }
+        AppSettings.shared.reservePaused.toggle()
+        updateStorageRows()
     }
 }

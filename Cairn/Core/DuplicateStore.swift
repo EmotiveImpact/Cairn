@@ -221,6 +221,11 @@ private enum DupRemovalEngine {
                     result.errors.append("\(file.url.lastPathComponent): changed, protected, or no verified keeper — rescan")
                     continue
                 }
+                guard let actionID = ActionJournal.shared.begin(path: file.url.path, category: "duplicates") else {
+                    result.failed += 1
+                    result.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; duplicate removal stopped")
+                    return result
+                }
                 do {
                     var trashedURL: NSURL?
                     try fm.trashItem(at: file.url, resultingItemURL: &trashedURL)
@@ -228,9 +233,18 @@ private enum DupRemovalEngine {
                     result.trashed += 1
                     result.bytes += file.estimatedBytes
                     result.removedIDs.insert(file.id)
+                    guard ActionJournal.shared.finish(actionID, succeeded: true, trashPath: (trashedURL as URL?)?.path) else {
+                        result.failed += 1
+                        result.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; duplicate removal stopped")
+                        return result
+                    }
                 } catch {
                     result.failed += 1
                     result.errors.append("\(file.url.lastPathComponent): \((error as NSError).localizedDescription)")
+                    guard ActionJournal.shared.finish(actionID, succeeded: false, trashPath: nil, detail: error.localizedDescription) else {
+                        result.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; duplicate removal stopped")
+                        return result
+                    }
                 }
             }
         }
@@ -249,7 +263,7 @@ private enum DupRemovalEngine {
 @MainActor
 @Observable
 final class DuplicateStore {
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
     var prepareRemoval: () -> Bool = { false }
 
     enum Phase: Equatable { case idle, scanning, finished, cancelled }
@@ -487,6 +501,9 @@ final class DuplicateStore {
     @discardableResult
     func removeSelected() async -> RemovalResult {
         guard prepareRemoval() else { return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]) }
+        guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
+            return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: [ActionJournal.shared.error ?? "Action journal unavailable. Nothing was removed."])
+        }
         guard !isRemoving else {
             return RemovalResult(trashed: 0, failed: 1, bytes: 0,
                                  errors: ["Duplicate removal is already running"])
@@ -521,9 +538,9 @@ final class DuplicateStore {
         }
         // Drop groups that no longer have at least 2 copies.
         groups.removeAll { $0.count < 2 }
-        onRemovals?(batch.history)
-        return RemovalResult(trashed: batch.trashed, failed: batch.failed,
-                             bytes: batch.bytes, errors: batch.errors)
+        let logged = onRemovals?(batch.history) ?? batch.history.isEmpty
+        return RemovalResult(trashed: batch.trashed, failed: batch.failed + (logged ? 0 : 1),
+                             bytes: batch.bytes, errors: batch.errors + (logged ? [] : ["Recovery history could not be saved. Action journal retains the paths; further cleanup is blocked."]))
     }
 
     // MARK: Keeper policy

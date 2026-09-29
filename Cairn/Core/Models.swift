@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 // MARK: - Severity (computed, never assumed)
 
@@ -69,6 +70,18 @@ struct CategoryInfo: Identifiable, Hashable {
 
 // MARK: - ScanItem
 
+/// The filesystem object seen when a result was created. A path can be reused
+/// by a different file after review, so a path comparison alone is insufficient.
+struct SourceIdentity: Equatable, Sendable {
+    let device: UInt64
+    let inode: UInt64
+    static func read(_ url: URL) -> SourceIdentity? {
+        var info = stat()
+        guard lstat(url.path, &info) == 0 else { return nil }
+        return SourceIdentity(device: UInt64(info.st_dev), inode: UInt64(info.st_ino))
+    }
+}
+
 struct ScanItem: Identifiable {
     let id = UUID()
     var url: URL                       // original path as surfaced
@@ -86,6 +99,7 @@ struct ScanItem: Identifiable {
     var permissionDenied: Bool         // size may be incomplete (FDA)
     var volumeURL: URL?                // the volume this lives on (for volume-aware trash)
     var selected: Bool
+    let sourceIdentity: SourceIdentity?
 
     init(
         url: URL,
@@ -102,10 +116,12 @@ struct ScanItem: Identifiable {
         note: String = "",
         permissionDenied: Bool = false,
         volumeURL: URL? = nil,
-        selected: Bool = false
+        selected: Bool = false,
+        sourceIdentity: SourceIdentity? = nil
     ) {
         self.url = url
-        self.resolvedURL = resolvedURL ?? url.resolvingSymlinksInPath()
+        let resolved = resolvedURL ?? url.resolvingSymlinksInPath()
+        self.resolvedURL = resolved
         self.allocatedSize = allocatedSize
         self.itemCount = itemCount
         self.latestModified = latestModified
@@ -119,6 +135,7 @@ struct ScanItem: Identifiable {
         self.permissionDenied = permissionDenied
         self.volumeURL = volumeURL
         self.selected = selected
+        self.sourceIdentity = sourceIdentity ?? SourceIdentity.read(resolved)
     }
 
     var ageDays: Double {

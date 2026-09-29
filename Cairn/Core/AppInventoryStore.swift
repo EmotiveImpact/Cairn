@@ -68,7 +68,7 @@ struct AppEntry: Identifiable {
 @Observable
 final class AppInventoryStore {
     private(set) var isUninstalling = false
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Void)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
     var prepareRemoval: () -> Bool = { false }
 
     private(set) var apps: [AppEntry] = []
@@ -409,6 +409,9 @@ final class AppInventoryStore {
     @discardableResult
     func uninstall(_ entries: [AppEntry]) async -> UninstallSummary {
         guard prepareRemoval() else { return UninstallSummary(failed: entries.count, errors: ["Recovery history is unavailable. No application was removed."]) }
+        guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
+            return UninstallSummary(failed: entries.count, errors: [ActionJournal.shared.error ?? "Action journal unavailable. No application was removed."])
+        }
         guard !isUninstalling, !isScanning else { return UninstallSummary(failed: entries.count, errors: ["Finish the current application operation first."]) }
         isUninstalling = true
         defer { isUninstalling = false }
@@ -440,24 +443,42 @@ final class AppInventoryStore {
                 // All-or-nothing: trash the bundle FIRST. If that fails (busy /
                 // perms / relaunched), bail BEFORE touching the app's data so we
                 // never orphan ~/Library files for a still-installed app.
+                guard let actionID = ActionJournal.shared.begin(path: app.url.path, category: "apps") else {
+                    b.summary.failed += 1
+                    b.summary.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; uninstall stopped")
+                    break
+                }
                 let (bundleOK, bundleBytes, trashURL) = Self.trash(app.url)
+                let journalSaved = ActionJournal.shared.finish(actionID, succeeded: bundleOK,
+                                                               trashPath: trashURL?.path,
+                                                               detail: bundleOK ? nil : "App bundle was not moved")
                 guard bundleOK else {
                     b.summary.failed += 1
                     b.summary.errors.append("\(app.name): could not move to Trash — left untouched")
+                    if !journalSaved { b.summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded"); break }
                     continue
                 }
                 b.summary.history.append(ScanStore.RemovalLogEntry(name: app.name, originalPath: app.url.path, trashPath: trashURL?.path, bytes: bundleBytes, date: Date(), category: "apps"))
                 b.summary.trashedApps += 1
                 b.summary.bytes += bundleBytes
                 b.done.insert(app.id)
+                if !journalSaved {
+                    b.summary.failed += 1
+                    b.summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; uninstall stopped")
+                    break
+                }
             }
             return b
         }.value
 
         // 3) Remove uninstalled apps from the list.
         apps.removeAll { batch.done.contains($0.id) }
-        onRemovals?(batch.summary.history)
-        return batch.summary
+        var result = batch.summary
+        if onRemovals?(batch.summary.history) == false {
+            result.failed += 1
+            result.errors.append("Recovery history could not be saved. The action journal retains the paths; further cleanup is blocked.")
+        }
+        return result
     }
 
     /// Trash a single path IF it passes the conservative app-uninstall guard.

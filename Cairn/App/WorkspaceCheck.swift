@@ -14,6 +14,9 @@ enum WorkspaceCheck {
         check(MenuStorageSummary.change(current: 30_000_000_000, samples: history).contains("more since yesterday"), "Menu free-space increase keeps its direction")
         check(!MenuStorageSummary.change(current: 10_000_000_000, samples: [.init(date: oldDay, freeBytes: 20_000_000_000)]).contains("yesterday"), "Older history is not labelled yesterday")
         check(MenuStorageSummary.change(current: 10_000_000_000, samples: [.init(date: today, freeBytes: 20_000_000_000)]).contains("still building"), "Same-day history does not invent a daily change")
+        let identifiedHistory = [CapacityReading(date: yesterday, volumeID: "internal-A", available: 20_000_000_000, total: 500_000_000_000)]
+        check(MenuStorageSummary.change(current: 10_000_000_000, volumeID: "internal-A", readings: identifiedHistory).contains("less"), "Menu compares matching-volume capacity")
+        check(MenuStorageSummary.change(current: 10_000_000_000, volumeID: "internal-B", readings: identifiedHistory).contains("still building"), "Menu refuses a replacement volume's history")
         check(MenuScanStatus().canStart, "Idle menu allows an explicit scan")
         check(!MenuScanStatus(scanning: true).canStart && !MenuScanStatus(operationBusy: true).canStart && !MenuScanStatus(otherScanBusy: true).canStart, "Menu blocks overlapping operations")
         // Scan comparison must never turn missing or incompatible data into savings.
@@ -43,6 +46,34 @@ enum WorkspaceCheck {
         later = external; later.date = Date(timeIntervalSince1970: 200)
         check(!ScanComparison.compare([external, later]).comparable, "External-drive comparisons withheld until drive scope is tracked")
         check(!ScanComparison.compare([baseline, baseline]).comparable, "Equal measurement times cannot be compared")
+        let candidateA = CandidateReading.Category(id: "a", title: "Build output", icon: "hammer", group: .developer, bytes: 100, complete: true)
+        let candidateB = CandidateReading.Category(id: "b", title: "Browser caches", icon: "globe", group: .general, bytes: 200, complete: false)
+        let candidateScope = ScanComparison.Scope(categories: ["a", "b"], exclusions: [], developerCaches: true, simulators: true, fullDiskAccess: false, externalVolumes: false)
+        let candidateBefore = CandidateReading(date: Date(timeIntervalSince1970: 100), volumeID: "internal-A", scope: candidateScope, categories: [candidateA, candidateB])
+        let candidateAfter = CandidateReading(date: Date(timeIntervalSince1970: 200), volumeID: "internal-A", scope: candidateScope, categories: [
+            .init(id: "a", title: "Build output", icon: "hammer", group: .developer, bytes: 175, complete: true),
+            .init(id: "b", title: "Browser caches", icon: "globe", group: .general, bytes: 500, complete: false)
+        ])
+        check(CandidateComparison.changes([candidateBefore, candidateAfter]).map(\.delta) == [75], "Partial candidate scan compares only complete categories")
+        check(CandidateComparison.changes([candidateBefore, .init(date: Date(timeIntervalSince1970: 200), volumeID: "internal-B", scope: candidateScope, categories: candidateAfter.categories)]).isEmpty, "Candidate comparison refuses another volume")
+        var changedScope = candidateScope; changedScope.exclusions = ["/example"]
+        check(CandidateComparison.changes([candidateBefore, .init(date: Date(timeIntervalSince1970: 200), volumeID: "internal-A", scope: changedScope, categories: candidateAfter.categories)]).isEmpty, "Candidate comparison refuses changed exclusions")
+        check(SpaceGoal.shortfall(available: 12_000_000_000, target: 30_000_000_000) == 18_000_000_000, "Goal calculates measured shortfall")
+        check(SpaceGoal.shortfall(available: nil, target: 30_000_000_000) == nil && !SpaceGoal.reached(available: nil, target: 30_000_000_000), "Unknown capacity never meets a goal")
+        check(SpaceGoal.shortfall(available: 12_000_000_000, target: 30_000_000_000) == 18_000_000_000 && !SpaceGoal.reached(available: 12_000_000_000, target: 30_000_000_000), "Candidate or Trash file sizes never credit an unmeasured goal")
+        check(SpaceGoal.reached(available: 31_000_000_000, target: 30_000_000_000), "Already-met goal needs no cleanup")
+        let firstLow = CapacityReading(date: Date(timeIntervalSince1970: 100), volumeID: "internal-A", available: 12_000_000_000, total: 500_000_000_000)
+        let secondLow = CapacityReading(date: Date(timeIntervalSince1970: 500), volumeID: "internal-A", available: 11_000_000_000, total: 500_000_000_000)
+        check(ReserveAlertPolicy.decide(current: secondLow, previous: firstLow, target: 30_000_000_000, alreadyAlerted: false) == .alert,
+              "Reserve alert needs two spaced low readings")
+        check(ReserveAlertPolicy.decide(current: secondLow, previous: firstLow, target: 30_000_000_000, alreadyAlerted: true) == .unchanged,
+              "Already-sent reserve alert does not repeat")
+        check(ReserveAlertPolicy.decide(current: secondLow, previous: .init(date: Date(timeIntervalSince1970: 300), volumeID: "internal-A", available: 12_000_000_000, total: 500_000_000_000), target: 30_000_000_000, alreadyAlerted: false) == .unchanged,
+              "Rapid low readings do not trigger an alert storm")
+        check(ReserveAlertPolicy.decide(current: secondLow, previous: .init(date: Date(timeIntervalSince1970: 100), volumeID: "internal-B", available: 12_000_000_000, total: 500_000_000_000), target: 30_000_000_000, alreadyAlerted: false) == .unchanged,
+              "Another volume cannot confirm a reserve alert")
+        check(ReserveAlertPolicy.decide(current: .init(date: Date(timeIntervalSince1970: 900), volumeID: "internal-A", available: 33_000_000_000, total: 500_000_000_000), previous: secondLow, target: 30_000_000_000, alreadyAlerted: true) == .clear,
+              "Reserve alert re-arms only after hysteresis")
         let fm = FileManager.default
         let root = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("cairn-workspace-check-\(UUID().uuidString)")
         do {

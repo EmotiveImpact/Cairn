@@ -88,6 +88,7 @@ final class ScanStore {
     private(set) var scanStartedAt: Date?
     private(set) var movedToTrashBytes: Int64 = 0
     private(set) var lastCleanSummary: CleanSummary?
+    private(set) var lastCleanRunID: UUID?
 
     private var scanTask: Task<Void, Never>?
     private var bucketIndex: [String: Int] = [:]
@@ -122,7 +123,10 @@ final class ScanStore {
     private(set) var comparisonReadings: [ScanComparison.Reading] = []
     private(set) var comparisonError: String?
     private var activeComparisonScope: ScanComparison.Scope?
+    /// Invoked only after a completed scan's snapshot and comparison are saved.
+    var onCompletedScan: (() -> Void)?
     var scanComparison: ScanComparison.Result { ScanComparison.compare(comparisonReadings) }
+    var comparisonScopeStable: Bool { activeComparisonScope == comparisonScope() }
     private static var comparisonURL: URL { supportDirectory.appendingPathComponent("scan-comparison.json") }
     private func comparisonScope() -> ScanComparison.Scope {
         let settings = AppSettings.shared
@@ -398,6 +402,7 @@ final class ScanStore {
         if phase == .finished {
             saveSnapshot()   // single, canonical scan-completion save
             recordComparison()
+            onCompletedScan?()
             if AppSettings.shared.scanNotifications {
                 Notify.scanComplete(totalBytes: grandTotal,
                                     items: buckets.reduce(0) { $0 + $1.items.count })
@@ -560,6 +565,9 @@ final class ScanStore {
     /// removes succeeded items from their buckets and records affected sizes.
     func clean(_ items: [ScanItem], proEnabled: Bool) async -> CleanSummary {
         guard !isCleaning, !isScanning, !isRestoring, prepareRemovalLog() else { return CleanSummary(failed: items.count, errors: ["Finish the current operation before cleanup."]) }
+        guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
+            return CleanSummary(failed: items.count, errors: [ActionJournal.shared.error ?? "Action journal unavailable; no cleanup ran."])
+        }
         isCleaning = true
         defer { isCleaning = false }
         guard await ScanGate.shared.acquire() else { return CleanSummary(failed: items.count, errors: ["Cleanup cancelled before starting."]) }
@@ -604,8 +612,19 @@ final class ScanStore {
                 continue
             }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
+            guard let actionID = await Task.detached(priority: .utility, operation: {
+                ActionJournal.shared.begin(path: item.resolvedURL.path, category: item.categoryID)
+            }).value else {
+                summary.interrupted = true
+                summary.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; further cleanup stopped.")
+                break
+            }
             let outcome = await Task.detached(priority: .userInitiated) {
                 Cleaner.clean(item, allowedRoots: roots, proEnabled: proEnabled)
+            }.value
+            let journalSaved = await Task.detached(priority: .utility) {
+                ActionJournal.shared.finish(actionID, succeeded: outcome.ok,
+                                            trashPath: outcome.movedToTrashURL?.path, detail: outcome.error)
             }.value
 
             if let err = outcome.error {
@@ -630,6 +649,11 @@ final class ScanStore {
                 break
             }
             summary.accounting.record(outcome, recoveryRecorded: logEntry != nil)
+            if !journalSaved {
+                summary.interrupted = true
+                summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; further cleanup stopped.")
+                break
+            }
         }
 
         // Remove cleaned items from buckets.
@@ -641,6 +665,7 @@ final class ScanStore {
         movedToTrashBytes += summary.accounting.trashBytes
         ReclaimStats.shared.recordClean(bytes: summary.bytes)   // affected-size estimate, not free capacity
         lastCleanSummary = summary
+        lastCleanRunID = UUID()
         // Re-save the snapshot so the cached dashboard reflects post-clean totals
         // (otherwise the next launch over-reports the reclaimable space).
         if hasScanned { saveSnapshot() }
@@ -655,5 +680,6 @@ final class ScanStore {
         let entries = removalLog.filter { $0.recoverable && $0.trashPath.map(paths.contains) == true }
         for entry in entries { _ = await restoreFromLog(entry) }
         lastCleanSummary = nil
+        lastCleanRunID = nil
     }
 }

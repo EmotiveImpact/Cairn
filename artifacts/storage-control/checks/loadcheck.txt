@@ -1,0 +1,57 @@
+PASS Round 1, request 5: workers exited before gate release
+PASS Round 1, request 4: workers exited before gate release
+PASS Round 1, request 6: workers exited before gate release
+PASS Round 1, request 2: workers exited before gate release
+PASS Round 2, request 1: workers exited before gate release
+PASS Round 2, request 2: workers exited before gate release
+PASS Round 2, request 6: workers exited before gate release
+PASS Round 2, request 4: workers exited before gate release
+PASS Round 3, request 1: workers exited before gate release
+PASS Round 3, request 2: workers exited before gate release
+PASS Round 3, request 4: workers exited before gate release
+PASS Round 3, request 6: workers exited before gate release
+PASS Round 4, request 1: workers exited before gate release
+PASS Round 4, request 2: workers exited before gate release
+PASS Round 4, request 4: workers exited before gate release
+PASS Round 4, request 6: workers exited before gate release
+PASS Round 5, request 1: workers exited before gate release
+PASS Round 5, request 2: workers exited before gate release
+PASS Round 5, request 4: workers exited before gate release
+PASS Round 5, request 6: workers exited before gate release
+PASS Round 6, request 1: workers exited before gate release
+PASS Round 6, request 2: workers exited before gate release
+PASS Round 6, request 6: workers exited before gate release
+PASS Round 6, request 4: workers exited before gate release
+PASS Round 7, request 2: workers exited before gate release
+PASS Round 7, request 6: workers exited before gate release
+PASS Round 7, request 4: workers exited before gate release
+PASS Round 8, request 1: workers exited before gate release
+PASS Round 8, request 2: workers exited before gate release
+PASS Round 8, request 6: workers exited before gate release
+PASS Round 8, request 4: workers exited before gate release
+PASS Round 9, request 1: workers exited before gate release
+PASS Round 9, request 2: workers exited before gate release
+PASS Round 9, request 4: workers exited before gate release
+PASS Round 9, request 6: workers exited before gate release
+PASS Round 10, request 1: workers exited before gate release
+PASS Round 10, request 4: workers exited before gate release
+PASS Round 10, request 6: workers exited before gate release
+PASS Round 10, request 2: workers exited before gate release
+PASS Round 11, request 2: workers exited before gate release
+PASS Round 11, request 6: workers exited before gate release
+PASS Round 11, request 4: workers exited before gate release
+PASS Round 12, request 1: workers exited before gate release
+PASS Round 12, request 2: workers exited before gate release
+PASS Round 12, request 4: workers exited before gate release
+PASS Round 12, request 6: workers exited before gate release
+PASS Gate remains usable after sustained mixed workload
+PASS Only one heavy operation runs at once
+PASS Scanner concurrency stays within four and returns to zero
+PASS Queued cancellation, successful completion and bounded overflow all exercised
+PASS Synthetic workload adds less than 256 MiB resident memory
+PASS Main actor stays responsive during load
+PASS Workload leaves fixture data in place
+LOAD: 72 requests, 12 completed, 36 interrupted, 24 bounded-overflow; 29.09s elapsed
+MEMORY: baseline 10.5 MiB; sampled peak 24.1 MiB; end 24.1 MiB
+RESPONSIVENESS: 1041 heartbeats; largest main-actor gap 0.031s
+Load checks: 0 failures

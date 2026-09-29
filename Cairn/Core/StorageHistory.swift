@@ -40,7 +40,8 @@ enum StorageHistory {
     }
 
     static func load() -> [Sample] {
-        guard let data = try? Data(contentsOf: fileURL),
+        guard (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).map({ $0 <= 512 * 1024 }) == true,
+              let data = try? Data(contentsOf: fileURL), data.count <= 512 * 1024,
               let samples = try? JSONDecoder().decode([Sample].self, from: data) else { return [] }
         return samples
     }
@@ -106,7 +107,7 @@ enum StorageHistory {
             return ("Learning your usage", false)
         }
         guard let days = f.daysUntilFull else {
-            return (f.isFilling ? "No risk in the next year" : "Freeing up space", false)
+            return (f.isFilling ? "No reliable date from legacy history" : "Freeing up space in legacy history", false)
         }
         switch days {
         case 0:          return ("Out of space now", true)

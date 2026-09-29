@@ -33,6 +33,11 @@ final class AppSettings {
     } }
 
     var showSidebarFocus: Bool { didSet { d.set(showSidebarFocus, forKey: "cairn.showSidebarFocus") } }
+    /// Read-only capacity monitoring. This does not arm any cleanup rule.
+    var reserveEnabled: Bool { didSet { d.set(reserveEnabled, forKey: "cairn.reserveEnabled") } }
+    var reservePaused: Bool { didSet { d.set(reservePaused, forKey: "cairn.reservePaused") } }
+    var reserveGB: Int { didSet { d.set(reserveGB, forKey: "cairn.reserveGB") } }
+    var goalGB: Int { didSet { d.set(goalGB, forKey: "cairn.goalGB") } }
 
     // Smart Scan
     var autoScanWeekly: Bool { didSet { d.set(autoScanWeekly, forKey: "cairn.autoScanWeekly") } }
@@ -72,6 +77,10 @@ final class AppSettings {
         openAtLogin = b("cairn.openAtLogin", false)
         showMenuBarItem = b("cairn.showMenuBarItem", true)
         showSidebarFocus = b("cairn.showSidebarFocus", false)
+        reserveEnabled = b("cairn.reserveEnabled", false)
+        reservePaused = b("cairn.reservePaused", false)
+        reserveGB = max(5, min(500, ud.object(forKey: "cairn.reserveGB") == nil ? 30 : ud.integer(forKey: "cairn.reserveGB")))
+        goalGB = max(5, min(1_000, ud.object(forKey: "cairn.goalGB") == nil ? 30 : ud.integer(forKey: "cairn.goalGB")))
         autoScanWeekly = b("cairn.autoScanWeekly", true)
         askBeforeDeleting = b("cairn.askBeforeDeleting", true)
         createRestoreSnapshot = b("cairn.createRestoreSnapshot", false)
