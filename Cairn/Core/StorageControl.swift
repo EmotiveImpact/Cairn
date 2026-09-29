@@ -249,9 +249,12 @@ enum ReserveAlertPolicy {
             } else if revision != nil { throw CocoaError(.fileNoSuchFile) }
             let data = try JSONEncoder().encode(Archive(version: 1, capacity: capacity, candidates: candidates))
             guard data.count <= Self.maxArchiveBytes else { throw CocoaError(.fileWriteOutOfSpace) }
-            try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true,
+            let directory = url.deletingLastPathComponent()
+            try fm.createDirectory(at: directory, withIntermediateDirectories: true,
                                    attributes: [.posixPermissions: 0o700])
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
             try data.write(to: url, options: .atomic)
+            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
             revision = data
         } catch {
             self.error = "Storage history could not be saved. The existing record was preserved; new history is paused."

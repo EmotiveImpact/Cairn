@@ -172,17 +172,24 @@ import Darwin
             try Data("old candidate".utf8).write(to: replaceable)
             let scanned = ScanItem(url: replaceable, allocatedSize: 13, categoryID: "fixture", severity: .safe)
             let originalIdentity = scanned.sourceIdentity
+            let appOrHealthSnapshot = SourceSnapshot.read(replaceable)
             try fm.moveItem(at: replaceable, to: root.appendingPathComponent("old-candidate.bin"))
             try Data("new important content".utf8).write(to: replaceable)
             let replaced = Cleaner.clean(scanned, allowedRoots: [root], proEnabled: true)
             check(originalIdentity != nil && !replaced.ok && replaced.error?.contains("changed since scanning") == true,
                   "Reviewed Trash action refuses a different inode at the same path")
             check(try Data(contentsOf: replaceable) == Data("new important content".utf8), "Replacement content remains untouched")
+            check(appOrHealthSnapshot != nil && appOrHealthSnapshot?.matches(replaceable) == false,
+                  "App and health review snapshots refuse a new object at the same path")
             let intentURL = root.appendingPathComponent("fixture-action-journal.json")
             let intentJournal = ActionJournal(url: intentURL)
             check(intentJournal.prepare(), "Fresh action journal permits an isolated fixture")
             let pendingID = intentJournal.begin(path: replaceable.path, category: "fixture")
             check(pendingID != nil, "Intent is durable before a filesystem action")
+            let journalDirectoryMode = (try fm.attributesOfItem(atPath: root.path)[.posixPermissions] as? NSNumber)?.intValue
+            let journalFileMode = (try fm.attributesOfItem(atPath: intentURL.path)[.posixPermissions] as? NSNumber)?.intValue
+            check(journalDirectoryMode == 0o700 && journalFileMode == 0o600,
+                  "Action journal directory and file are private after atomic save")
             let interruptedJournal = ActionJournal(url: intentURL)
             check(!interruptedJournal.prepare() && interruptedJournal.recent.first?.state == .pending,
                   "Relaunch sees uncertain intent and blocks replay")

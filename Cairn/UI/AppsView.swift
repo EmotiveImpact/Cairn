@@ -350,7 +350,7 @@ struct AppsView: View {
             }
             ForEach([
                 "Only the selected app bundle moves to Trash.",
-                "Running apps are quit automatically before removal.",
+                "Close running apps yourself before removal; Cairn checks again.",
                 "Support files, conversations, preferences and projects stay in place.",
                 "System apps are protected and can't be selected.",
             ], id: \.self) { line in

@@ -23,6 +23,7 @@ struct AppEntry: Identifiable {
     var bundleID: String
     var version: String
     var url: URL                      // the .app bundle
+    var sourceSnapshot: SourceSnapshot? // bundle seen during inventory
     var size: Int64                   // bundle on-disk size
     var supportSize: Int64            // Application Support / Containers / Group Containers
     var leftoverSize: Int64           // Caches / Preferences / Logs / Saved State / HTTPStorages / WebKit
@@ -217,6 +218,7 @@ final class AppInventoryStore {
                 bundleID: info.bundleID,
                 version: info.version,
                 url: raw.url,
+                sourceSnapshot: SourceSnapshot.read(raw.url),
                 size: stats.allocatedSize,
                 supportSize: support,
                 leftoverSize: leftover,
@@ -440,6 +442,11 @@ final class AppInventoryStore {
                     b.summary.errors.append("\(app.name): protected application")
                     continue
                 }
+                guard let snapshot = app.sourceSnapshot, snapshot.matches(app.url) else {
+                    b.summary.failed += 1
+                    b.summary.errors.append("\(app.name): bundle changed since inventory; rescan before removal")
+                    continue
+                }
                 // All-or-nothing: trash the bundle FIRST. If that fails (busy /
                 // perms / relaunched), bail BEFORE touching the app's data so we
                 // never orphan ~/Library files for a still-installed app.
@@ -448,7 +455,7 @@ final class AppInventoryStore {
                     b.summary.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; uninstall stopped")
                     break
                 }
-                let (bundleOK, bundleBytes, trashURL) = Self.trash(app.url)
+                let (bundleOK, bundleBytes, trashURL) = Self.trash(app.url, snapshot: snapshot)
                 let journalSaved = ActionJournal.shared.finish(actionID, succeeded: bundleOK,
                                                                trashPath: trashURL?.path,
                                                                detail: bundleOK ? nil : "App bundle was not moved")
@@ -483,10 +490,11 @@ final class AppInventoryStore {
 
     /// Trash a single path IF it passes the conservative app-uninstall guard.
     /// Returns (success, bytesMoved). Recoverable via Finder's Put Back.
-    private nonisolated static func trash(_ url: URL) -> (Bool, Int64, URL?) {
+    private nonisolated static func trash(_ url: URL, snapshot: SourceSnapshot) -> (Bool, Int64, URL?) {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-        guard isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0, nil) }
+        guard snapshot.matches(url), isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0, nil) }
         let bytes = FileScan.measure(resolved, maxFiles: 40_000).allocatedSize
+        guard snapshot.matches(url), isUninstallSafe(resolved) else { return (false, 0, nil) }
         do {
             var out: NSURL?
             try FileManager.default.trashItem(at: resolved, resultingItemURL: &out)

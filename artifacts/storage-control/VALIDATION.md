@@ -8,6 +8,7 @@ The pre-existing native app and PRD were preserved in local baseline commit `ae9
 - Overview uses the new capacity chart and compatible category changes. A dedicated Changes route has dated readings, a gap-aware plot and links back to specialist screens. The menu uses volume-aware capacity history and offers Changes, Make room and alert controls.
 - Make room accepts a final available-space target, calculates its measured shortfall, and offers only individually reviewed, recoverable Trash candidates from a completed internal scan. It credits no immediate free space for Trash. Review reuses the existing confirmation and executor; the target is met only by a new capacity observation.
 - Trash execution now checks the scanned device/inode before acting on a path. A shared bounded action journal persists per-item intent and outcome across general cleanup, duplicates, apps and health. An interrupted action is surfaced in Activity and blocks further cleanup; it is never replayed automatically.
+- App-bundle and fixable health actions also retain a resolved-path/device/inode snapshot from discovery and refuse a replaced source at execution. The app-removal screen now correctly asks the user to close running apps. New local history files use private file and directory permissions.
 - Optional reserve alerts are off by default, can be paused, poll available capacity at most roughly every five minutes while Cairn runs, require two low readings and use hysteresis. They remove nothing.
 - `AGENTS.md` records the requested test cadence: complete a coherent change, then run its build and suites together. The baseline commit contains this instruction.
 
@@ -15,12 +16,12 @@ The pre-existing native app and PRD were preserved in local baseline commit `ae9
 
 | Check | Result | Evidence |
 |---|---|---|
-| Debug SwiftPM build after the final UI edit | Pass | `checks/debug-build.txt` |
+| Debug SwiftPM build after the source-identity and private-record changes | Pass; cache-access and existing deprecated Security API warnings | `checks/debug-build.txt` |
 | Safety fixtures | Pass | `checks/safetycheck.txt` |
-| Reliability fixtures, including journal interruption/corruption and replacement-inode refusal | 0 failures | `checks/reliabilitycheck.txt` |
+| Reliability fixtures, including journal interruption/corruption, replacement-inode refusal and private record permissions | 0 failures | `checks/reliabilitycheck.txt` |
 | Workspace fixtures, including volume/scope/partial changes, goal arithmetic and reserve-alert hysteresis | 0 failures | `checks/workspacecheck.txt` |
 | Hash/copy footprint and cancellation | Pass; 6 MiB peak footprint growth in this isolated fixture | `checks/hashmemorycheck.txt` |
-| 72-request synthetic scan load | 0 failures; 24.1 MiB sampled RSS peak; 31 ms maximum heartbeat gap | `checks/loadcheck.txt` |
+| 72-request synthetic scan load | 0 failures; 26.6 MiB sampled RSS peak; 61 ms maximum heartbeat gap | `checks/loadcheck.txt` |
 | Native sample-only workspace capture | 16 routes captured at 1120 × 740; Overview, Changes and Make room visually inspected at 1024 × 680 through the UI | `native-preview/` |
 
 The default-size captures show the full graph and its endpoints. At 1024 × 680 the graph and plan controls remained visible; lower supporting content scrolls. Preview selectors and removal actions were disabled. The 1024 × 680 inspection was not saved as a standalone image. No real deletion, relocation, external-drive write, tool-configuration change, service stop, payment, publication or release packaging was performed.
@@ -32,7 +33,7 @@ One isolated QA launch initially started without `--preview-ui` because the desk
 - M1 is partial: the bounded JSON prototype has no SQLite migration, injectable clock/probe/volume identity, root-level measurements or hard-link/clone accounting. It preserves rather than imports the legacy history.
 - M2 has real native captures and minimum-size visual inspection, but no independent VoiceOver, Reduce Motion or long-name matrix. The specialist screens keep their existing style and behaviour.
 - M3 is a review-only goal journey. It has no validated immediate-reclaim adapter and cannot promise to achieve an unmet target by moving files to Trash or copying to an SSD. Typed per-action capabilities and full plan snapshot/version contracts remain to be completed.
-- M4 has a common durable intent/outcome record, but a pending record currently requires manual inspection and has no in-app reconciliation/acknowledgement workflow. App/health source replacement, live writer races, journal crash boundaries and real mutation/restore flows need further fixture and controlled-environment testing. The existing removal log remains the Put Back source.
+- M4 has a common durable intent/outcome record and app/health source-replacement checks, but a pending record currently requires manual inspection and has no in-app reconciliation/acknowledgement workflow. Live writer races, journal crash boundaries and real mutation/restore flows need further fixture and controlled-environment testing. The existing removal log remains the Put Back source.
 - M5 is capacity polling and alert suppression only. Bounded FSEvents dirty-root observation, event-drop reconciliation, sleep/wake and notification-denial tests remain. No unattended cleanup is armed.
 - Physical SSD disconnect/replacement, low-space failures, public signing/notarization, updates, payment and long-duration memory behaviour were not validated. M6 independent Astra review is required before any public release claim.
 

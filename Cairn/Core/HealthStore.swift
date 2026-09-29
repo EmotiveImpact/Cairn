@@ -13,6 +13,12 @@ struct HealthIssue: Identifiable {
     /// True only for issues we can SAFELY remediate by moving the artifact to the
     /// Trash (recoverable). Advice-only issues are always false.
     var fixable: Bool
+    let sourceSnapshot: SourceSnapshot?
+
+    init(title: String, url: URL?, detail: String, fixable: Bool) {
+        self.title = title; self.url = url; self.detail = detail; self.fixable = fixable
+        self.sourceSnapshot = fixable ? url.flatMap(SourceSnapshot.read) : nil
+    }
 }
 
 /// A category of health issues. `actionable` drives the row button: actionable
@@ -162,15 +168,14 @@ final class HealthStore {
         guard await ScanGate.shared.acquire() else { return }
         defer { ScanGate.shared.release() }
 
-        let targets = items.compactMap { issue -> (id: UUID, url: URL)? in
+        let targets = items.compactMap { issue -> HealthTrash.Target? in
             guard issue.fixable, let url = issue.url else { return nil }
-            return (issue.id, url)
+            return HealthTrash.Target(url: url, snapshot: issue.sourceSnapshot)
         }
         guard !targets.isEmpty else { return }
 
-        let urls = targets.map(\.url)
         let outcome = await Task.detached(priority: .userInitiated) {
-            HealthTrash.trashAll(urls)
+            HealthTrash.trashAll(targets)
         }.value
 
         // Drop successfully-trashed issues from their groups. Compare resolved +
@@ -196,6 +201,10 @@ final class HealthStore {
 /// LaunchAgents plist under ~/Library is allowed, but anything escaping HOME (or
 /// the global denylist: Keychains, .ssh, /System…) is rejected. Recoverable.
 enum HealthTrash {
+    struct Target: Sendable {
+        let url: URL
+        let snapshot: SourceSnapshot?
+    }
     struct Outcome {
         var trashed = 0
         var failed = 0
@@ -205,10 +214,16 @@ enum HealthTrash {
         var history: [ScanStore.RemovalLogEntry] = []
     }
 
-    static func trashAll(_ urls: [URL]) -> Outcome {
+    static func trashAll(_ targets: [Target]) -> Outcome {
         var out = Outcome()
-        for url in urls {
+        for target in targets {
+            let url = target.url
             let resolved = url.resolvingSymlinksInPath()
+            guard let snapshot = target.snapshot, snapshot.matches(url) else {
+                out.failed += 1
+                out.errors.append("\(url.lastPathComponent): changed since the health scan; rescan before removal")
+                continue
+            }
             // Recoverable, but still gate on the global safety chokepoint.
             let verdict = SafePaths.evaluate(url, allowedRoots: [FileScan.home])
             guard verdict.isAllowed else {
@@ -223,6 +238,12 @@ enum HealthTrash {
             }
             guard FileScan.exists(resolved) else { out.cleanedURLs.append(url); continue } // already gone
             let size = FileScan.measure(resolved).allocatedSize
+            guard snapshot.matches(url), SafePaths.evaluate(url, allowedRoots: [FileScan.home]).isAllowed,
+                  SafePaths.evaluateContents(resolved).isAllowed else {
+                out.failed += 1
+                out.errors.append("\(url.lastPathComponent): changed or became protected; rescan before removal")
+                continue
+            }
             guard let actionID = ActionJournal.shared.begin(path: resolved.path, category: "health") else {
                 out.failed += 1
                 out.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; health cleanup stopped")

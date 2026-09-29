@@ -82,6 +82,21 @@ struct SourceIdentity: Equatable, Sendable {
     }
 }
 
+/// Captures both the object and its resolved location when a user reviews it.
+/// A later item at the same path is not the reviewed item.
+struct SourceSnapshot: Equatable, Sendable {
+    let resolvedPath: String
+    let identity: SourceIdentity
+
+    static func read(_ url: URL) -> SourceSnapshot? {
+        let resolved = url.resolvingSymlinksInPath().standardizedFileURL
+        guard let identity = SourceIdentity.read(resolved) else { return nil }
+        return SourceSnapshot(resolvedPath: resolved.path, identity: identity)
+    }
+
+    func matches(_ url: URL) -> Bool { Self.read(url) == self }
+}
+
 struct ScanItem: Identifiable {
     let id = UUID()
     var url: URL                       // original path as surfaced
