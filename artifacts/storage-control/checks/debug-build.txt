@@ -5,7 +5,8 @@ warning: 'cairn-native': failed storing manifest for 'cairn-native' in cache: at
 Building for debugging...
 [0/4] Write sources
 [1/4] Write swift-version--58304C5D6DBC2206.txt
-[3/6] Compiling Cairn ReliabilityCheck.swift
+[3/7] Compiling Cairn WorkspaceCheck.swift
+[4/7] Emitting module Cairn
 /Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:45:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
  43 |         rejects("Locked Keychain is an error, not a new trial") {
  44 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
@@ -13,15 +14,8 @@ Building for debugging...
     |                                                                                                `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
  46 |                 return errSecInteractionNotAllowed
  47 |             })
-[4/6] Emitting module Cairn
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:45:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 43 |         rejects("Locked Keychain is an error, not a new trial") {
- 44 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
- 45 |                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
-    |                                                                                                `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 46 |                 return errSecInteractionNotAllowed
- 47 |             })
-[4/7] Write Objects.LinkFileList
-[5/7] Linking Cairn
-[6/7] Applying Cairn
-Build complete! (3.36s)
+[5/7] Compiling Cairn MakeRoomWorkspace.swift
+[5/8] Write Objects.LinkFileList
+[6/8] Linking Cairn
+[7/8] Applying Cairn
+Build complete! (3.00s)

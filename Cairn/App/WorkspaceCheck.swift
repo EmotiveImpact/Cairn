@@ -82,6 +82,14 @@ enum WorkspaceCheck {
             let source = root.appendingPathComponent("export.zip")
             let original = Data((0..<(3 * 1024 * 1024)).map { UInt8($0 % 251) })
             try original.write(to: source)
+            let eligiblePlanItem = ScanItem(url: source, allocatedSize: 1, categoryID: "fixture", severity: .safe)
+            let blockedPlanItems = (0..<120).map { index in
+                ScanItem(url: root.appendingPathComponent("missing-\(index)"), allocatedSize: 1_000_000,
+                         categoryID: "fixture", severity: .safe)
+            }
+            let planOptions = MakeRoomCandidates.select(blockedPlanItems + [eligiblePlanItem], isExcluded: { _ in false })
+            check(planOptions.map(\.id) == [eligiblePlanItem.id],
+                  "Blocked large findings cannot hide a valid plan option beyond the old display cap")
             let cancel = CancelBox()
             let result = try ArchiveCopy.copy(source: source, directory: root.appendingPathComponent("complete"), cancel: cancel, destinationValid: { true }, progress: { _ in })
             check(try Data(contentsOf: result.0) == original, "Full copy content matches")

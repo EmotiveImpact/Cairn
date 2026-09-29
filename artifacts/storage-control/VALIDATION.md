@@ -11,6 +11,7 @@ The pre-existing native app and PRD were preserved in local baseline commit `ae9
 - App-bundle and fixable health actions also retain a resolved-path/device/inode snapshot from discovery and refuse a replaced source at execution. The app-removal screen now correctly asks the user to close running apps. New local history files use private file and directory permissions.
 - Activity now offers a manual review sheet for an interrupted action. Two explicit location checks precede acknowledgement; the journal keeps the outcome marked unknown and never replays the action. A failed acknowledgement leaves the safety block in place.
 - Journal compaction preserves reviewed uncertain entries. If the bounded record fills with them, cleanup stops rather than silently discarding their evidence.
+- Make room now filters ineligible results before its display cap and ranks equal-capability options deterministically. A fixture places a valid candidate after 120 larger blocked findings.
 - Optional reserve alerts are off by default, can be paused, poll available capacity at most roughly every five minutes while Cairn runs, require two low readings and use hysteresis. They remove nothing.
 - `AGENTS.md` records the requested test cadence: complete a coherent change, then run its build and suites together. The baseline commit contains this instruction.
 

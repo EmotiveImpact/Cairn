@@ -30,6 +30,7 @@ PASS Already-sent reserve alert does not repeat
 PASS Rapid low readings do not trigger an alert storm
 PASS Another volume cannot confirm a reserve alert
 PASS Reserve alert re-arms only after hysteresis
+PASS Blocked large findings cannot hide a valid plan option beyond the old display cap
 PASS Full copy content matches
 PASS Original retained unchanged
 PASS Byte count and SHA-256 recorded

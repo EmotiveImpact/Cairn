@@ -1,5 +1,32 @@
 import SwiftUI
 
+/// The planner ranks only candidates that can actually reach the existing
+/// reviewed Trash executor. Filtering precedes the display cap so a long list
+/// of blocked findings cannot hide a valid option farther down the scan.
+enum MakeRoomCandidates {
+    static func select(_ items: [ScanItem], isExcluded: (URL) -> Bool, limit: Int = 60) -> [ScanItem] {
+        var seen: [String] = []
+        var options: [ScanItem] = []
+        let ranked = items.sorted { a, b in
+            if a.severity != b.severity { return a.severity < b.severity }
+            if a.allocatedSize != b.allocatedSize { return a.allocatedSize > b.allocatedSize }
+            return a.resolvedURL.path < b.resolvedURL.path
+        }
+        for item in ranked {
+            if options.count >= limit { break }
+            guard item.isActionable, item.severity != .risky, !item.permissionDenied,
+                  item.sourceIdentity != nil, !isExcluded(item.resolvedURL),
+                  SafePaths.protectedSessionReason(item.resolvedURL) == nil else { continue }
+            guard case .trash = item.cleanMethod else { continue }
+            let path = item.resolvedURL.standardizedFileURL.path
+            guard !seen.contains(where: { path == $0 || path.hasPrefix($0 + "/") || $0.hasPrefix(path + "/") }) else { continue }
+            seen.append(path)
+            options.append(item)
+        }
+        return options
+    }
+}
+
 /// A capacity target with a reviewed path into the existing cleaner. Trash
 /// actions carry zero immediate-reclaim credit, including when their file sizes
 /// are large. Only a fresh capacity observation can complete the user's goal.
@@ -21,19 +48,7 @@ struct MakeRoomWorkspace: View {
     private var actions: [ScanItem] {
         if preview { return Self.sampleActions }
         guard store.phase == .finished, !store.includeExternalVolumes else { return [] }
-        var seen: [String] = []
-        let ordered = store.buckets.flatMap(\.items).sorted { $0.allocatedSize > $1.allocatedSize }
-        return ordered.prefix(120).filter { item in
-            guard item.isActionable, item.severity != .risky, !item.permissionDenied,
-                  item.sourceIdentity != nil,
-                  !AppSettings.shared.isExcluded(item.resolvedURL),
-                  SafePaths.protectedSessionReason(item.resolvedURL) == nil else { return false }
-            guard case .trash = item.cleanMethod else { return false }
-            let path = item.resolvedURL.standardizedFileURL.path
-            guard !seen.contains(where: { path == $0 || path.hasPrefix($0 + "/") || $0.hasPrefix(path + "/") }) else { return false }
-            seen.append(path)
-            return true
-        }.prefix(60).map { $0 }
+        return MakeRoomCandidates.select(store.buckets.flatMap(\.items), isExcluded: AppSettings.shared.isExcluded)
     }
     private var selectedActions: [ScanItem] { actions.filter { selected.contains($0.id) } }
     private var affectedBytes: Int64 { selectedActions.reduce(0) { $0 + $1.allocatedSize } }
