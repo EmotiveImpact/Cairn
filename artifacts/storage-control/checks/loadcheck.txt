@@ -1,47 +1,43 @@
-PASS Round 1, request 5: workers exited before gate release
-PASS Round 1, request 6: workers exited before gate release
-PASS Round 1, request 2: workers exited before gate release
+PASS Round 1, request 1: workers exited before gate release
 PASS Round 1, request 4: workers exited before gate release
-PASS Round 2, request 1: workers exited before gate release
+PASS Round 1, request 2: workers exited before gate release
+PASS Round 1, request 6: workers exited before gate release
 PASS Round 2, request 2: workers exited before gate release
 PASS Round 2, request 6: workers exited before gate release
 PASS Round 2, request 4: workers exited before gate release
 PASS Round 3, request 1: workers exited before gate release
-PASS Round 3, request 4: workers exited before gate release
 PASS Round 3, request 2: workers exited before gate release
 PASS Round 3, request 6: workers exited before gate release
+PASS Round 3, request 4: workers exited before gate release
 PASS Round 4, request 1: workers exited before gate release
 PASS Round 4, request 2: workers exited before gate release
 PASS Round 4, request 6: workers exited before gate release
 PASS Round 4, request 4: workers exited before gate release
 PASS Round 5, request 2: workers exited before gate release
-PASS Round 5, request 4: workers exited before gate release
 PASS Round 5, request 6: workers exited before gate release
+PASS Round 5, request 4: workers exited before gate release
 PASS Round 6, request 1: workers exited before gate release
-PASS Round 6, request 2: workers exited before gate release
 PASS Round 6, request 4: workers exited before gate release
+PASS Round 6, request 2: workers exited before gate release
 PASS Round 6, request 6: workers exited before gate release
-PASS Round 7, request 1: workers exited before gate release
 PASS Round 7, request 2: workers exited before gate release
 PASS Round 7, request 4: workers exited before gate release
 PASS Round 7, request 6: workers exited before gate release
 PASS Round 8, request 1: workers exited before gate release
-PASS Round 8, request 2: workers exited before gate release
 PASS Round 8, request 4: workers exited before gate release
 PASS Round 8, request 6: workers exited before gate release
+PASS Round 8, request 2: workers exited before gate release
 PASS Round 9, request 1: workers exited before gate release
 PASS Round 9, request 2: workers exited before gate release
 PASS Round 9, request 6: workers exited before gate release
 PASS Round 9, request 4: workers exited before gate release
-PASS Round 10, request 1: workers exited before gate release
 PASS Round 10, request 2: workers exited before gate release
 PASS Round 10, request 6: workers exited before gate release
 PASS Round 10, request 4: workers exited before gate release
-PASS Round 11, request 1: workers exited before gate release
+PASS Round 11, request 3: workers exited before gate release
 PASS Round 11, request 2: workers exited before gate release
-PASS Round 11, request 6: workers exited before gate release
 PASS Round 11, request 4: workers exited before gate release
-PASS Round 12, request 1: workers exited before gate release
+PASS Round 11, request 6: workers exited before gate release
 PASS Round 12, request 2: workers exited before gate release
 PASS Round 12, request 4: workers exited before gate release
 PASS Round 12, request 6: workers exited before gate release
@@ -52,7 +48,7 @@ PASS Queued cancellation, successful completion and bounded overflow all exercis
 PASS Synthetic workload adds less than 256 MiB resident memory
 PASS Main actor stays responsive during load
 PASS Workload leaves fixture data in place
-LOAD: 72 requests, 12 completed, 36 interrupted, 24 bounded-overflow; 28.65s elapsed
-MEMORY: baseline 10.4 MiB; sampled peak 26.6 MiB; end 26.7 MiB
-RESPONSIVENESS: 1031 heartbeats; largest main-actor gap 0.061s
+LOAD: 72 requests, 12 completed, 36 interrupted, 24 bounded-overflow; 28.38s elapsed
+MEMORY: baseline 10.4 MiB; sampled peak 24.7 MiB; end 24.8 MiB
+RESPONSIVENESS: 1015 heartbeats; largest main-actor gap 0.032s
 Load checks: 0 failures

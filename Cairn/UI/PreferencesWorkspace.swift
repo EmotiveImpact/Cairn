@@ -125,6 +125,8 @@ struct RecoveryWorkspace: View {
     @State private var plan: ScanStore.RemovalLogEntry?
     @State private var availableTrash: Set<UUID> = []
     @State private var actionJournal: [ActionJournal.Entry] = []
+    @State private var reviewing: ActionJournal.Entry?
+    @State private var reviewMessage = ""
     private let preview = CommandLine.arguments.contains("--preview-ui")
     @State private var samples = [ScanStore.RemovalLogEntry(name: "Build output", originalPath: "~/Library/Developer/Xcode/DerivedData/Sample", trashPath: "~/.Trash/Sample", bytes: 2_300_000_000, date: Date(), category: "xcode"), ScanStore.RemovalLogEntry(name: "Tool-managed cache", originalPath: "Tool command", trashPath: nil, bytes: 400_000_000, date: Date().addingTimeInterval(-86400), category: "dev-caches")]
     private var entries: [ScanStore.RemovalLogEntry] { (preview ? samples : store.removalLog).filter { search.isEmpty || ($0.name + $0.originalPath).localizedCaseInsensitiveContains(search) } }
@@ -148,11 +150,31 @@ struct RecoveryWorkspace: View {
                         Text("A move may have been interrupted or its recovery record may be missing. Cairn will not replay it. Check the original and Trash locations before further cleanup.")
                             .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
                         ForEach(needsManualReview.prefix(5)) { entry in
-                            Text("\(entry.state == .pending ? "Uncertain" : "Recovery record missing") · \(entry.path)")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                            HStack(alignment: .top, spacing: 12) {
+                                Text("\(entry.state == .pending ? "Uncertain" : "Recovery record missing") · \(entry.path)")
+                                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                                Spacer(minLength: 0)
+                                if entry.state == .pending {
+                                    Button("Review…") { reviewing = entry }
+                                        .buttonStyle(ControlPanelButtonStyle())
+                                }
+                            }
                         }
                         Button("Show action journal") { NSWorkspace.shared.activateFileViewerSelecting([ActionJournal.shared.location]) }
                             .buttonStyle(ControlPanelButtonStyle())
+                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if !reviewMessage.isEmpty {
+                    CairnStateView(kind: .completed, title: "Manual review recorded", message: reviewMessage, compact: true)
+                }
+                let reviewed = actionJournal.filter { $0.state == .reviewed }
+                if !reviewed.isEmpty {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("REVIEWED UNCERTAIN ACTIONS").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(Brand.textMuted)
+                        ForEach(Array(reviewed.suffix(3).reversed())) { entry in
+                            Text("\(entry.path) · outcome unknown")
+                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                        }
                     }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
                 }
                 WorkspaceColumns(leading: "Operation", trailing: "Estimate · recovery")
@@ -179,11 +201,65 @@ struct RecoveryWorkspace: View {
         .sheet(isPresented: $confirm) {
             if let entry = plan { WorkspaceConfirmation(title: "Restore \(entry.name)?", explanation: "Return the recorded Trash item to its original path. Existing files will not be overwritten.", entries: [entry.originalPath], actionTitle: "Put Back") { Task { restoreSucceeded = await store.restoreFromLog(entry); message = restoreSucceeded ? "Restored \(entry.name)." : "Restore failed. The history record was retained."; await refresh() } } }
         }
+        .sheet(item: $reviewing) { entry in
+            InterruptedActionReview(entry: entry) {
+                let recorded = await Task.detached(priority: .utility) {
+                    ActionJournal.shared.acknowledgeManualReview(entry.id)
+                }.value
+                if recorded {
+                    reviewMessage = "The safety stop was cleared after your review. Cairn did not change files or decide whether the interrupted move succeeded."
+                    await refresh()
+                }
+                return recorded
+            }
+        }
     }
     private func refresh() async {
         guard !preview else { availableTrash = Set(samples.filter(\.recoverable).map(\.id)); return }
         let records = store.removalLog
         availableTrash = await Task.detached { Set(records.filter { $0.recoverable && $0.trashPath.map { FileManager.default.fileExists(atPath: $0) } ?? false }.map(\.id)) }.value
         actionJournal = await Task.detached(priority: .utility) { ActionJournal.shared.recent }.value
+    }
+}
+
+/// Acknowledgement changes only Cairn's journal. The user must inspect both
+/// locations; a missing Trash path after a crash cannot be reconstructed here.
+private struct InterruptedActionReview: View {
+    let entry: ActionJournal.Entry
+    let onAcknowledge: () async -> Bool
+    @Environment(\.dismiss) private var dismiss
+    @State private var checkedOriginal = false
+    @State private var checkedTrash = false
+    @State private var working = false
+    @State private var failure = false
+
+    var body: some View {
+        CairnDialog(title: "Review interrupted action", subtitle: "The filesystem outcome is unknown. Nothing will be replayed.", height: 520) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Original location").font(.system(size: 12, weight: .semibold))
+                    Text(entry.path).font(.system(size: 11, design: .monospaced)).textSelection(.enabled)
+                    Text("Recorded Trash location").font(.system(size: 12, weight: .semibold))
+                    Text(entry.trashPath ?? "None was recorded. Check Finder Trash for this item and keep any uncertain data.")
+                        .font(.system(size: 11, design: .monospaced)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                    Toggle("I checked the original location and any newer item there.", isOn: $checkedOriginal)
+                    Toggle("I checked Finder Trash and the recovery history.", isOn: $checkedTrash)
+                    Text("Acknowledging clears the block on future cleanup. It does not restore, remove, or mark this action successful. The uncertain record stays in the journal.")
+                        .font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+                    if failure { Text("The review could not be saved. No block was cleared; the journal remains available.").font(.system(size: 11)).foregroundStyle(Brand.amber) }
+                }.frame(maxWidth: .infinity, alignment: .leading)
+            }
+        } actions: {
+            Button("Cancel") { dismiss() }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction)
+            Button("Record manual review") {
+                working = true
+                Task {
+                    if await onAcknowledge() { dismiss() }
+                    else { failure = true; working = false }
+                }
+            }
+            .buttonStyle(ControlPanelButtonStyle(primary: true))
+            .disabled(!checkedOriginal || !checkedTrash || working)
+        }
     }
 }

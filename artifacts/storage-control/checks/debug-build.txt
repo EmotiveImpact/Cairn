@@ -2,161 +2,26 @@ warning: /Users/augustusedem/Library/org.swift.swiftpm/configuration is not acce
 warning: /Users/augustusedem/Library/org.swift.swiftpm/security is not accessible or not writable, disabling user-level cache features.
 warning: /Users/augustusedem/Library/Caches/org.swift.swiftpm is not accessible or not writable, disabling user-level cache features.
 warning: 'cairn-native': failed storing manifest for 'cairn-native' in cache: attempt to write a readonly database
-[0/1] Planning build
 Building for debugging...
 [0/4] Write sources
 [1/4] Write swift-version--58304C5D6DBC2206.txt
-[3/12] Compiling Cairn Models.swift
-[4/36] Compiling Cairn HealthStore.swift
-[5/36] Compiling Cairn StorageControl.swift
-[6/36] Compiling Cairn ActionJournal.swift
-[7/36] Compiling Cairn ReliabilityCheck.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:41:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 39 |         rejects("Locked Keychain is an error, not a new trial") {
- 40 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
- 41 |                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
+[3/6] Compiling Cairn ReliabilityCheck.swift
+/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:45:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
+ 43 |         rejects("Locked Keychain is an error, not a new trial") {
+ 44 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
+ 45 |                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
     |                                                                                                `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 42 |                 return errSecInteractionNotAllowed
- 43 |             })
-[8/68] Compiling Cairn AppInventoryStore.swift
-[9/68] Emitting module Cairn
-[10/68] Compiling Cairn AppsView.swift
-[11/90] Compiling Cairn Scanner.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[12/90] Compiling Cairn SmartTriggers.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[13/90] Compiling Cairn StorageHistory.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[14/90] Compiling Cairn StorageTransfer.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[15/90] Compiling Cairn ToolRunner.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[16/90] Compiling Cairn Licensing.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[17/90] Compiling Cairn Cleaner.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[18/90] Compiling Cairn Regenerability.swift
-/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/Licensing/Licensing.swift:79:45: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 77 |          kSecAttrService as String: "com.emotiveimpact.cairn.license",
- 78 |          kSecAttrAccount as String: account,
- 79 |          kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
-    |                                             `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
- 80 |     }
- 81 |     static func read<T: Decodable>(_ account: String, as: T.Type,
-[19/91] Compiling Cairn CLI.swift
-[20/91] Compiling Cairn CairnApp.swift
-[21/91] Compiling Cairn CairnMenuBar.swift
-[22/91] Compiling Cairn HashMemoryCheck.swift
-[23/91] Compiling Cairn LoadCheck.swift
-[24/91] Compiling Cairn ReadOnlyScanCheck.swift
-[25/91] Compiling Cairn ScanUIMemoryCheck.swift
-[26/91] Compiling Cairn SelfTest.swift
-[27/91] Compiling Cairn RunningApps.swift
-[28/91] Compiling Cairn AICachesScanner.swift
-[29/91] Compiling Cairn AndroidSDKScanner.swift
-[30/91] Compiling Cairn AppCachesScanner.swift
-[31/91] Compiling Cairn BrowserCachesScanner.swift
-[32/91] Compiling Cairn CommunicationCachesScanner.swift
-[33/91] Compiling Cairn CreativeCachesScanner.swift
-[34/91] Compiling Cairn DevCachesScanner.swift
-[35/91] Compiling Cairn SafetyCheck.swift
-[36/91] Compiling Cairn DevProjectsScanner.swift
-[37/91] Compiling Cairn DockerScanner.swift
-[38/91] Compiling Cairn GitMaintenanceScanner.swift
-[39/91] Compiling Cairn IDECachesScanner.swift
-[40/91] Compiling Cairn InstallersScanner.swift
-[41/91] Compiling Cairn LanguageRuntimesScanner.swift
-[42/91] Compiling Cairn LargeOldFilesScanner.swift
-[43/91] Compiling Cairn LogsScanner.swift
-[44/91] Compiling Cairn WorkspaceCheck.swift
-[45/91] Compiling Cairn CleanupAccounting.swift
-[46/91] Compiling Cairn DeviceInfo.swift
-[47/91] Compiling Cairn DuplicateStore.swift
-[48/91] Compiling Cairn FileScanning.swift
-[49/91] Compiling Cairn Notify.swift
-[50/91] Compiling Cairn ScanComparison.swift
-[51/91] Compiling Cairn ScanStore.swift
-[52/91] Compiling Cairn OrphanedAppDataScanner.swift
-[53/91] Compiling Cairn ScannerRegistry.swift
-[54/91] Compiling Cairn TimeMachineSnapshotsScanner.swift
-[55/91] Compiling Cairn TrashScanner.swift
-[56/91] Compiling Cairn XcodeScanner.swift
-[57/91] Compiling Cairn AppShell.swift
-[58/91] Compiling Cairn BrandUI.swift
-[59/91] Compiling Cairn CairnArt.swift
-[60/91] Compiling Cairn SettingsPage.swift
-[61/91] Compiling Cairn SmartScanView.swift
-[62/91] Compiling Cairn StorageAndActivityView.swift
-[63/91] Compiling Cairn StorageWorkspace.swift
-[64/91] Compiling Cairn ToolIcon.swift
-[65/91] Compiling Cairn TransparencyPanel.swift
-[66/91] Compiling Cairn WorkspaceKit.swift
-[67/91] Compiling Cairn OverviewWorkspace.swift
-[68/91] Compiling Cairn PageHero.swift
-[69/91] Compiling Cairn PreferencesWorkspace.swift
-[70/91] Compiling Cairn ProView.swift
-[71/91] Compiling Cairn ReviewSheet.swift
-[72/91] Compiling Cairn ScanningHero.swift
-[73/91] Compiling Cairn SectionView.swift
-[74/91] Compiling Cairn DonutChart.swift
-[75/91] Compiling Cairn DuplicatesView.swift
-[76/91] Compiling Cairn HealthView.swift
-[77/91] Compiling Cairn ItemRow.swift
-[78/91] Compiling Cairn LargeFilesView.swift
-[79/91] Compiling Cairn LibraryWorkspaces.swift
-[80/91] Compiling Cairn MakeRoomWorkspace.swift
-[81/91] Compiling Cairn Missions.swift
-[82/91] Compiling Cairn CairnChromeMaterial.swift
-[83/91] Compiling Cairn CelebrationOverlay.swift
-[84/91] Compiling Cairn ChangesWorkspace.swift
-[85/91] Compiling Cairn ControlPanelButtonStyle.swift
-[86/91] Compiling Cairn DashboardView.swift
-[87/91] Compiling Cairn DeveloperCleanupView.swift
-[88/91] Compiling Cairn DialogKit.swift
-[89/91] Compiling Cairn DiskMapView.swift
-[89/92] Write Objects.LinkFileList
-[90/92] Linking Cairn
-[91/92] Applying Cairn
-Build complete! (8.87s)
+ 46 |                 return errSecInteractionNotAllowed
+ 47 |             })
+[4/6] Emitting module Cairn
+/Users/augustusedem/Downloads/SSD/cairn-native/Cairn/App/ReliabilityCheck.swift:45:96: warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
+ 43 |         rejects("Locked Keychain is an error, not a new trial") {
+ 44 |             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
+ 45 |                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
+    |                                                                                                `- warning: 'kSecUseAuthenticationUIFail' was deprecated in macOS 11.0: Instead of kSecUseAuthenticationUI, use kSecUseAuthenticationContext and set LAContext.interactionNotAllowed property
+ 46 |                 return errSecInteractionNotAllowed
+ 47 |             })
+[4/7] Write Objects.LinkFileList
+[5/7] Linking Cairn
+[6/7] Applying Cairn
+Build complete! (3.36s)

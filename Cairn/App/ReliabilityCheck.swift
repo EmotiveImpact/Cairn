@@ -5,6 +5,10 @@ import Darwin
 /// Isolated failure injection. No real Keychain, scans, preferences or volumes.
 @MainActor enum ReliabilityCheck {
     static func run() async {
+        struct FixtureActionArchive: Encodable {
+            let version: Int
+            let entries: [ActionJournal.Entry]
+        }
         var failures = 0
         func check(_ good: Bool, _ label: String) {
             print("\(good ? "PASS" : "FAIL") \(label)"); if !good { failures += 1 }
@@ -198,6 +202,37 @@ import Darwin
                       "Failure outcome is durably recorded")
             }
             check(ActionJournal(url: intentURL).prepare(), "Completed failure no longer blocks unrelated reviewed work")
+            let reviewURL = root.appendingPathComponent("review-action-journal.json")
+            let reviewJournal = ActionJournal(url: reviewURL)
+            let reviewID = reviewJournal.begin(path: replaceable.path, category: "fixture")
+            let restartedReview = ActionJournal(url: reviewURL)
+            check(reviewID != nil && !restartedReview.prepare(), "Interrupted action remains blocked after relaunch")
+            if let reviewID {
+                check(restartedReview.acknowledgeManualReview(reviewID), "Explicit manual review persists without replay")
+            }
+            let afterReview = ActionJournal(url: reviewURL)
+            check(afterReview.prepare() && afterReview.recent.first?.state == .reviewed &&
+                  afterReview.recent.first?.detail?.contains("unknown") == true,
+                  "Reviewed uncertainty remains visible while new reviewed work can proceed")
+            if let reviewID {
+                check(!reviewJournal.finish(reviewID, succeeded: true, trashPath: nil) &&
+                      ActionJournal(url: reviewURL).recent.first?.state == .reviewed,
+                      "Stale process cannot overwrite a manually reviewed uncertain action")
+            }
+            let fullReviewURL = root.appendingPathComponent("full-reviewed-journal.json")
+            let uncertainEntries = (0..<512).map { _ in
+                ActionJournal.Entry(id: UUID(), date: Date(), path: replaceable.path,
+                                    category: "fixture", state: .reviewed, trashPath: nil,
+                                    detail: "Outcome unknown")
+            }
+            let fullReviewData = try JSONEncoder().encode(FixtureActionArchive(version: 1, entries: uncertainEntries))
+            try fullReviewData.write(to: fullReviewURL)
+            let fullReviewJournal = ActionJournal(url: fullReviewURL)
+            let initiallyReviewable = fullReviewJournal.prepare()
+            let refusedNewAction = fullReviewJournal.begin(path: replaceable.path, category: "fixture") == nil
+            let preservedReviewData = try Data(contentsOf: fullReviewURL)
+            check(initiallyReviewable && refusedNewAction && preservedReviewData == fullReviewData,
+                  "Full journal blocks cleanup rather than discarding reviewed uncertain actions")
             let corruptIntent = root.appendingPathComponent("corrupt-action-journal.json")
             let keepIntent = Data("preserve corrupt intent".utf8)
             try keepIntent.write(to: corruptIntent)

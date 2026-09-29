@@ -56,6 +56,11 @@ PASS Action journal directory and file are private after atomic save
 PASS Relaunch sees uncertain intent and blocks replay
 PASS Failure outcome is durably recorded
 PASS Completed failure no longer blocks unrelated reviewed work
+PASS Interrupted action remains blocked after relaunch
+PASS Explicit manual review persists without replay
+PASS Reviewed uncertainty remains visible while new reviewed work can proceed
+PASS Stale process cannot overwrite a manually reviewed uncertain action
+PASS Full journal blocks cleanup rather than discarding reviewed uncertain actions
 PASS Corrupt action journal is retained and blocks mutation
 PASS Existing verified copy can be checked again
 PASS Changed copy fails re-verification

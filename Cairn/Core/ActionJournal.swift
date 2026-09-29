@@ -5,7 +5,7 @@ import Foundation
 /// The existing removal log remains the Put Back source; this journal exposes
 /// the otherwise invisible gap between a filesystem move and its recovery log.
 final class ActionJournal: @unchecked Sendable {
-    enum State: String, Codable, Sendable { case pending, succeeded, failed }
+    enum State: String, Codable, Sendable { case pending, succeeded, failed, reviewed }
     struct Entry: Codable, Identifiable, Sendable {
         let id: UUID
         let date: Date
@@ -32,7 +32,14 @@ final class ActionJournal: @unchecked Sendable {
         self.url = url ?? base.appendingPathComponent("Cairn", isDirectory: true).appendingPathComponent("action-journal-v1.json")
     }
 
-    var error: String? { lock.lock(); defer { lock.unlock() }; loadLocked(); return problem }
+    var error: String? {
+        lock.lock(); defer { lock.unlock() }; loadLocked()
+        if let problem { return problem }
+        if entries.contains(where: { $0.state == .pending }) {
+            return "An action may have been interrupted. Review its original and Trash locations before more cleanup. Cairn will not replay it."
+        }
+        return nil
+    }
     var recent: [Entry] { lock.lock(); defer { lock.unlock() }; loadLocked(); return entries }
     var location: URL { url }
 
@@ -40,11 +47,7 @@ final class ActionJournal: @unchecked Sendable {
         lock.lock(); defer { lock.unlock() }
         loadLocked()
         guard problem == nil else { return false }
-        if entries.contains(where: { $0.state == .pending }) {
-            problem = "An action may have been interrupted. Review the action journal and its original/Trash paths before more cleanup. No action will be replayed."
-            return false
-        }
-        return true
+        return !entries.contains(where: { $0.state == .pending })
     }
 
     func begin(path: String, category: String) -> UUID? {
@@ -52,8 +55,20 @@ final class ActionJournal: @unchecked Sendable {
         loadLocked()
         guard problem == nil, !entries.contains(where: { $0.state == .pending }) else { return nil }
         if entries.count >= maxEntries {
-            entries.removeAll { $0.state != .pending && $0.date < Date().addingTimeInterval(-90 * 86_400) }
-            if entries.count >= maxEntries { entries = Array(entries.suffix(maxEntries - 1)) }
+            // Never age out an uncertain action, even after a user reviews it.
+            // Only settled successes/failures can be compacted; the separate
+            // removal log remains the source of Put Back history.
+            entries.removeAll {
+                ($0.state == .succeeded || $0.state == .failed) &&
+                $0.date < Date().addingTimeInterval(-90 * 86_400)
+            }
+            while entries.count >= maxEntries {
+                guard let settled = entries.firstIndex(where: { $0.state == .succeeded || $0.state == .failed }) else {
+                    problem = "Action journal is full of uncertain records. It was preserved; further cleanup is blocked."
+                    return nil
+                }
+                entries.remove(at: settled)
+            }
         }
         let id = UUID()
         entries.append(Entry(id: id, date: Date(), path: path, category: category, state: .pending))
@@ -69,6 +84,18 @@ final class ActionJournal: @unchecked Sendable {
         entries[index].state = succeeded ? .succeeded : .failed
         entries[index].trashPath = trashPath
         entries[index].detail = detail.map { String($0.prefix(240)) }
+        return saveLocked()
+    }
+
+    /// Called only after the user has inspected the original location and Trash.
+    /// This releases the safety stop; it does not assert success, restore a file,
+    /// create a Put Back record, or replay the uncertain action.
+    func acknowledgeManualReview(_ id: UUID) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        loadLocked()
+        guard problem == nil, let index = entries.firstIndex(where: { $0.id == id && $0.state == .pending }) else { return false }
+        entries[index].state = .reviewed
+        entries[index].detail = "Manual review acknowledged; filesystem outcome remains unknown."
         return saveLocked()
     }
 
