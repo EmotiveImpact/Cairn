@@ -36,6 +36,12 @@ final class AppSettings {
     /// Read-only capacity monitoring. This does not arm any cleanup rule.
     var reserveEnabled: Bool { didSet { d.set(reserveEnabled, forKey: "cairn.reserveEnabled") } }
     var reservePaused: Bool { didSet { d.set(reservePaused, forKey: "cairn.reservePaused") } }
+    var reservePauseUntil: Date? { didSet {
+        if let reservePauseUntil { d.set(reservePauseUntil, forKey: "cairn.reservePauseUntil") }
+        else { d.removeObject(forKey: "cairn.reservePauseUntil") }
+    } }
+    var locationMonitoringEnabled: Bool { didSet { d.set(locationMonitoringEnabled, forKey: "cairn.locationMonitoringEnabled.v1") } }
+    var reserveQuietHours: Bool { didSet { d.set(reserveQuietHours, forKey: "cairn.reserveQuietHours") } }
     var reserveGB: Int { didSet { d.set(reserveGB, forKey: "cairn.reserveGB") } }
     var goalGB: Int { didSet { d.set(goalGB, forKey: "cairn.goalGB") } }
 
@@ -60,9 +66,7 @@ final class AppSettings {
     var smartRecommendations: Bool { didSet { d.set(smartRecommendations, forKey: "cairn.smartRecommendations") } }
 
     // Developer Tools
-    /// Smart Triggers — clean a tool's regenerable caches when you quit it.
-    /// Pro-gated at the point of use, and only ever touches SAFE + regenerable
-    /// items that go to the Trash.
+    /// Legacy preference retained for compatibility; no executor reads it.
     var cleanOnQuitDevApp: Bool { didSet { d.set(cleanOnQuitDevApp, forKey: "cairn.cleanOnQuitDevApp") } }
     var includeDeveloperCaches: Bool { didSet { d.set(includeDeveloperCaches, forKey: "cairn.includeDeveloperCaches") } }
     var includeSimulators: Bool { didSet { d.set(includeSimulators, forKey: "cairn.includeSimulators") } }
@@ -78,14 +82,17 @@ final class AppSettings {
         showMenuBarItem = b("cairn.showMenuBarItem", true)
         showSidebarFocus = b("cairn.showSidebarFocus", false)
         reserveEnabled = b("cairn.reserveEnabled", false)
+        locationMonitoringEnabled = b("cairn.locationMonitoringEnabled.v1", false)
+        reserveQuietHours = b("cairn.reserveQuietHours", false)
         reservePaused = b("cairn.reservePaused", false)
+        reservePauseUntil = ud.object(forKey: "cairn.reservePauseUntil") as? Date
         reserveGB = max(5, min(500, ud.object(forKey: "cairn.reserveGB") == nil ? 30 : ud.integer(forKey: "cairn.reserveGB")))
         goalGB = max(5, min(1_000, ud.object(forKey: "cairn.goalGB") == nil ? 30 : ud.integer(forKey: "cairn.goalGB")))
         autoScanWeekly = b("cairn.autoScanWeekly", true)
         askBeforeDeleting = b("cairn.askBeforeDeleting", true)
         createRestoreSnapshot = b("cairn.createRestoreSnapshot", false)
         ignoreExternalDrives = b("cairn.ignoreExternalDrives", true)
-        cleanOnQuitDevApp = b("cairn.cleanOnQuitDevApp", false)   // opt-in: it deletes without asking
+        cleanOnQuitDevApp = b("cairn.cleanOnQuitDevApp", false)   // inert legacy setting
         protectSystemFiles = b("cairn.protectSystemFiles", true)
         skipOpenFiles = b("cairn.skipOpenFiles", true)
         secureDeletion = b("cairn.secureDeletion", false)

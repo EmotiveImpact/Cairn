@@ -1,5 +1,7 @@
 import Foundation
 import Observation
+import AppKit
+import UserNotifications
 
 /// One small, local evidence store for the control-panel journey. It does not
 /// infer a writing process, or turn observed bytes into cleanup permission.
@@ -31,8 +33,8 @@ enum CapacityProbe {
 
 /// A category reading is an observation of *cleanup candidates*, never a
 /// measurement of all data owned by an app or of total occupied capacity.
-struct CandidateReading: Codable, Identifiable {
-    struct Category: Codable, Identifiable {
+struct CandidateReading: Codable, Identifiable, Sendable {
+    struct Category: Codable, Identifiable, Sendable {
         let id: String
         let title: String
         let icon: String
@@ -72,6 +74,52 @@ enum CapacitySeries {
             result.append(current)
         }
         return result
+    }
+}
+
+/// Shared chart coverage. A pointer over a missing interval must not select a
+/// distant endpoint and make it look as though that interval was measured.
+struct CapacityPlot {
+    struct Point: Identifiable {
+        let reading: CapacityReading
+        let segment: Int
+        var id: UUID { reading.id }
+    }
+    struct Gap: Identifiable {
+        let before: CapacityReading
+        let after: CapacityReading
+        var id: UUID { after.id }
+        var start: Date { before.date }
+        var end: Date { after.date }
+        var detail: String {
+            "No saved readings · \(start.formatted(date: .abbreviated, time: .shortened)) – \(end.formatted(date: .abbreviated, time: .shortened))"
+        }
+    }
+    let points: [Point]
+    let gaps: [Gap]
+
+    init(readings: [CapacityReading], maximumInterval: TimeInterval) {
+        var points: [Point] = [], gaps: [Gap] = []
+        var previous: CapacityReading?, segment = 0
+        for reading in readings.sorted(by: { $0.date < $1.date }) {
+            if let previous {
+                if reading.volumeID != previous.volumeID { segment += 1 }
+                else if reading.date.timeIntervalSince(previous.date) > maximumInterval {
+                    segment += 1
+                    gaps.append(Gap(before: previous, after: reading))
+                }
+            }
+            points.append(Point(reading: reading, segment: segment))
+            previous = reading
+        }
+        self.points = points; self.gaps = gaps
+    }
+    func gap(at date: Date) -> Gap? {
+        gaps.first { date > $0.start && date < $0.end }
+    }
+    func reading(near date: Date) -> CapacityReading? {
+        guard gap(at: date) == nil else { return nil }
+        return points.min { abs($0.reading.date.timeIntervalSince(date)) < abs($1.reading.date.timeIntervalSince(date)) }?.reading
     }
 }
 
@@ -120,12 +168,14 @@ enum SpaceGoal {
 enum ReserveAlertPolicy {
     enum Decision: Equatable { case alert, clear, unchanged }
     static func decide(current: CapacityReading, previous: CapacityReading?, target: Int64,
-                       alreadyAlerted: Bool, minimumInterval: TimeInterval = 5 * 60) -> Decision {
+                       alreadyAlerted: Bool, urgentAlreadyAlerted: Bool = true, minimumInterval: TimeInterval = 5 * 60) -> Decision {
         guard target > 0 else { return .unchanged }
         if current.available >= target + 2_000_000_000 { return .clear }
+        if current.available < min(target, 2_000_000_000), !urgentAlreadyAlerted { return .alert }
         guard !alreadyAlerted, current.available < target,
               let previous, previous.volumeID == current.volumeID,
               current.date.timeIntervalSince(previous.date) >= minimumInterval,
+              current.date.timeIntervalSince(previous.date) <= 30 * 60,
               previous.available < target else { return .unchanged }
         return .alert
     }
@@ -133,172 +183,313 @@ enum ReserveAlertPolicy {
 
 @MainActor @Observable final class StorageControl {
     static let shared = StorageControl()
-    private struct Archive: Codable {
-        var version: Int
-        var capacity: [CapacityReading]
-        var candidates: [CandidateReading]
-    }
     private static let minimumSampleInterval: TimeInterval = 5 * 60
-    private static let maxArchiveBytes = 2 * 1024 * 1024
-    private static var archiveURL: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support", isDirectory: true)
-        return base.appendingPathComponent("Cairn", isDirectory: true)
-            .appendingPathComponent("storage-control-v1.json")
-    }
-
     private(set) var capacity: [CapacityReading] = []
     private(set) var candidates: [CandidateReading] = []
+    private(set) var locations: [LocationReading] = []
     private(set) var current: CapacityReading?
+    @ObservationIgnored private var reserveObservation: CapacityReading?
     private(set) var error: String?
     private(set) var lastChecked: Date?
+    private(set) var measuringLocations = false
+    private(set) var measurementStatus = ""
+    private(set) var monitoringStatus = "Monitoring is off"
+    private(set) var pendingLocationCount = 0
+    private(set) var notificationStatus = "Notification permission not checked"
+    @ObservationIgnored private var watcher: LocationEventWatcher?
+    @ObservationIgnored private var dirty = DirtyLocationSchedule(rootIDs: Set(ObservedRoot.catalogue().map(\.id)))
+    @ObservationIgnored private var workspaceTokens: [NSObjectProtocol] = []
+    @ObservationIgnored private var pressureSource: DispatchSourceMemoryPressure?
+    private var sleeping = false
+    private var memoryPressure = false
+    private var backgroundMeasurement = false
+    private var nextCapacityCheck = Date.distantPast
     private var loaded = false
-    private var revision: Data?
+    private var sequence: UInt64 = 0
+    @ObservationIgnored private var loadTask: Task<StorageEvidenceSnapshot, Error>?
+    @ObservationIgnored private var refreshTask: Task<Void, Never>?
     @ObservationIgnored private var monitorTask: Task<Void, Never>?
+    @ObservationIgnored private var measurementTask: Task<Void, Never>?
+    @ObservationIgnored private var measurementCancellation: CancelBox?
+    @ObservationIgnored private let evidence: StorageEvidenceStore
+    @ObservationIgnored private let probe: @Sendable () -> CapacityReading?
     private let defaults = UserDefaults.standard
 
-    private init() {}
-
-    var changes: [CandidateChange] { CandidateComparison.changes(candidates) }
-    var latestCapacity: [CapacityReading] {
-        CapacitySeries.visible(stored: capacity, current: current)
+    init(evidence: StorageEvidenceStore = StorageEvidenceStore(),
+         probe: @escaping @Sendable () -> CapacityReading? = { CapacityProbe.read() }) {
+        self.evidence = evidence; self.probe = probe
     }
+    var changes: [CandidateChange] { CandidateComparison.changes(candidates) }
+    var locationChanges: [LocationChange] { LocationComparison.changes(locations) }
+    var latestLocations: [LocationReading] { LocationComparison.latest(locations) }
+    var latestCapacity: [CapacityReading] { CapacitySeries.visible(stored: capacity, current: current) }
     var currentAvailable: Int64? { current?.available }
     var reserveBytes: Int64 { Int64(AppSettings.shared.reserveGB) * 1_000_000_000 }
     var reserveShortfall: Int64? {
         guard AppSettings.shared.reserveEnabled, let free = currentAvailable else { return nil }
         return max(0, reserveBytes - free)
     }
-
-    func load() {
-        guard !loaded else { return }
-        loaded = true
-        let url = Self.archiveURL
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
-        do {
-            guard (try url.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0) <= Self.maxArchiveBytes else {
-                throw CocoaError(.fileReadTooLarge)
-            }
-            let data = try Data(contentsOf: url)
-            guard data.count <= Self.maxArchiveBytes else { throw CocoaError(.fileReadTooLarge) }
-            let archive = try JSONDecoder().decode(Archive.self, from: data)
-            guard archive.version == 1, archive.capacity.allSatisfy({ $0.available >= 0 && $0.total > 0 && !$0.volumeID.isEmpty }),
-                  archive.candidates.allSatisfy({ !$0.volumeID.isEmpty && Set($0.categories.map(\.id)).count == $0.categories.count }) else {
-                throw CocoaError(.fileReadCorruptFile)
-            }
-            capacity = archive.capacity.sorted { $0.date < $1.date }
-            candidates = archive.candidates.sorted { $0.date < $1.date }
-            revision = data
-        } catch {
-            self.error = "Storage history could not be read. The existing file was preserved; new history is paused."
-        }
+    private func apply(_ snapshot: StorageEvidenceSnapshot) {
+        guard snapshot.sequence >= sequence else { return }
+        sequence = snapshot.sequence
+        capacity = snapshot.capacity; candidates = snapshot.candidates; locations = snapshot.locations
     }
-
+    func load() async {
+        guard !loaded else { return }
+        if loadTask == nil { loadTask = Task { try await evidence.load() } }
+        do { if let snapshot = try await loadTask?.value { apply(snapshot) } }
+        catch { self.error = "Storage history could not be read. Existing records are preserved; new history is paused." }
+        loaded = true; loadTask = nil
+    }
     func start() {
-        load()
         guard monitorTask == nil else { return }
+        installLifecycleObservers()
+        configureMonitoring()
         monitorTask = Task { [weak self] in
+            await self?.refreshNotificationStatus()
             await self?.refreshCapacity()
             while !Task.isCancelled {
-                do { try await Task.sleep(for: .seconds(300)) } catch { break }
+                do { try await Task.sleep(for: .seconds(15)) } catch { break }
                 guard let self else { break }
-                if AppSettings.shared.reserveEnabled && !AppSettings.shared.reservePaused { await self.refreshCapacity() }
+                configureMonitoring()
+                guard monitoringEnabled, !sleeping else { continue }
+                if Date() >= nextCapacityCheck {
+                    nextCapacityCheck = Date().addingTimeInterval(300)
+                    await refreshCapacity()
+                }
+                scheduleBackgroundMeasurement()
             }
         }
     }
+    private var monitoringEnabled: Bool {
+        AppSettings.shared.reserveEnabled && !AppSettings.shared.reservePaused
+    }
+    func configureMonitoring() {
+        let settings = AppSettings.shared
+        if settings.reservePaused, let until = settings.reservePauseUntil, until <= Date() {
+            settings.reservePaused = false; settings.reservePauseUntil = nil
+        }
+        guard monitoringEnabled, !sleeping else {
+            watcher?.stop(); watcher = nil
+            if backgroundMeasurement { cancelLocationMeasurement() }
+            monitoringStatus = sleeping ? "Paused while your Mac sleeps" : settings.reservePaused ? "Monitoring paused" : "Monitoring is off"
+            return
+        }
+        guard settings.locationMonitoringEnabled else {
+            watcher?.stop(); watcher = nil
+            if backgroundMeasurement { cancelLocationMeasurement() }
+            monitoringStatus = "Capacity alerts active · folder monitoring is off"
+            return
+        }
+        if watcher == nil {
+            let roots = ObservedRoot.nonOverlapping(ObservedRoot.catalogue())
+            watcher = LocationEventWatcher(roots: roots) { [weak self] ids, gap in
+                Task { @MainActor [weak self] in
+                    guard let self, self.monitoringEnabled, AppSettings.shared.locationMonitoringEnabled, !self.sleeping else { return }
+                    if gap { self.dirty.reconcile(at: Date()) }
+                    else { self.dirty.mark(ids, at: Date()) }
+                    self.pendingLocationCount = self.dirty.pending.count
+                }
+            }
+            dirty.reconcile(at: Date())
+            pendingLocationCount = dirty.pending.count
 
+        }
+        monitoringStatus = watcher == nil ? "Folder events unavailable; capacity alerts remain active" : traversalPauseReason ?? (pendingLocationCount > 0 ? "\(pendingLocationCount) locations waiting for a quiet measurement" : "Watching known locations · no cleanup")
+    }
+    func refreshNotificationStatus() async {
+        guard let center = Notify.center else {
+            notificationStatus = "Notifications unavailable from an unbundled build. Open Cairn.app to enable them."
+            return
+        }
+        let settings = await center.notificationSettings()
+        notificationStatus = settings.authorizationStatus == .denied ? "Notifications denied · reserve status remains visible in Cairn" : settings.authorizationStatus == .notDetermined ? "Notifications not enabled · reserve status remains visible in Cairn" : "Notifications allowed; macOS Focus may silence delivery"
+    }
+    func pauseMonitoring(until: Date?) {
+        AppSettings.shared.reservePaused = true
+        AppSettings.shared.reservePauseUntil = until
+        configureMonitoring()
+    }
+    func resumeMonitoring() {
+        AppSettings.shared.reservePauseUntil = nil
+        AppSettings.shared.reservePaused = false
+        nextCapacityCheck = .distantPast
+        configureMonitoring()
+    }
+    private var traversalPauseReason: String? {
+        if memoryPressure { return "Folder measurements paused for memory pressure" }
+        if ProcessInfo.processInfo.isLowPowerModeEnabled { return "Folder measurements paused in Low Power Mode" }
+        if ProcessInfo.processInfo.thermalState == .serious || ProcessInfo.processInfo.thermalState == .critical { return "Folder measurements paused while your Mac is hot" }
+        guard let current, Date().timeIntervalSince(current.date) < 600 else { return "Waiting for a recent capacity reading" }
+        if current.available < 2_000_000_000 { return "Folder measurements paused below 2 GB available" }
+        if error != nil { return "Folder history paused; review the storage-history message" }
+        return nil
+    }
+    private func scheduleBackgroundMeasurement() {
+        guard watcher != nil, traversalPauseReason == nil, measurementTask == nil else {
+            if backgroundMeasurement && traversalPauseReason != nil { cancelLocationMeasurement() }
+            return
+        }
+        guard let id = dirty.ready(at: Date(), suspended: false).first,
+              let root = ObservedRoot.catalogue().first(where: { $0.id == id }),
+              ScanGate.shared.tryAcquireForMonitoring() else { return }
+        let revision = dirty.begin(id, at: Date())!
+        launchLocationMeasurement(roots: [root], source: "monitor", gateAlreadyHeld: true, revision: revision)
+    }
+    private func installLifecycleObservers() {
+        guard workspaceTokens.isEmpty else { return }
+        let center = NSWorkspace.shared.notificationCenter
+        workspaceTokens.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.sleeping = true; self?.configureMonitoring() }
+        })
+        for name in [NSWorkspace.didWakeNotification, NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
+            workspaceTokens.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in
+                    guard let self else { return }
+                    self.sleeping = false; self.watcher?.stop(); self.watcher = nil
+                    self.nextCapacityCheck = .distantPast; self.configureMonitoring()
+                    await self.refreshCapacity()
+                }
+            })
+        }
+        let pressure = DispatchSource.makeMemoryPressureSource(eventMask: [.normal, .warning, .critical], queue: .main)
+        pressure.setEventHandler { [weak self] in
+            guard let self, let pressure = self.pressureSource else { return }
+            self.memoryPressure = !pressure.data.contains(.normal)
+            if self.memoryPressure { self.cancelLocationMeasurement() }
+            self.configureMonitoring()
+        }
+        pressure.resume(); pressureSource = pressure
+    }
     func refreshCapacity(force: Bool = false) async {
-        load()
-        let reading = await Task.detached(priority: .utility) { CapacityProbe.read() }.value
+        await load()
+        // Await the complete refresh, including publication of the result. A
+        // second caller must not resume with old capacity just because the probe
+        // finished before its first caller returned to the main actor.
+        if let refreshTask { await refreshTask.value; return }
+        let task = Task { await performCapacityRefresh(force: force) }
+        refreshTask = task
+        await task.value
+        refreshTask = nil
+    }
+    private func performCapacityRefresh(force: Bool) async {
+        let reading = await Task.detached(priority: .utility) { [probe] in probe() }.value
         lastChecked = Date()
         guard let reading else {
             current = nil
             if error == nil { error = "Internal storage is unavailable. No capacity change was recorded." }
             return
         }
-        // Concurrent activation/manual refreshes can finish out of order.
-        // Keep the newest observation rather than reverting the visible number.
         if let current, current.date > reading.date { return }
         current = reading
+        // Alert observations remain useful even if a full disk prevents history
+        // writes. Keep one confirming sample; rapid activation reads cannot
+        // continually reset the five-minute confirmation window.
+        let previous = reserveObservation ?? capacity.last
+        considerReserveAlert(reading, previous: previous)
+        if previous == nil || previous?.volumeID != reading.volumeID ||
+            reading.date.timeIntervalSince(previous!.date) >= Self.minimumSampleInterval {
+            reserveObservation = reading
+        }
         if error?.hasPrefix("Internal storage is unavailable") == true { error = nil }
         guard error == nil else { return }
         if !force, let last = capacity.last, last.volumeID == reading.volumeID,
            reading.date.timeIntervalSince(last.date) < Self.minimumSampleInterval { return }
-        capacity.append(reading)
-        pruneAndSave()
-        considerReserveAlert(reading)
+        do {
+            apply(try await evidence.append(capacity: reading))
+        } catch { historyWriteFailed() }
     }
-
-    func recordCompletedScan(_ store: ScanStore) {
-        load()
-        guard error == nil, store.comparisonError == nil, store.phase == .finished,
+    func recordCompletedScan(_ store: ScanStore) async {
+        guard store.comparisonError == nil, store.phase == .finished,
               store.comparisonScopeStable, !store.includeExternalVolumes,
               let volumeID = current?.volumeID,
               let lastComparison = store.comparisonReadings.last,
               let started = store.scanStartedAt, lastComparison.date >= started else { return }
-        let scope = lastComparison.scope
         let readings = store.buckets.map { bucket in
             CandidateReading.Category(id: bucket.id, title: bucket.info.title,
                 icon: bucket.info.systemImage, group: bucket.info.group,
                 bytes: bucket.totalSize, complete: bucket.complete && !bucket.permissionGap)
         }
         guard !readings.isEmpty else { return }
-        candidates.append(CandidateReading(volumeID: volumeID, scope: scope, categories: readings))
-        pruneAndSave()
-    }
-
-    private func pruneAndSave() {
-        let now = Date()
-        let fineCutoff = now.addingTimeInterval(-7 * 86_400)
-        let oldest = now.addingTimeInterval(-90 * 86_400)
-        // Preserve five-minute samples for a week, then one sample per day.
-        var olderDays = Set<String>()
-        var older: [CapacityReading] = []
-        for reading in capacity.reversed() where reading.date >= oldest && reading.date < fineCutoff {
-            let key = reading.volumeID + ":" + String(Int(reading.date.timeIntervalSince1970 / 86_400))
-            if olderDays.insert(key).inserted { older.append(reading) }
-        }
-        capacity = Array((Array(older.reversed()) + capacity.filter { $0.date >= fineCutoff }).suffix(2_300))
-            .sorted { $0.date < $1.date }
-        candidates = Array(candidates.filter { $0.date >= oldest }.suffix(32))
-        save()
-    }
-
-    private func save() {
+        let reading = CandidateReading(volumeID: volumeID, scope: lastComparison.scope, categories: readings)
+        await load()
         guard error == nil else { return }
-        do {
-            let url = Self.archiveURL
-            let fm = FileManager.default
-            if fm.fileExists(atPath: url.path) {
-                guard let revision, try Data(contentsOf: url) == revision else { throw CocoaError(.fileWriteFileExists) }
-            } else if revision != nil { throw CocoaError(.fileNoSuchFile) }
-            let data = try JSONEncoder().encode(Archive(version: 1, capacity: capacity, candidates: candidates))
-            guard data.count <= Self.maxArchiveBytes else { throw CocoaError(.fileWriteOutOfSpace) }
-            let directory = url.deletingLastPathComponent()
-            try fm.createDirectory(at: directory, withIntermediateDirectories: true,
-                                   attributes: [.posixPermissions: 0o700])
-            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: directory.path)
-            try data.write(to: url, options: .atomic)
-            try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-            revision = data
-        } catch {
-            self.error = "Storage history could not be saved. The existing record was preserved; new history is paused."
+        do { apply(try await evidence.append(candidates: reading)) }
+        catch { historyWriteFailed() }
+    }
+    /// Explicit scan/re-measure only. Merely visiting a view cannot traverse files.
+    func measureLocations() {
+        guard measurementTask == nil else { return }
+        launchLocationMeasurement(roots: ObservedRoot.nonOverlapping(ObservedRoot.catalogue()), source: "manual")
+    }
+    private func launchLocationMeasurement(roots: [ObservedRoot], source: String, gateAlreadyHeld: Bool = false, revision: UInt64? = nil) {
+        let exclusions = AppSettings.shared.excludedPaths
+        let cancellation = CancelBox()
+        measurementCancellation = cancellation; backgroundMeasurement = source == "monitor"
+        measuringLocations = true; measurementStatus = gateAlreadyHeld ? "Measuring changed location…" : "Waiting to measure known locations…"
+        measurementTask = Task {
+            defer {
+                measuringLocations = false; measurementStatus = ""; measurementTask = nil
+                measurementCancellation = nil; backgroundMeasurement = false
+                pendingLocationCount = dirty.pending.count
+            }
+            if !gateAlreadyHeld { guard await ScanGate.shared.acquire(.locations) else { return } }
+            defer { ScanGate.shared.release() }
+            guard !cancellation.isCancelled else { return }
+            measurementStatus = "Measuring known locations…"
+            let worker = Task.detached(priority: .utility) {
+                let deadline = ProcessInfo.processInfo.systemUptime + 30
+                return roots.map { root in
+                    var probe = LocationProbe()
+                    probe.seconds = max(0, deadline - ProcessInfo.processInfo.systemUptime)
+                    return autoreleasepool { probe.measure(root, exclusions: exclusions, source: source, cancelled: { cancellation.isCancelled || (source == "monitor" && ScanGate.shared.snapshot.queued > 0) }) }
+                }
+            }
+            let readings = await worker.value
+            if let revision, let reading = readings.first {
+                dirty.finish(reading.root.id, revision: revision, complete: reading.coverage.comparable)
+            }
+            await load()
+            guard error == nil else { return }
+            do { apply(try await evidence.append(locations: readings)) }
+            catch { historyWriteFailed() }
         }
     }
-
-    private func considerReserveAlert(_ reading: CapacityReading) {
+    func cancelLocationMeasurement() {
+        guard measurementTask != nil else { return }
+        measurementStatus = "Stopping location measurement…"
+        measurementCancellation?.cancel(); measurementTask?.cancel()
+    }
+    private func historyWriteFailed() {
+        error = "Storage history could not be saved. Existing records are preserved; new history is paused."
+    }
+    private func considerReserveAlert(_ reading: CapacityReading, previous: CapacityReading?) {
         guard AppSettings.shared.reserveEnabled && !AppSettings.shared.reservePaused else { return }
-        let target = reserveBytes
-        if (defaults.object(forKey: "cairn.reserveAlertTarget") as? NSNumber)?.int64Value != target {
-            defaults.set(target, forKey: "cairn.reserveAlertTarget")
-            defaults.set(false, forKey: "cairn.reserveAlerted")
+        // A bare SwiftPM launch cannot post notifications. Keep the in-app
+        // reserve state, but do not consume the alert's persisted suppression
+        // flags until the packaged app can actually attempt delivery.
+        guard Notify.isAvailable else { return }
+        if AppSettings.shared.reserveQuietHours {
+            let hour = Calendar.current.component(.hour, from: reading.date)
+            if hour >= 22 || hour < 8 { return }
         }
-        switch ReserveAlertPolicy.decide(current: reading, previous: capacity.dropLast().last,
-                                         target: target, alreadyAlerted: defaults.bool(forKey: "cairn.reserveAlerted")) {
-        case .clear: defaults.set(false, forKey: "cairn.reserveAlerted")
+        let target = reserveBytes
+        let key = reading.volumeID + ":" + String(target)
+        if defaults.string(forKey: "cairn.reserveAlertScope") != key {
+            defaults.set(key, forKey: "cairn.reserveAlertScope")
+            defaults.set(false, forKey: "cairn.reserveAlerted")
+            defaults.set(false, forKey: "cairn.reserveUrgentAlerted")
+        }
+        switch ReserveAlertPolicy.decide(current: reading, previous: previous,
+                                         target: target, alreadyAlerted: defaults.bool(forKey: "cairn.reserveAlerted"),
+                                         urgentAlreadyAlerted: defaults.bool(forKey: "cairn.reserveUrgentAlerted")) {
+        case .clear:
+            defaults.set(false, forKey: "cairn.reserveAlerted")
+            defaults.set(false, forKey: "cairn.reserveUrgentAlerted")
         case .unchanged: break
         case .alert:
             defaults.set(true, forKey: "cairn.reserveAlerted")
+            if reading.available < 2_000_000_000 { defaults.set(true, forKey: "cairn.reserveUrgentAlerted") }
             Notify.send(title: "Cairn · Space reserve is low",
                         body: "\(Fmt.size(reading.available)) available on your Mac; your chosen reserve is \(Fmt.size(target)). Open Cairn to review options.")
         }

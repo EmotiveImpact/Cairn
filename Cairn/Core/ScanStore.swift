@@ -8,12 +8,22 @@ import Observation
 @Observable
 final class ScanStore {
     private let customRemovalLogURL: URL?
+    private let recoveryJournal: ActionJournal
     private let restoreFile: @Sendable (URL, URL) -> Bool
     private let recordRestoredBytes: (Int64) -> Void
+    private let fixtureScanners: [CairnScanner]?
+    private let lifecycleCheckpoint: @Sendable (String) -> Void
+    private let cleanFile: @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome
     init(removalLogURL: URL? = nil,
+         actionJournal: ActionJournal? = nil,
          restoreFile: @escaping @Sendable (URL, URL) -> Bool = { Cleaner.restore(from: $0, to: $1) },
-         recordRestoredBytes: ((Int64) -> Void)? = nil) {
-        customRemovalLogURL = removalLogURL; self.restoreFile = restoreFile; self.recordRestoredBytes = recordRestoredBytes ?? { ReclaimStats.shared.recordRestore(bytes: $0) }
+         recordRestoredBytes: ((Int64) -> Void)? = nil,
+         fixtureScanners: [CairnScanner]? = nil,
+         lifecycleCheckpoint: @escaping @Sendable (String) -> Void = { _ in },
+         cleanFile: @escaping @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome = { Cleaner.clean($0, allowedRoots: $1, proEnabled: $2, reviewedSource: $3) }) {
+        self.fixtureScanners = fixtureScanners; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
+        recoveryJournal = actionJournal ?? (removalLogURL.map { ActionJournal(url: $0.appendingPathExtension("actions")) } ?? .shared)
+        customRemovalLogURL = removalLogURL; self.restoreFile = restoreFile; self.recordRestoredBytes = recordRestoredBytes ?? { if removalLogURL == nil { ReclaimStats.shared.recordRestore(bytes: $0) } }
     }
 
     enum Phase: Equatable { case idle, scanning, finished, cancelled }
@@ -41,7 +51,9 @@ final class ScanStore {
             items[index].selected.toggle()
         }
 
-        mutating func append(_ item: ScanItem) {
+        mutating func append(_ incoming: ScanItem) {
+            var item = incoming
+            if !item.isActionable || item.severity == .risky { item.selected = false }
             items.append(item)
             if item.isActionable { runningTotal += item.allocatedSize }
         }
@@ -58,16 +70,17 @@ final class ScanStore {
             transform(&items[index])
             runningTotal += (items[index].isActionable ? items[index].allocatedSize : 0) - before
         }
-        var selectedSize: Int64 { items.lazy.filter { $0.selected }.reduce(0) { $0 + $1.allocatedSize } }
-        var selectedCount: Int { items.lazy.filter { $0.selected }.count }
+        var selectedSize: Int64 { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.reduce(0) { $0 + $1.allocatedSize } }
+        var selectedCount: Int { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.count }
         var actionableCount: Int { items.lazy.filter { $0.isActionable }.count }
         var permissionGap: Bool { items.contains { $0.permissionDenied } }
     }
 
-    struct CleanSummary {
+    struct CleanSummary: Codable, Sendable {
+        struct Restorable: Codable, Sendable { let original: URL; let trash: URL }
         var failed = 0
         var errors: [String] = []
-        var restorable: [(original: URL, trash: URL)] = []
+        var restorable: [Restorable] = []
         var accounting = CleanupAccounting()
         var capacityChanges: [CleanupCapacityChange] = []
         var interrupted = false
@@ -89,6 +102,52 @@ final class ScanStore {
     private(set) var movedToTrashBytes: Int64 = 0
     private(set) var lastCleanSummary: CleanSummary?
     private(set) var lastCleanRunID: UUID?
+    private(set) var cleanupRuns: [CleanupRun] = []
+    private(set) var receiptError: String?
+    private var activeRunIDs: Set<UUID> = []
+    private var receiptRevision: UInt64 = 0
+    func isRunActive(_ id: UUID) -> Bool { activeRunIDs.contains(id) }
+    @ObservationIgnored private lazy var runHistory = CleanupRunHistory(url: removalLogURL.appendingPathExtension("runs"))
+    func loadCleanupRuns() async {
+        guard !isCleaning else { return }
+        let snapshot = await runHistory.load()
+        guard !isCleaning, snapshot.revision >= receiptRevision else { return }
+        receiptRevision = snapshot.revision
+        receiptError = snapshot.error
+        cleanupRuns = snapshot.runs.map { run in
+            var run = run
+            if run.finished == nil && !activeRunIDs.contains(run.id) {
+                run.summary.interrupted = true
+                run.summary.errors.append("This run did not finish. Counts reflect its last saved checkpoint. Review recorded actions for any later or uncertain outcomes; nothing will be replayed.")
+            }
+            return run
+        }
+        if let latest = cleanupRuns.first { lastCleanSummary = latest.summary; lastCleanRunID = latest.id }
+    }
+    func beginSpecialistRun(_ kind: String) async -> CleanupRun? {
+        let run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: .init(), kind: kind)
+        guard await saveRun(run) else { return nil }
+        activeRunIDs.insert(run.id)
+        return run
+    }
+    func finishSpecialistRun(_ run: CleanupRun, summary: CleanSummary) async -> Bool {
+        defer { activeRunIDs.remove(run.id) }
+        var run = run; run.summary = summary; run.finished = Date()
+        let saved = await saveRun(run)
+        var shown = summary
+        if !saved { shown.interrupted = true; shown.errors.append(receiptError ?? "Receipt could not be saved.") }
+        lastCleanSummary = shown; lastCleanRunID = run.id
+        return saved
+    }
+    private func saveRun(_ run: CleanupRun) async -> Bool {
+        receiptError = await runHistory.save(run)
+        guard receiptError == nil else { return false }
+        let snapshot = await runHistory.load()
+        receiptRevision = max(receiptRevision, snapshot.revision)
+        if let index = cleanupRuns.firstIndex(where: { $0.id == run.id }) { cleanupRuns[index] = run }
+        else { cleanupRuns.insert(run, at: 0) }
+        return true
+    }
 
     private var scanTask: Task<Void, Never>?
     private var bucketIndex: [String: Int] = [:]
@@ -210,7 +269,7 @@ final class ScanStore {
 
     /// One recorded action, persisted so Settings can show a real Restore Bin and
     /// Put Back recoverable items long after the celebration toast is gone.
-    struct RemovalLogEntry: Codable, Identifiable {
+    struct RemovalLogEntry: Codable, Identifiable, Sendable {
         var id = UUID()
         let name: String
         let originalPath: String
@@ -218,6 +277,7 @@ final class ScanStore {
         let bytes: Int64
         let date: Date
         let category: String
+        var trashIdentity: SourceIdentity? = nil
         var actionKind: String? = nil   // "trash" or "tool"; older records may be unknown
         var restoredAt: Date? = nil
         var recoverable: Bool { trashPath != nil && restoredAt == nil }
@@ -226,80 +286,89 @@ final class ScanStore {
 
     private(set) var removalLogError: String?
     private(set) var isRestoring = false
-    private var removalLogLoaded = false
-    private var removalLogRevision: Data?
+    private(set) var restoreMessage: String?
     private var removalLogURL: URL { customRemovalLogURL ?? Self.supportDirectory.appendingPathComponent("removal-log.json") }
-
-    func loadRemovalLog() {
-        guard !removalLogLoaded else { return }
-        removalLogLoaded = true
-        guard FileManager.default.fileExists(atPath: removalLogURL.path) else { return }
-        do {
-            let size = try removalLogURL.resourceValues(forKeys: [.fileSizeKey]).fileSize ?? 0
-            guard size <= 20 * 1024 * 1024 else { throw CocoaError(.fileReadTooLarge) }
-            let data = try Data(contentsOf: removalLogURL)
-            let log = try JSONDecoder().decode([RemovalLogEntry].self, from: data)
-            guard Set(log.map(\.id)).count == log.count else { throw CocoaError(.fileReadCorruptFile) }
-            removalLog = log
-            removalLogRevision = data
-        } catch { removalLogError = "Recovery history could not be read. It was preserved; cleanup is blocked until it can be recovered." }
+    @ObservationIgnored private lazy var recoveryHistory = RecoveryHistory(url: removalLogURL)
+    private var recoveryRevision: UInt64 = 0
+    private func applyRecovery(_ snapshot: RecoveryHistory.Snapshot) {
+        guard snapshot.revision >= recoveryRevision else { return }
+        recoveryRevision = snapshot.revision
+        removalLog = snapshot.entries; removalLogError = snapshot.error
     }
-    @discardableResult private func saveRemovalLog() -> Bool {
-        guard removalLogError == nil else { return false }
-        do {
-            if FileManager.default.fileExists(atPath: removalLogURL.path) {
-                guard try Data(contentsOf: removalLogURL) == removalLogRevision else {
-                    throw CocoaError(.fileWriteFileExists)
+    func loadRemovalLog() async { applyRecovery(await recoveryHistory.load()) }
+    func prepareRemovalLog() async -> Bool {
+        let snapshot = await recoveryHistory.prepare(); applyRecovery(snapshot)
+        return snapshot.error == nil
+    }
+    @discardableResult func appendRemovals(_ entries: [RemovalLogEntry]) async -> Bool {
+        let enriched = await Task.detached(priority: .utility) { [recoveryJournal] in
+            let actions = Dictionary(uniqueKeysWithValues: recoveryJournal.recent.map { ($0.id, $0) })
+            return entries.map { entry -> RemovalLogEntry in
+                var entry = entry
+                if let action = actions[entry.id], action.path == entry.originalPath, action.trashPath == entry.trashPath {
+                    entry.trashIdentity = action.trashIdentity; entry.actionKind = action.actionKind
                 }
-            } else if removalLogRevision != nil { throw CocoaError(.fileNoSuchFile) }
-            try FileManager.default.createDirectory(at: removalLogURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(removalLog)
-            try data.write(to: removalLogURL, options: .atomic)
-            removalLogRevision = data
-            return true
-        } catch { removalLogError = "Recovery history could not be saved. Further cleanup is blocked. Existing files and in-memory records are retained."; return false }
+                return entry
+            }
+        }.value
+        let snapshot = await recoveryHistory.append(enriched); applyRecovery(snapshot)
+        guard snapshot.error == nil else { return false }
+        return await Task.detached(priority: .utility) { [recoveryJournal] in
+            recoveryJournal.acknowledgeRecovery(Set(entries.map(\.id)))
+        }.value
     }
-    func prepareRemovalLog() -> Bool {
-        loadRemovalLog()
-        return saveRemovalLog()
-    }
-    @discardableResult func appendRemovals(_ entries: [RemovalLogEntry]) -> Bool {
-        loadRemovalLog()
-        guard removalLogError == nil else { return false }
-        guard !entries.isEmpty else { return true }
-        let known = Set(removalLog.map(\.id))
-        removalLog.insert(contentsOf: entries.filter { !known.contains($0.id) }, at: 0)
-        return saveRemovalLog()
-    }
-    func pruneRemovalLog() {
-        let keepDays = AppSettings.shared.restoreBinKeepDays
-        let cutoff = Date().addingTimeInterval(-Double(max(1, keepDays)) * 86_400)
-        let before = removalLog.count
-        removalLog.removeAll { $0.date < cutoff }
-        if removalLog.count != before { saveRemovalLog() }
+    func pruneRemovalLog() {} // Never silently expire Put Back records.
+    func reconcileActionJournal() async -> Bool {
+        let actions = await Task.detached(priority: .utility) { [recoveryJournal] in recoveryJournal.recent }.value
+        let snapshot = await recoveryHistory.reconcile(actions); applyRecovery(snapshot)
+        guard snapshot.error == nil else { return false }
+        return await Task.detached(priority: .utility) { [recoveryJournal] in
+            recoveryJournal.acknowledgeRecovery(snapshot.acknowledged)
+        }.value
     }
     /// Put a logged item back from the Trash. Returns success. Keep the audit
     /// record if the Trash entry has disappeared; it can still explain a past
     /// removal and should not be silently erased by a failed restore attempt.
     @discardableResult
     func restoreFromLog(_ entry: RemovalLogEntry) async -> Bool {
-        guard !isRestoring, !isCleaning, !isScanning, prepareRemovalLog(),
-              let recorded = removalLog.first(where: { $0.id == entry.id }), recorded.recoverable,
-              let trash = recorded.trashPath else { return false }
+        restoreMessage = nil
+        guard !isRestoring, !isCleaning, !isScanning else { return false }
         isRestoring = true
         defer { isRestoring = false }
-        guard await ScanGate.shared.acquire() else { return false }
+        guard await prepareRemovalLog(),
+              let recorded = removalLog.first(where: { $0.id == entry.id }), recorded.recoverable,
+              let trash = recorded.trashPath else { return false }
+        guard await ScanGate.shared.acquire(.restore) else { return false }
         defer { ScanGate.shared.release() }
         let restore = restoreFile
-        let ok = await Task.detached(priority: .utility) {
-            restore(URL(fileURLWithPath: trash), URL(fileURLWithPath: recorded.originalPath))
+        let journal = recoveryJournal
+        let actionID = await Task.detached(priority: .utility) {
+            guard journal.prepare(), recorded.trashIdentity == nil || SourceIdentity.read(URL(fileURLWithPath: trash)) == recorded.trashIdentity else { return nil as UUID? }
+            return journal.begin(path: trash, category: "restore", affectedBytes: recorded.bytes,
+                actionKind: "restore", relatedRecoveryID: recorded.id, destinationPath: recorded.originalPath)
         }.value
-        if ok, let index = removalLog.firstIndex(where: { $0.id == recorded.id }) {
-            removalLog[index].restoredAt = Date()
+        guard let actionID else { restoreMessage = journal.error ?? "The recorded Trash item is unavailable or changed. No restore ran."; return false }
+        let ok = await Task.detached(priority: .utility) {
+            guard recorded.trashIdentity == nil || SourceIdentity.read(URL(fileURLWithPath: trash)) == recorded.trashIdentity else { return false }
+            return restore(URL(fileURLWithPath: trash), URL(fileURLWithPath: recorded.originalPath))
+        }.value
+        let journalSaved = await Task.detached(priority: .utility) {
+            journal.finish(actionID, succeeded: ok, trashPath: nil, detail: ok ? "Restored to the recorded location" : "Restore refused or failed")
+        }.value
+        if ok {
+            let snapshot = await recoveryHistory.markRestored(recorded.id)
+            applyRecovery(snapshot)
             recordRestoredBytes(recorded.bytes)
-            saveRemovalLog()
+            guard snapshot.error == nil, journalSaved else {
+                restoreMessage = "The item was moved back, but its recovery record could not be fully saved. Review the original location and action journal before retrying."
+                return false
+            }
+            let linked = await Task.detached(priority: .utility) { journal.acknowledgeRecovery([actionID]) }.value
+            if !linked { restoreMessage = "The item was restored and its recovery history saved, but the action journal still needs reconciliation." }
+            return linked
         }
-        return ok
+        restoreMessage = journalSaved ? "Restore was refused or failed. The original was not overwritten; the history was retained." : "Restore outcome could not be recorded. Review both locations before retrying."
+        return false
     }
 
     // MARK: - Scan lifecycle
@@ -307,13 +376,13 @@ final class ScanStore {
     func startScan(includeExternalVolumes external: Bool = false) {
         guard !isCleaning, !isRestoring else { return }
         cancel()
-        let scanners = ScannerRegistry.all()
+        let scanners = fixtureScanners ?? ScannerRegistry.all()
         includeExternalVolumes = external
         fdaGranted = FullDiskAccess.isGranted()
         freeSpaceAtStart = Volumes.homeFree()
         scanStartedAt = Date()
         movedToTrashBytes = 0
-        lastCleanSummary = nil
+        // Keep completed receipts available while a new scan runs.
 
         // Seed buckets in registry order so the sidebar is stable while scanning.
         buckets = scanners.map { Bucket(info: $0.info) }
@@ -325,7 +394,7 @@ final class ScanStore {
         let external = includeExternalVolumes
         let granted = fdaGranted
         scanTask = Task { [weak self] in
-            guard await ScanGate.shared.acquire() else { return }
+            guard await ScanGate.shared.acquire(.scan) else { return }
             defer { ScanGate.shared.release() }
             guard !Task.isCancelled else { return }
             await self?.run(scanners: scanners, includeExternal: external, fdaGranted: granted)
@@ -399,7 +468,7 @@ final class ScanStore {
             return
         }
         if phase == .scanning { phase = .finished; progressText = "Scan complete." }
-        if phase == .finished {
+        if phase == .finished, customRemovalLogURL == nil {
             saveSnapshot()   // single, canonical scan-completion save
             recordComparison()
             onCompletedScan?()
@@ -471,7 +540,7 @@ final class ScanStore {
     }
 
     func selectedItems() -> [ScanItem] {
-        buckets.flatMap { $0.items.filter { $0.selected } }
+        buckets.flatMap { $0.items.filter { $0.selected && $0.isActionable && $0.severity != .risky } }
     }
 
     // MARK: - Space Missions selection
@@ -520,91 +589,85 @@ final class ScanStore {
 
     // MARK: - Cleaning
 
-    /// Smart Triggers entry point: scan ONE category and clean only what is
-    /// unambiguously safe to remove without asking.
-    ///
-    /// Deliberately far stricter than a user-driven clean. Automatic removal has
-    /// no human in the loop, so it takes only items that are SAFE, regenerable,
-    /// and go to the Trash — never `.tool` (which shells out) or `.emptyTrash`
-    /// (which is permanent), and never anything needing a running daemon. Returns
-    /// estimated affected file sizes. Everything flows through `clean`, so the removal
-    /// log, Restore Bin and lifetime total stay correct.
-    func autoClean(categoryID: String) async -> Int64 {
-        guard let scanner = ScannerRegistry.all().first(where: { $0.info.id == categoryID }) else { return 0 }
-
-        guard await ScanGate.shared.acquire() else { return 0 }
-        let found = Collector()
-        let ctx = ScanContext(
-            fdaGranted: FullDiskAccess.isGranted(),
-            includeExternalVolumes: false,
-            minSizeBytes: 5 * 1024 * 1024,
-            emit: { found.add($0) },
-            progress: { _ in },
-            isCancelled: { Task.isCancelled }
-        )
-        await scanner.scan(ctx)
-        ScanGate.shared.release()
-
-        let candidates = found.items.filter { item in
-            guard item.severity == .safe, item.isRegenerable, !item.requiresRunning else { return false }
-            if case .trash = item.cleanMethod { return true }
-            return false
-        }
-        guard !candidates.isEmpty else { return 0 }
-        return await clean(candidates, proEnabled: true).bytes
-    }
-
-    /// Thread-safe sink for a one-off scanner run.
-    private final class Collector: @unchecked Sendable {
-        private let lock = NSLock()
-        private(set) var items: [ScanItem] = []
-        func add(_ item: ScanItem) { lock.lock(); items.append(item); lock.unlock() }
-    }
+    /// Kept as a closed compatibility entry point. Old preferences cannot grant
+    /// consent to remove data. Future rules require their own reviewed contract.
+    func autoClean(categoryID: String) async -> Int64 { 0 }
 
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
-    func clean(_ items: [ScanItem], proEnabled: Bool) async -> CleanSummary {
-        guard !isCleaning, !isScanning, !isRestoring, prepareRemovalLog() else { return CleanSummary(failed: items.count, errors: ["Finish the current operation before cleanup."]) }
-        guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
-            return CleanSummary(failed: items.count, errors: [ActionJournal.shared.error ?? "Action journal unavailable; no cleanup ran."])
+    func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil) async -> CleanSummary {
+        // A stale review can still hand us a legacy `.tool` or permanent Trash
+        // item even though current scanners do not select them. Reject before
+        // journaling, snapshot creation, or any operation on the filesystem.
+        guard items.allSatisfy({ $0.isActionable && $0.severity != .risky }) else {
+            return CleanSummary(failed: items.count, errors: ["One or more items no longer have a supported cleanup action. Run a fresh scan and review again."])
         }
+        guard !isCleaning, !isScanning, !isRestoring else { return CleanSummary(failed: items.count, errors: ["Finish the current operation before cleanup."]) }
         isCleaning = true
         defer { isCleaning = false }
-        guard await ScanGate.shared.acquire() else { return CleanSummary(failed: items.count, errors: ["Cleanup cancelled before starting."]) }
+        guard await prepareRemovalLog() else { return CleanSummary(failed: items.count, errors: [removalLogError ?? "Recovery history unavailable."]) }
+        let journal = recoveryJournal
+        guard await Task.detached(priority: .utility, operation: { journal.prepare() }).value else {
+            return CleanSummary(failed: items.count, errors: [journal.error ?? "Action journal unavailable; no cleanup ran."])
+        }
+        guard await ScanGate.shared.acquire(.cleanup) else { return CleanSummary(failed: items.count, errors: ["Cleanup cancelled before starting."]) }
         defer { ScanGate.shared.release() }
 
+        let goalCapacity: CapacityReading?
+        if reviewedPlan != nil {
+            goalCapacity = await Task.detached(priority: .utility) { CapacityProbe.read() }.value
+        } else { goalCapacity = nil }
+        if let reviewedPlan {
+            guard comparisonScopeStable, !includeExternalVolumes,
+                  Int64(AppSettings.shared.goalGB) * 1_000_000_000 == reviewedPlan.target else {
+                return CleanSummary(failed: items.count, errors: ["The scan settings or target changed. Review a fresh plan."])
+            }
+            if let reason = reviewedPlan.invalidReason(itemIDs: Set(items.map(\.id)), scanStarted: scanStartedAt,
+                exclusions: AppSettings.shared.excludedPaths, fullDiskAccess: FullDiskAccess.isGranted(),
+                developerCaches: AppSettings.shared.includeDeveloperCaches, simulators: AppSettings.shared.includeSimulators, capacity: goalCapacity) {
+                return CleanSummary(failed: items.count, errors: [reason])
+            }
+            if SpaceGoalState.evaluate(current: goalCapacity, target: reviewedPlan.target) == .met {
+                return CleanSummary(errors: ["Your target is already met. No plan actions ran."])
+            }
+        }
+
         let rootsByCategory = Dictionary(
-            ScannerRegistry.all().map { ($0.info.id, $0.allowedRoots) },
+            (fixtureScanners ?? ScannerRegistry.all()).map { ($0.info.id, $0.allowedRoots) },
             uniquingKeysWith: { a, _ in a }
         )
         var summary = CleanSummary()
+        var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary)
+        guard await saveRun(run) else { return CleanSummary(failed: items.count, errors: [receiptError ?? "Receipt history unavailable."]) }
+        activeRunIDs.insert(run.id)
+        defer { activeRunIDs.remove(run.id) }
         let volumes = Array(Set(items.compactMap { $0.volumeURL ?? FileScan.volumeURL(of: $0.resolvedURL) })).sorted { $0.path < $1.path }
         let capacityBefore = await Task.detached(priority: .utility) { volumes.map(CleanupCapacityChange.read) }.value
+        let runID = run.id
+        let execute = cleanFile
         var cleanedIDs = Set<UUID>()
 
         // Do not shut down an app behind the user's back. A live cache can hold
         // unsaved state, so re-check its owner immediately before each action.
 
-        // Optional APFS snapshot before tool actions. This is a local recovery
-        // point, not a backup, and must finish successfully before acting.
-        let hasPermanent = items.contains {
-            switch $0.cleanMethod { case .emptyTrash, .tool: return true; default: return false }
-        }
-        if AppSettings.shared.createRestoreSnapshot && hasPermanent {
-            progressText = "Creating a restore snapshot…"
-            let snapshotOK = await Task.detached(priority: .userInitiated) {
-                (try? ToolRunner.run("tmutil", ["localsnapshot"], timeout: 45).ok) ?? false
-            }.value
-            guard snapshotOK else {
-                summary.failed = items.count
-                summary.errors.append("The local snapshot failed or timed out; no cleanup ran. Turn off the snapshot option only if you want to proceed without it.")
-                return summary
-            }
-        }
-
         for item in items {
+            run.summary = summary
+            guard await saveRun(run) else {
+                summary.interrupted = true; summary.errors.append(receiptError ?? "Receipt checkpoint unavailable."); break
+            }
             var logEntry: RemovalLogEntry?
             if Task.isCancelled { summary.interrupted = true; break }
+            if let reviewedPlan {
+                if let reason = reviewedPlan.invalidReason(itemIDs: Set(items.map(\.id)), scanStarted: scanStartedAt,
+                    exclusions: AppSettings.shared.excludedPaths, fullDiskAccess: FullDiskAccess.isGranted(),
+                    developerCaches: AppSettings.shared.includeDeveloperCaches, simulators: AppSettings.shared.includeSimulators, capacity: goalCapacity) {
+                    summary.interrupted = true; summary.errors.append(reason); break
+                }
+                let matches = await Task.detached(priority: .utility) { reviewedPlan.matchesSource(item) }.value
+                if !matches {
+                    summary.failed += 1; summary.errors.append("\(item.url.lastPathComponent): changed since goal review. Review again."); continue
+                }
+            }
             let runningOwners = RunningApps.runningNow(amongst: item.requiresQuitBundleIDs)
             if !runningOwners.isEmpty {
                 summary.failed += 1
@@ -613,45 +676,48 @@ final class ScanStore {
             }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
             guard let actionID = await Task.detached(priority: .utility, operation: {
-                ActionJournal.shared.begin(path: item.resolvedURL.path, category: item.categoryID)
+                journal.begin(path: item.resolvedURL.path, category: item.categoryID, affectedBytes: item.allocatedSize, actionKind: item.cleanMethod == .trash ? "trash" : "tool", runID: runID)
             }).value else {
                 summary.interrupted = true
-                summary.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; further cleanup stopped.")
+                summary.errors.append(journal.error ?? "Action intent could not be recorded; further cleanup stopped.")
                 break
             }
+            lifecycleCheckpoint("intent")
             let outcome = await Task.detached(priority: .userInitiated) {
-                Cleaner.clean(item, allowedRoots: roots, proEnabled: proEnabled)
+                execute(item, roots, proEnabled, reviewedPlan?.sources[item.id])
             }.value
             let journalSaved = await Task.detached(priority: .utility) {
-                ActionJournal.shared.finish(actionID, succeeded: outcome.ok,
+                journal.finish(actionID, succeeded: outcome.ok,
                                             trashPath: outcome.movedToTrashURL?.path, detail: outcome.error)
             }.value
 
+            lifecycleCheckpoint("outcome")
             if let err = outcome.error {
                 summary.failed += 1
                 summary.errors.append("\(item.url.lastPathComponent): \(err)")
             } else {
                 cleanedIDs.insert(item.id)
                 if let trashURL = outcome.movedToTrashURL {
-                    summary.restorable.append((original: item.resolvedURL, trash: trashURL))
-                    logEntry = RemovalLogEntry(name: item.url.lastPathComponent, originalPath: item.resolvedURL.path,
+                    summary.restorable.append(.init(original: item.resolvedURL, trash: trashURL))
+                    logEntry = RemovalLogEntry(id: actionID, name: item.url.lastPathComponent, originalPath: item.resolvedURL.path,
                                                       trashPath: trashURL.path, bytes: outcome.bytesAffected, date: Date(), category: item.categoryID)
                 } else {
-                    logEntry = RemovalLogEntry(name: item.url.lastPathComponent, originalPath: item.resolvedURL.path,
+                    logEntry = RemovalLogEntry(id: actionID, name: item.url.lastPathComponent, originalPath: item.resolvedURL.path,
                                                       trashPath: nil, bytes: outcome.bytesAffected, date: Date(), category: item.categoryID)
                 }
             }
             logEntry?.actionKind = outcome.usedTool ? "tool" : "trash"
-            if let entry = logEntry, !appendRemovals([entry]) {
+            if let entry = logEntry, !(await appendRemovals([entry])) {
                 summary.accounting.record(outcome, recoveryRecorded: false)
                 summary.interrupted = true
                 summary.errors.append("Recovery history could not be saved; further cleanup stopped.")
                 break
             }
+            lifecycleCheckpoint("recovery")
             summary.accounting.record(outcome, recoveryRecorded: logEntry != nil)
             if !journalSaved {
                 summary.interrupted = true
-                summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; further cleanup stopped.")
+                summary.errors.append(journal.error ?? "Action outcome could not be recorded; further cleanup stopped.")
                 break
             }
         }
@@ -663,12 +729,17 @@ final class ScanStore {
         let capacityAfter = await Task.detached(priority: .utility) { volumes.map(CleanupCapacityChange.read) }.value
         summary.capacityChanges = volumes.indices.map { CleanupCapacityChange(id: volumes[$0].path, before: capacityBefore[$0], after: capacityAfter[$0]) }
         movedToTrashBytes += summary.accounting.trashBytes
-        ReclaimStats.shared.recordClean(bytes: summary.bytes)   // affected-size estimate, not free capacity
+        if customRemovalLogURL == nil { ReclaimStats.shared.recordClean(bytes: summary.bytes) }   // affected-size estimate, not free capacity
+        run.summary = summary; run.finished = Date()
+        if !(await saveRun(run)) {
+            summary.interrupted = true; summary.errors.append(receiptError ?? "Final receipt could not be saved.")
+        }
+        lifecycleCheckpoint("receipt")
         lastCleanSummary = summary
-        lastCleanRunID = UUID()
+        lastCleanRunID = run.id
         // Re-save the snapshot so the cached dashboard reflects post-clean totals
         // (otherwise the next launch over-reports the reclaimable space).
-        if hasScanned { saveSnapshot() }
+        if hasScanned, customRemovalLogURL == nil { saveSnapshot() }
         return summary
     }
 

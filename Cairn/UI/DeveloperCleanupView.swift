@@ -1,16 +1,15 @@
 import SwiftUI
 import AppKit
+import QuickLook
 
 /// Native, compact Developer review. Each row is built from the existing scan
 /// store; selection still flows into the established ReviewSheet and cleaner.
 struct DeveloperCleanupView: View {
     let store: ScanStore
     var section: NavSection = .developer
-    var proEnabled: Bool = false
     var searchText: String = ""
     @Binding var inspectorVisible: Bool
     var onReview: () -> Void
-    var onUpgrade: () -> Void = {}
 
     @State private var expandedBuckets: Set<String> = ["xcode"]
     @State private var inspectedBucketID: String? = "xcode"
@@ -20,6 +19,7 @@ struct DeveloperCleanupView: View {
     @State private var fileSort = "Size"
     @State private var showMap = false
     @State private var showProtected = false
+    @State private var quickLookURL: URL?
     @State private var previewBuckets = DeveloperCleanupView.makePreviewBuckets()
     private let previewMode = CommandLine.arguments.contains("--preview-ui")
 
@@ -97,14 +97,19 @@ struct DeveloperCleanupView: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     listToolbar
+                    if section == .smartScan {
+                        smartScanSummary
+                    } else if section != .largeFiles {
+                        categorySummary
+                    }
                     if section == .largeFiles {
                         HStack {
-                            Picker("File type", selection: $fileFilter) { ForEach(["All Files", "Videos", "Downloads", "Archives", "Disk Images", "Project Backups"], id: \.self) { Text($0) } }.frame(width: 210)
+                            Picker("File type", selection: $fileFilter) { ForEach(["All Files", "Videos", "Downloads", "Archives", "Disk Images", "Project Backups"], id: \.self) { Text($0) } }.cairnFilterSurface().frame(width: 210)
                             Spacer()
-                            Picker("Sort", selection: $fileSort) { ForEach(["Size", "Name", "Modified"], id: \.self) { Text($0) } }.frame(width: 145)
+                            Picker("Sort", selection: $fileSort) { ForEach(["Size", "Name", "Modified"], id: \.self) { Text($0) } }.cairnFilterSurface().frame(width: 145)
                         }.font(.system(size: 12)).padding(.horizontal, 16).padding(.bottom, 12)
                     }
-                    if !visibleBuckets.isEmpty {
+                    if section != .smartScan && !visibleBuckets.isEmpty {
                         if store.isScanning { CairnStateView(kind: .scanning, title: "Scan in progress", message: store.progressText.isEmpty ? "Reading files. Nothing is being removed." : store.progressText, compact: true) }
                         else if store.phase == .cancelled { CairnStateView(kind: .interrupted, title: "Scan stopped", message: "Results may be incomplete. Rescan to finish measuring before cleanup.", compact: true) }
                     }
@@ -134,9 +139,11 @@ struct DeveloperCleanupView: View {
                     inspector.frame(width: 300).frame(maxHeight: .infinity)
                 }
             }
-            actionBar
+            actionBar.fixedSize(horizontal: false, vertical: true)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Brand.background)
+        .quickLookPreview($quickLookURL)
         .onAppear { if previewMode && section != .developer { previewBuckets = PreviewLibrary.buckets(section) } }
         .sheet(isPresented: $showMap) {
             CairnDialog(title: "Storage map", subtitle: "Measured categories", wide: true, height: 540) {
@@ -144,44 +151,155 @@ struct DeveloperCleanupView: View {
             } actions: { Button("Done") { showMap = false }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction) }
         }
         .onChange(of: section) { _, value in
+            quickLookURL = nil
             inspectedItemID = nil; inspectedBucketID = value == .developer ? "xcode" : nil; expandedBuckets = value == .developer ? ["xcode"] : []
             if previewMode { previewBuckets = value == .developer ? Self.makePreviewBuckets() : PreviewLibrary.buckets(value) }
         }
     }
 
     private var listToolbar: some View {
-        HStack(spacing: 6) {
-            VStack(alignment: .leading, spacing: 7) {
-                Text(section.title).font(.system(size: 23, weight: .regular)).foregroundStyle(Brand.textPrimary)
-                Text(section == .largeFiles ? "Review the files worth a closer look." : "Choose what to review. Your work stays protected.")
-                    .font(.system(size: 12, weight: .regular)).foregroundStyle(Brand.textMuted)
-            }
-            Spacer()
-            if section == .smartScan {
-                Menu("Select…") {
-                    ForEach(Mission.all.filter { $0.id != "ai" }) { mission in
-                        Button(mission.title) { mission.apply(store) }
-                    }
-                }.frame(width: 90).disabled(previewMode || !store.hasScanned)
-                Button { showMap = true } label: { Image(systemName: "square.split.2x2") }.buttonStyle(.plain).help("Storage map").disabled(previewMode || !store.hasScanned)
-            }
-            if section != .largeFiles {
-            Menu {
-                Button("Sort by Size") { sortBySize = true }
-                Button("Sort by Name") { sortBySize = false }
-            } label: {
-                HStack(spacing: 6) {
-                    Text(sortBySize ? "Sort by Size" : "Sort by Name")
-                    Image(systemName: "chevron.down").font(.system(size: 9))
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Text(section.title).font(.system(size: 28, weight: .semibold)).foregroundStyle(Brand.textPrimary)
+                    Text(headerSubtitle).font(.system(size: 12.5, weight: .regular))
+                        .foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .foregroundStyle(Brand.textSecondary)
+                Spacer()
             }
-            .menuStyle(.borderlessButton)
-            .frame(width: 135)
+            .frame(minHeight: 92)
+            .padding(.trailing, 150)
+            if section != .largeFiles {
+                HStack(spacing: 10) {
+                    if section == .smartScan {
+                        Menu("Select…") {
+                            ForEach(Mission.all.filter { $0.id != "ai" }) { mission in
+                                Button(mission.title) { mission.apply(store) }
+                            }
+                        }.frame(width: 90).disabled(previewMode || !store.hasScanned)
+                        Button { showMap = true } label: { Image(systemName: "square.split.2x2") }
+                            .buttonStyle(.plain).help("Storage map").disabled(previewMode || !store.hasScanned)
+                    }
+                    Spacer()
+                    Menu {
+                        Button("Sort by Size") { sortBySize = true }
+                        Button("Sort by Name") { sortBySize = false }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Text(sortBySize ? "Sort by Size" : "Sort by Name")
+                            Image(systemName: "chevron.down").font(.system(size: 9))
+                        }
+                        .foregroundStyle(Brand.textSecondary)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 135)
+                }
+                .frame(height: 28)
             }
         }
         .font(.system(size: 15, weight: .medium))
-        .padding(.horizontal, 26).frame(height: 98)
+        .padding(.horizontal, 26)
+        .padding(.bottom, section == .largeFiles ? 10 : 4)
+    }
+
+    private var headerSubtitle: String {
+        switch section {
+        case .smartScan: return "A focused check for measured items worth your review."
+        case .developer: return "Review build output, package caches and tool-owned data before acting."
+        case .browsers: return "Browser caches and site data have different consequences. Inspect each item."
+        case .ai: return "Review local models and generated media; some may need to be downloaded again."
+        case .creative: return "Inspect render and creative-tool data before choosing an action."
+        case .general: return "Every category has its own requirement and recovery limits."
+        case .largeFiles: return "Review the files worth a closer look. Some may be the only copy."
+        default: return "Choose what to review. Your work stays protected."
+        }
+    }
+
+    private var categorySummary: some View {
+        let items = sourceBuckets.flatMap(\.items)
+        let measuredBytes = items.reduce(Int64(0)) { $0 + $1.allocatedSize }
+        return VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .firstTextBaseline, spacing: 16) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("MEASURED IN THIS CATEGORY")
+                        .font(.system(size: 10.5, weight: .medium)).tracking(0.7)
+                        .foregroundStyle(Brand.textMuted)
+                    Text(items.isEmpty ? "No items measured" : Fmt.size(measuredBytes))
+                        .font(.system(size: 22, weight: .regular)).monospacedDigit()
+                        .foregroundStyle(Brand.textPrimary)
+                }
+                Spacer()
+                Text("\(items.count) item\(items.count == 1 ? "" : "s") · \(sourceBuckets.count) categor\(sourceBuckets.count == 1 ? "y" : "ies")")
+                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            }
+            Text(previewMode ? "Sample data for interface preview. No files have been inspected or changed." :
+                    "These are scanned file-size estimates, not available space or promised savings. Review each requirement below.")
+                .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 26).padding(.vertical, 13)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
+    }
+
+    private var smartScanSummary: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: scanSummaryIcon)
+                    .font(.system(size: 21, weight: .medium))
+                    .foregroundStyle(store.phase == .cancelled ? Brand.amber : Brand.safeCyan)
+                    .frame(width: 26)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(scanSummaryTitle).font(.system(size: 19, weight: .medium))
+                        .foregroundStyle(Brand.textPrimary)
+                    Text(scanSummaryDetail).font(.system(size: 11.5))
+                        .foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if !previewMode, let date = store.lastScanDate, store.phase == .finished {
+                        Text("Started \(date.formatted(date: .abbreviated, time: .shortened))")
+                            .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+            Text(previewMode ? "Sample suggestions · no scan or file action." :
+                    "The results below come from the current scan. No files have been changed; selected items still need review.")
+                .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 26).padding(.top, 10).padding(.bottom, 14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
+    }
+
+    private var scanSummaryTitle: String {
+        if previewMode { return "Sample scan results" }
+        switch store.phase {
+        case .scanning: return "Scan in progress"
+        case .finished: return "Scan complete"
+        case .cancelled: return "Scan interrupted"
+        case .idle: return "Ready to scan"
+        }
+    }
+
+    private var scanSummaryDetail: String {
+        if previewMode { return "Example categories illustrate the review flow." }
+        if store.isScanning { return "\(store.completedCount) of \(store.totalCount) categories completed. Nothing is being removed." }
+        if store.phase == .cancelled { return "Results may be incomplete. Rescan before choosing items." }
+        if store.phase == .finished {
+            return "\(store.completedCount) of \(store.totalCount) categories completed · \(sourceBuckets.flatMap(\.items).count) items measured."
+        }
+        return "Run a scan to see measured categories and review suggestions."
+    }
+
+    private var scanSummaryIcon: String {
+        switch store.phase {
+        case .scanning: return "circle.dotted"
+        case .cancelled: return "exclamationmark.circle.fill"
+        case .finished: return "checkmark.circle.fill"
+        case .idle: return "scope"
+        }
     }
 
     private var tableHeader: some View {
@@ -202,21 +320,31 @@ struct DeveloperCleanupView: View {
 
     private func bucketRow(_ group: VisibleBucket) -> some View {
         let selected = group.bucket.selectedCount > 0
+        let canSelectSafeItems = group.items.contains {
+            $0.severity == .safe && $0.isRegenerable && $0.isActionable
+        }
         let focused = inspectorVisible && inspectedItemID == nil && (inspectedBucketID ?? visibleBuckets.first?.id) == group.id
         return HStack(spacing: 10) {
-            Button {
-                toggleBucketSelection(group.id, clear: selected)
-                inspectorVisible = true
-                inspectedBucketID = group.id
-                inspectedItemID = nil
-            } label: {
-                Image(systemName: selected ? "checkmark.square.fill" : "square")
-                    .font(.system(size: 17)).foregroundStyle(selected ? Brand.blue : Brand.textMuted)
+            if selected || canSelectSafeItems {
+                Button {
+                    toggleBucketSelection(group.id, clear: selected)
+                    inspectorVisible = true
+                    inspectedBucketID = group.id
+                    inspectedItemID = nil
+                } label: {
+                    Image(systemName: selected ? "checkmark.square.fill" : "square")
+                        .font(.system(size: 17)).foregroundStyle(selected ? Brand.blue : Brand.textMuted)
+                        .frame(width: 23)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(selected ? "Clear \(group.bucket.info.title) selection" :
+                                        "Select rebuildable \(group.bucket.info.title) items")
+            } else {
+                Image(systemName: "minus.square")
+                    .font(.system(size: 17)).foregroundStyle(Brand.textMuted)
                     .frame(width: 23)
+                    .accessibilityHidden(true)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(selected ? "Clear \(group.bucket.info.title) selection" :
-                                    "Select rebuildable \(group.bucket.info.title) items")
             Button {
                 inspectorVisible = true
                 inspectedBucketID = group.id
@@ -252,7 +380,7 @@ struct DeveloperCleanupView: View {
             requirement(for: group.items).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 68)
-        .background(focused ? Brand.surfaceSubtle : Brand.background)
+        .background(focused ? Color.white.opacity(0.045) : Brand.background)
     }
 
     private func itemRow(_ item: ScanItem, bucketID: String) -> some View {
@@ -301,7 +429,20 @@ struct DeveloperCleanupView: View {
             requirement(for: [item]).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 40)
-        .background(focused ? Brand.surfaceSubtle : Brand.surfaceSubtle.opacity(0.17))
+        .background(focused ? Color.white.opacity(0.045) : Brand.surfaceSubtle.opacity(0.17))
+        .contextMenu {
+            if section == .largeFiles {
+                Button("Quick Look") { quickLook(item) }
+                    .disabled(previewMode)
+                Button("Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([item.resolvedURL])
+                }.disabled(previewMode)
+                Button("Copy Path") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(item.resolvedURL.path, forType: .string)
+                }.disabled(previewMode)
+            }
+        }
     }
 
     private var protectedRow: some View {
@@ -368,8 +509,9 @@ struct DeveloperCleanupView: View {
                 .buttonStyle(ControlPanelButtonStyle(primary: true))
                 .disabled(previewMode || store.selectedCount == 0)
         }
-        .padding(.horizontal, 20).frame(height: 64)
-        .background(Brand.deepPanel)
+        .padding(.horizontal, 22).frame(height: 72)
+        .background(Brand.deepPanel.opacity(0.35))
+        .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 
     private var inspector: some View {
@@ -417,9 +559,8 @@ struct DeveloperCleanupView: View {
                 Spacer()
                 Text("\(bucket.selectedCount) · \(Fmt.size(bucket.selectedSize))").monospacedDigit()
             }.font(.system(size: 12))
-            if bucket.items.contains(where: { $0.cleanMethod.isPaid }) && !proEnabled {
-                inspectorSection("Tool-managed cleanup", "Some items require their own tool command and a Pro licence. Review shows the exact action.")
-                Button("View Pro options") { onUpgrade() }.buttonStyle(ControlPanelButtonStyle())
+            if bucket.items.contains(where: { $0.cleanMethod.isPaid }) {
+                inspectorSection("Tool-managed finding", "Broad tool commands are review-only until Cairn can verify their exact scope and active writers.")
             }
             detailDivider
             DisclosureGroup("Protected data") {
@@ -446,14 +587,24 @@ struct DeveloperCleanupView: View {
                 Text(item.note).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
             }
             detailDivider
+            if section == .largeFiles {
+                Button {
+                    quickLook(item)
+                } label: { Label("Quick Look", systemImage: "eye") }
+                    .buttonStyle(ControlPanelButtonStyle())
+                    .disabled(previewMode)
+                    .keyboardShortcut(.space, modifiers: [])
+                Text("Preview the file before deciding what to do. Space opens Quick Look when this page is active.")
+                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             inspectorSection("What happens", consequence(for: item))
             if !item.requiresQuitBundleIDs.isEmpty {
                 inspectorSection("Close before cleanup", item.requiresQuitBundleIDs.joined(separator: "\n"))
             }
             inspectorSection("Action", methodText(for: item))
-            if item.cleanMethod.isPaid && !proEnabled {
-                inspectorSection("Pro required", "Tool commands require a Pro licence. The exact command is shown in review.")
-                Button("View Pro options") { onUpgrade() }.buttonStyle(ControlPanelButtonStyle())
+            if item.cleanMethod.isPaid {
+                inspectorSection("Review only", "Cairn will not execute this tool command. Inspect the owning tool and its active work before manual maintenance.")
             }
             detailDivider
             DisclosureGroup("Location & file details") {
@@ -476,6 +627,12 @@ struct DeveloperCleanupView: View {
                 .buttonStyle(ControlPanelButtonStyle()).disabled(previewMode)
         }.foregroundStyle(Brand.textPrimary).padding(.vertical, 18)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func quickLook(_ item: ScanItem) {
+        guard !previewMode, section == .largeFiles,
+              FileManager.default.fileExists(atPath: item.resolvedURL.path) else { return }
+        quickLookURL = item.resolvedURL
     }
 
     private func inspectorSize(_ bytes: Int64, label: String) -> some View {
@@ -635,7 +792,7 @@ struct DeveloperCleanupView: View {
             ]),
             group("npm", "npm cache", "Downloaded packages and metadata", "shippingbox.fill", [
                 example(".npm/_cacache", 2 * gib + gib / 10, "npm",
-                        "npm can download these packages again", selected: true),
+                        "Verify npm's configured cache and active installs before maintenance", severity: .review, method: .adviceOnly),
             ]),
             group("dev-projects", "Project build artifacts", "Dependencies and generated output", "folder.fill", [
                 example("Projects/MyApp/node_modules", 8 * gib + 6 * gib / 10,
@@ -645,9 +802,7 @@ struct DeveloperCleanupView: View {
             group("docker", "Docker build cache", "Managed by Docker", "shippingbox.fill", [
                 example("Library/Containers/com.docker.docker/Data", 3 * gib + 2 * gib / 10,
                         "docker", "Use Docker's own prune command; never delete Docker.raw",
-                        severity: .review,
-                        method: .tool(ToolCommand(tool: "docker", arguments: ["builder", "prune"],
-                                                  display: "docker builder prune"))),
+                        severity: .review, method: .adviceOnly),
             ]),
             group("android", "Android system images", "Review before removing", "candybarphone", [
                 example("Library/Android/sdk/system-images", 4 * gib + 8 * gib / 10,

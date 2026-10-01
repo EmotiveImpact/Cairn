@@ -44,13 +44,16 @@ enum CleanMethod: Equatable {
     case tool(ToolCommand)     // run a CLI tool (paid)
     case adviceOnly            // non-actionable advice card (Docker.raw, Nix, sleepimage)
 
-    var isActionable: Bool { if case .adviceOnly = self { return false } else { return true } }
+    // Only a reviewed Trash move currently has an enabled executor. Legacy
+    // tool and permanent-Trash items remain readable in old scan/recovery data,
+    // but cannot enter a new selection or cleanup plan.
+    var isActionable: Bool { if case .trash = self { return true } else { return false } }
     var isPaid: Bool { if case .tool = self { return true } else { return false } }
 }
 
 // MARK: - Category
 
-enum CategoryGroup: String, Codable {
+enum CategoryGroup: String, Codable, Sendable {
     case developer
     case ai
     case creative
@@ -72,7 +75,7 @@ struct CategoryInfo: Identifiable, Hashable {
 
 /// The filesystem object seen when a result was created. A path can be reused
 /// by a different file after review, so a path comparison alone is insufficient.
-struct SourceIdentity: Equatable, Sendable {
+struct SourceIdentity: Equatable, Codable, Sendable {
     let device: UInt64
     let inode: UInt64
     static func read(_ url: URL) -> SourceIdentity? {

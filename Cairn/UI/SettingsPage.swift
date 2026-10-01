@@ -120,7 +120,7 @@ struct SettingsPage: View {
         card("gearshape.fill", "General") {
             toggleRow("Open at login", "Launch Cairn automatically when you log in.", $s.openAtLogin)
             div
-            toggleRow("Show menu bar item", "Access Cairn quickly from the menu bar.", $s.showMenuBarItem)
+            toggleRow("Show menu bar item", "Show available internal storage beside Cairn's menu bar icon.", $s.showMenuBarItem)
             div
             dropdownRow("Language", "Choose your preferred language.", current: "System Default", options: ["System Default", "English"]) { _ in }
         }
@@ -132,7 +132,7 @@ struct SettingsPage: View {
             div
             toggleRow("Confirm Large File Removal", "Show an extra prompt before moving a file from Large Files to Trash.", $s.askBeforeDeleting)
             div
-            toggleRow("Create Restore Snapshot", "Create a snapshot before major cleanup operations.", $s.createRestoreSnapshot)
+            alwaysOnRow("Trash recovery", "Supported cleanup moves reviewed items to Trash. Put Back requires a valid recorded entry that remains there. No local snapshot is requested.")
             div
             toggleRow("Ignore External Drives", "Skip external and network drives during scans.", $s.ignoreExternalDrives)
         }

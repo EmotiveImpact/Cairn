@@ -1,19 +1,16 @@
 import SwiftUI
 
 /// Mandatory dry-run review between scan and clean (SPEC §4.4 / §5). Shows exact
-/// items, per-volume free space, quit-first warnings, and Pro gating for
-/// tool-mediated cleans.
+/// items, per-volume free space and quit-first warnings. Unsupported legacy
+/// tool actions remain visible for review but cannot enter execution.
 struct ReviewSheet: View {
     let store: ScanStore
     let proEnabled: Bool
+    var goalPlan: ReviewedSpacePlan? = nil
     var onDone: (ScanStore.CleanSummary) -> Void
-    var onUpgrade: () -> Void = {}
     @Environment(\.dismiss) private var dismiss
 
     @State private var cleaning = false
-    @State private var confirmDestructive = false
-    @State private var destructiveConfirmText = ""
-
     @State private var items: [ScanItem] = []
     @State private var freeBytes: Int64?
     private var total: Int64 { items.reduce(0) { $0 + $1.allocatedSize } }
@@ -21,16 +18,10 @@ struct ReviewSheet: View {
         let ids = items.flatMap { $0.requiresQuitBundleIDs }
         return RunningApps.displayNames(for: RunningApps.running(amongst: Array(Set(ids))))
     }
-    private var paidItems: [ScanItem] { items.filter { $0.cleanMethod.isPaid } }
-    private var paidTotal: Int64 { paidItems.reduce(0) { $0 + $1.allocatedSize } }
-    /// Estimated size of eligible inputs, never a promise of released capacity.
-    private var effectiveTotal: Int64 { proEnabled ? total : total - paidTotal }
-    private var destructiveItems: [ScanItem] {
-        items.filter { if case .tool(let c) = $0.cleanMethod { return c.destroysData } else { return false } }
-    }
+    private var unsupportedItems: [ScanItem] { items.filter { !$0.isActionable || $0.severity == .risky } }
 
     var body: some View {
-        CairnDialog(title: cleaning ? "Cleanup in progress" : "Review cleanup", subtitle: "\(items.count) items · about \(Fmt.size(total)) affected. Trash items can be restored while present; tool actions cannot.", height: 540) {
+        CairnDialog(title: cleaning ? "Cleanup in progress" : "Review cleanup", subtitle: "\(items.count) items · about \(Fmt.size(total)) in measured size estimates. Items moved to Trash remain there until emptied.", height: 540) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if cleaning { CairnStateView(kind: .scanning, title: "Applying reviewed actions", message: "Keep Cairn open. Each result will be recorded in Activity & Recovery.", compact: true) }
@@ -42,12 +33,17 @@ struct ReviewSheet: View {
                             Divider()
                         }
                     }
+                    if let goalPlan {
+                        Text("Target: \(Fmt.size(goalPlan.target)) available · immediate reclaim credit: 0 bytes").font(.system(size: 12, weight: .medium))
+                        Text(goalPlan.recoveryText).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                        Text("Source identity, size and modification time are captured for this review. Changes to the source or scan settings require another review.").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    }
                     warnings
                 }
             }
         } actions: { footer }
         .interactiveDismissDisabled(cleaning)
-        .task { items = store.selectedItems(); freeBytes = await Task.detached { Volumes.homeFree() }.value }
+        .task { items = goalPlan?.items ?? store.selectedItems(); freeBytes = await Task.detached { Volumes.homeFree() }.value }
     }
 
     @ViewBuilder private var warnings: some View {
@@ -56,16 +52,9 @@ struct ReviewSheet: View {
                 warn(Brand.amber, "lock.fill", "Quit first: \(runningBlockers.joined(separator: ", "))",
                      "Cairn will skip their caches while they are running. Close the apps and retry.")
             }
-            if !paidItems.isEmpty && !proEnabled {
-                warn(Brand.purple, "star.fill", "\(paidItems.count) items need Pro",
-                     "Tool-run cleans (e.g. simctl, pnpm, docker) are a Pro feature. Free cleans the rest to Trash.")
-            }
-            if !destructiveItems.isEmpty {
-                Toggle(isOn: $confirmDestructive) {
-                    Text("I understand \(destructiveItems.count) destructive item(s) (e.g. docker volumes) can't be undone")
-                        .font(.system(size: 11)).foregroundStyle(Brand.danger)
-                }
-                .toggleStyle(.checkbox).disabled(cleaning)
+            if !unsupportedItems.isEmpty {
+                warn(Brand.amber, "info.circle", "\(unsupportedItems.count) review-only item(s)",
+                     "Cairn will not run broad tool commands or remove protected data. Return to the results and select supported Trash actions.")
             }
             HStack(spacing: 6) {
                 Image(systemName: "internaldrive").foregroundStyle(Brand.textMuted).font(.system(size: 11))
@@ -82,10 +71,6 @@ struct ReviewSheet: View {
             if cleaning {
                 ProgressView().controlSize(.small)
             }
-            if !proEnabled && paidTotal > 0 {
-                Button { onUpgrade(); dismiss() } label: { Text("Unlock \(Fmt.size(paidTotal)) with Pro →") }
-                    .buttonStyle(ControlPanelButtonStyle()).disabled(cleaning)
-            }
             Button {
                 Task { await runClean() }
             } label: {
@@ -97,7 +82,7 @@ struct ReviewSheet: View {
     }
 
     private var canClean: Bool {
-        !cleaning && !store.isScanning && !store.isCleaning && !items.isEmpty && effectiveTotal > 0 && (destructiveItems.isEmpty || confirmDestructive)
+        !cleaning && !store.isScanning && !store.isCleaning && !items.isEmpty && total > 0 && unsupportedItems.isEmpty
     }
 
     private func warn(_ color: Color, _ icon: String, _ title: String, _ sub: String) -> some View {
@@ -112,7 +97,7 @@ struct ReviewSheet: View {
 
     private func runClean() async {
         cleaning = true
-        let summary = await store.clean(items, proEnabled: proEnabled)
+        let summary = await store.clean(items, proEnabled: proEnabled, reviewedPlan: goalPlan)
         cleaning = false
         onDone(summary)
         dismiss()

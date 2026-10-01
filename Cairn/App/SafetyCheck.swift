@@ -65,6 +65,51 @@ enum SafetyCheck {
             fails += 1
         }
 
+        // A stale scan or crafted review item must not bypass the executor's
+        // tool/cache policy. Only disposable paths are used for the command
+        // fixture; the npm URL is a string and is never read or modified.
+        let toolFixture = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cairn-tool-safety-\(UUID().uuidString)")
+        do {
+            try FileManager.default.createDirectory(at: toolFixture, withIntermediateDirectories: false)
+            defer { try? FileManager.default.removeItem(at: toolFixture) }
+            let marker = toolFixture.appendingPathComponent("must-not-be-created")
+            let toolItem = ScanItem(
+                url: toolFixture, resolvedURL: toolFixture, allocatedSize: 1024,
+                categoryID: "fixture", severity: .safe,
+                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [marker.path], display: "touch fixture")),
+                selected: true
+            )
+            let toolResult = Cleaner.clean(toolItem, allowedRoots: [toolFixture], proEnabled: true)
+            if !toolResult.ok && !toolResult.usedTool && toolResult.bytesAffected == 0 &&
+                toolResult.error?.contains("review-only") == true && !FileManager.default.fileExists(atPath: marker.path) {
+                print("✅ broad tool action blocked in executor")
+            } else {
+                print("❌ broad tool action escaped executor guard")
+                fails += 1
+            }
+
+            for rel in [".npm/_cacache", ".gradle/caches", "Library/Caches/Homebrew"] {
+                let cacheURL = home.appendingPathComponent(rel)
+                let staleCacheItem = ScanItem(
+                    url: cacheURL, resolvedURL: cacheURL, allocatedSize: 1024,
+                    categoryID: "dev-caches", severity: .safe,
+                    cleanMethod: .trash, selected: true,
+                    sourceIdentity: SourceIdentity(device: 0, inode: 0)
+                )
+                let result = Cleaner.clean(staleCacheItem, allowedRoots: [home], proEnabled: true)
+                if !result.ok && result.bytesAffected == 0 && result.error?.contains("review-only") == true {
+                    print("✅ stale tool-cache Trash item blocked: \(rel)")
+                } else {
+                    print("❌ stale tool-cache Trash item escaped executor guard: \(rel)")
+                    fails += 1
+                }
+            }
+        } catch {
+            print("❌ tool safety fixture failed: \(error.localizedDescription)")
+            fails += 1
+        }
+
         // Exercise the CLI installer policy against isolated temporary fixtures.
         // A regular file or someone else's symlink must never be replaced.
         let fm = FileManager.default

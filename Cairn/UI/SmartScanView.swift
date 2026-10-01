@@ -134,11 +134,7 @@ struct SmartScanView: View {
                 HStack {
                     Text("Results").font(.system(size: 13, weight: .semibold)).foregroundStyle(Brand.textMuted)
                     Spacer()
-                    Picker("", selection: $showMap) {
-                        Image(systemName: "list.bullet").tag(false)
-                        Image(systemName: "chart.pie.fill").tag(true)
-                    }
-                    .pickerStyle(.segmented).frame(width: 92)
+                    CairnSegmentedControl(label: "Results view", selection: $showMap, options: [("List", false), ("Map", true)]).frame(width: 112, height: 32)
                 }
                 if showMap {
                     DiskMapView(store: store) { _ in }

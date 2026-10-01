@@ -7,6 +7,7 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
     var title: String
     var subtitle: String = ""
     var inspectorVisible: Bool = true
+    var headerTrailingInset: CGFloat = 0
     @ViewBuilder var content: () -> Content
     @ViewBuilder var detail: () -> Detail
     @ViewBuilder var actions: () -> Actions
@@ -14,10 +15,11 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(title).font(.system(size: 23, weight: .regular))
-                        if !subtitle.isEmpty { Text(subtitle).font(.system(size: 12)).foregroundStyle(Brand.textMuted) }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 26).padding(.vertical, 24)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(title).font(.system(size: 28, weight: .semibold))
+                        if !subtitle.isEmpty { Text(subtitle).font(.system(size: 13)).foregroundStyle(Brand.textSecondary) }
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 28)
+                        .padding(.trailing, headerTrailingInset).padding(.top, 27).padding(.bottom, 21)
                     content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }.frame(minWidth: 490, maxWidth: .infinity)
                 if inspectorVisible {
@@ -28,8 +30,11 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
                 }
             }
             HStack(spacing: 12) { actions() }.font(.system(size: 12))
-                .padding(.horizontal, 20).frame(height: 64).background(Brand.background)
-        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
+                .padding(.horizontal, 22).frame(height: 72)
+                .background(Brand.deepPanel.opacity(0.35))
+                .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Brand.background).foregroundStyle(Brand.textPrimary)
     }
 }
 
@@ -72,16 +77,16 @@ struct WorkspaceRow: View {
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 13) {
+            HStack(spacing: 14) {
                 Image(systemName: icon).font(.system(size: 22, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 32)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.system(size: 12.5, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
-                    if !subtitle.isEmpty { Text(subtitle).font(.system(size: 10.5)).foregroundStyle(Brand.textMuted).lineLimit(1).truncationMode(.middle) }
+                    Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
+                    if !subtitle.isEmpty { Text(subtitle).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(1).truncationMode(.middle) }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 if !value.isEmpty { Text(value).font(.system(size: 12)).monospacedDigit().foregroundStyle(Brand.textSecondary) }
-                if !status.isEmpty { Text(status).font(.system(size: 10.5)).foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing) }
+                if !status.isEmpty { Text(status).font(.system(size: 11)).foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing) }
             }.padding(.horizontal, 18).frame(height: 68).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(focused ? Brand.surfaceSubtle : Color.clear)
+        }.buttonStyle(.plain).background(focused ? Color.white.opacity(0.045) : Color.clear)
     }
 }
 struct WorkspaceColumns: View {
@@ -110,7 +115,7 @@ struct WorkspaceConfirmation: View {
     var action: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
-        CairnDialog(title: title, subtitle: explanation) {
+        CairnDialog(title: title, subtitle: explanation, height: min(520, 320 + CGFloat(max(0, entries.count - 2)) * 24)) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("Included locations").font(.system(size: 12, weight: .medium))
@@ -155,7 +160,7 @@ struct WorkspaceCompletion: View {
                 VStack(alignment: .leading, spacing: 18) {
                     CairnStateView(kind: summary.interrupted ? .interrupted : summary.failed == 0 && summary.errors.isEmpty ? .completed : .attention,
                         title: summary.interrupted ? "Cleanup stopped" : summary.failed == 0 && summary.errors.isEmpty ? "Cleanup finished" : "Finished with skipped items",
-                        message: "\(summary.trashed) \(summary.trashed == 1 ? "action" : "actions") completed · \(summary.failed) skipped", compact: true)
+                        message: "\(summary.trashed) \(summary.trashed == 1 ? "action" : "actions") completed · \(summary.failed) skipped", compact: true, horizontalInset: 0)
                     receiptRow("Moved to Trash", value: Fmt.size(summary.accounting.trashBytes), detail: "\(itemCount(summary.accounting.trashCount)) · estimated file size. Files in Trash still occupy disk space.")
                     receiptRow("Recovery recorded", value: itemCount(summary.recoverableCount), detail: "Put Back is available while the recorded Trash entries remain accessible.")
                     if summary.accounting.missingRecoveryCount > 0 {
@@ -193,4 +198,25 @@ struct WorkspaceCompletion: View {
         }
     }
 
+}
+
+/// Shared specialist receipt: file estimates, recovery records and observed
+/// capacity stay separate. This view makes no causal claim about the delta.
+struct CapacityReceiptView: View {
+    let changes: [CleanupCapacityChange]
+    let estimatedBytes: Int64
+    let recoveryCount: Int
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("\(Fmt.size(estimatedBytes)) estimated file size affected · \(recoveryCount) recovery paths recorded")
+            ForEach(changes) { change in
+                Text("\(change.name): \(change.changeText) · \(change.after.map { Fmt.size($0.available) + " available now" } ?? "current capacity unavailable")")
+                if let date = change.after?.date { Text("Observed \(date.formatted(date: .abbreviated, time: .shortened)) · macOS important-usage capacity") }
+            }
+            if changes.isEmpty { Text("Capacity change is unavailable.") }
+            Text("Trash still occupies disk space. Other Mac activity may affect these readings. Activity checks whether each recorded recovery is still available.")
+        }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 12)
+            .accessibilityElement(children: .combine)
+    }
 }

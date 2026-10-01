@@ -69,8 +69,10 @@ struct AppEntry: Identifiable {
 @Observable
 final class AppInventoryStore {
     private(set) var isUninstalling = false
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
-    var prepareRemoval: () -> Bool = { false }
+    var beginReceipt: (() async -> CleanupRun?)?
+    var finishReceipt: ((CleanupRun, ScanStore.CleanSummary) async -> Bool)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) async -> Bool)?
+    var prepareRemoval: () async -> Bool = { false }
 
     private(set) var apps: [AppEntry] = []
     private(set) var isScanning = false
@@ -135,7 +137,7 @@ final class AppInventoryStore {
         lastError = nil
         progress = "Reading installed apps…"
         scanTask = Task { [weak self] in
-            guard await ScanGate.shared.acquire() else { return }
+            guard await ScanGate.shared.acquire(.apps) else { return }
             defer { ScanGate.shared.release() }
             guard !Task.isCancelled else { return }
             await self?.run(box: box)
@@ -403,6 +405,8 @@ final class AppInventoryStore {
         var errors: [String] = []
         var quit: [String] = []
         var history: [ScanStore.RemovalLogEntry] = []
+        var capacityChanges: [CleanupCapacityChange] = []
+        var recordedRecoveries = 0
     }
 
     /// Require selected apps to be closed, then trash only bundles that have
@@ -410,19 +414,19 @@ final class AppInventoryStore {
     /// guard permits only known app-bundle locations.
     @discardableResult
     func uninstall(_ entries: [AppEntry]) async -> UninstallSummary {
-        guard prepareRemoval() else { return UninstallSummary(failed: entries.count, errors: ["Recovery history is unavailable. No application was removed."]) }
+        guard await prepareRemoval() else { return UninstallSummary(failed: entries.count, errors: ["Recovery history is unavailable. No application was removed."]) }
         guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
             return UninstallSummary(failed: entries.count, errors: [ActionJournal.shared.error ?? "Action journal unavailable. No application was removed."])
         }
         guard !isUninstalling, !isScanning else { return UninstallSummary(failed: entries.count, errors: ["Finish the current application operation first."]) }
         isUninstalling = true
         defer { isUninstalling = false }
-        guard await ScanGate.shared.acquire() else { return UninstallSummary(failed: entries.count, errors: ["Removal cancelled before starting."]) }
+        guard await ScanGate.shared.acquire(.removeApps) else { return UninstallSummary(failed: entries.count, errors: ["Removal cancelled before starting."]) }
         defer { ScanGate.shared.release() }
 
+        guard let run = await beginReceipt?() else { return UninstallSummary(failed: entries.count, errors: ["Cleanup receipt could not be prepared. No application was removed."]) }
+        let capacityWindow = await CleanupCapacityWindow.begin(urls: entries.map(\.url))
         // The user closes applications themselves to preserve unsaved work.
-        let runningIDs = entries.map { $0.bundleID }.filter { !$0.isEmpty }
-        let stillRunning = Set(RunningApps.runningNow(amongst: runningIDs))
         let summary = UninstallSummary()
 
         // 2) Trash bundles off-main. Support data is never included implicitly.
@@ -430,7 +434,7 @@ final class AppInventoryStore {
         let batch = await Task.detached(priority: .userInitiated) { () -> Batch in
             var b = Batch(summary: summary)
             for app in entries {
-                if stillRunning.contains(app.bundleID) {
+                if await Self.isRunning(app.url, bundleID: app.bundleID) {
                     b.summary.failed += 1
                     b.summary.errors.append("\(app.name): still running; close it before uninstalling")
                     continue
@@ -450,22 +454,22 @@ final class AppInventoryStore {
                 // All-or-nothing: trash the bundle FIRST. If that fails (busy /
                 // perms / relaunched), bail BEFORE touching the app's data so we
                 // never orphan ~/Library files for a still-installed app.
-                guard let actionID = ActionJournal.shared.begin(path: app.url.path, category: "apps") else {
+                guard let actionID = ActionJournal.shared.begin(path: app.url.path, category: "apps", affectedBytes: app.size) else {
                     b.summary.failed += 1
                     b.summary.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; uninstall stopped")
                     break
                 }
-                let (bundleOK, bundleBytes, trashURL) = Self.trash(app.url, snapshot: snapshot)
+                let (bundleOK, bundleBytes, trashURL, failure) = await Self.trash(app.url, bundleID: app.bundleID, snapshot: snapshot)
                 let journalSaved = ActionJournal.shared.finish(actionID, succeeded: bundleOK,
                                                                trashPath: trashURL?.path,
-                                                               detail: bundleOK ? nil : "App bundle was not moved")
+                                                               detail: bundleOK ? nil : failure ?? "App bundle was not moved")
                 guard bundleOK else {
                     b.summary.failed += 1
-                    b.summary.errors.append("\(app.name): could not move to Trash — left untouched")
+                    b.summary.errors.append("\(app.name): \(failure ?? "could not move to Trash") — left untouched")
                     if !journalSaved { b.summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded"); break }
                     continue
                 }
-                b.summary.history.append(ScanStore.RemovalLogEntry(name: app.name, originalPath: app.url.path, trashPath: trashURL?.path, bytes: bundleBytes, date: Date(), category: "apps"))
+                b.summary.history.append(ScanStore.RemovalLogEntry(id: actionID, name: app.name, originalPath: app.url.path, trashPath: trashURL?.path, bytes: bundleBytes, date: Date(), category: "apps"))
                 b.summary.trashedApps += 1
                 b.summary.bytes += bundleBytes
                 b.done.insert(app.id)
@@ -481,26 +485,51 @@ final class AppInventoryStore {
         // 3) Remove uninstalled apps from the list.
         apps.removeAll { batch.done.contains($0.id) }
         var result = batch.summary
-        if onRemovals?(batch.summary.history) == false {
+        let logged = await onRemovals?(batch.summary.history) ?? batch.summary.history.isEmpty
+        result.recordedRecoveries = logged ? batch.summary.history.filter { $0.trashPath != nil }.count : 0
+        result.capacityChanges = await capacityWindow.finish()
+        if !logged {
             result.failed += 1
             result.errors.append("Recovery history could not be saved. The action journal retains the paths; further cleanup is blocked.")
+        }
+        let receipt = ScanStore.CleanSummary.specialist(history: result.history, failed: result.failed, errors: result.errors,
+            capacity: result.capacityChanges, logged: logged, interrupted: Task.isCancelled || !logged)
+        if await finishReceipt?(run, receipt) != true {
+            result.failed += 1; result.errors.append("The complete receipt could not be saved. Recovery records remain available.")
         }
         return result
     }
 
+    /// Re-read the live app list on the main actor. A bundle URL match also
+    /// covers applications whose bundle identifier was missing from inventory.
+    private nonisolated static func isRunning(_ url: URL, bundleID: String) async -> Bool {
+        await MainActor.run {
+            let bundle = url.resolvingSymlinksInPath().standardizedFileURL
+            return NSWorkspace.shared.runningApplications.contains { running in
+                (!bundleID.isEmpty && running.bundleIdentifier?.caseInsensitiveCompare(bundleID) == .orderedSame)
+                    || running.bundleURL?.resolvingSymlinksInPath().standardizedFileURL == bundle
+            }
+        }
+    }
+
     /// Trash a single path IF it passes the conservative app-uninstall guard.
-    /// Returns (success, bytesMoved). Recoverable via Finder's Put Back.
-    private nonisolated static func trash(_ url: URL, snapshot: SourceSnapshot) -> (Bool, Int64, URL?) {
+    /// Returns (success, bytesMoved, Trash URL, failure). Recoverable via Finder's Put Back.
+    private nonisolated static func trash(_ url: URL, bundleID: String, snapshot: SourceSnapshot) async -> (Bool, Int64, URL?, String?) {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
-        guard snapshot.matches(url), isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0, nil) }
+        guard snapshot.matches(url), isUninstallSafe(resolved), FileScan.exists(resolved) else { return (false, 0, nil, nil) }
         let bytes = FileScan.measure(resolved, maxFiles: 40_000).allocatedSize
-        guard snapshot.matches(url), isUninstallSafe(resolved) else { return (false, 0, nil) }
+        guard snapshot.matches(url), isUninstallSafe(resolved) else { return (false, 0, nil, nil) }
+        // Sizing may take time and the app can relaunch after the batch preflight.
+        // Check again at the last possible point before the filesystem move.
+        guard !(await isRunning(resolved, bundleID: bundleID)) else {
+            return (false, 0, nil, "relaunched; close it before uninstalling")
+        }
         do {
             var out: NSURL?
             try FileManager.default.trashItem(at: resolved, resultingItemURL: &out)
-            return (true, bytes, out as URL?)
+            return (true, bytes, out as URL?, nil)
         } catch {
-            return (false, 0, nil)
+            return (false, 0, nil, nil)
         }
     }
 

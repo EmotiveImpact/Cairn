@@ -49,8 +49,10 @@ struct HealthGroup: Identifiable {
 @Observable
 final class HealthStore {
     private(set) var isFixing = false
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
-    var prepareRemoval: () -> Bool = { false }
+    var beginReceipt: (() async -> CleanupRun?)?
+    var finishReceipt: ((CleanupRun, ScanStore.CleanSummary) async -> Bool)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) async -> Bool)?
+    var prepareRemoval: () async -> Bool = { false }
 
     /// Number of distinct system-health checks Cairn runs (launch agents, orphaned
     /// app data, broken login items, corrupted preferences, permission issues).
@@ -76,6 +78,8 @@ final class HealthStore {
         var failed: Int
         var bytes: Int64
         var errors: [String]
+        var capacityChanges: [CleanupCapacityChange] = []
+        var recordedRecoveries = 0
         var ok: Bool { failed == 0 }
     }
 
@@ -119,7 +123,7 @@ final class HealthStore {
         lastResult = nil
         let scanner = HealthScanner()
         scanTask = Task { [weak self] in
-            guard await ScanGate.shared.acquire() else { return }
+            guard await ScanGate.shared.acquire(.health) else { return }
             defer { ScanGate.shared.release() }
             guard let self, !Task.isCancelled else { return }
             let progressStore = self
@@ -156,7 +160,7 @@ final class HealthStore {
 
     /// Trash a specific set of fixable issues (used by Fix All after confirm).
     func fix(items: [HealthIssue]) async {
-        guard prepareRemoval() else { lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]); return }
+        guard await prepareRemoval() else { lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]); return }
         guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
             lastResult = FixResult(trashed: 0, failed: items.count, bytes: 0,
                                    errors: [ActionJournal.shared.error ?? "Action journal unavailable. Nothing was removed."])
@@ -165,7 +169,7 @@ final class HealthStore {
         guard !isFixing, !isScanning else { return }
         isFixing = true
         defer { isFixing = false }
-        guard await ScanGate.shared.acquire() else { return }
+        guard await ScanGate.shared.acquire(.fixHealth) else { return }
         defer { ScanGate.shared.release() }
 
         let targets = items.compactMap { issue -> HealthTrash.Target? in
@@ -173,6 +177,10 @@ final class HealthStore {
             return HealthTrash.Target(url: url, snapshot: issue.sourceSnapshot)
         }
         guard !targets.isEmpty else { return }
+        guard let run = await beginReceipt?() else {
+            lastResult = FixResult(trashed: 0, failed: targets.count, bytes: 0, errors: ["Cleanup receipt could not be prepared. Nothing was removed."]); return
+        }
+        let capacityWindow = await CleanupCapacityWindow.begin(urls: targets.map(\.url))
 
         let outcome = await Task.detached(priority: .userInitiated) {
             HealthTrash.trashAll(targets)
@@ -188,9 +196,15 @@ final class HealthStore {
                 return cleaned.contains(u.resolvingSymlinksInPath().standardizedFileURL.path)
             }
         }
-        let logged = onRemovals?(outcome.history) ?? outcome.history.isEmpty
+        let logged = await onRemovals?(outcome.history) ?? outcome.history.isEmpty
         lastResult = FixResult(trashed: outcome.trashed, failed: outcome.failed + (logged ? 0 : 1),
-                               bytes: outcome.bytes, errors: outcome.errors + (logged ? [] : ["Recovery history could not be saved. The action journal retains the paths; further cleanup is blocked."]))
+                               bytes: outcome.bytes, errors: outcome.errors + (logged ? [] : ["Recovery history could not be saved. The action journal retains the paths; further cleanup is blocked."]),
+                               capacityChanges: await capacityWindow.finish(), recordedRecoveries: logged ? outcome.history.filter { $0.trashPath != nil }.count : 0)
+        if let result = lastResult {
+            let receipt = ScanStore.CleanSummary.specialist(history: outcome.history, failed: result.failed, errors: result.errors,
+                capacity: result.capacityChanges, logged: logged, interrupted: Task.isCancelled || !logged)
+            if await finishReceipt?(run, receipt) != true { lastResult?.failed += 1; lastResult?.errors.append("The complete receipt could not be saved. Recovery records remain available.") }
+        }
     }
 }
 
@@ -244,7 +258,7 @@ enum HealthTrash {
                 out.errors.append("\(url.lastPathComponent): changed or became protected; rescan before removal")
                 continue
             }
-            guard let actionID = ActionJournal.shared.begin(path: resolved.path, category: "health") else {
+            guard let actionID = ActionJournal.shared.begin(path: resolved.path, category: "health", affectedBytes: size) else {
                 out.failed += 1
                 out.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; health cleanup stopped")
                 return out
@@ -252,7 +266,7 @@ enum HealthTrash {
             var resulting: NSURL?
             do {
                 try FileManager.default.trashItem(at: resolved, resultingItemURL: &resulting)
-                out.history.append(ScanStore.RemovalLogEntry(name: url.lastPathComponent, originalPath: url.path, trashPath: (resulting as URL?)?.path, bytes: size, date: Date(), category: "health"))
+                out.history.append(ScanStore.RemovalLogEntry(id: actionID, name: url.lastPathComponent, originalPath: url.path, trashPath: (resulting as URL?)?.path, bytes: size, date: Date(), category: "health"))
                 out.trashed += 1
                 out.bytes += size
                 out.cleanedURLs.append(url)

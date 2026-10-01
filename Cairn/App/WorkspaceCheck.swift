@@ -17,8 +17,25 @@ enum WorkspaceCheck {
         let identifiedHistory = [CapacityReading(date: yesterday, volumeID: "internal-A", available: 20_000_000_000, total: 500_000_000_000)]
         check(MenuStorageSummary.change(current: 10_000_000_000, volumeID: "internal-A", readings: identifiedHistory).contains("less"), "Menu compares matching-volume capacity")
         check(MenuStorageSummary.change(current: 10_000_000_000, volumeID: "internal-B", readings: identifiedHistory).contains("still building"), "Menu refuses a replacement volume's history")
+        check(MenuAvailableSpace.title(nil, checked: false) == "…" && MenuAvailableSpace.title(nil, checked: true) == "—",
+              "Menu bar does not turn an unavailable capacity reading into zero")
+        check(MenuAvailableSpace.title(42_600_000_000, checked: true).contains("GB"),
+              "Menu bar labels measured available capacity with a size unit")
         check(MenuScanStatus().canStart, "Idle menu allows an explicit scan")
         check(!MenuScanStatus(scanning: true).canStart && !MenuScanStatus(operationBusy: true).canStart && !MenuScanStatus(otherScanBusy: true).canStart, "Menu blocks overlapping operations")
+        let chartStart = Date(timeIntervalSince1970: 100)
+        let chartReadings = [0.0, 3600.0, 28 * 3600.0, 29 * 3600.0].map {
+            CapacityReading(date: chartStart.addingTimeInterval($0), volumeID: "chart-fixture", available: 1_000, total: 10_000)
+        }
+        let chart = CapacityPlot(readings: chartReadings, maximumInterval: 8 * 3600)
+        check(chart.points.map(\.segment) == [0, 0, 1, 1] && chart.gaps.count == 1,
+              "Capacity chart retains a missing interval as separate measured segments")
+        check(chart.reading(near: chartStart.addingTimeInterval(12 * 3600)) == nil && chart.gap(at: chartStart.addingTimeInterval(12 * 3600)) != nil,
+              "Hovering an unmeasured gap cannot claim a distant sample")
+        check(chart.reading(near: chartReadings[1].date)?.id == chartReadings[1].id && chart.reading(near: chartReadings[2].date)?.id == chartReadings[2].id,
+              "Capacity readings at both gap boundaries remain inspectable")
+        check(chart.gaps.first?.before.id == chartReadings[1].id && chart.gaps.first?.after.id == chartReadings[2].id && chart.points.count == chartReadings.count,
+              "Gap connectors use saved endpoints without adding synthetic readings")
         // Scan comparison must never turn missing or incompatible data into savings.
         let scope = ScanComparison.Scope(categories: ["a"], exclusions: [], developerCaches: true,
                                          simulators: true, fullDiskAccess: true, externalVolumes: false)

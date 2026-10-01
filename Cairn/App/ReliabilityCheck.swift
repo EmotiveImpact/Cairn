@@ -16,6 +16,16 @@ import Darwin
         func rejects(_ label: String, _ operation: () throws -> Void) {
             do { try operation(); check(false, label) } catch { check(true, label) }
         }
+        if !Notify.isAvailable {
+            // This check runs from the raw SwiftPM executable. It must not
+            // prompt, post, or crash when no application bundle exists.
+            Notify.requestAuth()
+            Notify.send(title: "Fixture", body: "No notification should be posted")
+            Notify.scanComplete(totalBytes: 1, items: 1)
+            await StorageControl.shared.refreshNotificationStatus()
+            check(StorageControl.shared.notificationStatus.contains("unbundled build"),
+                  "Unbundled executable skips UserNotifications without crashing")
+        }
         var receipt = CleanupAccounting()
         receipt.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/.Trash/file"), bytesAffected: 800, usedTool: false), recoveryRecorded: true)
         receipt.record(.init(bytesAffected: 200, usedTool: false))
@@ -128,6 +138,23 @@ import Darwin
         do {
             try fm.createDirectory(at: root, withIntermediateDirectories: false)
             defer { try? fm.removeItem(at: root) }
+            let unsupportedTool = ScanItem(
+                url: root, resolvedURL: root, allocatedSize: 1024,
+                categoryID: "fixture", severity: .safe,
+                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [root.appendingPathComponent("must-not-exist").path], display: "touch fixture")),
+                selected: true
+            )
+            var toolBucket = ScanStore.Bucket(info: .init(id: "fixture", title: "Fixture", subtitle: "", systemImage: "folder", group: .general, requiresFDA: false))
+            toolBucket.append(unsupportedTool)
+            check(!unsupportedTool.isActionable && toolBucket.selectedCount == 0 && !toolBucket.items[0].selected,
+                  "Legacy tool findings cannot enter a new cleanup selection")
+            let unsupportedJournal = root.appendingPathComponent("unsupported-clean.actions")
+            let unsupportedStore = ScanStore(removalLogURL: root.appendingPathComponent("unsupported-clean"),
+                                             actionJournal: ActionJournal(url: unsupportedJournal))
+            let unsupportedResult = await unsupportedStore.clean([unsupportedTool], proEnabled: true)
+            check(unsupportedResult.failed == 1 && !fm.fileExists(atPath: unsupportedJournal.path) &&
+                  !fm.fileExists(atPath: root.appendingPathComponent("must-not-exist").path),
+                  "Legacy tool cleanup stops before journal or command work")
             let duplicatesRoot = root.appendingPathComponent("duplicate-fixtures")
             try fm.createDirectory(at: duplicatesRoot, withIntermediateDirectories: false)
             let duplicateData = Data(repeating: 0x42, count: 2 * 1_048_576)
@@ -273,7 +300,7 @@ import Darwin
             let corruptBytes = Data("do not replace this record".utf8)
             try corruptBytes.write(to: corrupt)
             let history = ScanStore(removalLogURL: corrupt, recordRestoredBytes: { _ in })
-            check(!history.prepareRemovalLog(), "Corrupt recovery history blocks new removal")
+            check(!(await history.prepareRemovalLog()), "Corrupt recovery history blocks new removal")
             check(try Data(contentsOf: corrupt) == corruptBytes, "Corrupt recovery history is not overwritten")
             let transferHistory = StorageTransferStore(journal: corrupt)
             transferHistory.load()
@@ -281,6 +308,29 @@ import Darwin
             let fakeDrive = StorageDrive(url: root, name: "Fixture", uuid: "fixture", capacity: 1_000_000_000, available: 500_000_000, external: true, writable: true, encrypted: true, format: "apfs")
             transferHistory.start(source: source, drive: fakeDrive)
             check(try !transferHistory.busy && Data(contentsOf: corrupt) == corruptBytes, "Transfer does not overwrite corrupt journal or begin copying")
+            let oversized = root.appendingPathComponent("oversized-transfer-history.json")
+            let oversizedBytes = Data(repeating: 0x58, count: 4 * 1024 * 1024 + 1)
+            try oversizedBytes.write(to: oversized)
+            let oversizedHistory = StorageTransferStore(journal: oversized)
+            oversizedHistory.load()
+            check(oversizedHistory.message.contains("too large") && oversizedHistory.records.isEmpty,
+                  "Oversized transfer history reports its limit without loading records")
+            let exportsBefore = try fm.contentsOfDirectory(atPath: root.path).filter { $0.hasPrefix("Cairn Export ") }
+            oversizedHistory.start(source: source, drive: fakeDrive)
+            let exportsAfter = try fm.contentsOfDirectory(atPath: root.path).filter { $0.hasPrefix("Cairn Export ") }
+            check(try !oversizedHistory.busy && exportsAfter == exportsBefore &&
+                  Data(contentsOf: oversized) == oversizedBytes && Data(contentsOf: source) == content,
+                  "Oversized transfer history blocks export and preserves journal and source bytes")
+            let danglingJournal = root.appendingPathComponent("dangling-transfer-history.json")
+            let absentTarget = root.appendingPathComponent("absent-transfer-history.json")
+            try fm.createSymbolicLink(at: danglingJournal, withDestinationURL: absentTarget)
+            let linkedHistory = StorageTransferStore(journal: danglingJournal)
+            linkedHistory.load()
+            linkedHistory.start(source: source, drive: fakeDrive)
+            check(try !linkedHistory.busy && linkedHistory.message.contains("ordinary file") &&
+                  fm.destinationOfSymbolicLink(atPath: danglingJournal.path) == absentTarget.path &&
+                  !fm.fileExists(atPath: absentTarget.path),
+                  "Dangling transfer-history link blocks export and leaves its target untouched")
 
             let journal = root.appendingPathComponent("recovery.json"), trash = root.appendingPathComponent(".Trash")
             try fm.createDirectory(at: trash, withIntermediateDirectories: false)
@@ -291,7 +341,7 @@ import Darwin
                 guard Cleaner.canRestore(from: from, to: to, trashRoots: [trash]) else { return false }
                 return renamex_np(from.path, to.path, UInt32(RENAME_EXCL)) == 0
             }, recordRestoredBytes: { _ in })
-            check(recovery.appendRemovals([record]), "Fixture recovery entry saved")
+            check(await recovery.appendRemovals([record]), "Fixture recovery entry saved")
             try Data("existing original".utf8).write(to: original)
             check(!(await recovery.restoreFromLog(record)), "Restore refuses to overwrite existing original")
             check(try Data(contentsOf: original) == Data("existing original".utf8), "Failed restore preserves existing original")
@@ -299,10 +349,75 @@ import Darwin
             check(await recovery.restoreFromLog(record), "Fixture can be restored without overwriting")
             check(recovery.removalLog.count == 1 && recovery.removalLog[0].restoredAt != nil && !recovery.removalLog[0].recoverable, "Successful restore keeps a non-actionable history record")
             let reloaded = ScanStore(removalLogURL: journal, recordRestoredBytes: { _ in })
-            reloaded.loadRemovalLog()
+            await reloaded.loadRemovalLog()
             check(reloaded.removalLog.first?.restoredAt != nil, "Restored status survives relaunch")
+            // Concurrent callers must merge against the actor's current history,
+            // not overwrite one another with stale UI snapshots.
+            let bulk = RecoveryHistory(url: root.appendingPathComponent("bulk-recovery.json"))
+            let makeRecords: (Int) -> [ScanStore.RemovalLogEntry] = { offset in
+                (offset..<(offset + 6_000)).map { index in
+                    .init(name: "Fixture \(index)", originalPath: "/fixture/\(index)", trashPath: nil,
+                          bytes: 1, date: Date(), category: "fixture")
+                }
+            }
+            let batchA = makeRecords(0), batchB = makeRecords(6_000)
+            var recoveryHeartbeats = 0
+            var recoveryMaxGap: TimeInterval = 0
+            let heartbeat = Task { @MainActor in
+                var last = ProcessInfo.processInfo.systemUptime
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .milliseconds(10))
+                    let now = ProcessInfo.processInfo.systemUptime
+                    recoveryMaxGap = max(recoveryMaxGap, now - last)
+                    last = now; recoveryHeartbeats += 1
+                }
+            }
+            async let appendedA = bulk.append(batchA)
+            async let appendedB = bulk.append(batchB)
+            let pair = await (appendedA, appendedB)
+            let bulkResult = await bulk.load()
+            check(pair.0.error == nil && pair.1.error == nil && bulkResult.entries.count == 12_000,
+                  "Concurrent background history appends preserve both batches")
+            let bulkReload = await RecoveryHistory(url: root.appendingPathComponent("bulk-recovery.json")).load()
+            check(bulkReload.entries.count == 12_000 && bulkReload.error == nil,
+                  "Large background recovery history round-trips without lost records")
+            heartbeat.cancel(); await heartbeat.value
+            check(recoveryHeartbeats > 0 && recoveryMaxGap < 1,
+                  "Main actor remains responsive during large recovery history writes")
+            print("RECOVERY HISTORY: 12,000 records; \(recoveryHeartbeats) heartbeats; largest gap \(recoveryMaxGap)s")
+            var conflicting = batchA[0]
+            conflicting = .init(id: conflicting.id, name: "Replacement", originalPath: "/wrong-source", trashPath: nil,
+                                bytes: 1, date: Date(), category: "fixture")
+            let conflict = await bulk.append([conflicting])
+            check(conflict.error != nil && conflict.entries.count == 12_000,
+                  "Conflicting recovery identity is refused without losing history")
+            // Simulate a crash after the per-action outcome persisted, before
+            // the separate Put Back history callback could run. No Trash API runs.
+            let gapJournal = ActionJournal(url: root.appendingPathComponent("gap-actions.json"))
+            let gapTrash = trash.appendingPathComponent("gap.zip")
+            let gapOriginal = root.appendingPathComponent("gap-original.zip")
+            try Data("gap fixture".utf8).write(to: gapTrash)
+            let gapID = gapJournal.begin(path: gapOriginal.path, category: "fixture", affectedBytes: 11)!
+            check(gapJournal.finish(gapID, succeeded: true, trashPath: gapTrash.path), "Outcome persists its Trash identity before Put Back callback")
+            let gapLogURL = root.appendingPathComponent("gap-recovery.json")
+            let gapStore = ScanStore(removalLogURL: gapLogURL, actionJournal: gapJournal, recordRestoredBytes: { _ in })
+            check(await gapStore.reconcileActionJournal(), "Successful journal outcome rebuilds missing Put Back metadata")
+            check(gapStore.removalLog.count == 1 && gapStore.removalLog[0].id == gapID && gapStore.removalLog[0].trashIdentity != nil,
+                  "Recovered receipt retains exact action and Trash identities")
+            check(await gapStore.reconcileActionJournal(), "Reconciliation is idempotent")
+            check(gapStore.removalLog.count == 1 && gapJournal.recent.first?.recoveryRecorded == true,
+                  "Journal is linked only after recovery metadata is saved")
+            try fm.moveItem(at: gapTrash, to: trash.appendingPathComponent("old-gap.zip"))
+            try Data("different important content".utf8).write(to: gapTrash)
+            check(!(await gapStore.restoreFromLog(gapStore.removalLog[0])), "Put Back rejects a replaced Trash inode")
+            check(try Data(contentsOf: gapTrash) == Data("different important content".utf8), "Replacement Trash contents remain untouched")
+            let gapRestoreID = gapJournal.begin(path: gapTrash.path, category: "restore", affectedBytes: 11, actionKind: "restore", relatedRecoveryID: gapID, destinationPath: gapOriginal.path)!
+            check(gapJournal.finish(gapRestoreID, succeeded: true, trashPath: nil), "Synthetic completed-restore receipt persists")
+            check(await gapStore.reconcileActionJournal(), "Completed restore reconciles after a lost history update")
+            check(gapStore.removalLog.first?.restoredAt != nil, "A reconciled restore cannot be offered again")
+            check(!fm.fileExists(atPath: gapOriginal.path), "Reconciliation never replays filesystem operations")
             try corruptBytes.write(to: journal)
-            check(try !reloaded.prepareRemovalLog() && Data(contentsOf: journal) == corruptBytes, "External history change is not overwritten")
+            check(try !(await reloaded.prepareRemovalLog()) && Data(contentsOf: journal) == corruptBytes, "External history change is not overwritten")
         } catch { check(false, "Fixture failure: \(error.localizedDescription)") }
 
         do {

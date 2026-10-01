@@ -5,28 +5,43 @@ import UserNotifications
 /// Scan Notifications setting on. Quiet failure everywhere: notifications are
 /// nice-to-have, never load-bearing.
 enum Notify {
-    static func requestAuth() {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    /// UserNotifications raises an Objective-C exception when a SwiftPM
+    /// executable is launched without its containing .app bundle. Check the
+    /// process identity before asking for the notification center; Swift error
+    /// handling cannot catch that exception.
+    static var isAvailable: Bool {
+        let bundle = Bundle.main
+        return bundle.bundleURL.pathExtension.lowercased() == "app"
+            && bundle.object(forInfoDictionaryKey: "CFBundlePackageType") as? String == "APPL"
+            && !(bundle.bundleIdentifier ?? "").isEmpty
     }
 
-    /// General-purpose local notice. Used by Smart Triggers, which acts without
-    /// the user present — so it must always say what it did.
+    static var center: UNUserNotificationCenter? {
+        guard isAvailable else { return nil }
+        return UNUserNotificationCenter.current()
+    }
+
+    static func requestAuth() {
+        center?.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+    }
+
+    /// General-purpose local status notice. Notifications never authorize actions.
     static func send(title: String, body: String) {
         let content = UNMutableNotificationContent()
         content.title = title
         content.body = body
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        center?.add(request)
     }
 
-    /// "Scan complete — X reclaimable found."
+    /// Candidate estimates are not guaranteed released capacity.
     static func scanComplete(totalBytes: Int64, items: Int) {
         let content = UNMutableNotificationContent()
         content.title = "Scan complete"
-        content.body = "\(Fmt.size(totalBytes)) reclaimable across \(items) items."
+        content.body = "\(Fmt.size(totalBytes)) in candidate file-size estimates across \(items) items. Review before removal."
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(request)
+        center?.add(request)
     }
 }

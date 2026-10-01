@@ -152,6 +152,10 @@ enum ArchiveCopy {
 }
 
 @MainActor @Observable final class StorageTransferStore {
+    // Keep a damaged or unexpectedly large history from loading unbounded data
+    // on the UI actor. Limits stop new exports rather than pruning old records.
+    private static let maxJournalBytes = 4 * 1024 * 1024
+    private static let maxJournalRecords = 2_048
     private(set) var drives: [StorageDrive] = []
     private(set) var records: [TransferRecord] = []
     private(set) var busy = false
@@ -168,6 +172,29 @@ enum ArchiveCopy {
     private var journalRevision: Data?
     init(journal: URL = FileScan.home.appendingPathComponent("Library/Application Support/Cairn/transfers.json")) { self.journal = journal }
 
+    private static func journalEntryExists(_ url: URL) throws -> Bool {
+        var info = stat()
+        if lstat(url.path, &info) == 0 { return true } // includes dangling links
+        if errno == ENOENT { return false }
+        throw ArchiveCopy.Failure.rejected("Transfer history could not be inspected; it was left untouched.")
+    }
+
+    private static func readJournal(_ url: URL) throws -> Data {
+        let descriptor = open(url.path, O_RDONLY | O_NOFOLLOW | O_CLOEXEC)
+        guard descriptor >= 0 else { throw ArchiveCopy.Failure.rejected("Transfer history could not be opened as an ordinary file; it was left untouched.") }
+        let handle = FileHandle(fileDescriptor: descriptor, closeOnDealloc: true)
+        defer { try? handle.close() }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, (info.st_mode & 0o170000) == 0o100000 else {
+            throw ArchiveCopy.Failure.rejected("Transfer history is not an ordinary file; it was left untouched.")
+        }
+        let data = try handle.read(upToCount: maxJournalBytes + 1) ?? Data()
+        guard data.count <= maxJournalBytes else {
+            throw ArchiveCopy.Failure.rejected("Transfer history is too large to load safely; it was left untouched.")
+        }
+        return data
+    }
+
     func refresh() async {
         guard !refreshing else { refreshAgain = true; return }
         refreshing = true
@@ -181,27 +208,36 @@ enum ArchiveCopy {
     func load() {
         guard !hasLoaded else { return }
         hasLoaded = true
-        guard FileManager.default.fileExists(atPath: journal.path) else { return }
         do {
-            let data = try Data(contentsOf: journal)
-            records = try JSONDecoder().decode([TransferRecord].self, from: data)
-            guard Set(records.map(\.id)).count == records.count else { throw ArchiveCopy.Failure.rejected("Duplicate transfer identities") }
+            guard try Self.journalEntryExists(journal) else { return }
+            let data = try Self.readJournal(journal)
+            let decoded = try JSONDecoder().decode([TransferRecord].self, from: data)
+            guard decoded.count <= Self.maxJournalRecords else { throw ArchiveCopy.Failure.rejected("Transfer history has too many records; it was left untouched.") }
+            guard Set(decoded.map(\.id)).count == decoded.count else { throw ArchiveCopy.Failure.rejected("Duplicate transfer identities") }
+            records = decoded
             journalRevision = data
             for i in records.indices where records[i].status == "Copying" {
                 records[i].status = "Interrupted"; records[i].detail = "Previous copy did not complete. Source was retained. Inspect the destination before starting a new copy."
             }
-        } catch { journalError = "Transfer history could not be read; it will not be overwritten."; message = journalError! }
+        } catch {
+            let reason = (error as? ArchiveCopy.Failure)?.localizedDescription
+            journalError = "Transfer history could not be read; it will not be overwritten."
+                + (reason.map { " \($0)" } ?? "")
+            message = journalError!
+        }
     }
     private func persist() throws {
         if let journalError { throw ArchiveCopy.Failure.rejected(journalError) }
-        if FileManager.default.fileExists(atPath: journal.path) {
-            guard try Data(contentsOf: journal) == journalRevision else {
+        if try Self.journalEntryExists(journal) {
+            guard try Self.readJournal(journal) == journalRevision else {
                 journalError = "Transfer history changed outside this window. It will not be overwritten."
                 throw ArchiveCopy.Failure.rejected(journalError!)
             }
         } else if journalRevision != nil { throw ArchiveCopy.Failure.rejected("Transfer history disappeared. It will not be recreated automatically.") }
+        guard records.count <= Self.maxJournalRecords else { throw ArchiveCopy.Failure.rejected("Transfer history is full; no existing records were removed.") }
         try FileManager.default.createDirectory(at: journal.deletingLastPathComponent(), withIntermediateDirectories: true)
         let data = try JSONEncoder().encode(records)
+        guard data.count <= Self.maxJournalBytes else { throw ArchiveCopy.Failure.rejected("Transfer history is full; no existing records were removed.") }
         try data.write(to: journal, options: .atomic)
         journalRevision = data
     }
@@ -216,7 +252,7 @@ enum ArchiveCopy {
         catch { message = error.localizedDescription; records.removeAll { $0.id == record.id }; return }
         busy = true; checkingCopy = false; copied = 0; message = "Copying and verifying…"
         task = Task {
-            guard await ScanGate.shared.acquire() else {
+            guard await ScanGate.shared.acquire(.copy) else {
                 record.status = "Interrupted"; record.detail = "Cancelled before copying. Original retained."
                 finish(record); return
             }
@@ -261,7 +297,7 @@ enum ArchiveCopy {
         let cancel = CancelBox(); cancellation = cancel; busy = true; checkingCopy = true; message = "Checking the copy…"
         let target = destination
         task = Task {
-            guard await ScanGate.shared.acquire() else { busy = false; checkingCopy = false; cancellation = nil; task = nil; message = "Copy check cancelled."; return }
+            guard await ScanGate.shared.acquire(.verify) else { busy = false; checkingCopy = false; cancellation = nil; task = nil; message = "Copy check cancelled."; return }
             defer { ScanGate.shared.release() }
             let outcome = await Task.detached(priority: .utility) { () -> Result<(Int64, String), Error> in
                 Result { try ArchiveCopy.verify(source: URL(fileURLWithPath: record.source), destination: target, bytes: record.bytes, digest: record.digest,

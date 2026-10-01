@@ -7,6 +7,45 @@ import AppKit
 @main
 struct CairnMain {
     static func main() {
+        let isolated = ["--evidencecheck", "--hashmemorycheck", "--loadcheck", "--reliabilitycheck", "--workspacecheck", "--safetycheck", "--lifecyclecheck", "--native-reliability-check", "--lease-probe", "--recovery-child"]
+        let command = CommandLine.arguments.dropFirst().first ?? ""
+        // Diagnostic flags bypass live-store ownership only when unambiguous.
+        // In particular, --readonlycheck must not borrow --safetycheck's bypass.
+        let modes = isolated + ["--readonlycheck", "--selftest"]
+        let selectedModes = modes.filter { CommandLine.arguments.contains($0) }
+        guard selectedModes.count <= 1,
+              !(CLI.commands.contains(command) && !selectedModes.isEmpty) else {
+            fputs("Choose one Cairn command or diagnostic mode at a time. No operation started.\n", stderr)
+            exit(64)
+        }
+        let visualPreview = CommandLine.arguments.contains("--preview-ui") && !CLI.commands.contains(command)
+            && !CommandLine.arguments.contains("--readonlycheck") && !CommandLine.arguments.contains("--selftest")
+        if visualPreview && CommandLine.arguments.contains("--component-showcase") && selectedModes.isEmpty {
+            ComponentShowcaseRunner.run()
+            return
+        }
+        if !visualPreview, !CommandLine.arguments.contains(where: isolated.contains), !InstanceLease.claimApplication() {
+            if CLI.commands.contains(command) { exit(75) }
+            return
+        }
+        if CommandLine.arguments.contains("--native-reliability-check") {
+            Task { @MainActor in await LifecycleCheck.nativeCheck() }
+            RunLoop.main.run(); return
+        }
+        if CommandLine.arguments.contains("--lifecyclecheck") {
+            Task { @MainActor in await LifecycleCheck.run() }
+            RunLoop.main.run(); return
+        }
+        if CommandLine.arguments.contains("--lease-probe") { LifecycleCheck.leaseProbe(); return }
+        if CommandLine.arguments.contains("--recovery-child") {
+            Task { @MainActor in await LifecycleCheck.recoveryChild() }
+            RunLoop.main.run(); return
+        }
+        if CommandLine.arguments.contains("--evidencecheck") {
+            Task.detached { await EvidenceCheck.run() }
+            RunLoop.main.run()
+            return
+        }
         if CommandLine.arguments.contains("--hashmemorycheck") {
             Task { await HashMemoryCheck.run() }
             RunLoop.main.run()
@@ -58,11 +97,10 @@ struct CairnApp: App {
         // caches — a direct multiplier on memory.
         Window("Cairn", id: "main") {
             AppShell()
-                .background(Brand.background)
+                .background(Brand.chrome)
             .preferredColorScheme(.dark)
         }
-        .windowStyle(.titleBar)
-        .windowToolbarStyle(.unified)
+        .windowStyle(.hiddenTitleBar)
         // CRITICAL: do NOT use `.contentMinSize` together with a `.frame(minWidth:
         // minHeight:)` on the content. That makes AppKit re-derive the WINDOW's
         // minimum size from SwiftUI's content layout on every pass: the content
@@ -114,12 +152,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // from content layout (`.contentMinSize`) is what caused the render loop.
         for window in NSApp.windows where window.styleMask.contains(.titled) {
             let preview = CommandLine.arguments.contains("--preview-ui")
+            let minimumPreview = preview && CommandLine.arguments.contains("--preview-min-window")
+            let widePreview = preview && CommandLine.arguments.contains("--preview-wide-window")
             let visible = (window.screen ?? NSScreen.main)?.visibleFrame
             window.minSize = NSSize(width: min(1024, visible?.width ?? 1024), height: min(680, visible?.height ?? 680))
             // Restore once, outside SwiftUI layout. Preview never overwrites the live frame.
             let restored = !preview && window.setFrameUsingName("CairnMainWindow.v2")
             if !restored {
-                window.setContentSize(NSSize(width: min(1120, visible?.width ?? 1120), height: min(740, visible?.height ?? 740)))
+                let target = NSSize(width: minimumPreview ? 1024 : widePreview ? 1280 : 1120,
+                                    height: minimumPreview ? 680 : widePreview ? 800 : 740)
+                window.setContentSize(NSSize(width: min(target.width, visible?.width ?? target.width),
+                                             height: min(target.height, visible?.height ?? target.height)))
                 window.center()
             }
             if let visible {

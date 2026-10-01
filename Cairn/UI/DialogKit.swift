@@ -12,13 +12,14 @@ struct CairnDialog<Content: View, Actions: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 8) {
-                Text(title).font(.system(size: 22, weight: .regular))
+                Text(title).font(.system(size: 22, weight: .semibold))
                 if !subtitle.isEmpty { Text(subtitle).font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true) }
-            }.padding(24)
+            }.padding(.horizontal, 24).padding(.top, 24).padding(.bottom, 8)
             content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading).padding(24)
             HStack(spacing: 10) { Spacer(minLength: 0); actions() }.padding(.horizontal, 24).frame(height: 66)
         }.frame(width: wide ? 740 : 600, height: height)
-            .foregroundStyle(Brand.textPrimary).background(Brand.background)
+            .foregroundStyle(Brand.textPrimary).background(Brand.surfaceElevated)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -28,22 +29,25 @@ struct CairnStateView: View {
     var title: String
     var message: String
     var compact = false
+    var horizontalInset: CGFloat? = nil
     private var icon: String {
         switch kind { case .scanning: return "scope"; case .empty: return "tray"; case .interrupted: return "pause.circle"; case .completed: return "checkmark.circle"; case .attention: return "exclamationmark.circle" }
     }
-    private var tint: Color { kind == .interrupted || kind == .attention ? Brand.amber : Brand.textSecondary }
+    private var tint: Color { kind == .interrupted || kind == .attention ? Brand.amber : kind == .completed ? Brand.safeCyan : kind == .scanning ? Brand.blue : Brand.textMuted }
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(Brand.surfaceSubtle)
+                RoundedRectangle(cornerRadius: 10).fill(tint.opacity(0.07))
                 if kind == .scanning { ProgressView().controlSize(.small) }
                 else { Image(systemName: icon).font(.system(size: 23, weight: .light)).foregroundStyle(tint) }
-            }.frame(width: 48, height: 48).accessibilityHidden(true)
+            }.frame(width: compact ? 34 : 42, height: compact ? 34 : 42).accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 7) {
-                Text(title).font(.system(size: compact ? 14 : 19, weight: .regular))
+                Text(title).font(.system(size: compact ? 13 : 18, weight: .medium))
                 Text(message).font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
             }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(compact ? 16 : 26).frame(maxWidth: .infinity, alignment: .leading)
+        }.padding(.vertical, compact ? 16 : 26)
+            .padding(.horizontal, horizontalInset ?? (compact ? 16 : 26))
+            .frame(maxWidth: .infinity, alignment: .leading)
             .accessibilityElement(children: .combine)
     }
 }
@@ -58,7 +62,7 @@ struct DialogStatePreview: View {
     var body: some View {
         CairnDialog(title: "State preview", subtitle: "Sample data · no disk actions") {
             VStack(alignment: .leading, spacing: 24) {
-                Picker("State", selection: $state) { ForEach(states, id: \.self) { Text($0) } }.pickerStyle(.segmented)
+                CairnSegmentedControl(label: "State", selection: $state, options: states.map { ($0, $0) }).frame(height: 32)
                 CairnStateView(kind: kind, title: title, message: message)
                 if state == "Interrupted" || state == "Skipped" { Text("Review recorded results before starting again. Existing files and history remain available.").font(.system(size: 12)).foregroundStyle(Brand.textMuted) }
             }

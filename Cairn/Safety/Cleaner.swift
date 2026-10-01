@@ -14,8 +14,21 @@ enum Cleaner {
     }
 
     /// Perform the clean appropriate to the item's `cleanMethod`.
-    /// `proEnabled` gates tool-mediated cleans (the paid "correct command" feature).
-    static func clean(_ item: ScanItem, allowedRoots: [URL], proEnabled: Bool) -> Outcome {
+    /// The caller may still pass a legacy tool item; the executor must reject it.
+    static func clean(_ item: ScanItem, allowedRoots: [URL], proEnabled: Bool, reviewedSource: ReviewedSource? = nil,
+                      moveToTrash: @Sendable (URL) throws -> URL? = { url in
+                          var result: NSURL?
+                          try FileManager.default.trashItem(at: url, resultingItemURL: &result)
+                          return result as URL?
+                      }) -> Outcome {
+        // A package/build tool may still write to a cache, and a fixed path
+        // does not prove which location its configuration actually uses. Refuse
+        // even a stale or manually constructed `.trash` item for observed
+        // tool-owned roots, not just current scanner selections.
+        if DevCachesScanner.isObservedToolCache(item.url) || DevCachesScanner.isObservedToolCache(item.resolvedURL) {
+            return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
+                           error: "Tool-owned caches are review-only. Cairn cannot verify the configured cache or active writers; use the tool's own maintenance after checking it is idle.")
+        }
         if item.severity == .risky {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: "Risky data is review-only; Cairn will not remove it.")
@@ -26,7 +39,7 @@ enum Cleaner {
                            error: "This is an advice item — nothing to delete here.")
 
         case .trash:
-            return trash(item, allowedRoots: allowedRoots)
+            return trash(item, allowedRoots: allowedRoots, reviewedSource: reviewedSource, moveToTrash: moveToTrash)
 
         case .emptyTrash:
             // Trash can contain the last recoverable copy of a conversation or
@@ -34,27 +47,20 @@ enum Cleaner {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: "Permanent Trash removal is disabled. Review and empty Trash in Finder.")
 
-        case .tool(let cmd):
-            if cmd.destroysData {
-                return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: true,
-                               error: "This tool action can destroy retained data and is disabled.")
-            }
-            if let reason = SafePaths.protectedSessionReason(item.url)
-                ?? SafePaths.protectedSessionReason(item.resolvedURL) {
-                return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
-                               error: "Blocked by safety guard: \(reason).")
-            }
-            guard proEnabled else {
-                return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
-                               error: "Correct-command cleaning is a Pro feature.")
-            }
-            return runTool(cmd, item: item)
+        case .tool:
+            // A broad command can act outside `item.url` (for example pnpm's
+            // configured store or Docker's whole VM). Neither SafePaths nor a
+            // checkbox can constrain the command's real target, exclusions,
+            // writers, or effect. Keep tool findings visible but never execute
+            // them until each action has its own validated adapter.
+            return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
+                           error: "Tool cleanup is review-only. Cairn cannot verify the command's configured target, exclusions, active writers, or exact effect.")
         }
     }
 
     // MARK: - Trash (the default, recoverable path)
 
-    private static func trash(_ item: ScanItem, allowedRoots: [URL]) -> Outcome {
+    private static func trash(_ item: ScanItem, allowedRoots: [URL], reviewedSource: ReviewedSource?, moveToTrash: @Sendable (URL) throws -> URL?) -> Outcome {
         guard item.url.resolvingSymlinksInPath().standardizedFileURL == item.resolvedURL.standardizedFileURL else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The location changed since scanning. Run a fresh scan.")
         }
@@ -75,40 +81,17 @@ enum Cleaner {
         guard FileScan.exists(item.resolvedURL) else {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false, error: "This item is no longer at its scanned location. Run a fresh scan.")
         }
-        var resulting: NSURL?
+        if let reviewedSource, ReviewedSource.read(item.url) != reviewedSource {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "The source changed after goal review. Review a fresh plan.")
+        }
         do {
-            try FileManager.default.trashItem(at: item.resolvedURL, resultingItemURL: &resulting)
-            return Outcome(movedToTrashURL: resulting as URL?, bytesAffected: item.allocatedSize,
+            let resulting = try moveToTrash(item.resolvedURL)
+            return Outcome(movedToTrashURL: resulting, bytesAffected: item.allocatedSize,
                            usedTool: false, error: nil)
         } catch {
             // Surface ENOSPC / cross-device honestly; never report a failed trash as reclaimed.
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: trashErrorText(error))
-        }
-    }
-
-    // MARK: - Tool-mediated (paid)
-
-    private static func runTool(_ cmd: ToolCommand, item: ScanItem) -> Outcome {
-        guard ToolRunner.isAvailable(cmd.tool) else {
-            return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: true,
-                           error: "`\(cmd.tool)` not found on PATH — run it yourself: \(cmd.display)")
-        }
-        do {
-            let r = try ToolRunner.run(cmd.tool, cmd.arguments, timeout: 180)
-            if r.timedOut {
-                return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: true,
-                               error: "\(cmd.display) timed out and was stopped.")
-            }
-            if !r.ok {
-                let msg = r.stderr.isEmpty ? r.stdout : r.stderr
-                return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: true,
-                               error: "\(cmd.display) failed: \(msg.prefix(200))")
-            }
-            return Outcome(movedToTrashURL: nil, bytesAffected: item.allocatedSize, usedTool: true, error: nil)
-        } catch {
-            return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: true,
-                           error: "Could not run \(cmd.tool): \(error.localizedDescription)")
         }
     }
 

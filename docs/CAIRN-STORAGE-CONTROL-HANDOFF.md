@@ -1,5 +1,7 @@
 # Cairn: implementation and independent review handoff
 
+**Implementation continuation:** Read [current validation](../artifacts/storage-control/measurement/VALIDATION.md) and [capability ledger](STORAGE-CONTROL-CAPABILITIES.md) before treating the work packages below as unimplemented. Independent review and release gates remain.
+
 29 September 2026 · Companion to [the product requirements](CAIRN-STORAGE-CONTROL-PRD.md).
 
 **This is a handoff, not evidence that the new features are built.** The requested workflow is: agree the direction, switch to GPT-6 Sol for implementation, then switch to GPT-6 Astra for independent review and testing. This documentation task does not switch models, start another task, or activate monitoring/cleanup.

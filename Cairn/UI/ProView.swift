@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 /// Pro status + activation card (used on the Settings page).
 struct ProStatusCard: View {
@@ -31,18 +30,9 @@ struct ProStatusCard: View {
                         .buttonStyle(ControlPanelButtonStyle()).disabled(license.isLoading || license.isBusy)
                 }
                 if license.hasRequestedStorage && !license.isLoading && license.storageMessage == nil && !license.isPro {
-                    ForEach(proFeatures, id: \.self) { f in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "checkmark.circle.fill").font(.system(size: 11)).foregroundStyle(Brand.purple)
-                            Text(f).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                        }
-                    }
-                    HStack(spacing: 10) {
-                        Button { NSWorkspace.shared.open(LicenseConfig.purchaseURL) } label: {
-                            Text("Buy Cairn Pro — \(LicenseConfig.price), yours forever")
-                        }.buttonStyle(BrandButtonStyle())
-                        Button(showKeyField ? "Hide key" : "Enter key") { showKeyField.toggle() }.buttonStyle(GhostButtonStyle())
-                    }
+                    Text("Purchases are not offered in this build. Broad tool cleanups are review-only while their safety checks are completed; supported actions remain available without an upgrade.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
+                    Button(showKeyField ? "Hide key" : "Enter existing key") { showKeyField.toggle() }.buttonStyle(GhostButtonStyle())
                     if showKeyField {
                         HStack(spacing: 8) {
                             HStack(spacing: 7) {
@@ -77,19 +67,13 @@ struct ProStatusCard: View {
         .task { await license.loadIfNeeded() }
     }
 
-    private var proFeatures: [String] {
-        ["Batch-clean across every category and project at once",
-         "Correct-command cleans (docker prune, simctl, git gc, conda…)",
-         "App uninstaller and saved exclusions/presets",
-         "One-time purchase — no subscription, ever"]
-    }
     private var statusLine: String {
         if !license.hasRequestedStorage { return "Your license is checked here when needed" }
         if license.isLoading { return "Checking saved license · Cairn remains available" }
         if license.storageMessage != nil { return "Saved license unavailable · free features available" }
-        if license.isPro { return "Active — all features unlocked" }
-        if license.isInTrial { return "Free trial — \(license.trialDaysRemaining) day\(license.trialDaysRemaining == 1 ? "" : "s") left, all features unlocked" }
-        return "Free — Pro features locked"
+        if license.isPro { return "Active licence · supported actions available" }
+        if license.isInTrial { return "Trial licence · \(license.trialDaysRemaining) day\(license.trialDaysRemaining == 1 ? "" : "s") left" }
+        return "Supported actions available without an upgrade"
     }
     private var statusColor: Color {
         if license.isPro { return Brand.safeCyan }
@@ -125,6 +109,6 @@ struct ProPill: View {
         if LicenseConfig.devProUnlock { return "Cairn Pro · DEV" }
         if license.isPro { return "Cairn Pro" }
         if license.isInTrial { return "Trial · \(license.trialDaysRemaining)d left" }
-        return "Upgrade to Pro"
+        return "Licence status"
     }
 }

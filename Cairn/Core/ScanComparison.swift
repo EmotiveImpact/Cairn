@@ -3,7 +3,7 @@ import Foundation
 /// Immutable measurements, separate from the mutable post-cleanup snapshot.
 /// This compares observed cleanup candidates, not all bytes used on a volume.
 enum ScanComparison {
-    struct Scope: Codable, Equatable {
+    struct Scope: Codable, Equatable, Sendable {
         var version = 1
         var categories: [String]
         var exclusions: [String]

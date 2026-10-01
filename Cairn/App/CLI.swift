@@ -4,16 +4,16 @@ import Foundation
 ///
 /// The scan engine was already headless — `--selftest` has always run every
 /// scanner with no window server — so this is argument parsing and output
-/// formatting over the same code the GUI uses. Same scanners, same SafePaths
-/// chokepoint, same Trash-by-default removal.
+/// formatting over the same code the GUI uses. Scans and cleanup previews use
+/// the same scanners, while removal remains in the reviewed app workflow.
 ///
-/// Cairn's buyers live in the terminal, and no competitor in this niche ships a
-/// good CLI, so this is both a real workflow win and the thing that gets posted
-/// to Hacker News.
+/// CLI cleanup is preview-only until a reviewed selection can be bound to the
+/// exact sources the executor will act on. A fresh scan plus `--yes` is not
+/// sufficient authorization for a newly discovered set of files.
 ///
 ///     cairn status
 ///     cairn scan [--json] [--category <id>]
-///     cairn clean --safe [--category <id>] [--dry-run] [--yes]
+///     cairn clean --safe [--category <id>] [--dry-run]
 ///     cairn categories
 enum CLI {
     static let commands: Set<String> = ["status", "scan", "clean", "categories", "help", "--help", "-h"]
@@ -26,9 +26,15 @@ enum CLI {
         switch command {
         case "status":      status(json: flags.contains("--json"))
         case "scan":        scan(json: flags.contains("--json"), category: category)
-        case "clean":       clean(category: category,
-                                  dryRun: flags.contains("--dry-run"),
-                                  confirmed: flags.contains("--yes") || flags.contains("-y"))
+        case "clean":
+            // Refuse before collecting candidates. `--yes` must never turn a
+            // new scan into consent for a different set of files.
+            if flags.contains("--yes") || flags.contains("-y") {
+                let message = "CLI cleanup is preview-only. --yes cannot authorize newly scanned files. Open Cairn, select exact items, and review the action there.\n"
+                FileHandle.standardError.write(Data(message.utf8))
+                exit(2)
+            }
+            clean(category: category)
         case "categories":  categories()
         default:            help()
         }
@@ -91,9 +97,9 @@ enum CLI {
         print("\nTotal measured candidates: \(Fmt.size(total)) across \(items.count) items")
     }
 
-    private static func clean(category: String?, dryRun: Bool, confirmed: Bool) {
-        // Same rule the automatic triggers use: without a human reviewing each
-        // item, only take what is SAFE, regenerable, and recoverable from Trash.
+    private static func clean(category: String?) {
+        // Preview the narrowly eligible set. No CLI flag authorizes removal;
+        // the interactive app records an exact reviewed selection first.
         let candidates = collect(category: category).filter { item in
             guard item.severity == .safe, item.isRegenerable, !item.requiresRunning else { return false }
             if case .trash = item.cleanMethod { return true }
@@ -103,28 +109,12 @@ enum CLI {
 
         guard !candidates.isEmpty else { print("Nothing safe to clean."); return }
 
-        if dryRun || !confirmed {
-            print("Would move \(candidates.count) items to the Trash — \(Fmt.size(total)):\n")
-            for item in candidates.sorted(by: { $0.allocatedSize > $1.allocatedSize }).prefix(20) {
-                print("   \(Fmt.size(item.allocatedSize).padding(toLength: 10, withPad: " ", startingAt: 0)) \(item.resolvedURL.path)")
-            }
-            if candidates.count > 20 { print("   … and \(candidates.count - 20) more") }
-            print(dryRun ? "\nDry run — nothing was removed."
-                         : "\nRe-run with --yes to actually clean. Everything goes to the Trash.")
-            return
+        print("Would move \(candidates.count) items to the Trash — \(Fmt.size(total)):\n")
+        for item in candidates.sorted(by: { $0.allocatedSize > $1.allocatedSize }).prefix(20) {
+            print("   \(Fmt.size(item.allocatedSize).padding(toLength: 10, withPad: " ", startingAt: 0)) \(item.resolvedURL.path)")
         }
-
-        // Use the same recovery logging and running-owner guards as the app.
-        Task { @MainActor in
-            let store = ScanStore()
-            let summary = await store.clean(candidates, proEnabled: false)
-            print("Moved to Trash: \(summary.accounting.trashCount) items · \(Fmt.size(summary.accounting.trashBytes)) estimated file size. These files still occupy disk space.")
-            print("Recovery recorded for \(summary.recoverableCount) items.")
-            for change in summary.capacityChanges { print("\(change.name): \(change.changeText). This change is not attributable solely to Cairn.") }
-            for error in summary.errors { print("Skipped: \(error)") }
-            exit(summary.failed == 0 && summary.errors.isEmpty ? 0 : 1)
-        }
-        RunLoop.main.run()
+        if candidates.count > 20 { print("   … and \(candidates.count - 20) more") }
+        print("\nPreview only — nothing was removed. Open Cairn to select exact items and review cleanup.")
     }
 
     private static func categories() {
@@ -139,17 +129,18 @@ enum CLI {
 
           cairn status                     available capacity, trend, affected-size estimates
           cairn scan [--category <id>]     measure cleanup candidates
-          cairn clean --safe [--yes]       clean safe items (Trash, recoverable)
+          cairn clean --safe               preview eligible Trash candidates only
           cairn categories                 list scanner ids
 
         Flags
           --json          machine-readable output (status, scan)
           --category <id> restrict to one category
-          --dry-run       show what would be removed, change nothing
-          --yes, -y       actually clean; without it, clean only previews
+          --dry-run       explicit preview (the CLI never removes files)
+          --yes, -y       unavailable; CLI cleanup requires exact-item review
 
-        Everything goes to the Trash and can be put back. Cairn never touches
-        AI assistant history, iCloud mirrors, Keychains, ssh keys or Documents.
+        Use the app to select and review exact items before cleanup. The CLI
+        never removes files. Cairn protects AI assistant history, iCloud
+        mirrors, Keychains, ssh keys and Documents.
         """)
     }
 

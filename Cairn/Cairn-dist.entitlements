@@ -4,9 +4,12 @@
 <dict>
     <!--
       Distribution entitlements for Developer ID + Hardened Runtime (NOT sandboxed).
-      App Sandbox is intentionally OFF: a disk cleaner needs to see and reclaim
-      files across the whole home folder (and run tools like `docker`/`brew`),
-      which the sandbox forbids. Full Disk Access is granted by the user in
+      App Sandbox is intentionally OFF for this direct-distribution build.
+      A Store edition needs explicit user-selected folder access, persistent
+      security-scoped bookmarks and a per-feature sandbox audit. Sandboxing
+      does not categorically prohibit file-management apps. External tool
+      actions currently remain disabled pending validated adapters.
+      Full Disk Access is granted by the user in
       System Settings > Privacy & Security; it is not an entitlement.
 
       Hardened runtime is required for notarization. We keep entitlements empty:

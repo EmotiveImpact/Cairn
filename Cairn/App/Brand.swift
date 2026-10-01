@@ -4,6 +4,7 @@ import SwiftUI
 /// screens and the compact native shell, so navigation never changes theme.
 enum Brand {
     // Neutral layers carry the interface; colour identifies actions and status.
+    static let chrome = Color(hex: 0x282D33)
     static let background = Color(hex: 0x191D21)
     static let deepPanel = Color(hex: 0x1D2227)
     static let surfaceElevated = Color(hex: 0x252B31)

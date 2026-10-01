@@ -1,18 +1,18 @@
 // swift-tools-version:5.9
 import PackageDescription
 
-// Cairn — developer-native disk cleaner for macOS.
-// SwiftPM executable target; the .app is assembled + signed by build_local.sh /
-// build_release.sh (see ../mac-apps/SIGNING.md). No Mac App Store: a full-disk
-// cleaner can't be sandboxed and needs Full Disk Access.
+// Native storage manager. Direct distribution is the current build target.
+// A sandboxed Store edition requires separate capability and commerce testing.
 let package = Package(
     name: "Cairn",
     platforms: [
         .macOS("14.0")
     ],
     targets: [
+        .systemLibrary(name: "CSQLite", path: "Support/CSQLite"),
         .executableTarget(
             name: "Cairn",
+            dependencies: ["CSQLite"],
             path: "Cairn",
             exclude: [
                 "Cairn-dist.entitlements",

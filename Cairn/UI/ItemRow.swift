@@ -14,7 +14,7 @@ struct ItemRow: View {
             checkbox
             SeverityDot(severity: item.severity)
 
-            VStack(alignment: .leading, spacing: 2) {
+            VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(item.url.lastPathComponent)
                         .font(.system(size: 13, weight: .medium))
@@ -31,7 +31,7 @@ struct ItemRow: View {
 
             Spacer(minLength: 8)
 
-            VStack(alignment: .trailing, spacing: 2) {
+            VStack(alignment: .trailing, spacing: 5) {
                 Text(item.isActionable ? Fmt.size(item.allocatedSize) : "—")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Brand.textSecondary)
@@ -50,7 +50,7 @@ struct ItemRow: View {
             .opacity(hovering || showInfo ? 1 : 0.25)
             .popover(isPresented: $showInfo, arrowEdge: .trailing) { ItemDetail(item: item) }
         }
-        .padding(.horizontal, 12).padding(.vertical, 9)
+        .padding(.horizontal, 12).padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 9)
                 .fill(hovering ? Brand.blue.opacity(0.05) : .clear)   // white-on-white before; now visibly seats
@@ -67,8 +67,7 @@ struct ItemRow: View {
             Image(systemName: item.selected ? "checkmark.square.fill" : "square")
                 .font(.system(size: 16))
                 .foregroundStyle(item.selected ? Brand.blue : Brand.textMuted)
-                .contentTransition(.symbolEffect(.replace))
-                .symbolEffect(.bounce, value: item.selected)
+
         } else {
             Image(systemName: item.cleanMethod.isActionable ? "exclamationmark.triangle.fill" : "info.circle")
                 .font(.system(size: 14))
@@ -81,7 +80,7 @@ struct ItemRow: View {
             tag("ADVICE", Brand.textMuted)
         }
         if item.cleanMethod.isPaid {
-            tag("PRO · TOOL", Brand.purple)
+            tag("TOOL · ADVICE", Brand.textMuted)
         }
         if !item.requiresQuitBundleIDs.isEmpty {
             let running = RunningApps.running(amongst: item.requiresQuitBundleIDs)

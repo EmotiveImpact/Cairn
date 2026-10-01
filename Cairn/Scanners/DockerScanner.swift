@@ -2,11 +2,10 @@ import Foundation
 
 /// Docker disk reclaim (SPEC §3.x — the developer wedge, tool-mediated). Docker
 /// hides its real space inside a Linux VM image (`Docker.raw`), so deletion from
-/// the host is meaningless: the only honest reclaim is `docker … prune`, run
-/// while the daemon is up. We size with the read-only `docker system df` and then
-/// surface graduated, individually-checked prune actions ordered safest →
-/// destructive. Container layers and volumes are advice only because they may
-/// hold the only copy of application or database state. The host `Docker.raw` is advice-only — pruning frees space INSIDE
+/// the host is meaningless. We size with the read-only `docker system df` and
+/// surface review-only findings. A prune command can affect resources outside
+/// the displayed item and cannot run until an adapter validates its real scope,
+/// active writers, and recovery state. The host `Docker.raw` is advice-only — pruning frees space INSIDE
 /// the VM but the sparse host image only shrinks on a manual disk resize.
 struct DockerScanner: CairnScanner {
     let info = CategoryInfo(
@@ -39,7 +38,7 @@ struct DockerScanner: CairnScanner {
         }
 
         // Read-only sizing pass. Best-effort — if docker isn't on PATH or the
-        // call fails, reclaimable stays unknown (0) and we still offer prunes.
+        // call fails, reclaimable stays unknown (0) and the advice remains visible.
         ctx.progress("docker system df")
         var reclaim = Reclaimable()
         if let result = try? ToolRunner.run("docker", ["system", "df"], timeout: 12), result.ok {
@@ -48,60 +47,47 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
 
-        // Graduated prune actions, safest first. Each is individually checked;
-        // none is pre-selected (all REVIEW or RISKY). Sizes come from the parsed
-        // reclaimable column where available, else 0.
+        // Graduated review findings. None is actionable or pre-selected. Sizes
+        // come from the parsed reclaimable column where available, else 0.
         let dockerHome = FileScan.home
 
         ctx.progress("Build cache")
-        ctx.emit(toolItem(
+        ctx.emit(adviceItem(
             label: "Docker build cache",
             url: dockerHome.appendingPathComponent(".docker/buildx"),
             severity: .review,
-            command: ToolCommand(tool: "docker", arguments: ["builder", "prune", "-f"],
-                                 display: "docker builder prune"),
             allocated: reclaim.buildCache,
-            note: "Docker build cache — safest to prune; rebuilds on next `docker build`"
+            note: "Docker build cache may rebuild on the next build. Inspect active builders and the actual prune scope in Docker before manual cleanup."
         ))
 
         if ctx.isCancelled() { return }
         ctx.progress("Unused images")
-        ctx.emit(toolItem(
+        ctx.emit(adviceItem(
             label: "Unused Docker images",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
-            command: ToolCommand(tool: "docker", arguments: ["image", "prune", "-a", "-f"],
-                                 display: "docker image prune -a"),
             allocated: reclaim.images,
-            note: "Dangling + unreferenced images — re-pulled/rebuilt when needed"
+            note: "Docker reports reclaimable image space. Inspect dependencies and the actual prune scope in Docker before manual cleanup."
         ))
 
         if ctx.isCancelled() { return }
         ctx.progress("Stopped containers")
-        ctx.emit(toolItem(
+        ctx.emit(adviceItem(
             label: "Stopped Docker containers",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
-            command: ToolCommand(tool: "docker", arguments: ["container", "prune", "-f"],
-                                 display: "docker container prune", destroysData: true),
             allocated: reclaim.containers,
-            note: "Stopped containers may contain unrecoverable writable-layer data. Inspect them in Docker before any manual removal.",
-            actionable: false
+            note: "Stopped containers may contain unrecoverable writable-layer data. Inspect them in Docker before any manual removal."
         ))
 
         if ctx.isCancelled() { return }
-        ctx.progress("System prune (destructive)")
-        ctx.emit(toolItem(
+        ctx.progress("Volume and system risks")
+        ctx.emit(adviceItem(
             label: "Docker volumes + everything (DESTRUCTIVE)",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .risky,
-            command: ToolCommand(tool: "docker",
-                                 arguments: ["system", "prune", "-a", "--volumes", "-f"],
-                                 display: "docker system prune -a --volumes",
-                                 destroysData: true),
             allocated: reclaim.total,
-            note: "Deletes unused images, build cache, networks and named volumes; volume data may be unrecoverable. Cairn will not run this command.",
-            actionable: false
+            note: "A broad system prune can delete images, networks, and named volumes containing the only copy of data. Cairn will not run this command."
         ))
 
         if ctx.isCancelled() { return }
@@ -132,26 +118,23 @@ struct DockerScanner: CairnScanner {
 
     // MARK: - Item construction
 
-    /// Build a tool-mediated prune item. Size is the parsed reclaimable bytes (or
-    /// 0 when unknown); never trash-based, so we construct ScanItem directly to
-    /// bypass makeItem's min-size skip and filesystem measurement.
-    private func toolItem(
+    /// Build a review-only item. Size is Docker's parsed reclaimable estimate
+    /// (or 0 when unknown), not measured host space that Cairn can free.
+    private func adviceItem(
         label: String,
         url: URL,
         severity: Severity,
-        command: ToolCommand,
         allocated: Int64,
-        note: String,
-        actionable: Bool = true
+        note: String
     ) -> ScanItem {
         ScanItem(
             url: url,
             allocatedSize: max(0, allocated),
             categoryID: info.id,
             severity: severity,
-            isRegenerable: actionable,
+            isRegenerable: false,
             requiresRunning: true,
-            cleanMethod: actionable ? .tool(command) : .adviceOnly,
+            cleanMethod: .adviceOnly,
             note: "\(label) — \(note)",
             volumeURL: FileScan.volumeURL(of: FileScan.home)
         )

@@ -14,6 +14,13 @@ final class ActionJournal: @unchecked Sendable {
         var state: State
         var trashPath: String?
         var detail: String?
+        var affectedBytes: Int64? = nil
+        var actionKind: String? = nil
+        var trashIdentity: SourceIdentity? = nil
+        var recoveryRecorded: Bool? = nil
+        var relatedRecoveryID: UUID? = nil
+        var destinationPath: String? = nil
+        var runID: UUID? = nil
     }
 
     static let shared = ActionJournal()
@@ -50,7 +57,7 @@ final class ActionJournal: @unchecked Sendable {
         return !entries.contains(where: { $0.state == .pending })
     }
 
-    func begin(path: String, category: String) -> UUID? {
+    func begin(path: String, category: String, affectedBytes: Int64? = nil, actionKind: String = "trash", relatedRecoveryID: UUID? = nil, destinationPath: String? = nil, runID: UUID? = nil) -> UUID? {
         lock.lock(); defer { lock.unlock() }
         loadLocked()
         guard problem == nil, !entries.contains(where: { $0.state == .pending }) else { return nil }
@@ -59,19 +66,19 @@ final class ActionJournal: @unchecked Sendable {
             // Only settled successes/failures can be compacted; the separate
             // removal log remains the source of Put Back history.
             entries.removeAll {
-                ($0.state == .succeeded || $0.state == .failed) &&
+                ($0.state == .failed || ($0.state == .succeeded && $0.recoveryRecorded == true)) &&
                 $0.date < Date().addingTimeInterval(-90 * 86_400)
             }
             while entries.count >= maxEntries {
-                guard let settled = entries.firstIndex(where: { $0.state == .succeeded || $0.state == .failed }) else {
-                    problem = "Action journal is full of uncertain records. It was preserved; further cleanup is blocked."
+                guard let settled = entries.firstIndex(where: { $0.state == .failed || ($0.state == .succeeded && $0.recoveryRecorded == true) }) else {
+                    problem = "Action journal is full of uncertain or unlinked recovery records. It was preserved; further cleanup is blocked."
                     return nil
                 }
                 entries.remove(at: settled)
             }
         }
         let id = UUID()
-        entries.append(Entry(id: id, date: Date(), path: path, category: category, state: .pending))
+        entries.append(Entry(id: id, date: Date(), path: path, category: category, state: .pending, affectedBytes: affectedBytes, actionKind: actionKind, relatedRecoveryID: relatedRecoveryID, destinationPath: destinationPath, runID: runID))
         guard saveLocked() else { return nil }
         return id
     }
@@ -83,8 +90,21 @@ final class ActionJournal: @unchecked Sendable {
         guard problem == nil, let index = entries.firstIndex(where: { $0.id == id && $0.state == .pending }) else { return false }
         entries[index].state = succeeded ? .succeeded : .failed
         entries[index].trashPath = trashPath
+        entries[index].trashIdentity = trashPath.flatMap { SourceIdentity.read(URL(fileURLWithPath: $0)) }
         entries[index].detail = detail.map { String($0.prefix(240)) }
         return saveLocked()
+    }
+
+    /// Called only after the separate recovery log was durably written. Until
+    /// then successful actions cannot be compacted out of the bounded journal.
+    func acknowledgeRecovery(_ ids: Set<UUID>) -> Bool {
+        lock.lock(); defer { lock.unlock() }; loadLocked()
+        guard problem == nil else { return false }
+        var changed = false
+        for index in entries.indices where ids.contains(entries[index].id) && entries[index].state == .succeeded && entries[index].recoveryRecorded != true {
+            entries[index].recoveryRecorded = true; changed = true
+        }
+        return !changed || saveLocked()
     }
 
     /// Called only after the user has inspected the original location and Trash.

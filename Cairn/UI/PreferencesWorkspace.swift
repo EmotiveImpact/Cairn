@@ -10,12 +10,42 @@ struct PreferencesWorkspace: View {
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let tabs = ["General", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
     var body: some View {
-        CairnWorkspace(title: "Preferences", subtitle: preview ? "Preview · changes disabled" : "Saved on this Mac", inspectorVisible: false) {
+        CairnWorkspace(title: "Settings", subtitle: preview ? "Preview · changes disabled" : "How Cairn observes and protects your Mac", inspectorVisible: false) {
             VStack(spacing: 0) {
-                Picker("Preferences", selection: $tab) { ForEach(tabs, id: \.self) { Text($0) } }
-                    .pickerStyle(.segmented).labelsHidden().padding(.horizontal, 26).padding(.bottom, 16)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 22) {
+                        ForEach(tabs, id: \.self) { item in
+                            Button { tab = item } label: {
+                                VStack(spacing: 10) {
+                                    Text(item)
+                                        .font(.system(size: 12, weight: tab == item ? .semibold : .regular))
+                                        .foregroundStyle(tab == item ? Brand.textPrimary : Brand.textMuted)
+                                        .fixedSize()
+                                    Rectangle()
+                                        .fill(tab == item ? Brand.blue : .clear)
+                                        .frame(height: 2)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(tab == item ? .isSelected : [])
+                        }
+                    }
+                    .padding(.horizontal, 26)
+                }
+                .frame(height: 39)
+                .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+                .padding(.bottom, 12)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) { preferences }.padding(.horizontal, 22)
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(tab.uppercased())
+                            .font(.system(size: 10, weight: .semibold))
+                            .tracking(0.8)
+                            .foregroundStyle(Brand.textMuted)
+                            .padding(.top, 10)
+                            .padding(.bottom, 7)
+                        preferences
+                    }.padding(.horizontal, 26)
                 }.disabled(preview)
             }
         } detail: {
@@ -34,28 +64,53 @@ struct PreferencesWorkspace: View {
         case "General":
             option("Sidebar focus outline", "Show an outline around the sidebar control reached with the keyboard.", $settings.showSidebarFocus)
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
-            option("Menu bar", "Keep a small Cairn menu in the macOS menu bar.", $settings.showMenuBarItem)
+            option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)
             option("Scan notifications", "Notify when a scan completes. macOS permission is required.", $settings.scanNotifications)
         case "Scanning":
             option("Refresh older scans", "On launch, rescan if the previous scan is more than a week old.", $settings.autoScanWeekly)
             option("Skip external drives", "Keep general scans on this Mac.", $settings.ignoreExternalDrives)
-            option("Developer caches", "Include supported developer-tool cache categories.", $settings.includeDeveloperCaches)
+            option("Developer caches", "Measure developer-tool cache categories. Package-manager stores are review-only.", $settings.includeDeveloperCaches)
             option("Simulator data", "Include simulator measurements; device contents are inspection-only.", $settings.includeSimulators)
             option("Extra large-file confirmation", "Request an additional confirmation for large file removal.", $settings.askBeforeDeleting)
-            option("Local snapshot before cleanup", "Ask Time Machine for a local snapshot. Cleanup stops if the request fails; a snapshot is not an external backup.", $settings.createRestoreSnapshot)
+            fixed("Local snapshots", "Current supported cleanup moves reviewed items to Trash. Cairn does not request a local snapshot or treat one as a backup.")
             option("Recommendations", "Show relevant cleanup suggestions from measured results.", $settings.smartRecommendations)
         case "Monitoring":
-            option("Space reserve alerts", "Check available space while Cairn is running and alert when it remains below your chosen reserve. Nothing is removed.", $settings.reserveEnabled)
+            option("Space reserve alerts", "Check available space while Cairn is running and alert when it remains below your chosen reserve. Nothing is removed.", preview ? .constant(true) : $settings.reserveEnabled)
                 .onChange(of: settings.reserveEnabled) { _, enabled in
                     if enabled && !preview {
                         settings.reservePaused = false
                         Notify.requestAuth()
                         StorageControl.shared.start()
-                        Task { await StorageControl.shared.refreshCapacity() }
+                        Task { await StorageControl.shared.refreshCapacity(); await StorageControl.shared.refreshNotificationStatus() }
                     }
+                    if !preview { StorageControl.shared.configureMonitoring() }
                 }
-            if settings.reserveEnabled {
-                option("Pause alerts", "Keep your target but stop background checks and notifications until resumed.", $settings.reservePaused)
+            if preview || settings.reserveEnabled {
+                option("Watch known folders", "Observe metadata for build output, package and browser caches, Downloads and Codex local data. No file contents are read and no cleanup runs.", $settings.locationMonitoringEnabled)
+                    .onChange(of: settings.locationMonitoringEnabled) { _, _ in
+                        if !preview { StorageControl.shared.configureMonitoring() }
+                    }
+                option("Quiet hours · 22:00–08:00", "Keep in-app reserve status visible but send no reserve notifications during these local hours.", $settings.reserveQuietHours)
+                if !preview {
+                    HStack(spacing: 16) {
+                        if settings.reservePaused {
+                            Text(settings.reservePauseUntil.map { "Paused until " + $0.formatted(date: .abbreviated, time: .shortened) } ?? "Paused indefinitely").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                            Spacer()
+                            Button("Resume") { StorageControl.shared.resumeMonitoring() }.buttonStyle(ControlPanelButtonStyle())
+                        } else {
+                            Text("Pause monitoring").font(.system(size: 13))
+                            Spacer()
+                            Menu("Pause…") {
+                                Button("For one hour") { StorageControl.shared.pauseMonitoring(until: Date().addingTimeInterval(3_600)) }
+                                Button("Until tomorrow") { StorageControl.shared.pauseMonitoring(until: Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: Date()))) }
+                                Button("Indefinitely") { StorageControl.shared.pauseMonitoring(until: nil) }
+                            }.fixedSize()
+                        }
+                    }
+                    .padding(.vertical, 16)
+                }
+                fixed("Current state", preview ? "Sample reserve only · monitoring is not running in this preview." : StorageControl.shared.monitoringStatus)
+                fixed("Notifications", preview ? "Disabled in sample preview." : StorageControl.shared.notificationStatus)
             }
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
@@ -63,10 +118,10 @@ struct PreferencesWorkspace: View {
                     Text("An alert threshold, not storage held aside by macOS.").font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
                 }
                 Spacer()
-                Stepper("\(settings.reserveGB) GB", value: $settings.reserveGB, in: 5...500, step: 5)
+                Stepper("\(preview ? Int(PreviewStorageScenario.reserveBytes / 1_000_000_000) : settings.reserveGB) GB", value: $settings.reserveGB, in: 5...500, step: 5)
                     .frame(width: 150)
             }.padding(.vertical, 18)
-            fixed("How it works", "Cairn checks capacity roughly every five minutes while it is open. It never clears files in the background. If Cairn is closed, monitoring stops until it runs again.")
+            fixed("How it works", "Capacity is checked roughly every five minutes. Optional folder monitoring waits at least a minute after writes and fifteen minutes between attempts, yields to your scans, and pauses under resource pressure. Quitting Cairn stops monitoring. Closing the window can leave the menu-bar app running.")
             if let checked = StorageControl.shared.lastChecked {
                 fixed("Last checked", checked.formatted(date: .abbreviated, time: .shortened))
             }
@@ -88,7 +143,7 @@ struct PreferencesWorkspace: View {
             ProStatusCard(license: license).padding(.vertical, 20)
         default:
             fixed("Cairn", "Native macOS storage and maintenance workspace · local development build")
-            fixed("Command-line access", "The existing status, scan, clean and categories commands remain available. Installation is optional.")
+            fixed("Command-line access", "Status, scan and categories are read-only. Clean previews eligible items but cannot remove them from the CLI. Installation is optional.")
             Button("Copy CLI installation command") {
                 guard let binary = Bundle.main.executableURL else { return }
                 guard CLIInstallPolicy.state(at: CLIInstallPolicy.target, for: binary) != .conflict else { message = "Another file owns /usr/local/bin/cairn. It was left unchanged."; return }
@@ -104,127 +159,21 @@ struct PreferencesWorkspace: View {
                 VStack(alignment: .leading, spacing: 5) { Text(title).font(.system(size: 13, weight: .medium)); Text(detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true) }.frame(maxWidth: .infinity, alignment: .leading)
                 Toggle(title, isOn: value).labelsHidden().toggleStyle(.switch).controlSize(.small)
             }.padding(.vertical, 18)
+            Rectangle().fill(Brand.separator).frame(height: 0.5)
         }
     }
     private func fixed(_ title: String, _ detail: String) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack { Text(title).font(.system(size: 13, weight: .medium)); Spacer(); if tab == "Protection" { Image(systemName: "lock.fill").foregroundStyle(Brand.textMuted) } }
             Text(detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
-        }.padding(.top, 18)
-    }
-}
-
-struct RecoveryWorkspace: View {
-    let store: ScanStore
-    var search: String
-    @Binding var inspectorVisible: Bool
-    @State private var focused: UUID?
-    @State private var message = ""
-    @State private var restoreSucceeded = false
-    @State private var confirm = false
-    @State private var plan: ScanStore.RemovalLogEntry?
-    @State private var availableTrash: Set<UUID> = []
-    @State private var actionJournal: [ActionJournal.Entry] = []
-    @State private var reviewing: ActionJournal.Entry?
-    @State private var reviewMessage = ""
-    private let preview = CommandLine.arguments.contains("--preview-ui")
-    @State private var samples = [ScanStore.RemovalLogEntry(name: "Build output", originalPath: "~/Library/Developer/Xcode/DerivedData/Sample", trashPath: "~/.Trash/Sample", bytes: 2_300_000_000, date: Date(), category: "xcode"), ScanStore.RemovalLogEntry(name: "Tool-managed cache", originalPath: "Tool command", trashPath: nil, bytes: 400_000_000, date: Date().addingTimeInterval(-86400), category: "dev-caches")]
-    private var entries: [ScanStore.RemovalLogEntry] { (preview ? samples : store.removalLog).filter { search.isEmpty || ($0.name + $0.originalPath).localizedCaseInsensitiveContains(search) } }
-    private var needsManualReview: [ActionJournal.Entry] {
-        let recordedPaths = Set(store.removalLog.compactMap(\.trashPath))
-        return actionJournal.filter { entry in
-            entry.state == .pending || (entry.state == .succeeded && entry.trashPath.map { !recordedPaths.contains($0) } == true)
-        }
-    }
-    private var inspected: ScanStore.RemovalLogEntry? { entries.first { $0.id == focused } ?? entries.first }
-    var body: some View {
-        CairnWorkspace(title: "Activity  ›  Recovery", subtitle: "\(entries.count) records", inspectorVisible: inspectorVisible) {
-            VStack(spacing: 0) {
-                if !preview, let journalError = ActionJournal.shared.error {
-                    CairnStateView(kind: .attention, title: "Action journal needs attention", message: journalError, compact: true)
-                        .padding(14)
-                }
-                if !needsManualReview.isEmpty {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("ACTION NEEDS MANUAL REVIEW").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(Brand.amber)
-                        Text("A move may have been interrupted or its recovery record may be missing. Cairn will not replay it. Check the original and Trash locations before further cleanup.")
-                            .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-                        ForEach(needsManualReview.prefix(5)) { entry in
-                            HStack(alignment: .top, spacing: 12) {
-                                Text("\(entry.state == .pending ? "Uncertain" : "Recovery record missing") · \(entry.path)")
-                                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
-                                Spacer(minLength: 0)
-                                if entry.state == .pending {
-                                    Button("Review…") { reviewing = entry }
-                                        .buttonStyle(ControlPanelButtonStyle())
-                                }
-                            }
-                        }
-                        Button("Show action journal") { NSWorkspace.shared.activateFileViewerSelecting([ActionJournal.shared.location]) }
-                            .buttonStyle(ControlPanelButtonStyle())
-                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if !reviewMessage.isEmpty {
-                    CairnStateView(kind: .completed, title: "Manual review recorded", message: reviewMessage, compact: true)
-                }
-                let reviewed = actionJournal.filter { $0.state == .reviewed }
-                if !reviewed.isEmpty {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("REVIEWED UNCERTAIN ACTIONS").font(.system(size: 10, weight: .semibold)).tracking(0.6).foregroundStyle(Brand.textMuted)
-                        ForEach(Array(reviewed.suffix(3).reversed())) { entry in
-                            Text("\(entry.path) · outcome unknown")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
-                        }
-                    }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
-                }
-                WorkspaceColumns(leading: "Operation", trailing: "Estimate · recovery")
-                if !message.isEmpty { CairnStateView(kind: restoreSucceeded ? .completed : .attention, title: restoreSucceeded ? "Item restored" : "Restore could not finish", message: message, compact: true) }
-                if entries.isEmpty { WorkspaceEmpty(title: "No recorded operations", message: "Reviewed cleanups appear here with their original path and recorded Trash location.", icon: "clock.arrow.circlepath") }
-                else { ScrollView { LazyVStack(spacing: 0) { ForEach(entries) { entry in
-                    WorkspaceRow(title: entry.name, subtitle: entry.originalPath, icon: "clock.arrow.circlepath", value: Fmt.size(entry.bytes), status: entry.restoredAt != nil ? "Restored" : availableTrash.contains(entry.id) ? "In Trash" : entry.actionKind == "tool" ? "Tool action" : "Unavailable", focused: inspectorVisible && inspected?.id == entry.id) { focused = entry.id; inspectorVisible = true }
-                } } } }
-            }
-        } detail: {
-            if let entry = inspected {
-                WorkspaceHeading(title: entry.name, subtitle: Fmt.relative(entry.date), icon: "arrow.uturn.backward", value: Fmt.size(entry.bytes))
-                WorkspaceDetail(title: "Recorded size", text: "This is a file-size estimate from the scan, not measured space freed. Trash items continue to occupy disk space.")
-                WorkspaceDetail(title: "Original location", text: entry.originalPath)
-                WorkspaceDetail(title: "Recorded Trash location", text: entry.trashPath ?? "No Trash path was recorded for this action.")
-                WorkspaceDetail(title: "Recovery", text: availableTrash.contains(entry.id) ? "The recorded Trash entry is present. Put Back refuses to overwrite an existing original." : "The Trash entry is absent or cannot be accessed. The history record alone cannot restore the contents.")
-            }
-            WorkspaceDetail(title: "History stays", text: "An unsuccessful restore keeps the operation record. Cairn does not erase the history just because a Trash item is missing.")
-        } actions: {
-            Text(message.isEmpty ? "Recovery depends on the original Trash item" : message).foregroundStyle(Brand.textMuted).lineLimit(2)
-            Spacer()
-            Button("Put Back…") { plan = inspected; confirm = true }.buttonStyle(ControlPanelButtonStyle(primary: true)).disabled(preview || store.isRestoring || inspected.map { !availableTrash.contains($0.id) } ?? true)
-        }.task { await refresh() }
-        .sheet(isPresented: $confirm) {
-            if let entry = plan { WorkspaceConfirmation(title: "Restore \(entry.name)?", explanation: "Return the recorded Trash item to its original path. Existing files will not be overwritten.", entries: [entry.originalPath], actionTitle: "Put Back") { Task { restoreSucceeded = await store.restoreFromLog(entry); message = restoreSucceeded ? "Restored \(entry.name)." : "Restore failed. The history record was retained."; await refresh() } } }
-        }
-        .sheet(item: $reviewing) { entry in
-            InterruptedActionReview(entry: entry) {
-                let recorded = await Task.detached(priority: .utility) {
-                    ActionJournal.shared.acknowledgeManualReview(entry.id)
-                }.value
-                if recorded {
-                    reviewMessage = "The safety stop was cleared after your review. Cairn did not change files or decide whether the interrupted move succeeded."
-                    await refresh()
-                }
-                return recorded
-            }
-        }
-    }
-    private func refresh() async {
-        guard !preview else { availableTrash = Set(samples.filter(\.recoverable).map(\.id)); return }
-        let records = store.removalLog
-        availableTrash = await Task.detached { Set(records.filter { $0.recoverable && $0.trashPath.map { FileManager.default.fileExists(atPath: $0) } ?? false }.map(\.id)) }.value
-        actionJournal = await Task.detached(priority: .utility) { ActionJournal.shared.recent }.value
+        }.padding(.vertical, 18)
+            .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 }
 
 /// Acknowledgement changes only Cairn's journal. The user must inspect both
 /// locations; a missing Trash path after a crash cannot be reconstructed here.
-private struct InterruptedActionReview: View {
+struct InterruptedActionReview: View {
     let entry: ActionJournal.Entry
     let onAcknowledge: () async -> Bool
     @Environment(\.dismiss) private var dismiss

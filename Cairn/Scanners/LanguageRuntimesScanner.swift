@@ -10,8 +10,8 @@ import Foundation
 /// project's `.nvmrc` / `.tool-versions` / `.python-version` / `.ruby-version`.
 /// So everything here is REVIEW and never pre-selected. We prefer the manager's
 /// own `uninstall` (which also rewrites shims) but `.trash` is acceptable for v1.
-/// conda environments are irreversible once removed; the conda package cache is
-/// pruned via `conda clean --all`, never rm.
+/// conda environments are irreversible once removed; the conda package cache
+/// remains advice-only until Cairn can verify the configured root and writers.
 struct LanguageRuntimesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "runtimes",
@@ -104,10 +104,9 @@ struct LanguageRuntimesScanner: CairnScanner {
             }
         }
 
-        // 3) conda package cache — ONE REVIEW item per install, pruned via
-        //    `conda clean --all` (never rm: the cache is hard-linked into envs).
-        //    Construct ScanItem directly so the size is surfaced even though the
-        //    method is tool-mediated, applying the ctx.minSizeBytes floor.
+        // 3) conda package cache — ONE review-only item per install. It may be
+        //    hard-linked into environments. Surface the size for inspection but
+        //    never infer that the scanned path is conda's configured active root.
         for condaRoot in condaRoots {
             if ctx.isCancelled() { return }
             let pkgs = condaRoot.appendingPathComponent("pkgs")
@@ -116,11 +115,6 @@ struct LanguageRuntimesScanner: CairnScanner {
 
             let stats = FileScan.measure(pkgs)
             guard stats.allocatedSize >= ctx.minSizeBytes else { continue }
-            let clean = ToolCommand(
-                tool: "conda",
-                arguments: ["clean", "--all", "-y"],
-                display: "conda clean --all"
-            )
             ctx.emit(ScanItem(
                 url: pkgs,
                 allocatedSize: stats.allocatedSize,
@@ -128,11 +122,11 @@ struct LanguageRuntimesScanner: CairnScanner {
                 latestModified: stats.latestModified,
                 categoryID: info.id,
                 severity: .review,
-                isRegenerable: true,
+                isRegenerable: false,
                 requiresQuitBundleIDs: [],
                 requiresRunning: false,
-                cleanMethod: .tool(clean),
-                note: "conda package cache — pruned via conda clean --all",
+                cleanMethod: .adviceOnly,
+                note: "Conda package cache — verify the configured package root, environments, and active operations before using conda's own maintenance. Cairn will not remove it.",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: pkgs),
                 selected: false

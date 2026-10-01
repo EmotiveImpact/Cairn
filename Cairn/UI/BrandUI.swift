@@ -71,95 +71,30 @@ struct AmbientBackground: View {
     }
 }
 
-/// Primary button — the blue→teal brand gradient + a soft colored shadow, with
-/// the studio press-scale. `prominent` makes it full-width and a touch larger for
-/// hero/footer CTAs. This is the single primary-CTA identity across the app.
+/// Compatibility entry points share the approved component surface.
 struct BrandButtonStyle: ButtonStyle {
-    @Environment(\.isEnabled) private var isEnabled
-    var enabled: Bool = true
-    var prominent: Bool = false
+    var enabled = true
+    var prominent = false
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: prominent ? 14 : 13, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, prominent ? 20 : 14)
-            .padding(.vertical, prominent ? 11 : 8)
-            .frame(maxWidth: prominent ? .infinity : nil)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(enabled && isEnabled ? AnyShapeStyle(Brand.brand) : AnyShapeStyle(Brand.surfaceSubtle))
-            )
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.white.opacity(0.12)))
-            .opacity(enabled && isEnabled ? (configuration.isPressed ? 0.82 : 1) : 0.48)
-            .pointerCursor()
+        CairnControlSurface(label: configuration.label, primary: true, pressed: configuration.isPressed,
+                            available: enabled, prominent: prominent)
     }
 }
-
-/// Hover-lift for clickable cards/rows — a small rise on hover + press-scale.
-/// Premium apps give feedback on every target; this is the shared treatment.
-struct HoverButtonStyle: ButtonStyle {
-    var lift: CGFloat = 2
-    func makeBody(configuration: Configuration) -> some View { HoverBody(configuration: configuration, lift: lift) }
-    struct HoverBody: View {
-        let configuration: Configuration
-        let lift: CGFloat
-        @State private var hovering = false
-        var body: some View {
-            configuration.label
-                .offset(y: hovering && !configuration.isPressed ? -lift : 0)
-                .scaleEffect(configuration.isPressed ? 0.985 : 1)
-                .animation(.easeOut(duration: 0.14), value: hovering)
-                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-                .contentShape(Rectangle())
-                .onHover { hovering = $0 }
-                .pointerCursor()
-        }
-    }
-}
-
-/// White filled button with a hairline border — the reference's secondary CTA
-/// (e.g. "Configure Scan"). Matches the primary button's height.
 struct WhiteButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 14, weight: .semibold))
-            .foregroundStyle(Brand.textPrimary)
-            .padding(.horizontal, 18).padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous).fill(Brand.surfaceElevated)
-                    .overlay(RoundedRectangle(cornerRadius: Brand.rCard, style: .continuous).stroke(Brand.inputBorder, lineWidth: 1))
-            )
-            .shadow(color: Brand.shadowColor.opacity(0.05), radius: 6, y: 2)
-            .scaleEffect(configuration.isPressed ? 0.97 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .pointerCursor()
+        CairnControlSurface(label: configuration.label, pressed: configuration.isPressed)
     }
 }
-
 struct GhostButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View { GhostBody(configuration: configuration) }
-    struct GhostBody: View {
-        let configuration: Configuration
-        @Environment(\.isEnabled) private var isEnabled
-        @State private var hovering = false
-        var body: some View {
-            configuration.label
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(hovering && isEnabled ? Brand.textPrimary : Brand.textSecondary)
-                .padding(.horizontal, 12).padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: Brand.rSm, style: .continuous)
-                        .fill(hovering && isEnabled ? Brand.surfaceSubtle : .clear)
-                        .overlay(RoundedRectangle(cornerRadius: Brand.rSm, style: .continuous)
-                            .stroke(hovering && isEnabled ? Brand.inputBorder : Brand.border, lineWidth: 1))
-                )
-                .opacity(isEnabled ? 1 : 0.4)               // visible-but-disabled
-                .scaleEffect(configuration.isPressed ? 0.97 : 1)
-                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-                .animation(.easeOut(duration: 0.12), value: hovering)
-                .onHover { if isEnabled { hovering = $0 } }
-                .pointerCursor()
-        }
+    func makeBody(configuration: Configuration) -> some View {
+        CairnControlSurface(label: configuration.label, pressed: configuration.isPressed)
+    }
+}
+/// Keep legacy call sites stable without lift, scaling or geometry changes.
+struct HoverButtonStyle: ButtonStyle {
+    var lift: CGFloat = 0
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label.contentShape(Rectangle())
     }
 }
 
@@ -179,10 +114,10 @@ struct StatusPill: View {
     }
     var body: some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
+            .font(.system(size: 10, weight: .medium))
             .foregroundStyle(color)
-            .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(0.13)))
+            .padding(.horizontal, 9).padding(.vertical, 5)
+            .background(Capsule().fill(color.opacity(0.07)))
     }
 }
 

@@ -13,44 +13,52 @@ struct DevCachesScanner: CairnScanner {
         requiresFDA: false
     )
 
-    /// (label, home-relative path, severity, method, note)
+    /// These are observations, not deletion targets. A fixed home-relative
+    /// path does not prove the tool's configured cache, and a scan cannot prove
+    /// a CLI process has stopped writing. Re-enable one target only through a
+    /// separately validated, tool-specific adapter.
     private struct Target {
-        let label: String, rel: String, sev: Severity, method: CleanMethod, note: String
+        let label: String, rel: String, note: String
     }
 
-    private var targets: [Target] {
-        func tool(_ t: String, _ a: [String], _ d: String, destroys: Bool = false) -> CleanMethod {
-            .tool(ToolCommand(tool: t, arguments: a, display: d, destroysData: destroys))
+    private static let targets: [Target] = [
+            .init(label: "npm cache", rel: ".npm/_cacache", note: "Check npm's configured cache and active installs before using npm's own maintenance."),
+            .init(label: "npm logs", rel: ".npm/_logs", note: "Install logs may have active writers or useful diagnostics. Review in npm."),
+            .init(label: "Yarn (classic)", rel: "Library/Caches/Yarn", note: "Check Yarn's configured cache and active installs before using yarn cache clean."),
+            .init(label: "Yarn Berry", rel: ".yarn/berry/cache", note: "Global cache may be shared with projects. Check configuration and active installs."),
+            .init(label: "pnpm store", rel: "Library/pnpm/store", note: "May be hard-linked into projects. Check configured store and active installs before using pnpm store prune."),
+            .init(label: "pnpm store (XDG)", rel: ".local/share/pnpm/store", note: "May be hard-linked into projects. Check configured store and active installs before using pnpm store prune."),
+            .init(label: "Bun cache", rel: ".bun/install/cache", note: "Check Bun's configured cache and active installs before maintenance."),
+            .init(label: "pip cache", rel: "Library/Caches/pip", note: "Check pip's configured cache and active installs before using pip cache commands."),
+            .init(label: "uv cache", rel: ".cache/uv", note: "Shared package cache may be in use. Check uv configuration and active operations."),
+            .init(label: "Poetry cache", rel: "Library/Caches/pypoetry", note: "Check Poetry's configured cache and active installs before maintenance."),
+            .init(label: "Cargo registry", rel: ".cargo/registry/cache", note: "Downloaded crate archives may be shared across projects. Check active Cargo operations."),
+            .init(label: "Cargo git db", rel: ".cargo/git/db", note: "Shared Git dependency cache. Check active Cargo operations and project recovery needs."),
+            .init(label: "Go module cache", rel: "go/pkg/mod", note: "Check GOMODCACHE and active builds before using go clean -modcache."),
+            .init(label: "Go build cache", rel: "Library/Caches/go-build", note: "Check GOCACHE and active builds before using go clean -cache."),
+            .init(label: "Gradle caches", rel: ".gradle/caches", note: "Shared dependencies and build state. Check active daemons and configured Gradle home."),
+            .init(label: "Gradle wrapper dists", rel: ".gradle/wrapper/dists", note: "Installed Gradle distributions may be pinned by projects. Review versions first."),
+            .init(label: "Maven repository", rel: ".m2/repository", note: "Local repository may contain artifacts unavailable elsewhere. Inspect before maintenance."),
+            .init(label: "Ivy cache", rel: ".ivy2/cache", note: "Shared dependencies may be in use or unavailable elsewhere. Inspect first."),
+            .init(label: "CocoaPods cache", rel: "Library/Caches/CocoaPods", note: "Check configured cache and active installs before pod cache maintenance."),
+            .init(label: "Carthage cache", rel: "Library/Caches/org.carthage.CarthageKit", note: "Check active builds and whether dependencies can be fetched again."),
+            .init(label: "SwiftPM cache", rel: "Library/Caches/org.swift.swiftpm", note: "Shared package artifacts may be in use. Check active builds and configured cache."),
+            .init(label: "ccache", rel: ".cache/ccache", note: "Check CCACHE_DIR and active compiler processes before ccache maintenance."),
+            .init(label: "ccache (Library)", rel: "Library/Caches/ccache", note: "Check CCACHE_DIR and active compiler processes before ccache maintenance."),
+            .init(label: "Composer cache", rel: ".composer/cache", note: "Check Composer's configured cache and active installs before maintenance."),
+            .init(label: "Homebrew cache", rel: "Library/Caches/Homebrew", note: "Check Homebrew's configured cache and active operations before cleanup."),
+            .init(label: "Deno cache", rel: "Library/Caches/deno", note: "Check Deno's configured cache and active runs before maintenance."),
+            .init(label: "NuGet packages", rel: ".nuget/packages", note: "Shared packages may be in use. Check NuGet configuration and active restores."),
+    ]
+
+    /// Reject a legacy Trash item for any cache root observed by this scanner.
+    /// The displayed path is not proof that the corresponding CLI uses it.
+    static func isObservedToolCache(_ url: URL) -> Bool {
+        let path = url.standardizedFileURL.path
+        return targets.contains { target in
+            let root = FileScan.home.appendingPathComponent(target.rel).standardizedFileURL.path
+            return path == root || path.hasPrefix(root + "/")
         }
-        return [
-            .init(label: "npm cache", rel: ".npm/_cacache", sev: .safe, method: .trash, note: "npm package cache — reinstalls on next install"),
-            .init(label: "npm logs", rel: ".npm/_logs", sev: .safe, method: .trash, note: "npm install logs"),
-            .init(label: "Yarn (classic)", rel: "Library/Caches/Yarn", sev: .safe, method: .trash, note: "Yarn v1 cache — `yarn cache clean`"),
-            .init(label: "Yarn Berry", rel: ".yarn/berry/cache", sev: .safe, method: .trash, note: "Yarn Berry global cache"),
-            .init(label: "pnpm store", rel: "Library/pnpm/store", sev: .review, method: tool("pnpm", ["store", "prune"], "pnpm store prune"), note: "Hard-linked into projects — prune, never delete"),
-            .init(label: "pnpm store (XDG)", rel: ".local/share/pnpm/store", sev: .review, method: tool("pnpm", ["store", "prune"], "pnpm store prune"), note: "Hard-linked into projects — prune, never delete"),
-            .init(label: "Bun cache", rel: ".bun/install/cache", sev: .safe, method: .trash, note: "Bun install cache"),
-            .init(label: "pip cache", rel: "Library/Caches/pip", sev: .safe, method: .trash, note: "pip wheel cache — `pip cache purge`"),
-            .init(label: "uv cache", rel: ".cache/uv", sev: .safe, method: .trash, note: "uv cache"),
-            .init(label: "Poetry cache", rel: "Library/Caches/pypoetry", sev: .safe, method: .trash, note: "Poetry cache"),
-            .init(label: "Cargo registry", rel: ".cargo/registry/cache", sev: .safe, method: .trash, note: "Rust registry tarballs — re-downloaded on build"),
-            .init(label: "Cargo git db", rel: ".cargo/git/db", sev: .safe, method: .trash, note: "Cargo git dependency cache"),
-            .init(label: "Go module cache", rel: "go/pkg/mod", sev: .safe, method: tool("go", ["clean", "-modcache"], "go clean -modcache"), note: "Read-only (0444) — use go clean, not rm"),
-            .init(label: "Go build cache", rel: "Library/Caches/go-build", sev: .safe, method: .trash, note: "Go build cache — `go clean -cache`"),
-            .init(label: "Gradle caches", rel: ".gradle/caches", sev: .review, method: .trash, note: "Gradle dependency + build caches"),
-            .init(label: "Gradle wrapper dists", rel: ".gradle/wrapper/dists", sev: .review, method: .trash, note: "Downloaded Gradle distributions — pile up forever"),
-            .init(label: "Maven repository", rel: ".m2/repository", sev: .review, method: .trash, note: "Maven local repo — re-resolves on next build"),
-            .init(label: "Ivy cache", rel: ".ivy2/cache", sev: .review, method: .trash, note: "Ivy cache"),
-            .init(label: "CocoaPods cache", rel: "Library/Caches/CocoaPods", sev: .safe, method: .trash, note: "CocoaPods cache — `pod cache clean --all`"),
-            .init(label: "Carthage cache", rel: "Library/Caches/org.carthage.CarthageKit", sev: .safe, method: .trash, note: "Rebuilds on `carthage bootstrap`"),
-            .init(label: "SwiftPM cache", rel: "Library/Caches/org.swift.swiftpm", sev: .safe, method: .trash, note: "SwiftPM artifacts — `swift package resolve` restores"),
-            .init(label: "ccache", rel: ".cache/ccache", sev: .safe, method: .trash, note: "C/C++ compiler cache — `ccache -C`"),
-            .init(label: "ccache (Library)", rel: "Library/Caches/ccache", sev: .safe, method: .trash, note: "C/C++ compiler cache"),
-            .init(label: "Composer cache", rel: ".composer/cache", sev: .safe, method: .trash, note: "PHP Composer cache"),
-            .init(label: "Homebrew cache", rel: "Library/Caches/Homebrew", sev: .safe, method: .trash, note: "Downloaded bottles — `brew cleanup --prune=all`"),
-            .init(label: "Deno cache", rel: "Library/Caches/deno", sev: .review, method: .trash, note: "Deno module cache"),
-            .init(label: "NuGet packages", rel: ".nuget/packages", sev: .review, method: .trash, note: ".NET packages — `dotnet nuget locals all --clear`"),
-        ]
     }
 
     func scan(_ ctx: ScanContext) async {
@@ -58,7 +66,7 @@ struct DevCachesScanner: CairnScanner {
         // per-tree limit alone still allows the whole category to run for minutes.
         let budget: TimeInterval = 18
         let deadline = ProcessInfo.processInfo.systemUptime + budget
-        let list = targets
+        let list = Self.targets
         for (index, t) in list.enumerated() {
             if ctx.isCancelled() { return }
             let remaining = deadline - ProcessInfo.processInfo.systemUptime
@@ -98,25 +106,24 @@ struct DevCachesScanner: CairnScanner {
         if ctx.isCancelled() || stats.cancelled { return nil }
         // A timed-out tree may have exceeded the floor even when its measured
         // prefix did not. Show the lower bound rather than silently hiding it.
-        if stats.allocatedSize < ctx.minSizeBytes && !target.method.isPaid && !stats.truncated { return nil }
+        if stats.allocatedSize < ctx.minSizeBytes && !stats.truncated { return nil }
 
         let partial = stats.truncated || stats.permissionDenied
-        let method: CleanMethod = partial && stats.allocatedSize == 0 ? .adviceOnly : target.method
         let note = "\(target.label) — \(target.note)" +
-            (partial ? " · Partial size (lower bound); review before cleaning" : "")
+            (partial ? " · Partial size (lower bound)" : "") + " Cairn will not remove this tool-owned cache."
         return ScanItem(
             url: url,
             allocatedSize: stats.allocatedSize,
             itemCount: stats.fileCount,
             latestModified: stats.latestModified,
             categoryID: info.id,
-            severity: partial ? .review : target.sev,
-            isRegenerable: true,
-            cleanMethod: method,
+            severity: .review,
+            isRegenerable: false,
+            cleanMethod: .adviceOnly,
             note: note,
             permissionDenied: stats.permissionDenied,
             volumeURL: FileScan.volumeURL(of: url),
-            selected: !partial && target.sev == .safe && method.isActionable
+            selected: false
         )
     }
 }

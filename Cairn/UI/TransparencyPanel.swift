@@ -59,12 +59,7 @@ struct TransparencyPanel: View {
             }
             .padding(16)
 
-            Picker("", selection: $tab) {
-                Text("What's New").tag(0)
-                Text("Bugs & Fixes").tag(1)
-                Text("Safety").tag(2)
-            }
-            .pickerStyle(.segmented)
+            CairnSegmentedControl(label: "Information", selection: $tab, options: [("What's New", 0), ("Bugs & Fixes", 1), ("Safety", 2)]).frame(height: 32)
             .padding(.horizontal, 16)
 
             ScrollView {

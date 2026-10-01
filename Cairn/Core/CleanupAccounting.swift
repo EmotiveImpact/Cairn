@@ -1,7 +1,7 @@
 import Foundation
 
 /// File sizes are estimates from a scan, never evidence of released capacity.
-struct CleanupAccounting {
+struct CleanupAccounting: Codable, Sendable {
     private(set) var trashCount = 0
     private(set) var trashBytes: Int64 = 0
     private(set) var recordedRecoveryCount = 0
@@ -24,11 +24,12 @@ struct CleanupAccounting {
 
 /// A before/after observation of macOS available capacity. Other apps, snapshots
 /// and purgeable data can change it too: do not attribute its delta to Cairn.
-struct CleanupCapacityChange: Identifiable {
-    struct Reading {
+struct CleanupCapacityChange: Identifiable, Codable, Sendable {
+    struct Reading: Codable, Sendable {
         var volumeID: String
         var name: String
         var available: Int64
+        var date = Date()
     }
     let id: String
     let before: Reading?
@@ -50,5 +51,28 @@ struct CleanupCapacityChange: Identifiable {
               let id = values.volumeUUIDString, !id.isEmpty,
               let available = values.volumeAvailableCapacityForImportantUsage, available >= 0 else { return nil }
         return Reading(volumeID: id, name: values.volumeName ?? "Volume", available: available)
+    }
+}
+
+/// Shared before/after volume observations for specialist receipts. The source
+/// volume URLs survive a move to Trash; a missing/replaced drive yields unknown.
+struct CleanupCapacityWindow {
+    let volumes: [URL]
+    let before: [CleanupCapacityChange.Reading?]
+    static func begin(urls: [URL]) async -> CleanupCapacityWindow {
+        await Task.detached(priority: .utility) {
+            var devices = Set<UInt64>()
+            var volumes: [URL] = []
+            for url in urls {
+                guard let identity = SourceIdentity.read(url), devices.insert(identity.device).inserted,
+                      let volume = FileScan.volumeURL(of: url) else { continue }
+                volumes.append(volume)
+            }
+            return CleanupCapacityWindow(volumes: volumes, before: volumes.map(CleanupCapacityChange.read))
+        }.value
+    }
+    func finish() async -> [CleanupCapacityChange] {
+        let after = await Task.detached(priority: .utility) { volumes.map(CleanupCapacityChange.read) }.value
+        return volumes.indices.map { CleanupCapacityChange(id: volumes[$0].path, before: before[$0], after: after[$0]) }
     }
 }

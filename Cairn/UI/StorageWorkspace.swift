@@ -32,7 +32,7 @@ struct StorageWorkspace: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("Where your work lives").font(.system(size: 23, weight: .regular))
+                        Text("Where your work lives").font(.system(size: 28, weight: .semibold))
                         Text("See your drives and choose the right next step for your files.").font(.system(size: 13)).foregroundStyle(Brand.textMuted)
                     }
                     Spacer()
@@ -163,7 +163,7 @@ struct StorageWorkspace: View {
                     Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                 }.frame(width: 175, alignment: .leading)
             }.padding(.horizontal, 19).frame(height: 58).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(selected == area ? Brand.surfaceSubtle : Color.clear)
+        }.buttonStyle(.plain).background(selected == area ? Color.white.opacity(0.045) : Color.clear)
     }
     @ViewBuilder private var detail: some View {
         if selected == "Finished exports" {
@@ -315,5 +315,5 @@ struct StorageWorkspace: View {
         }
         return URL(string: value)
     }
-    private static let samples = [StorageDrive(url: URL(fileURLWithPath: "/"), name: "Macintosh HD", uuid: "Sample internal volume", capacity: 500_000_000_000, available: 9_900_000_000, external: false, writable: true, encrypted: true, format: "apfs"), StorageDrive(url: URL(fileURLWithPath: "/Volumes/Studio SSD"), name: "Studio SSD", uuid: "SAMPLE-DRIVE-IDENTITY", capacity: 1_000_000_000_000, available: 186_000_000_000, external: true, writable: true, encrypted: true, format: "apfs")]
+    private static let samples = [StorageDrive(url: URL(fileURLWithPath: "/"), name: "Macintosh HD", uuid: PreviewStorageScenario.volumeID, capacity: PreviewStorageScenario.totalBytes, available: PreviewStorageScenario.availableBytes, external: false, writable: true, encrypted: true, format: "apfs"), StorageDrive(url: URL(fileURLWithPath: "/Volumes/Studio SSD"), name: "Studio SSD", uuid: "SAMPLE-DRIVE-IDENTITY", capacity: 1_000_000_000_000, available: 186_000_000_000, external: true, writable: true, encrypted: true, format: "apfs")]
 }

@@ -24,6 +24,7 @@ struct MenuScanStatus {
     var categoryCount = 0
     var scanDate: Date?
     var partial = false
+    var operationText: String?
     var canStart: Bool { !scanning && !operationBusy && !otherScanBusy }
 }
 
@@ -51,14 +52,23 @@ enum MenuStorageSummary {
     }
 }
 
+enum MenuAvailableSpace {
+    static func title(_ bytes: Int64?, checked: Bool) -> String {
+        guard let bytes, bytes >= 0 else { return checked ? "—" : "…" }
+        return Fmt.size(bytes)
+    }
+}
+
 /// AppKit supplies real menu tracking, keyboard navigation, submenus and material.
-/// No scene binding, timers, scan stores or synchronous filesystem work on open.
+/// No scene binding, scan stores or synchronous filesystem work on open.
 @MainActor final class CairnMenuBar: NSObject, NSMenuDelegate {
     static let shared = CairnMenuBar()
     var scanStatus: () -> MenuScanStatus = { MenuScanStatus() }
     private var statusItem: NSStatusItem?
     private let menu = NSMenu()
     private var refreshTask: Task<Void, Never>?
+    private var badgeRefreshLoop: Task<Void, Never>?
+    private var visibilityGeneration: UInt64 = 0
     private var available: Int64?
     private var change = "Reading storage…"
     private var readAt: Date?
@@ -86,33 +96,57 @@ enum MenuStorageSummary {
     func setVisible(_ visible: Bool) {
         let enabled = preview ? CommandLine.arguments.contains("--preview-menu") : visible
         guard enabled != (statusItem != nil) else { return }
+        visibilityGeneration &+= 1
         if !enabled {
+            badgeRefreshLoop?.cancel()
+            badgeRefreshLoop = nil
+            refreshTask?.cancel()
+            refreshTask = nil
             if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
             statusItem = nil
             return
         }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if !preview { available = nil; readAt = nil }
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         let renderer = ImageRenderer(content: CairnLogo(size: 22, monochrome: true))
         renderer.scale = 2
         let image = renderer.nsImage ?? NSImage(systemSymbolName: "mountain.2.fill", accessibilityDescription: "Cairn")
         image?.isTemplate = true
         image?.size = NSSize(width: 20, height: 20)
         item.button?.image = image
-        item.button?.toolTip = preview ? "Cairn Preview · sample data" : "Cairn · Storage & maintenance"
-        item.button?.setAccessibilityLabel(preview ? "Cairn Preview" : "Cairn")
+        item.button?.imagePosition = .imageLeading
+        item.button?.font = .monospacedDigitSystemFont(ofSize: 11, weight: .medium)
         menu.delegate = self
         menu.autoenablesItems = false
         menu.minimumWidth = 290
         item.menu = menu
         statusItem = item
         if preview {
-            available = 9_900_000_000
-            change = "4.2 GB less since yesterday"
+            available = PreviewStorageScenario.availableBytes
+            change = "3.5 GB more available since yesterday"
             drives = CommandLine.arguments.contains("--preview-empty-storage") ? [] : [.init(id: "SAMPLE-DRIVE-IDENTITY", name: "Studio SSD", available: 186_000_000_000, readOnly: false)]
             drivesRead = true
             readAt = Date()
         }
         rebuild()
+        if !preview { startBadgeRefreshLoop() }
+    }
+
+    /// The visible number is a fresh internal-volume capacity reading, never a
+    /// scan estimate. A minute-level metadata check keeps it useful even when
+    /// reserve monitoring is off and the menu stays closed.
+    private func startBadgeRefreshLoop() {
+        badgeRefreshLoop?.cancel()
+        badgeRefreshLoop = Task { [weak self] in
+            while !Task.isCancelled {
+                let reading = await Task.detached(priority: .utility) { CapacityProbe.read() }.value
+                guard !Task.isCancelled, let self, self.statusItem != nil else { return }
+                self.available = reading?.available
+                self.readAt = Date()
+                self.updateStorageRows()
+                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            }
+        }
     }
 
     func menuWillOpen(_ menu: NSMenu) {
@@ -150,14 +184,14 @@ enum MenuStorageSummary {
 
     private func refresh() {
         guard !preview, refreshTask == nil else { return }
+        let generation = visibilityGeneration
         let history = StorageControl.shared.latestCapacity
         // Only volume metadata and Cairn's small saved history; no directory walks
         // or diskutil processes. One in-flight task even after repeated menu opens.
         refreshTask = Task {
             let reading = await Task.detached(priority: .utility) {
-                let home = FileManager.default.homeDirectoryForCurrentUser
-                let info = try? home.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeAvailableCapacityForImportantUsageKey])
-                let free = info?.volumeAvailableCapacityForImportantUsage
+                let internalCapacity = CapacityProbe.read()
+                let free = internalCapacity?.available
                 let keys: Set<URLResourceKey> = [.volumeUUIDStringKey, .volumeNameKey, .volumeIsLocalKey, .volumeIsInternalKey, .volumeIsReadOnlyKey, .volumeAvailableCapacityForImportantUsageKey]
                 let locality: Set<URLResourceKey> = [.volumeIsLocalKey, .volumeIsInternalKey]
                 let mounts = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: Array(locality), options: [.skipHiddenVolumes]) ?? []
@@ -167,8 +201,9 @@ enum MenuStorageSummary {
                     return Drive(id: values.volumeUUIDString ?? url.path, name: values.volumeName ?? url.lastPathComponent,
                                  available: values.volumeAvailableCapacityForImportantUsage, readOnly: values.volumeIsReadOnly != false)
                 }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: info?.volumeUUIDString, readings: history), drives: drives)
+                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: internalCapacity?.volumeID, readings: history), drives: drives)
             }.value
+            guard !Task.isCancelled, generation == visibilityGeneration, statusItem != nil else { return }
             available = reading.available
             change = reading.change
             drives = reading.drives
@@ -187,6 +222,7 @@ enum MenuStorageSummary {
         reserveRow = AppSettings.shared.reserveEnabled ? info("Reading your chosen reserve…") : nil
         menu.addItem(.separator())
         let status = scanStatus()
+        if let text = status.operationText { info(text) }
         action(status.scanning ? "Stop scan" : "Scan Mac", symbol: status.scanning ? "stop.circle" : "magnifyingglass", key: "r", route: status.scanning ? .stop : .scan,
                enabled: !preview && (status.scanning || status.canStart))
         let review = status.categoryCount > 0 ? "Review latest results (\(status.categoryCount))" : "Review latest results"
@@ -229,7 +265,7 @@ enum MenuStorageSummary {
         action("Settings…", key: ",", route: .preferences("General"))
         let quit = NSMenuItem(title: "Quit Cairn", action: #selector(quitApp), keyEquivalent: "q")
         quit.target = self
-        quit.isEnabled = !status.operationBusy && !status.scanning && !status.otherScanBusy
+        quit.isEnabled = !status.operationBusy
         menu.addItem(quit)
         updateStorageRows()
     }
@@ -262,6 +298,7 @@ enum MenuStorageSummary {
         }
         pauseRow?.title = AppSettings.shared.reservePaused ? "Resume space alerts" : "Pause space alerts"
         capacityRow?.toolTip = "Available capacity includes space macOS may reclaim.\(readAt.map { " Read at \($0.formatted(date: .omitted, time: .shortened))." } ?? "")"
+        updateBadge()
         let submenu = NSMenu()
         submenu.autoenablesItems = false
         drivesRow?.title = drives.count == 1 ? drives[0].name : "External drives\(drives.isEmpty ? "" : " (\(drives.count))")"
@@ -279,6 +316,21 @@ enum MenuStorageSummary {
         if !drives.isEmpty { submenu.addItem(.separator()) }
         action("Storage options…", route: .storage(nil), in: submenu)
         drivesRow?.submenu = submenu
+    }
+
+    private func updateBadge() {
+        guard let button = statusItem?.button else { return }
+        button.title = MenuAvailableSpace.title(available, checked: readAt != nil)
+        let state: String
+        if let available {
+            state = "\(Fmt.size(available)) available on this Mac"
+        } else {
+            state = readAt == nil ? "Checking available storage" : "Available storage could not be read"
+        }
+        button.setAccessibilityLabel(preview ? "Cairn preview, \(state), sample data" : "Cairn, \(state)")
+        button.toolTip = preview
+            ? "Cairn Preview · sample data"
+            : "\(state). Includes space macOS may reclaim.\(readAt.map { " Checked at \($0.formatted(date: .omitted, time: .shortened))." } ?? "")"
     }
 
     @discardableResult private func info(_ title: String) -> NSMenuItem {
@@ -311,12 +363,13 @@ enum MenuStorageSummary {
     }
     @objc private func quitApp() {
         let status = scanStatus()
-        guard !status.operationBusy && !status.scanning && !status.otherScanBusy else { return }
+        guard !status.operationBusy else { return }
         NSApp.terminate(nil)
     }
     @objc private func toggleReservePause() {
         guard !preview, AppSettings.shared.reserveEnabled else { return }
-        AppSettings.shared.reservePaused.toggle()
+        if AppSettings.shared.reservePaused { StorageControl.shared.resumeMonitoring() }
+        else { StorageControl.shared.pauseMonitoring(until: nil) }
         updateStorageRows()
     }
 }

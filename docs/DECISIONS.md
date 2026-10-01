@@ -1,5 +1,7 @@
 # Project Decisions
 
+> Historical record. Some entries describe disabled actions or superseded product decisions. Use [the current PRD](CAIRN-STORAGE-CONTROL-PRD.md) and [capability map](STORAGE-CONTROL-CAPABILITIES.md) for active behaviour and restrictions.
+
 Decisions locked for the Mac cleaner app. Updated as we go.
 
 ## 2026-06-30 — Kickoff decisions

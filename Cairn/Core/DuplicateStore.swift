@@ -47,9 +47,10 @@ struct DupGroup: Identifiable {
 
     var count: Int { files.count }
     var totalSize: Int64 { files.reduce(0) { $0 + $1.size } }
-    /// Size of a single copy (all copies are identical) — what one extra copy costs.
+    /// Logical file size of a copy, not independently allocated disk blocks.
     var copySize: Int64 { files.first?.size ?? 0 }
-    /// Space freed if every non-keeper is removed.
+    /// Combined logical file sizes of non-keepers. Trash and shared blocks mean
+    /// this must never be presented as an immediate free-space estimate.
     var reclaimableSize: Int64 { Int64(max(0, count - 1)) * copySize }
     var keeper: DupFile? { files.first { $0.isKeeper } }
     /// Representative file for the thumbnail (the keeper, else the first copy).
@@ -221,7 +222,7 @@ private enum DupRemovalEngine {
                     result.errors.append("\(file.url.lastPathComponent): changed, protected, or no verified keeper — rescan")
                     continue
                 }
-                guard let actionID = ActionJournal.shared.begin(path: file.url.path, category: "duplicates") else {
+                guard let actionID = ActionJournal.shared.begin(path: file.url.path, category: "duplicates", affectedBytes: file.estimatedBytes) else {
                     result.failed += 1
                     result.errors.append(ActionJournal.shared.error ?? "Action intent could not be recorded; duplicate removal stopped")
                     return result
@@ -229,7 +230,7 @@ private enum DupRemovalEngine {
                 do {
                     var trashedURL: NSURL?
                     try fm.trashItem(at: file.url, resultingItemURL: &trashedURL)
-                    result.history.append(ScanStore.RemovalLogEntry(name: file.url.lastPathComponent, originalPath: file.url.path, trashPath: (trashedURL as URL?)?.path, bytes: file.estimatedBytes, date: Date(), category: "duplicates"))
+                    result.history.append(ScanStore.RemovalLogEntry(id: actionID, name: file.url.lastPathComponent, originalPath: file.url.path, trashPath: (trashedURL as URL?)?.path, bytes: file.estimatedBytes, date: Date(), category: "duplicates"))
                     result.trashed += 1
                     result.bytes += file.estimatedBytes
                     result.removedIDs.insert(file.id)
@@ -263,8 +264,10 @@ private enum DupRemovalEngine {
 @MainActor
 @Observable
 final class DuplicateStore {
-    var onRemovals: (([ScanStore.RemovalLogEntry]) -> Bool)?
-    var prepareRemoval: () -> Bool = { false }
+    var beginReceipt: (() async -> CleanupRun?)?
+    var finishReceipt: ((CleanupRun, ScanStore.CleanSummary) async -> Bool)?
+    var onRemovals: (([ScanStore.RemovalLogEntry]) async -> Bool)?
+    var prepareRemoval: () async -> Bool = { false }
 
     enum Phase: Equatable { case idle, scanning, finished, cancelled }
     enum SortOrder: String, CaseIterable, Identifiable {
@@ -300,6 +303,7 @@ final class DuplicateStore {
     var groupCount: Int { groups.count }
     /// Mockup "duplicate files" = every redundant copy (all copies minus one keeper per group).
     var duplicateFileCount: Int { groups.reduce(0) { $0 + max(0, $1.count - 1) } }
+    /// Historical property name; this is extra-copy file size, not capacity gain.
     var reclaimableBytes: Int64 { groups.reduce(0) { $0 + $1.reclaimableSize } }
     var selectedCopyCount: Int { groups.reduce(0) { $0 + $1.files.lazy.filter { $0.selected }.count } }
     var selectedBytes: Int64 {
@@ -403,7 +407,7 @@ final class DuplicateStore {
         // user-initiated priority — it starved the UI and froze navigation for the
         // whole scan. Detaching guarantees it runs off-main, below the UI.
         scanTask = Task.detached(priority: .utility) { [weak self] in
-            guard await ScanGate.shared.acquire() else { return }
+            guard await ScanGate.shared.acquire(.duplicates) else { return }
             defer { ScanGate.shared.release() }
             guard !Task.isCancelled else { return }
             await MainActor.run { [weak self] in
@@ -494,13 +498,13 @@ final class DuplicateStore {
 
     // MARK: Removal (recoverable — Trash only)
 
-    struct RemovalResult { var trashed = 0; var failed = 0; var bytes: Int64 = 0; var errors: [String] = [] }
+    struct RemovalResult { var trashed = 0; var failed = 0; var bytes: Int64 = 0; var errors: [String] = []; var capacityChanges: [CleanupCapacityChange] = []; var recordedRecoveries = 0 }
 
     /// Rehash the keeper and selected files off-main before each recoverable Trash
     /// move. A scan result is never enough evidence to remove a possibly changed file.
     @discardableResult
     func removeSelected() async -> RemovalResult {
-        guard prepareRemoval() else { return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]) }
+        guard await prepareRemoval() else { return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: ["Recovery history is unavailable. Nothing was removed."]) }
         guard await Task.detached(priority: .utility, operation: { ActionJournal.shared.prepare() }).value else {
             return RemovalResult(trashed: 0, failed: 1, bytes: 0, errors: [ActionJournal.shared.error ?? "Action journal unavailable. Nothing was removed."])
         }
@@ -522,8 +526,10 @@ final class DuplicateStore {
         guard !plans.isEmpty else { return RemovalResult() }
         isRemoving = true
         defer { isRemoving = false }
-        guard await ScanGate.shared.acquire() else { return RemovalResult() }
+        guard await ScanGate.shared.acquire(.removeDuplicates) else { return RemovalResult() }
         defer { ScanGate.shared.release() }
+        guard let run = await beginReceipt?() else { return RemovalResult(failed: plans.reduce(0) { $0 + $1.selected.count }, errors: ["Cleanup receipt could not be prepared. No duplicate was removed."]) }
+        let capacityWindow = await CleanupCapacityWindow.begin(urls: plans.flatMap { $0.selected.map(\.url) })
         let excludedPaths = SafePaths.userExcluded
         let worker = Task.detached(priority: .utility) {
             DupRemovalEngine.run(plans, excludedPaths: excludedPaths)
@@ -538,9 +544,14 @@ final class DuplicateStore {
         }
         // Drop groups that no longer have at least 2 copies.
         groups.removeAll { $0.count < 2 }
-        let logged = onRemovals?(batch.history) ?? batch.history.isEmpty
-        return RemovalResult(trashed: batch.trashed, failed: batch.failed + (logged ? 0 : 1),
-                             bytes: batch.bytes, errors: batch.errors + (logged ? [] : ["Recovery history could not be saved. Action journal retains the paths; further cleanup is blocked."]))
+        let logged = await onRemovals?(batch.history) ?? batch.history.isEmpty
+        var result = RemovalResult(trashed: batch.trashed, failed: batch.failed + (logged ? 0 : 1),
+                             bytes: batch.bytes, errors: batch.errors + (logged ? [] : ["Recovery history could not be saved. Action journal retains the paths; further cleanup is blocked."]),
+                             capacityChanges: await capacityWindow.finish(), recordedRecoveries: logged ? batch.history.filter { $0.trashPath != nil }.count : 0)
+        let receipt = ScanStore.CleanSummary.specialist(history: batch.history, failed: result.failed, errors: result.errors,
+            capacity: result.capacityChanges, logged: logged, interrupted: Task.isCancelled || !logged)
+        if await finishReceipt?(run, receipt) != true { result.failed += 1; result.errors.append("The complete receipt could not be saved. Recovery records remain available.") }
+        return result
     }
 
     // MARK: Keeper policy

@@ -10,7 +10,12 @@ import QuickLookThumbnailing
 final class ThumbnailCache {
     static let shared = ThumbnailCache()
     private let store = NSCache<NSString, NSImage>()   // auto-evicting, thread-safe
-    init() { store.countLimit = 400 }
+    init() {
+        store.countLimit = 400
+        // A selected large file can request a much larger preview than a list
+        // row. Bound decoded image memory by cost as well as entry count.
+        store.totalCostLimit = 48 * 1024 * 1024
+    }
 
     // QLThumbnailGenerator applies NO concurrency limit of its own. With a few
     // hundred visible rows every one fired a request at once and each completion
@@ -25,7 +30,9 @@ final class ThumbnailCache {
     private let maxQueued = 60          // don't hoard work for rows scrolled past
 
     func cached(_ key: String) -> NSImage? { store.object(forKey: key as NSString) }
-    func set(_ image: NSImage, for key: String) { store.setObject(image, forKey: key as NSString) }
+    func set(_ image: NSImage, for key: String, cost: Int) {
+        store.setObject(image, forKey: key as NSString, cost: cost)
+    }
 
     /// Cancel queued (not yet started) work — call when a view goes away.
     func drainQueue() {
@@ -60,8 +67,15 @@ final class ThumbnailCache {
         QLThumbnailGenerator.shared.generateBestRepresentation(for: req) { [weak self] rep, _ in
             guard let self else { return }
             if let rep {
-                let img = NSImage(cgImage: rep.cgImage, size: size)
-                self.set(img, for: job.key)
+                // Quick Look can return a wide video frame for a square request.
+                // Giving NSImage the requested square size distorts that frame
+                // even when the view later uses scaledToFit or scaledToFill.
+                let pixels = rep.cgImage
+                let imageSize = CGSize(width: CGFloat(pixels.width) / job.scale,
+                                       height: CGFloat(pixels.height) / job.scale)
+                let img = NSImage(cgImage: pixels, size: imageSize)
+                self.set(img, for: job.key,
+                         cost: rep.cgImage.bytesPerRow * rep.cgImage.height)
                 DispatchQueue.main.async { job.done(img) }
             }
             self.lock.lock(); self.inFlight -= 1; self.lock.unlock()
@@ -181,7 +195,7 @@ struct DuplicatesView: View {
         HStack(spacing: 14) {
             statCard("doc.on.doc.fill", "Duplicate Groups", grouped(store.groupCount))
             statCard("doc.on.doc", "Duplicate Files", grouped(store.duplicateFileCount))
-            statCard("internaldrive.fill", "Reclaimable Space", Fmt.size(store.reclaimableBytes))
+            statCard("doc.on.doc", "Extra-copy file size", Fmt.size(store.reclaimableBytes))
         }
     }
 
@@ -276,7 +290,7 @@ struct DuplicatesView: View {
                     VStack(alignment: .trailing, spacing: 1) {
                         Text(Fmt.size(group.totalSize)).font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Brand.textSecondary)
-                        Text("\(Fmt.size(group.reclaimableSize)) reclaimable")
+                        Text("\(Fmt.size(group.reclaimableSize)) extra-copy file size")
                             .font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                     }
                     Button("Keep Best") { store.keepBest(group.id) }

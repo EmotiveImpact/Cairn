@@ -1,5 +1,7 @@
 # Cairn — Features & Functions
 
+> Historical record. Some entries describe disabled actions or superseded product decisions. Use [the current PRD](CAIRN-STORAGE-CONTROL-PRD.md) and [capability map](STORAGE-CONTROL-CAPABILITIES.md) for active behaviour and restrictions.
+
 Status of the native SwiftUI macOS app as built. ✅ = implemented & compiling. 🔲 = not yet.
 
 ## 1. Cleaning coverage — 17 scanners across 4 pillars

@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import AppKit
 
 /// Dedicated evidence screen. Candidate changes never claim to explain all
 /// capacity movement or identify which process wrote the files.
@@ -18,20 +19,9 @@ struct ChangesWorkspace: View {
         let start = Date().addingTimeInterval(-Double(period) * 86_400)
         return all.filter { $0.date >= start }.sorted { $0.date < $1.date }
     }
-    private struct PlotPoint: Identifiable {
-        let reading: CapacityReading
-        let segment: Int
-        var id: UUID { reading.id }
-    }
-    private var plotPoints: [PlotPoint] {
+    private var plot: CapacityPlot {
         let maxGap: TimeInterval = preview ? 2 * 86_400 : period == 30 ? 36 * 3_600 : 8 * 3_600
-        var segment = 0
-        var previous: Date?
-        return readings.map { reading in
-            if let previous, reading.date.timeIntervalSince(previous) > maxGap { segment += 1 }
-            previous = reading.date
-            return PlotPoint(reading: reading, segment: segment)
-        }
+        return CapacityPlot(readings: readings, maximumInterval: maxGap)
     }
     private var changes: [CandidateChange] {
         let all = preview ? Self.sampleChanges : control.changes
@@ -39,7 +29,13 @@ struct ChangesWorkspace: View {
     }
     private var selected: CapacityReading? {
         guard let selectedDate else { return nil }
-        return readings.min { abs($0.date.timeIntervalSince(selectedDate)) < abs($1.date.timeIntervalSince(selectedDate)) }
+        return plot.reading(near: selectedDate)
+    }
+    private var selectedDetail: String? {
+        guard let selectedDate else { return nil }
+        if let gap = plot.gap(at: selectedDate) { return gap.detail }
+        guard let selected else { return nil }
+        return "\(selected.date.formatted(date: .abbreviated, time: .shortened)) · \(Fmt.size(selected.available)) available"
     }
     private var scopeMessage: String {
         if preview { return "Sample readings · two compatible scans" }
@@ -56,18 +52,15 @@ struct ChangesWorkspace: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Changes").font(.system(size: 24, weight: .regular))
+                        Text("Changes").font(.system(size: 28, weight: .semibold))
                         Text("What Cairn observed on this Mac. Measurements are local and dated.")
                             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }
                     Spacer()
-                    Picker("Period", selection: $period) {
-                        Text("24 hours").tag(1)
-                        Text("7 days").tag(7)
-                        Text("30 days").tag(30)
-                    }.pickerStyle(.segmented).frame(width: 250)
+                    CairnSegmentedControl(label: "Period", selection: $period, options: [("24 hours", 1), ("7 days", 7), ("30 days", 30)]).frame(width: 228, height: 32)
                 }
-                history.padding(.top, 28)
+                history.padding(.top, 26)
+                locationSection.padding(.top, 28)
                 if !legacyReadings.isEmpty {
                     DisclosureGroup("Earlier daily readings · volume unverified") {
                         VStack(alignment: .leading, spacing: 7) {
@@ -126,7 +119,7 @@ struct ChangesWorkspace: View {
                 Text("Changes in these cleanup candidates do not account for every change in available space. Browser activity, app data and macOS-managed files may lie outside this coverage.")
                     .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 18)
-            }.padding(30).frame(maxWidth: 980, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(30).frame(maxWidth: .infinity, alignment: .leading)
         }.background(Brand.background).foregroundStyle(Brand.textPrimary)
             .onChange(of: period) { _, _ in selectedDate = nil }
             .task {
@@ -137,44 +130,146 @@ struct ChangesWorkspace: View {
             }
     }
 
-    private var history: some View {
+    private var visibleLocations: [LocationReading] {
+        (preview ? Self.sampleLocations : control.latestLocations).filter {
+            search.isEmpty || $0.root.title.localizedCaseInsensitiveContains(search)
+        }
+    }
+    private var locationSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Available space").font(.system(size: 15, weight: .medium))
+                Text("KNOWN LOCATIONS").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
                 Spacer()
-                if let last = readings.last {
-                    Text(Fmt.size(last.available)).font(.system(size: 18, weight: .regular)).monospacedDigit()
+                Button(control.measuringLocations ? "Stop measuring" : "Measure locations") {
+                    if control.measuringLocations { control.cancelLocationMeasurement() }
+                    else { control.measureLocations() }
+                }.buttonStyle(ControlPanelButtonStyle()).disabled(preview)
+            }
+            Text(control.measuringLocations ? control.measurementStatus : "Folder sizes from metadata only. These observations do not grant permission to remove anything.")
+                .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            if visibleLocations.isEmpty {
+                Text(search.isEmpty ? "Measure known locations to start a baseline. A second compatible reading shows growth or decline." : "No observed location matches this filter.")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.vertical, 12)
+            }
+            ForEach(visibleLocations) { reading in
+                let change = (preview ? LocationComparison.changes(Self.sampleLocationHistory) : control.locationChanges).first { $0.id == reading.root.id }
+                DisclosureGroup {
+                    VStack(alignment: .leading, spacing: 7) {
+                        Text(reading.root.path).textSelection(.enabled)
+                        Text("Observed \(reading.ended.formatted(date: .abbreviated, time: .shortened)) · \(reading.entries) entries checked")
+                        if let change {
+                            Text("\(change.interval) · \(Fmt.size(change.before.allocated ?? 0)) → \(Fmt.size(change.after.allocated ?? 0)) allocated")
+                        } else {
+                            Text("A second complete reading with matching location, volume and scope is needed for a comparison.")
+                        }
+                        Text(reading.root.observationOnly ? "Observation only. This location is not added to cleanup candidates." : "Open the relevant cleanup screen to review separately eligible items.")
+                        Text("Hard links are counted once within this folder. APFS clones and snapshots can share or retain blocks; folder sizes are not guaranteed space savings.")
+                        Button("Show location") { NSWorkspace.shared.activateFileViewerSelecting([reading.root.url]) }
+                            .buttonStyle(.plain).foregroundStyle(Brand.deepBlue).disabled(preview || reading.coverage == .absent)
+                    }.font(.system(size: 11)).foregroundStyle(Brand.textMuted).padding(.vertical, 8)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: reading.root.icon).frame(width: 24).foregroundStyle(Brand.textSecondary)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(reading.root.title).font(.system(size: 13)).foregroundStyle(Brand.textPrimary)
+                            Text(reading.coverage.label).font(.system(size: 11)).foregroundStyle(reading.coverage.comparable ? Brand.textMuted : Brand.amber)
+                        }
+                        Spacer()
+                        if let change {
+                            Text(change.delta == 0 ? "Unchanged" : "\(change.delta > 0 ? "+" : "−")\(Fmt.size(abs(change.delta)))")
+                                .font(.system(size: 12)).monospacedDigit().foregroundStyle(Brand.textSecondary)
+                        }
+                        Text(reading.allocated.map { (reading.coverage.comparable ? "" : "Partial · ") + Fmt.size($0) } ?? "Unavailable")
+                            .font(.system(size: 13)).monospacedDigit().frame(minWidth: 92, alignment: .trailing)
+                    }.frame(minHeight: 52)
+                }
+                Rectangle().fill(Brand.separator).frame(height: 0.5)
+            }
+            Text("Each location has its own measured interval. These sizes are not added together to explain the whole disk.")
+                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+        }
+    }
+    private static var sampleLocationHistory: [LocationReading] {
+        sampleChanges.flatMap { change -> [LocationReading] in
+            let root = ObservedRoot(id: change.id, title: change.category.title, path: "/Sample/" + change.category.title, icon: change.category.icon, observationOnly: false)
+            return [(change.before, change.category.bytes - change.delta), (change.after, change.category.bytes)].map { date, bytes in
+                LocationReading(id: UUID(), root: root, started: date.addingTimeInterval(-1), ended: date, volumeID: PreviewStorageScenario.volumeID, identity: .init(device: 1, inode: 2), parentIdentity: .init(device: 1, inode: 1), scope: "sample", coverage: .complete, allocated: bytes, logical: bytes, entries: 25, hardLinksSkipped: 0, source: "sample", metric: "allocated-and-logical-v1", adapterVersion: 1)
+            }
+        }
+    }
+    private static var sampleLocations: [LocationReading] { LocationComparison.latest(sampleLocationHistory) }
+
+    private var history: some View {
+        let shownReserve: Int64? = preview ? PreviewStorageScenario.reserveBytes :
+            (AppSettings.shared.reserveEnabled ? control.reserveBytes : nil)
+        return VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("AVAILABLE SPACE").font(.system(size: 11, weight: .medium))
+                        .tracking(0.7).foregroundStyle(Brand.textMuted)
+                    if let last = readings.last {
+                        Text(Fmt.size(last.available)).font(.system(size: 34, weight: .regular))
+                            .monospacedDigit().foregroundStyle(Brand.textPrimary)
+                    } else {
+                        Text("No readings yet").font(.system(size: 21, weight: .regular))
+                    }
+                }
+                Spacer()
+                if let shownReserve {
+                    Label("\(Fmt.size(shownReserve)) reserve", systemImage: "line.diagonal")
+                        .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
                 }
             }
             if readings.count >= 2, let first = readings.first, let last = readings.last {
-                let low = max(0, readings.map(\.available).min()! - 3_000_000_000)
+                let observedLow = readings.map(\.available).min()!
+                let low = max(0, min(observedLow, shownReserve ?? observedLow) - 3_000_000_000)
                 let high = readings.map(\.available).max()! + 3_000_000_000
+                let upper = shownReserve.map { max(high, $0 + 2_000_000_000) } ?? high
                 Chart {
-                    ForEach(plotPoints) { point in
-                        AreaMark(x: .value("Date", point.reading.date), yStart: .value("Bytes", low), yEnd: .value("Bytes", point.reading.available), series: .value("Observation segment", point.segment))
+                    ForEach(plot.points) { point in
+                        AreaMark(x: .value("Date", point.reading.date), yStart: .value("GB", Double(low) / 1e9), yEnd: .value("GB", Double(point.reading.available) / 1e9), series: .value("Observation segment", point.segment))
                             .foregroundStyle(LinearGradient(colors: [Brand.blue.opacity(0.20), Brand.blue.opacity(0)], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Date", point.reading.date), y: .value("Bytes", point.reading.available), series: .value("Observation segment", point.segment))
+                        LineMark(x: .value("Date", point.reading.date), y: .value("GB", Double(point.reading.available) / 1e9), series: .value("Observation segment", point.segment))
                             .foregroundStyle(Brand.blue).lineStyle(StrokeStyle(lineWidth: 1.8))
                     }
-                    if AppSettings.shared.reserveEnabled {
-                        RuleMark(y: .value("Chosen reserve", control.reserveBytes))
+                    if let shownReserve {
+                        RuleMark(y: .value("Chosen reserve", Double(shownReserve) / 1e9))
                             .foregroundStyle(Brand.amber.opacity(0.55)).lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                     }
                     if let selected {
                         RuleMark(x: .value("Selected", selected.date)).foregroundStyle(Brand.textMuted.opacity(0.6))
-                        PointMark(x: .value("Reading", selected.date), y: .value("Bytes", selected.available))
+                        PointMark(x: .value("Reading", selected.date), y: .value("GB", Double(selected.available) / 1e9))
                             .foregroundStyle(Brand.blue).symbolSize(35)
                     }
                 }
+                .chartOverlay { proxy in
+                    CapacityGapOverlay(gaps: plot.gaps, proxy: proxy)
+                }
                 .chartXSelection(value: $selectedDate)
                 .chartXScale(range: .plotDimension(padding: 7))
-                .chartYScale(domain: low...(AppSettings.shared.reserveEnabled ? max(high, control.reserveBytes + 2_000_000_000) : high))
-                .chartYAxis(.hidden).chartXAxis(.hidden).frame(height: 185)
+                .chartYScale(domain: (Double(low) / 1e9)...(Double(upper) / 1e9))
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { axis in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3]))
+                            .foregroundStyle(Brand.separator)
+                        if let gb = axis.as(Double.self) {
+                            AxisValueLabel { Text("\(Int(gb)) GB") }
+                                .foregroundStyle(Brand.textMuted)
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: .automatic(desiredCount: 4)) {
+                        AxisValueLabel(format: .dateTime.day().month(.abbreviated))
+                            .foregroundStyle(Brand.textMuted)
+                    }
+                }
+                .frame(height: 218)
                 .accessibilityLabel("Available space changed from \(Fmt.size(first.available)) to \(Fmt.size(last.available))")
+                CapacityChartReadout(text: selectedDetail)
                 HStack {
                     readingLabel(first)
                     Spacer()
-                    if let selected { readingLabel(selected).foregroundStyle(Brand.textPrimary); Spacer() }
                     readingLabel(last)
                 }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                 let delta = last.available - first.available
@@ -185,8 +280,21 @@ struct ChangesWorkspace: View {
                     message: "Cairn needs two readings on this volume before drawing a trend. It will never invent earlier readings.")
                     .frame(minHeight: 160)
             }
-            Text(preview ? "Sample data · no disk actions" : "Readings are collected while Cairn runs. Long gaps are left open because it was not observing.")
-                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            DisclosureGroup("Readings as text") {
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(Array(readings.suffix(100).reversed())) { reading in
+                        HStack {
+                            Text(reading.date.formatted(date: .abbreviated, time: .shortened))
+                            Spacer()
+                            Text(Fmt.size(reading.available)).monospacedDigit()
+                        }.accessibilityElement(children: .combine)
+                    }
+                }.font(.system(size: 11)).padding(.top, 8)
+            }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            if preview {
+                Text("Sample data · no disk actions")
+                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            }
         }
     }
     private func readingLabel(_ reading: CapacityReading) -> some View {
@@ -202,9 +310,7 @@ struct ChangesWorkspace: View {
         case .general: return .general
         }
     }
-    private static let samples: [CapacityReading] = [28.4, 26.8, 23.2, 24.1, 18.6, 14.3, 9.9].enumerated().map { index, gb in
-        CapacityReading(date: Date().addingTimeInterval(Double(index - 6) * 86_400), volumeID: "SAMPLE", available: Int64(gb * 1e9), total: 500_000_000_000)
-    }
+    private static let samples = PreviewStorageScenario.capacityHistory
     private static let sampleChanges: [CandidateChange] = [
         CandidateChange(category: .init(id: "xcode", title: "Build output", icon: "hammer", group: .developer, bytes: 6_400_000_000, complete: true), delta: 4_200_000_000, before: Date().addingTimeInterval(-86400), after: Date()),
         CandidateChange(category: .init(id: "browser-caches", title: "Browser caches", icon: "globe", group: .general, bytes: 2_700_000_000, complete: true), delta: 1_100_000_000, before: Date().addingTimeInterval(-86400), after: Date())
