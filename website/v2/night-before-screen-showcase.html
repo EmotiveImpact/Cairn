@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090b0d" />
+    <meta name="description" content="A Mac cleaner built for developers. Find what grew, review what can go, and protect the code and conversations behind your next build." />
+    <title>Cairn — A Mac cleaner built for developers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&amp;display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="night-refined.css?v=20260929-16" />
+    <link rel="stylesheet" href="hero-layered.css?v=20260929-2" />
+    <link rel="stylesheet" href="ui/interactions.css?v=1" />
+    <script src="assets/cairn-interactions.js?v=1" defer></script>
+    <link rel="stylesheet" href="footer-matrix.css?v=1" />
+    <script src="footer-matrix.js?v=2" defer></script>
+    <link rel="stylesheet" href="storage-story.css?v=20260929-1" />
+    <script src="assets/cairn-storage-story.js?v=20260929-2" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header" id="top">
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="Cairn, back to top"><span class="brand-mark" aria-hidden="true"><img src="../assets/cairn-stones-transparent.png" width="44" height="44" alt="" /></span><span>Cairn</span></a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-navigation" hidden>Menu</button>
+        <nav class="main-nav" id="main-navigation" aria-label="Main navigation">
+          <a href="#problem">Why Cairn</a><a href="#changes">How it works</a><a href="#protection">Protection</a><a href="#features">Features</a>
+        </nav>
+        <span class="header-status">In development</span>
+        <a class="button button-light header-action" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog" aria-label="View app preview"><span class="preview-label-wide">View app preview</span><span class="preview-label-short" aria-hidden="true">Preview</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero hero-linear" aria-labelledby="hero-title">
+        <div class="hero-atmosphere" aria-hidden="true"><img src="assets/stone-seam.png" width="1536" height="1024" alt="" fetchpriority="high" /></div>
+        <div class="shell hero-layout">
+          <div class="hero-copy">
+            <p class="section-label">More space. Same momentum.</p>
+            <h1 id="hero-title">A Mac cleaner.<span>Built for developers.</span></h1>
+            <p class="hero-description">Make room for your next build. Review the caches and tools taking up space, while protecting the code and conversations that got you here.</p>
+            <div class="hero-actions">
+              <a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a>
+              <a class="text-link" href="#problem">Why Cairn</a>
+            </div>
+            <p class="hero-availability">Native to macOS. In development.</p>
+          </div>
+          <figure class="product-composition" id="product">
+            <div class="hero-panel-field">
+              <a class="hero-panel hero-panel--rear" href="assets/app-developer-current.png" data-preview="developer" aria-haspopup="dialog" aria-label="Explore Cairn Developer Cleanup">
+                <img src="assets/app-developer-current.png" width="1120" height="740" alt="Cairn Developer Cleanup showing build artifacts, Xcode data, Docker and package caches with review requirements" fetchpriority="high" />
+              </a>
+              <a class="hero-panel hero-panel--front" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog" aria-label="Explore Cairn Overview">
+                <img src="assets/app-overview-current.png" width="1120" height="740" alt="Cairn Overview showing 9.9 GB available and a chart of available space" fetchpriority="high" />
+              </a>
+            </div>
+            <figcaption><span>Inside Cairn</span><span>Native app previews · Sample data</span></figcaption>
+          </figure>
+        </div>
+        <div class="shell stack-strip" aria-label="Developer tools covered by Cairn">
+          <p><strong>Built around your stack.</strong></p>
+          <ul>
+            <li title="Known session locations protected"><img src="assets/tool-icons/codex.svg" width="24" height="24" alt="" /><span>Codex</span><span class="sr-only"> — Known session locations protected</span></li>
+            <li title="Editor caches reviewed; known working state protected"><img src="assets/tool-icons/cursor.svg" width="24" height="24" alt="" /><span>Cursor</span><span class="sr-only"> — Editor caches reviewed; known working state protected</span></li>
+            <li title="Known session locations protected"><img src="assets/tool-icons/claude.svg" width="24" height="24" alt="" /><span>Claude Code</span><span class="sr-only"> — Known session locations protected</span></li>
+            <li title="Build data and simulators reviewed"><img src="assets/tool-icons/xcode.svg" width="24" height="24" alt="" /><span>Xcode</span><span class="sr-only"> — Build data and simulators reviewed</span></li>
+            <li title="Package caches reviewed"><img src="assets/tool-icons/npm.svg" width="24" height="24" alt="" /><span>npm</span><span class="sr-only"> — Package caches reviewed</span></li>
+            <li title="Docker storage reviewed"><img src="assets/tool-icons/docker.svg" width="24" height="24" alt="" /><span>Docker</span><span class="sr-only"> — Docker storage reviewed</span></li>
+            <li title="Local model storage reviewed"><img src="assets/tool-icons/ollama.svg" width="24" height="24" alt="" /><span>Ollama</span><span class="sr-only"> — Local model storage reviewed</span></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="problem section" id="problem" aria-labelledby="problem-title">
+        <div class="shell">
+          <div class="section-intro">
+            <div><p class="section-label">Keep your momentum</p><h2 id="problem-title"><span>The disk is filling up.</span><span>Your build can’t wait.</span></h2></div>
+            <p>Another dependency. Another simulator. Another local model. Your Mac fills up while you’re making things. Knowing what can go shouldn’t become the next project.</p>
+          </div>
+          <div class="work-map" aria-label="Examples of developer data with different cleanup requirements">
+            <div class="work-group">
+              <div class="work-group-heading"><h3>Find room to review.</h3><span>Check requirements</span></div>
+              <ul><li><code>DerivedData</code><span>Xcode build output</span></li><li><code>node_modules</code><span>Project dependencies</span></li><li><code>Package caches</code><span>Downloaded tool data</span></li></ul>
+            </div>
+            <div class="work-group work-group-protected">
+              <div class="work-group-heading"><h3>Keep your place.</h3><span>Known locations protected</span></div>
+              <ul><li><code>.git</code><span>Source-control history</span></li><li><code>.codex/sessions</code><span>Your coding conversations</span></li><li><code>Credentials</code><span>Access and recovery data</span></li></ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="scene-story" id="changes" aria-labelledby="scene-title">
+<div class="scene-intro shell"><h2 id="scene-title">The space behind<br />your work.</h2><p>See where your space goes, understand what can go, and keep what makes your work yours.</p></div>
+<div class="scene-track"><div class="scene-stage">
+<div class="storage-stage-art" aria-hidden="true"><div class="storage-fallback"><div class="storage-fallback-stack"></div></div><div class="storage-view"></div></div>
+<div class="scene-content shell"><div class="scene-copy"><article class="scene-chapter" data-scene-chapter="0" id="understand">
+<p class="scene-kicker">01 / Understand</p><h3>See what’s taking<br />up your space.</h3><p class="scene-description">Build output, packages and local models. Understand what changed before deciding what goes.</p><p class="scene-note">Compare dated readings and compatible scans, with coverage clearly shown.</p><p class="scene-legend"><span><i class="legend-work" aria-hidden="true"></i>Protected work</span><span><i class="legend-review" aria-hidden="true"></i>Review candidates</span></p><a class="scene-link" href="assets/app-changes-current.png" data-preview="changes" aria-haspopup="dialog">Explore Changes</a></article><article class="scene-chapter" data-scene-chapter="1" id="make-room">
+<span id="review"></span><p class="scene-kicker">02 / Review</p><h3>Know what<br />can go.</h3><p class="scene-description">Choose your target. Review exact paths, sizes and requirements before approving a change.</p><p class="scene-note">You decide what happens next.</p><p class="scene-legend"><span><i class="legend-work" aria-hidden="true"></i>Protected work</span><span><i class="legend-review" aria-hidden="true"></i>Review candidates</span></p><a class="scene-link" href="assets/app-make-room-current.png" data-preview="make-room" aria-haspopup="dialog">Explore Make room</a></article><article class="scene-chapter" data-scene-chapter="2" id="protection">
+<p class="scene-kicker">03 / Protect</p><h3>Your work is<br />not clutter.</h3><p class="scene-description">The code. The conversations. The context for your next build. Known working locations stay protected.</p><p class="scene-note">Source-control history, coding sessions and credentials. Uncertain rebuildability requires review.</p><p class="scene-legend"><span><i class="legend-work" aria-hidden="true"></i>Protected work</span><span><i class="legend-review" aria-hidden="true"></i>Review candidates</span></p><a class="scene-link" href="assets/app-developer-current.png" data-preview="developer" aria-haspopup="dialog">Explore protected work</a></article><article class="scene-chapter" data-scene-chapter="3" id="outcome">
+<p class="scene-kicker">04 / Make room</p><h3>More room.<br />Same momentum.</h3><p class="scene-description">Review what changed, check your available space and keep building with your work intact.</p><p class="scene-note">Moving files to Trash alone doesn’t free their space.</p><div class="storage-record"><p><span>Selected items</span><strong>Action recorded</strong></p><p><span>Known working locations</span><strong>Protected</strong></p></div><a class="scene-link" href="assets/app-activity-current.png" data-preview="activity" aria-haspopup="dialog">Explore Activity &amp; Recovery</a></article></div></div>
+<div class="scene-controls shell" hidden><div class="scene-control-heading"><label for="scene-scrubber">Explore the process</label><span class="scene-scroll-hint">Scroll to follow the story, or drag below</span></div><input class="scene-scrubber" id="scene-scrubber" type="range" min="0" max="1000" value="0" step="1" aria-label="Move through the Cairn process" /><nav class="scene-steps" aria-label="Process chapters"><button type="button" data-scene-step="0" aria-pressed="true"><small>01</small><span>Understand</span></button><button type="button" data-scene-step="1" aria-pressed="false"><small>02</small><span>Review</span></button><button type="button" data-scene-step="2" aria-pressed="false"><small>03</small><span>Protect</span></button><button type="button" data-scene-step="3" aria-pressed="false"><small>04</small><span>Make room</span></button></nav><span class="scene-status sr-only" role="status" aria-live="polite"></span></div></div></div></section>
+
+      <section class="features section" id="features" aria-labelledby="features-title">
+        <div class="shell">
+          <div class="section-intro"><div><p class="section-label">The rest of your Mac</p><h2 id="features-title">Built for more<br />than a clean build.</h2></div><p>Start with the developer stack. Bring the same care to the files, apps and tools around it.</p></div>
+          <div class="feature-grid">
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M9.96424 2.68571C10.0668 2.42931 9.94209 2.13833 9.6857 2.03577C9.4293 1.93322 9.13832 2.05792 9.03576 2.31432L5.03576 12.3143C4.9332 12.5707 5.05791 12.8617 5.3143 12.9642C5.5707 13.0668 5.86168 12.9421 5.96424 12.6857L9.96424 2.68571ZM3.85355 5.14646C4.04882 5.34172 4.04882 5.6583 3.85355 5.85356L2.20711 7.50001L3.85355 9.14646C4.04882 9.34172 4.04882 9.6583 3.85355 9.85356C3.65829 10.0488 3.34171 10.0488 3.14645 9.85356L1.14645 7.85356C0.951184 7.6583 0.951184 7.34172 1.14645 7.14646L3.14645 5.14646C3.34171 4.9512 3.65829 4.9512 3.85355 5.14646ZM11.1464 5.14646C11.3417 4.9512 11.6583 4.9512 11.8536 5.14646L13.8536 7.14646C14.0488 7.34172 14.0488 7.6583 13.8536 7.85356L11.8536 9.85356C11.6583 10.0488 11.3417 10.0488 11.1464 9.85356C10.9512 9.6583 10.9512 9.34172 11.1464 9.14646L12.7929 7.50001L11.1464 5.85356C10.9512 5.6583 10.9512 5.34172 11.1464 5.14646Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Build output</span></h3><p>Review Xcode data, simulator support, and generated project folders with their requirements in view.</p></article>
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M7.28856 0.796908C7.42258 0.734364 7.57742 0.734364 7.71144 0.796908L13.7114 3.59691C13.8875 3.67906 14 3.85574 14 4.05V10.95C14 11.1443 13.8875 11.3209 13.7114 11.4031L7.71144 14.2031C7.57742 14.2656 7.42258 14.2656 7.28856 14.2031L1.28856 11.4031C1.11252 11.3209 1 11.1443 1 10.95V4.05C1 3.85574 1.11252 3.67906 1.28856 3.59691L7.28856 0.796908ZM2 4.80578L7 6.93078V12.9649L2 10.6316V4.80578ZM8 12.9649L13 10.6316V4.80578L8 6.93078V12.9649ZM7.5 6.05672L12.2719 4.02866L7.5 1.80176L2.72809 4.02866L7.5 6.05672Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Packages &amp; runtimes</span></h3><p>Inspect Node, Python, Rust, and other tool caches. Check what can be rebuilt before acting.</p></article>
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M1 9.50006C1 10.3285 1.67157 11.0001 2.5 11.0001H4L4 10.0001H2.5C2.22386 10.0001 2 9.7762 2 9.50006L2 2.50006C2 2.22392 2.22386 2.00006 2.5 2.00006L9.5 2.00006C9.77614 2.00006 10 2.22392 10 2.50006V4.00002H5.5C4.67158 4.00002 4 4.67159 4 5.50002V12.5C4 13.3284 4.67158 14 5.5 14H12.5C13.3284 14 14 13.3284 14 12.5V5.50002C14 4.67159 13.3284 4.00002 12.5 4.00002H11V2.50006C11 1.67163 10.3284 1.00006 9.5 1.00006H2.5C1.67157 1.00006 1 1.67163 1 2.50006V9.50006ZM5 5.50002C5 5.22388 5.22386 5.00002 5.5 5.00002H12.5C12.7761 5.00002 13 5.22388 13 5.50002V12.5C13 12.7762 12.7761 13 12.5 13H5.5C5.22386 13 5 12.7762 5 12.5V5.50002Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Files, apps &amp; duplicates</span></h3><p>Find forgotten large files and review duplicate files or app data individually.</p></article>
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M1 3.25C1 3.11193 1.11193 3 1.25 3H13.75C13.8881 3 14 3.11193 14 3.25V10.75C14 10.8881 13.8881 11 13.75 11H1.25C1.11193 11 1 10.8881 1 10.75V3.25ZM1.25 2C0.559643 2 0 2.55964 0 3.25V10.75C0 11.4404 0.559644 12 1.25 12H5.07341L4.82991 13.2986C4.76645 13.6371 5.02612 13.95 5.37049 13.95H9.62951C9.97389 13.95 10.2336 13.6371 10.1701 13.2986L9.92659 12H13.75C14.4404 12 15 11.4404 15 10.75V3.25C15 2.55964 14.4404 2 13.75 2H1.25ZM9.01091 12H5.98909L5.79222 13.05H9.20778L9.01091 12Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Browser &amp; creative tools</span></h3><p>Review temporary data from the other tools you use, with saved work kept distinct.</p></article>
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M4.5 2C3.11929 2 2 3.11929 2 4.5C2 5.88072 3.11929 7 4.5 7C5.88072 7 7 5.88072 7 4.5C7 3.11929 5.88072 2 4.5 2ZM3 4.5C3 3.67157 3.67157 3 4.5 3C5.32843 3 6 3.67157 6 4.5C6 5.32843 5.32843 6 4.5 6C3.67157 6 3 5.32843 3 4.5ZM10.5 2C9.11929 2 8 3.11929 8 4.5C8 5.88072 9.11929 7 10.5 7C11.8807 7 13 5.88072 13 4.5C13 3.11929 11.8807 2 10.5 2ZM9 4.5C9 3.67157 9.67157 3 10.5 3C11.3284 3 12 3.67157 12 4.5C12 5.32843 11.3284 6 10.5 6C9.67157 6 9 5.32843 9 4.5ZM2 10.5C2 9.11929 3.11929 8 4.5 8C5.88072 8 7 9.11929 7 10.5C7 11.8807 5.88072 13 4.5 13C3.11929 13 2 11.8807 2 10.5ZM4.5 9C3.67157 9 3 9.67157 3 10.5C3 11.3284 3.67157 12 4.5 12C5.32843 12 6 11.3284 6 10.5C6 9.67157 5.32843 9 4.5 9ZM10.5 8C9.11929 8 8 9.11929 8 10.5C8 11.8807 9.11929 13 10.5 13C11.8807 13 13 11.8807 13 10.5C13 9.11929 11.8807 8 10.5 8ZM9 10.5C9 9.67157 9.67157 9 10.5 9C11.3284 9 12 9.67157 12 10.5C12 11.3284 11.3284 12 10.5 12C9.67157 12 9 11.3284 9 10.5Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Local AI tools</span></h3><p>Review model downloads and AI app caches while known conversation and session locations stay protected.</p></article>
+            <article><h3><svg width="23" height="23" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" class="feature-icon" aria-hidden="true" focusable="false"><path d="M3.30902 1C2.93025 1 2.58398 1.214 2.41459 1.55279L1.05279 4.27639C1.01807 4.34582 1 4.42238 1 4.5V13C1 13.5523 1.44772 14 2 14H13C13.5523 14 14 13.5523 14 13V4.5C14 4.42238 13.9819 4.34582 13.9472 4.27639L12.5854 1.55281C12.416 1.21403 12.0698 1.00003 11.691 1.00003L7.5 1.00001L3.30902 1ZM3.30902 2L7 2.00001V4H2.30902L3.30902 2ZM8 4V2.00002L11.691 2.00003L12.691 4H8ZM7.5 5H13V13H2V5H7.5ZM5.5 7C5.22386 7 5 7.22386 5 7.5C5 7.77614 5.22386 8 5.5 8H9.5C9.77614 8 10 7.77614 10 7.5C10 7.22386 9.77614 7 9.5 7H5.5Z" fill="currentColor" fill-rule="evenodd" clip-rule="evenodd"></path></svg><span>Storage &amp; alerts</span></h3><p>Verify eligible copies to a supported encrypted drive, with originals retained. Get optional low-space alerts.</p></article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-hero" aria-labelledby="closing-title"><p class="section-label">For the work ahead</p><h2 id="closing-title">More room.<br />Keep your momentum.</h2><p>Your next idea needs room. Your current work needs care.<br />Cairn is being built for both.</p><a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a><span class="footer-availability">In development for macOS</span></div>
+      <div class="shell footer-main">
+        <div class="footer-about"><a class="brand" href="#top" aria-label="Cairn, back to top"><img src="../assets/cairn-icon.png" width="32" height="32" alt="" /><span>Cairn</span></a><p>Mac cleaning built around<br />the work behind every build.</p></div>
+        <nav class="footer-links" aria-label="Footer navigation">
+          <div><h2>Explore</h2><a href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a><a href="#changes">How it works</a><a href="#features">All features</a></div>
+          <div><h2>The approach</h2><a href="#problem">Why Cairn</a><a href="#protection">Protected work</a><a href="#outcome">Activity &amp; Recovery</a></div>
+          <div><h2>Cairn</h2><details class="footer-name" id="name"><summary>Why “Cairn”?</summary><p>A cairn is a stack of stones that marks a path. The idea behind our name: a clearer next step when your Mac is full.</p></details><a href="#top">Back to top</a></div>
+        </nav>
+      </div>
+      <div class="shell footer-bottom"><span>Native app previews use sample data.</span><span>Cairn / 2026</span></div>
+    </footer>
+
+    <dialog class="app-preview" aria-labelledby="preview-title" aria-describedby="preview-note">
+      <div class="preview-heading"><div><span>Inside Cairn</span><h2 id="preview-title">Overview</h2></div><button class="preview-close" type="button" autofocus>Close</button></div>
+      <div class="preview-choices" role="group" aria-label="Choose an app screen">
+        <button type="button" data-screen="overview" data-src="assets/app-overview-current.png" data-alt="Cairn Overview showing available-space history and the Make room action" aria-pressed="true">Overview</button>
+        <button type="button" data-screen="changes" data-src="assets/app-changes-current.png" data-alt="Cairn Changes showing dated readings and measured candidate growth" aria-pressed="false">Changes</button>
+        <button type="button" data-screen="make-room" data-src="assets/app-make-room-current.png" data-alt="Cairn Make room showing available space, a target, and items to review" aria-pressed="false">Make room</button>
+        <button type="button" data-screen="developer" data-src="assets/app-developer-current.png" data-alt="Cairn Developer Cleanup showing exact paths and review requirements" aria-pressed="false">Developer cleanup</button>
+        <button type="button" data-screen="activity" data-src="assets/app-activity-current.png" data-alt="Cairn Activity and Recovery showing recorded actions and recovery options" aria-pressed="false">Activity &amp; Recovery</button>
+      </div>
+      <div class="preview-toolbar"><button class="preview-zoom" type="button" aria-pressed="false" aria-controls="preview-canvas">Actual size</button><a class="preview-original" href="assets/app-overview-current.png" target="_blank" rel="noopener">Open image</a><span class="preview-hint" aria-live="polite">Choose Actual size to read the details.</span></div>
+      <div class="preview-image-wrap" id="preview-canvas" role="region" aria-label="App screenshot; scroll to inspect when viewing at actual size" tabindex="0"><img class="preview-image" width="1120" height="740" alt="" /></div>
+      <p id="preview-note">Sample data. Disk actions are disabled in these native app captures.</p>
+    </dialog>
+  </body>
+</html>

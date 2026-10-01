@@ -1,0 +1,113 @@
+const { JSDOM, VirtualConsole } = require('jsdom');
+const fs = require('node:fs');
+const path = require('node:path');
+const assert = require('node:assert/strict');
+const root = path.resolve(__dirname, '..');
+const errors = [];
+const console = new VirtualConsole();
+console.on('jsdomError', e => errors.push(e.message));
+console.on('error', (...args) => errors.push(args.join(' ')));
+const dom = new JSDOM(fs.readFileSync(path.join(root, 'night.html'), 'utf8'), {
+ url: 'file://' + root + '/night.html', runScripts: 'outside-only', pretendToBeVisual: true, virtualConsole: console,
+});
+const w = dom.window, d = w.document;
+const mediaListeners = [];
+let mobile = true;
+w.matchMedia = () => ({ get matches() { return mobile; }, addEventListener(type, fn) { mediaListeners.push(fn); }, removeEventListener() {} });
+w.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} };
+w.HTMLElement.prototype.scrollIntoView = function() {};
+w.eval(fs.readFileSync(path.join(root, 'assets/cairn-interactions.js'), 'utf8'));
+const tick = (ms=80) => new Promise(resolve => setTimeout(resolve, ms));
+const escape = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+(async () => {
+ await tick();
+ assert(d.documentElement.classList.contains('radix-ready'));
+ assert.equal(d.querySelectorAll('.tool-mark').length, 7);
+ assert.equal(d.querySelector('dialog'), null);
+ const tourButtons=[...d.querySelectorAll('.product-tour-trigger')];
+ assert.equal(tourButtons.length,3);
+ assert(!d.querySelector('.feature-grid').hidden,'original feature grid is restored');
+ tourButtons[0].focus();
+ tourButtons[0].dispatchEvent(new w.KeyboardEvent('keydown',{key:'ArrowDown',bubbles:true}));await tick();
+ assert.equal(d.activeElement,tourButtons[1],'accordion supports arrow-key focus');
+ for(let i=0;i<3;i++){
+  tourButtons[i].click();await tick(240);
+  assert.equal(tourButtons[i].getAttribute('aria-expanded'),'true');
+  assert.equal(d.querySelectorAll('.product-tour-trigger[aria-expanded=true]').length,1);
+  const visible=d.querySelectorAll('.product-tour-screen:not([hidden])');
+  assert.equal(visible.length,1,'one app screen is visible');
+  assert.equal(visible[0].dataset.preview,['overview','developer','activity'][i]);
+  visible[0].focus();visible[0].click();await tick();
+  assert(d.querySelector('.radix-preview'));escape();await tick();
+  assert.equal(d.activeElement,visible[0],'preview focus returns to selected screen');
+ }
+ const trigger = d.querySelector('.header-action');
+ for (const key of ['overview', 'changes', 'make-room', 'developer', 'activity']) {
+  trigger.dataset.preview = key; trigger.focus(); trigger.click(); await tick();
+  const dialog = d.querySelector('.radix-preview');
+  assert.equal(dialog.getAttribute('role'), 'dialog');
+  assert.equal(dialog.dataset.state, 'open');
+  assert(dialog.getAttribute('aria-labelledby'));
+  assert(dialog.getAttribute('aria-describedby'));
+  assert.equal(d.querySelector('.radix-preview [role=tab][aria-selected=true]').textContent.trim(), {overview:'Overview',changes:'Changes','make-room':'Make room',developer:'Developer cleanup',activity:'Activity & Recovery'}[key]);
+  const img = d.querySelector('.radix-preview [role=tabpanel][data-state=active] img');
+  assert(img.getAttribute('src').includes({overview:'overview',changes:'changes','make-room':'make-room',developer:'developer',activity:'activity'}[key]));
+  assert.equal(d.querySelector('.preview-original').getAttribute('href'), img.getAttribute('src'));
+  d.querySelector('.preview-zoom').click(); await tick();
+  assert(d.querySelector('.is-zoomed'));
+  assert.equal(d.activeElement.getAttribute('role'), 'region');
+  escape(); await tick();
+  assert.equal(d.querySelector('.radix-preview'), null);
+  assert.equal(d.activeElement, trigger);
+ }
+ trigger.dataset.preview = 'overview'; trigger.click(); await tick();
+ const first = d.querySelector('.radix-preview [role=tab]'); first.focus();
+ first.dispatchEvent(new w.KeyboardEvent('keydown', {key:'ArrowRight',bubbles:true})); await tick();
+ assert.equal(d.querySelector('.radix-preview [role=tab][aria-selected=true]').textContent, 'Changes');
+ d.querySelector('.preview-close').click(); await tick();
+ assert.equal(d.querySelector('.radix-preview'), null);
+ trigger.click(); await tick();
+ const overlay = d.querySelector('.cairn-overlay');
+ overlay.dispatchEvent(new w.MouseEvent('pointerdown', {bubbles:true,button:0}));
+ overlay.dispatchEvent(new w.MouseEvent('pointerup', {bubbles:true,button:0}));
+ overlay.click(); await tick();
+ assert(!d.querySelector('.radix-preview'), 'Preview should be dismissed after outside pointer');
+ // Dynamic story links use delegated handling, even when inserted after mount.
+ const dynamic = d.createElement('a'); dynamic.href='assets/app-activity-current.png'; dynamic.dataset.preview='activity'; d.body.append(dynamic);
+ dynamic.click(); await tick(); assert.equal(d.querySelector('.preview-heading h2').textContent, 'Activity & Recovery'); escape(); await tick();
+ let modifiedHandled;
+ d.addEventListener('click', e => { modifiedHandled=e.defaultPrevented; e.preventDefault(); }, {once:true});
+ trigger.dispatchEvent(new w.MouseEvent('click', {bubbles:true,cancelable:true,ctrlKey:true})); await tick();
+ assert.equal(modifiedHandled, false); assert.equal(d.querySelector('.radix-preview'), null);
+ const menu = d.querySelector('.menu-toggle'); menu.click(); await tick();
+ assert.equal(menu.getAttribute('aria-expanded'), 'true');
+ assert.equal(d.querySelectorAll('.cairn-navigation nav a').length,5);
+ assert(d.querySelector('.cairn-navigation nav a[href="docs-preview/index.html"]'));
+ escape(); await tick(); assert.equal(menu.getAttribute('aria-expanded'),'false'); assert.equal(d.activeElement,menu);
+ menu.click(); await tick(); d.querySelector('.cairn-navigation nav a').click(); await tick();
+ assert.equal(menu.getAttribute('aria-expanded'),'false');
+ const showcase=d.querySelector('#inside-cairn');
+ let showcaseTop=76;
+ Object.defineProperty(showcase,'offsetHeight',{value:3000});
+ showcase.getBoundingClientRect=()=>({top:showcaseTop});
+ d.querySelector('.site-header').getBoundingClientRect=()=>({height:76});
+ const tourScrolls=[];w.scrollTo=options=>tourScrolls.push(options);
+ menu.click(); await tick(); mobile=false; mediaListeners.forEach(fn=>fn()); await tick();
+ assert.equal(menu.getAttribute('aria-expanded'),'false');
+ assert(showcase.classList.contains('tour-ready'),'desktop product tour becomes scroll driven');
+ const tourTravel=3000-(w.innerHeight-76);
+ for(const [fraction,key] of [[.1,'overview'],[.5,'developer'],[.9,'activity'],[.45,'developer']]){
+  showcaseTop=76-tourTravel*fraction;w.dispatchEvent(new w.Event('scroll'));await tick();
+  assert.equal(d.querySelector('.product-tour-screen:not([hidden])').dataset.preview,key,'screens follow forward and reverse scroll');
+ }
+ tourButtons[2].click();await tick();
+ assert.equal(tourScrolls.at(-1).behavior,'smooth','clicking a step moves to its scroll state');
+ d.querySelector('.tool-mark').focus(); await tick(450);
+ assert(d.querySelector('[role=tooltip]')); escape(); await tick();
+ const name = d.querySelector('.name-trigger'); name.click(); await tick();
+ assert.equal(name.getAttribute('aria-expanded'),'true'); assert(d.querySelector('.name-content p'));
+ name.click(); await tick(); assert.equal(name.getAttribute('aria-expanded'),'false');
+ assert.deepEqual(errors,[]);
+ process.stdout.write('PASS: scroll-driven product tour forward/reverse and click seeking; five previews, Radix dialog semantics, zoom, tab arrows, close/Escape/focus return, dynamic links, modified clicks, mobile menu/resize and focus tooltips.\nNon-rendering DOM checks; native browser layout and focus trapping still require visual/browser QA.\n');
+ dom.window.close();
+})().catch(e => { process.stderr.write(e.stack+'\n'+errors.join('\n')); dom.window.close(); process.exitCode=1; });

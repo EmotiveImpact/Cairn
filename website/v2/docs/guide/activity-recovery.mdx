@@ -1,0 +1,22 @@
+---
+title: "Activity and recovery"
+description: "Read action outcomes and understand what a recovery option can do."
+---
+
+**Activity & Recovery** keeps a record of reviewed actions and their outcomes. Where a recovery option is available, Cairn connects it to the recorded item. Not every action has the same recovery path.
+
+## Read an outcome
+
+Keep three numbers separate:
+
+- **Affected file size** describes the selected item.
+- **Recorded recovery** describes what the action record can support.
+- **Observed available space** comes from a later reading of the same volume.
+
+These are related, but they are not interchangeable. Moving something to Trash may change the action record while leaving available space unchanged.
+
+## If an action was interrupted
+
+Cairn marks an uncertain action for manual review and blocks further cleanup. It does not replay an interrupted disk action automatically. Review the recorded path and the actual filesystem state before acknowledging the uncertainty.
+
+The current native implementation still has release-validation work outstanding. Treat the action record as evidence to inspect, not a substitute for checking the files that matter to you.

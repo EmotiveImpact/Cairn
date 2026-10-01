@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#101418" />
+    <meta name="description" content="Cairn helps you understand your Mac's storage and review what can change, while protecting the work that matters." />
+    <title>Cairn — Make room with care</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="assets/favicon.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header">
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="Cairn, back to top">
+          <img src="assets/cairn-icon.png" width="42" height="42" alt="" />
+          <span>Cairn</span>
+        </a>
+        <nav class="main-nav" aria-label="Main navigation">
+          <a href="#method">How it works</a>
+          <a href="#care">What it protects</a>
+          <a href="#product">The app</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero shell" id="top" aria-labelledby="hero-title">
+        <div class="hero-grid">
+          <div class="hero-copy">
+            <p class="platform">Cairn for macOS</p>
+            <h1 id="hero-title">Know what to keep.<br />Know what can go.</h1>
+            <p class="hero-description">Cairn shows the space you have and what its scans find. Review the exact files before anything changes, and make room without losing track of the work behind it.</p>
+            <div class="hero-actions">
+              <a class="button-primary" href="#product">Explore the app</a>
+              <a class="text-link" href="#care">How Cairn protects your work</a>
+            </div>
+          </div>
+          <div class="hero-art">
+            <img src="assets/cairn-icon.png" width="284" height="284" alt="Four blue stones stacked on a dark rounded square, the Cairn app icon" />
+          </div>
+        </div>
+      </section>
+
+      <section class="product-section" id="product" aria-labelledby="product-title">
+        <div class="shell">
+          <div class="section-heading product-heading">
+            <div>
+              <h2 id="product-title">See what changed.</h2>
+            </div>
+            <p>Available space, recent history, and scan findings in one place. Cairn calls out incomplete measurements instead of inventing an answer.</p>
+          </div>
+
+          <div class="preview-frame">
+            <div class="preview-controls" role="group" aria-label="App preview screen">
+              <button class="preview-tab is-active" type="button" aria-pressed="true" data-screen="overview">Overview</button>
+              <button class="preview-tab" type="button" aria-pressed="false" data-screen="storage">Storage</button>
+              <span class="preview-note">Preview with sample data</span>
+            </div>
+            <img id="app-preview" src="assets/app-overview.png" width="1120" height="740" loading="lazy" alt="Cairn Overview preview showing available space, recent storage history, and a file review prompt" />
+          </div>
+          <p class="preview-caption" id="preview-caption">Overview shows available space, recent history, and a next step grounded in measured findings.</p>
+        </div>
+      </section>
+
+      <section class="method-section shell" id="method" aria-labelledby="method-title">
+        <div class="section-heading method-heading">
+          <div>
+            <h2 id="method-title">From full to understood.</h2>
+          </div>
+          <p>A good storage tool should show its work. Cairn takes you from a broad view to an exact path before you decide what to do.</p>
+        </div>
+        <ol class="steps">
+          <li>
+            <span class="step-number">01</span>
+            <div>
+              <h3>See the picture</h3>
+              <p>Follow available space over time and scan categories when you need a closer look.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">02</span>
+            <div>
+              <h3>Review the path</h3>
+              <p>Inspect individual files, locations, and requirements before selecting anything.</p>
+            </div>
+          </li>
+          <li>
+            <span class="step-number">03</span>
+            <div>
+              <h3>Choose the next step</h3>
+              <p>Approve a change deliberately, then find its record in Activity &amp; Recovery.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section class="care-section" id="care" aria-labelledby="care-title">
+        <div class="shell care-grid">
+          <div class="care-copy">
+            <h2 id="care-title">Your source code<br />is not clutter.</h2>
+            <p>Known project, session, credential, and recovery locations are protected. Cairn asks you to review exact paths before removal and keeps a record of changes it makes.</p>
+            <a class="text-link" href="#name">The idea behind the name</a>
+          </div>
+          <div class="care-list" aria-label="How Cairn treats different data">
+            <div class="care-row"><span>Known source and sessions</span><strong>Protected</strong></div>
+            <div class="care-row"><span>Credentials and recovery data</span><strong>Protected</strong></div>
+            <div class="care-row"><span>Finished exports to an eligible drive</span><strong>Copied and verified</strong></div>
+            <p>External copies keep the original in place. They are not presented as freed internal space or as a complete backup.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="name-section shell" id="name" aria-labelledby="name-title">
+        <div class="name-mark"><img src="assets/cairn-icon.png" width="116" height="116" alt="" /></div>
+        <div>
+          <p class="section-kicker">Why Cairn?</p>
+          <h2 id="name-title">A marker for the way forward.</h2>
+          <p>A cairn <span class="pronunciation">(“kairn” in the UK, “kern” in the US)</span> is a stack of stones that marks a path. On a crowded Mac, the next step should feel just as clear.</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="shell footer-inner">
+        <div class="brand footer-brand"><img src="assets/cairn-icon.png" width="36" height="36" alt="" /><span>Cairn</span></div>
+        <p>For macOS. In development.</p>
+        <a href="#top">Back to top</a>
+      </div>
+    </footer>
+  </body>
+</html>

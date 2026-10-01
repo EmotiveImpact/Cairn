@@ -42,6 +42,7 @@ This compiles the executable. For normal use, launch a packaged `Cairn.app`; a r
 | `Cairn/Diagnostics/` | Executable diagnostic and fixture suites |
 | `Cairn/Resources/` | Shipped icons and preview artwork |
 | `Support/` | SQLite module and supporting checks |
+| `website/` | Marketing website, assets and website documentation; active page `v2/night.html` |
 | `docs/` | Product, implementation, design and release documentation |
 | `artifacts/` | Versioned written evidence; generated output stays local |
 | `reference-prototype/` | Historical Python reference, not shipped |

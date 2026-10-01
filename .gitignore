@@ -24,3 +24,10 @@ artifacts/**/*.app/
 *.p8
 __pycache__/
 *.pyc
+
+# Website dependencies and local tooling
+website/**/node_modules/
+website/**/.cache/
+
+# Local Blender and cinematic design experiments (not loaded by the website)
+website/v2/cinematic-concepts/

@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090b0d" />
+    <meta name="description" content="Cairn is a Mac cleaner built for developers. See what changed, review exact paths, and make room for the next build while protecting projects and sessions." />
+    <title>Cairn — A Mac cleaner built for developers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&amp;display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="night-before-refinement.css?v=20260929-no-features-divider" />
+    <script src="night-before-refinement.js" defer></script>
+    <link rel="stylesheet" href="footer-matrix.css?v=1" />
+    <script src="footer-matrix.js?v=2" defer></script>
+    <link rel="stylesheet" href="process-story.css?v=2" />
+    <script src="process-story.js?v=2" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" id="top">
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="Cairn, back to top">
+          <img src="../assets/cairn-icon.png" width="38" height="38" alt="" />
+          <span>Cairn</span>
+        </a>
+        <nav class="main-nav" aria-label="Main navigation">
+          <a href="#problem">Why Cairn</a>
+          <a href="#changes">How it works</a>
+          <a href="#protection">Protection</a>
+          <a href="#features">Features</a>
+        </nav>
+        <span class="header-divider" aria-hidden="true"></span>
+        <span class="header-status">In development</span>
+        <a class="header-action" href="#product">See the app</a>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="hero-atmosphere" aria-hidden="true">
+          <img src="assets/hero-daylight.png" width="1536" height="1024" alt="" fetchpriority="high" />
+        </div>
+        <div class="shell hero-layout">
+          <div class="hero-copy">
+            <p class="hero-kicker"><span></span>More space. Same momentum.</p>
+            <h1 id="hero-title">A Mac cleaner.<span>Built for developers.</span></h1>
+            <p class="hero-description">Keep building. Cairn helps you find room on your Mac, review what can go, and protect the code and conversations that got you here.</p>
+            <div class="hero-actions">
+              <a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">Explore the app</a>
+              <a class="hero-story-link" href="#problem">Why Cairn</a>
+            </div>
+            <p class="hero-availability">Native to macOS. Built around your working state.</p>
+          </div>
+          <figure class="product-composition" id="product" aria-labelledby="showcase-caption">
+            <div class="screen-stack">
+              <a class="product-screen screen-overview" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog" aria-label="Explore the Cairn Overview screen">
+                <img src="assets/app-overview-current.png" width="1120" height="740" alt="Cairn Overview with 9.9 GB available and a chart of falling free space" fetchpriority="high" />
+                <span class="screen-open">Explore Overview</span>
+              </a>
+            </div>
+            <figcaption id="showcase-caption"><span>Real app. Real workflow.</span> Native preview with sample data. Click the screen to explore.</figcaption>
+          </figure>
+        </div>
+        <div class="shell hero-context">
+          <p>For the work behind<br /><strong>your next build.</strong></p>
+          <div class="context-item"><span>01</span><div><strong>See what changed</strong><p>Follow the space, not a guess.</p></div></div>
+          <div class="context-item"><span>02</span><div><strong>Review what can go</strong><p>The path. The size. The trade-off.</p></div></div>
+          <div class="context-item"><span>03</span><div><strong>Keep your working state</strong><p>Code, sessions, credentials.</p></div></div>
+        </div>
+      </section>
+
+      <section class="problem" id="problem" aria-labelledby="problem-title">
+        <div class="shell problem-layout">
+          <div class="problem-copy">
+            <p class="eyebrow">THE MOMENT</p>
+            <h2 id="problem-title"><span>The disk is filling up.</span><span>The build still needs to ship.</span></h2>
+            <p>DerivedData, simulators, package caches, Docker, local models. A working Mac fills up with things that need different decisions. Some can be rebuilt. Some are the work itself.</p>
+            <div class="scenario-readout" aria-label="Illustrative storage scenario">
+              <div><span>AVAILABLE NOW</span><strong>9.9 GB</strong></div>
+              <div><span>YOUR TARGET</span><strong>30 GB</strong></div>
+            </div>
+            <p class="scenario-note">One example, using the labelled sample data shown in the app previews.</p>
+          </div>
+          <div class="path-map" role="group" aria-label="Illustrative developer paths and how Cairn treats them">
+            <div class="map-heading"><span>ONE MAC / DIFFERENT STAKES</span><span>ILLUSTRATIVE PATHS</span></div>
+            <div class="path-row"><span class="path-kind">SOURCE</span><code>~/Projects/my-app/.git</code><strong class="path-protected">Protected</strong></div>
+            <div class="path-row"><span class="path-kind">BUILD</span><code>~/Library/Developer/Xcode/DerivedData</code><strong>Review after quitting Xcode</strong></div>
+            <div class="path-row"><span class="path-kind">PACKAGE</span><code>~/Projects/my-app/node_modules</code><strong>Check rebuildability</strong></div>
+            <div class="path-row"><span class="path-kind">SESSION</span><code>~/.codex/sessions</code><strong class="path-protected">Protected</strong></div>
+            <p>These paths explain the principle. Cairn checks the actual location and requirements before a change.</p>
+          </div>
+        </div>
+        <nav class="shell journey-nav" aria-label="Follow the Cairn example">
+          <a href="#changes"><span>01</span>Understand the change</a>
+          <a href="#make-room"><span>02</span>Set a space target</a>
+          <a href="#review"><span>03</span>Review exact paths</a>
+          <a href="#outcome"><span>04</span>Check the outcome</a>
+        </nav>
+      </section>
+
+      <section class="cairn-process" id="changes" aria-labelledby="process-title">
+        <div class="shell process-intro">
+          <p class="section-label">How Cairn works</p>
+          <h2 id="process-title">From scattered data.<br />To a clear way forward.</h2>
+          <p>A cairn marks the way ahead. Ours takes shape with every considered step: understand, review, protect, verify.</p>
+        </div>
+        <div class="process-track">
+          <div class="shell process-stage">
+            <canvas class="process-canvas" aria-hidden="true"></canvas>
+            <div class="process-copy">
+              <p class="process-eyebrow">01 / Understand</p>
+              <h3>Start with a clear picture.</h3>
+              <p class="process-description">Compare space readings and compatible scans. Bring build output, packages and local tools into view, with scan coverage clearly shown.</p>
+            </div>
+            <div class="process-key" aria-label="Illustration key"><span>Particles: illustrative data</span><span>Stones: steps toward clarity</span></div>
+            <aside class="process-evidence" aria-label="What Cairn checks"><small>MEASURED, NOT GUESSED</small><h4>Read the disk.</h4><ul><li>Dated space readings</li><li>Compatible scan comparisons</li><li>Partial coverage made visible</li></ul></aside>
+            <p class="process-inspect">Data becomes a clearer decision. Each stone marks a step.</p>
+            <div class="process-bottom">
+              <nav class="process-controls" aria-label="Process stages">
+                <button type="button" data-process-step="0" aria-pressed="true">01 <span>Scan</span></button>
+                <button type="button" data-process-step="1" aria-pressed="false">02 <span>Review</span></button>
+                <button type="button" data-process-step="2" aria-pressed="false">03 <span>Protect</span></button>
+                <button type="button" data-process-step="3" aria-pressed="false">04 <span>Verify</span></button>
+              </nav>
+              <a class="process-preview" href="assets/app-changes-current.png" data-preview="changes" aria-haspopup="dialog">See this in Cairn <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="process-progress" aria-hidden="true"><span></span></div>
+          </div>
+        </div>
+        <div class="shell process-fallback">
+          <article><h3>Scan</h3><p>Compare space readings and compatible scans. Partial coverage stays visible.</p></article>
+          <article id="make-room"><h3>Review</h3><p>Choose a space target, then inspect exact paths, sizes and requirements before approving a change.</p></article>
+          <article id="review"><h3>Protect</h3><p>Known source-control, coding-session and credential locations stay protected. Uncertain rebuildability needs review.</p></article>
+          <article id="outcome"><h3>Verify</h3><p>Check recorded actions, recover eligible Trash items and read available space again. Moving to Trash does not immediately free space.</p></article>
+        </div>
+      </section>
+
+      <section class="protection" id="protection" aria-labelledby="protection-title">
+        <div class="protection-art">
+          <img src="assets/stone-seam.png" width="1536" height="1024" loading="lazy" alt="A narrow blue mineral seam through dark stone" />
+        </div>
+        <div class="shell protection-inner">
+          <p class="eyebrow">THE HARD STOP</p>
+          <h2 id="protection-title">Your work is not clutter.</h2>
+          <p>An AI-assisted project is more than its repository. The conversation that shaped it, source-control state, credentials, and recovery data can matter just as much as the code. Cairn guards known locations, even inside a larger candidate, and asks for review when rebuildability is uncertain.</p>
+          <div class="protection-facts">
+            <div><span>KNOWN WORKING STATE</span><strong>Protected</strong></div>
+            <div><span>UNCERTAIN REBUILD</span><strong>Review required</strong></div>
+            <div><span>RUNNING APP DATA</span><strong>Close the owner first</strong></div>
+          </div>
+        </div>
+      </section>
+
+<section class="more-features section-grid" id="features" aria-labelledby="features-title">
+        <div class="shell features-intro">
+          <p class="eyebrow">THE REST OF YOUR MAC</p>
+          <h2 id="features-title">Start with the dev stack.<br />See the whole machine.</h2>
+          <p>Cairn starts where developers lose space: build output, dependencies, and local tools. The same careful review extends to the other places a working Mac fills up.</p>
+        </div>
+        <div class="shell feature-grid">
+          <article><span>01 / BUILD</span><h3>Xcode and project output</h3><p>DerivedData, simulator support, and generated project folders, with their requirements shown before action.</p></article>
+          <article><span>02 / TOOLCHAINS</span><h3>Packages and runtimes</h3><p>Node, Python, Rust, and other developer caches. Rebuildability and active tools affect what Cairn recommends.</p></article>
+          <article><span>03 / FILES</span><h3>Large files, apps, duplicates</h3><p>Find forgotten giants and review duplicate files or app data without folding them into a one-click total.</p></article>
+          <article><span>04 / TEMPORARY DATA</span><h3>Browser and creative caches</h3><p>Look at temporary data from browsers and creator tools while keeping saved work distinct from cache.</p></article>
+          <article><span>05 / LOCAL AI</span><h3>AI tools and model stores</h3><p>Review local model downloads and AI app caches. Known conversation and session data stays protected.</p></article>
+          <article><span>06 / STAY AHEAD</span><h3>Storage and reserve</h3><p>Verify eligible export copies to a supported encrypted drive with originals retained, or opt into low-space alerts. Neither runs automatic cleanup.</p></article>
+        </div>
+      </section>
+
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-hero" aria-labelledby="closing-title">
+        <div class="shell footer-hero-inner">
+          <div class="footer-hero-copy">
+            <p class="footer-overline">FOR THE WORK AHEAD</p>
+            <h2 id="closing-title">More room for<br />the work ahead.</h2>
+            <p>Your next idea needs room. Your current work needs care.<br />Cairn is being built for both.</p>
+            <div class="closing-actions">
+              <a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">Explore the app</a>
+              <a class="button button-outline" href="#problem">Follow the story</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="shell footer-main">
+        <div class="footer-about">
+          <a class="footer-brand" href="#top" aria-label="Cairn, back to top"><img src="../assets/cairn-icon.png" width="46" height="46" alt="" /><span>Cairn</span></a>
+          <p>Mac cleaning built for developers and the work behind every build.</p>
+          <span class="footer-state">In development for macOS</span>
+        </div>
+        <nav class="footer-links" aria-label="Footer navigation">
+          <div><h2>Explore</h2><a href="#product">The app</a><a href="#changes">How it works</a><a href="#features">All features</a></div>
+          <div><h2>The approach</h2><a href="#problem">Developer problem</a><a href="#protection">Protected work</a><a href="#outcome">Activity &amp; Recovery</a></div>
+          <div>
+            <h2>Cairn</h2>
+            <details class="footer-name" id="name">
+              <summary>Why “Cairn”?</summary>
+              <p>A cairn is a stack of stones that marks a path. The idea behind our name: a clearer next step when your Mac is full.</p>
+            </details>
+            <a href="#top">Back to top</a>
+          </div>
+        </nav>
+      </div>
+      <div class="shell footer-bottom"><span>Native app previews use labelled sample data.</span><span>Cairn / 2026</span></div>
+    </footer>
+
+    <dialog class="app-preview" aria-labelledby="preview-title" aria-describedby="preview-note">
+      <div class="preview-heading">
+        <div><span>INSIDE CAIRN</span><h2 id="preview-title">Overview</h2></div>
+        <button class="preview-close" type="button" autofocus>Close</button>
+      </div>
+      <div class="preview-choices" role="group" aria-label="Choose an app screen">
+        <button type="button" data-screen="overview" data-src="assets/app-overview-current.png" data-alt="Cairn Overview showing available-space history and the Make room action" aria-pressed="true">Overview</button>
+        <button type="button" data-screen="changes" data-src="assets/app-changes-current.png" data-alt="Cairn Changes showing dated readings and measured candidate growth" aria-pressed="false">Changes</button>
+        <button type="button" data-screen="make-room" data-src="assets/app-make-room-current.png" data-alt="Cairn Make room showing available space, a target, and items to review" aria-pressed="false">Make room</button>
+        <button type="button" data-screen="developer" data-src="assets/app-developer-current.png" data-alt="Cairn Developer Cleanup showing exact paths and review requirements" aria-pressed="false">Developer cleanup</button>
+        <button type="button" data-screen="activity" data-src="assets/app-activity-current.png" data-alt="Cairn Activity and Recovery showing recorded actions and recovery options" aria-pressed="false">Activity &amp; Recovery</button>
+      </div>
+      <div class="preview-image-wrap"><img class="preview-image" width="1120" height="740" alt="" /></div>
+      <p id="preview-note">Native app in development · Sample data · Disk actions disabled in these captures.</p>
+    </dialog>
+  </body>
+</html>

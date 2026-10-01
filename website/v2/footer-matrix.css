@@ -1,0 +1,14 @@
+.site-footer > .footer-matrix {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+  pointer-events: none;
+  mask-image: linear-gradient(transparent, #000 12%, #000 90%, transparent);
+  -webkit-mask-image: linear-gradient(transparent, #000 12%, #000 90%, transparent);
+}
+.site-footer > div { position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce), (hover: none) {
+  .site-footer > .footer-matrix { opacity: .55; }
+}

@@ -1,0 +1,78 @@
+.scene-story { background: linear-gradient(#0c1013 0, #090b0d 240px); color: #edf3f8; }
+.scene-intro { padding-block: 85px 44px; display: grid; grid-template-columns: 1.15fr .85fr; gap: 55px; align-items: end; }
+.scene-intro h2 { font-size: clamp(32px,3.2vw,46px); line-height: 1.12; font-weight: 500; }
+.scene-intro p { max-width: 410px; font-size: 16px; }
+.scene-track { position: relative; }
+.scene-stage { position: relative; isolation: isolate; overflow: hidden; background: #090b0d; scroll-margin-top: var(--header-height,76px); }
+.scene-art { position: absolute; inset: 0; z-index: -1; pointer-events: none; -webkit-mask-image: linear-gradient(transparent,rgba(0,0,0,.3) 5%,#000 19%,#000 75%,rgba(0,0,0,.3) 94%,transparent); mask-image: linear-gradient(transparent,rgba(0,0,0,.3) 5%,#000 19%,#000 75%,rgba(0,0,0,.3) 94%,transparent); }
+.scene-art img,.scene-art video { position: absolute; width: 100%; height: 100%; max-width: none; object-fit: contain; object-position: center; }
+.scene-film { opacity: 0; }
+.scene-story.has-frame .scene-film { opacity: 1; }
+.scene-content { padding-block: 100px 140px; position: relative; }
+.scene-copy { width: 43%; max-width: 510px; }
+.scene-chapter + .scene-chapter { margin-top: 64px; }
+.scene-chapter h3 { font-size: clamp(38px,4.5vw,64px); line-height: 1.08; letter-spacing: -.04em; font-weight: 500; }
+.scene-kicker { margin-bottom: 24px; font-size: 13px; color: #abd9f7; }
+.scene-description { max-width: 390px; margin-top: 26px; font-size: 16px; line-height: 1.7; color: #b7c5d0; }
+.scene-note { max-width: 390px; margin-top: 18px; font-size: 12px; color: #92aaba; }
+.scene-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 22px; font-size: 14px; color: #b8e4ff; }
+.scene-link:hover { color: white; }
+.scene-controls { position: absolute; inset-inline: 0; bottom: 25px; }
+.scene-control-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; font-size: 12px; color: #91a9ba; margin-bottom: 13px; }
+.scene-scrubber { display: block; width: 100%; height: 26px; margin: 0; accent-color: #b6dff8; cursor: ew-resize; }
+.scene-steps { display: grid; grid-template-columns: repeat(4,1fr); gap: 18px; }
+.scene-steps button { display: flex; align-items: center; gap: 12px; min-height: 48px; padding: 8px 0; border: 0; background: transparent; color: #8da6b8; text-align: left; font-size: 13px; }
+.scene-steps small { font-size: 11px; font-variant-numeric: tabular-nums; }
+.scene-steps button[aria-pressed="true"] { color: #d4edff; }
+.scene-steps button:hover { color: #fff; }
+.scene-story.is-ready .scene-track { height: 380svh; }
+.scene-story.is-ready .scene-stage { position: sticky; top: var(--header-height,76px); height: calc(100svh - var(--header-height,76px)); min-height: 620px; max-height: 1040px; }
+.scene-story.is-ready .scene-content { display: flex; align-items: center; height: 100%; padding-block: 30px 160px; }
+.scene-story.is-ready .scene-chapter { margin: 0; }
+.scene-story + .features { border-top: 0; }
+@media (max-width: 1050px) { .scene-copy { width: 45%; } .scene-chapter h3 { font-size: 44px; } .scene-description { font-size: 15px; } }
+@media (max-width: 800px), (max-height: 720px) {
+ .scene-story.is-ready .scene-track { height: auto; }
+ .scene-story.is-ready .scene-stage { position: relative; top: auto; height: 730px; min-height: 0; }
+ .scene-scroll-hint { display: none; }
+}
+@media (max-width: 800px) {
+ .scene-intro { display: block; padding-block: 65px 32px; }
+ .scene-intro p { margin-top: 22px; }
+ .scene-story.is-ready .scene-stage { height: 870px; }
+ .scene-story.is-ready .scene-content { align-items: flex-start; padding-block: 30px 0; }
+ .scene-copy { width: 100%; max-width: 540px; }
+ .scene-chapter h3 { font-size: clamp(36px,7vw,48px); }
+ .scene-description { max-width: 530px; margin-top: 20px; }
+ .scene-kicker { margin-bottom: 18px; }
+ .scene-note { margin-top: 14px; }
+ .scene-link { margin-top: 12px; }
+ .scene-art { top: 370px; bottom: 125px; }
+ .scene-art img,.scene-art video { width: auto; height: 100%; aspect-ratio: 1280 / 900; left: 50%; transform: translateX(-65%); }
+ .scene-steps { gap: 10px; }
+ .scene-steps button { gap: 6px; font-size: 12px; }
+ .scene-control-heading { font-size: 11px; }
+ .scene-story:not(.is-ready) .scene-art { display: none; }
+}
+@media (max-width: 400px) { .scene-story.is-ready .scene-stage { height: 920px; } .scene-art { top: 420px; } .scene-steps button { font-size: 11px; } }
+@media (prefers-reduced-motion: reduce) {
+ .scene-story.is-ready .scene-track { height: auto; }
+ .scene-story.is-ready .scene-stage { position: relative; top: auto; }
+ .scene-film,.scene-scroll-hint { display: none; }
+}
+/* A light-only film blends its black backdrop into the surrounding page. */
+.scene-art { mix-blend-mode: screen; }
+.scene-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, #000, rgba(0,0,0,.65) 7%, transparent 24%, transparent 85%, rgba(0,0,0,.65) 96%, #000); pointer-events: none; }
+.scene-story.is-ready .scene-chapter:not([hidden]) { animation: scene-copy-enter 240ms ease-out; }
+.scene-steps button { transition: color 180ms ease, transform 180ms ease; cursor: pointer; }
+.scene-steps button:active { transform: translateY(1px); }
+.scene-scrubber:focus-visible { outline: 2px solid #b6dff8; outline-offset: 6px; border-radius: 4px; }
+@keyframes scene-copy-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .scene-story.is-ready .scene-chapter:not([hidden]), .scene-steps button { animation: none; transition: none; } }
+
+.scene-legend { display: flex; flex-wrap: wrap; gap: 8px 20px; margin-top: 18px; font-size: 11px; color: #9baebc; }
+.scene-legend span { display: inline-flex; align-items: center; gap: 7px; }
+.scene-legend i { width: 5px; height: 5px; border-radius: 50%; background: #489fd9; }
+.scene-legend .legend-review { background: #84909b; }
+@media (min-width: 801px) and (max-height: 850px) { .scene-chapter h3 { font-size: 46px; } .scene-kicker { margin-bottom: 18px; } .scene-description { margin-top: 18px; } .scene-note,.scene-legend { margin-top: 12px; } .scene-link { margin-top: 12px; } }
+@media (max-width: 800px) { .scene-steps button { flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; } }

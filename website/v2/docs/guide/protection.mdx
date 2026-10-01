@@ -1,0 +1,17 @@
+---
+title: "Keep your working state"
+description: "Understand the boundary around code, sessions, credentials, and recovery data."
+---
+
+The files that let you resume work are not interchangeable with generated build output. Cairn treats known working locations as protected, including source-control history, coding-session locations, credentials, and recovery records.
+
+## Protection in practice
+
+- A repository and its history are not a routine cleanup candidate.
+- Known coding-session locations stay distinct from disposable tool caches.
+- Credentials and recovery data require their own safety boundary.
+- When Cairn cannot establish that data is safely rebuildable, it requires review rather than assuming it can go.
+
+Protection is based on known locations and the evidence available to a scan. It is not a guarantee that every valuable file anywhere on a Mac can be identified automatically. Always inspect an unfamiliar path before approving a change.
+
+For the developer workflow, see [Review before you remove](reviewing).

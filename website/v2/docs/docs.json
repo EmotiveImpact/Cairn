@@ -1,0 +1,27 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "name": "Cairn",
+  "description": "Cairn for macOS: understand storage, review what can go, and keep your working state intact.",
+  "theme": "mint",
+  "colors": {
+    "primary": "#4DA9F3",
+    "light": "#B8E4FF",
+    "dark": "#123A59"
+  },
+  "appearance": {
+    "default": "dark",
+    "strict": true
+  },
+  "fonts": {
+    "family": "Inter"
+  },
+  "logo": "/logo.png",
+  "favicon": "/favicon.png",
+  "navigation": {
+    "groups": [
+      { "group": "Start here", "pages": ["index"] },
+      { "group": "Using Cairn", "pages": ["guide/reading-space", "guide/reviewing", "guide/protection", "guide/activity-recovery"] },
+      { "group": "Reference", "pages": ["reference/faq"] }
+    ]
+  }
+}

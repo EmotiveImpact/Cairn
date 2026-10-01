@@ -1,0 +1,34 @@
+/* Actual Cairn screens, moved from the hero into a dedicated product explanation. */
+.screen-showcase { padding-block: 85px 65px; overflow: hidden; background: linear-gradient(#090d11, #090b0d 55%); }
+.screen-showcase h2 { font-size: var(--section-type); line-height: 1.12; }
+.screen-showcase .section-intro > p { color: #a7b7c3; }
+.showcase-composition { max-width: 1120px; margin: 50px auto 0; }
+.showcase-panel-field { position: relative; isolation: isolate; width: 100%; aspect-ratio: 1.65; -webkit-mask-image: linear-gradient(90deg,transparent,#000 10%,#000 89%,transparent),linear-gradient(180deg,transparent,#000 10%,#000 62%,transparent); -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg,transparent,#000 10%,#000 89%,transparent),linear-gradient(180deg,transparent,#000 10%,#000 62%,transparent); mask-composite: intersect; }
+.showcase-panel { position: absolute; display: block; overflow: hidden; aspect-ratio: 920 / 660; border: 1px solid rgba(190,215,233,.17); border-radius: 7px; background: #191e23; box-shadow: 0 20px 70px #0007; cursor: zoom-in; }
+.showcase-panel img { position: absolute; width: 121.7392%; max-width: none; height: auto; left: -21.7392%; top: -7.879%; }
+.showcase-panel--rear { z-index: 1; width: 72%; left: 0; top: 10%; opacity: .6; }
+.showcase-panel--front { z-index: 2; width: 68%; left: 32%; top: 0; }
+.showcase-panel:focus-visible { outline: 2px solid #b7e2ff; outline-offset: -4px; }
+.showcase-composition figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; margin-top: -20px; font-size: 11px; color: #8da2b1; }
+.showcase-composition figcaption > span:first-child { color: #c5d6e3; }
+.showcase-explainers { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; margin-top: 38px; }
+.showcase-explainers h3 { font-size: 21px; font-weight: 500; line-height: 1.25; letter-spacing: -.025em; }
+.showcase-explainers p { margin-top: 12px; max-width: 43ch; color: #96a9b7; font-size: 14px; }
+.showcase-explainers a { display: inline-flex; align-items: center; min-height: 44px; margin-top: 8px; color: #c5e6fa; font-size: 13px; }
+.showcase-explainers a:hover { color: #fff; }
+.showcase-explainers a:focus-visible { outline: 2px solid #b7e2ff; outline-offset: 4px; }
+.screen-showcase + .features { border-top: 0; }
+@media (max-width: 800px) {
+ .screen-showcase { padding-block: 65px 40px; }
+ .showcase-composition { margin-top: 32px; }
+ .showcase-panel-field { aspect-ratio: 1.35; }
+ .showcase-panel--rear { width: 86%; left: -6%; top: 13%; }
+ .showcase-panel--front { width: 82%; left: 23%; }
+ .showcase-composition figcaption { margin-top: -10px; font-size: 10px; }
+ .showcase-explainers { gap: 28px; margin-top: 30px; }
+ .showcase-explainers h3 { font-size: 19px; }
+}
+@media (max-width: 560px) {
+ .showcase-explainers { grid-template-columns: 1fr; gap: 22px; }
+ .showcase-explainers p { max-width: 42ch; }
+}

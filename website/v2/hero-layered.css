@@ -1,0 +1,27 @@
+/* Linear reference belongs to the hero: actual Cairn product views, flat and feathered. */
+.hero.hero-linear { background: #090b0d; }
+.hero-linear .hero-layout { grid-template-columns: minmax(0,.42fr) minmax(0,.58fr); align-items: center; gap: 40px; padding-block: 82px 58px; }
+.hero-linear .hero-copy { position: relative; z-index: 2; }
+.hero-linear .product-composition { width: 100%; max-width: 760px; justify-self: end; padding: 0; top: 0; }
+.hero-panel-field { position: relative; isolation: isolate; width: 100%; aspect-ratio: 1.45; -webkit-mask-image: linear-gradient(90deg,transparent,#000 14%,#000 84%,transparent),linear-gradient(180deg,transparent,#000 10%,#000 58%,transparent 100%); -webkit-mask-composite: source-in; mask-image: linear-gradient(90deg,transparent,#000 14%,#000 84%,transparent),linear-gradient(180deg,transparent,#000 10%,#000 58%,transparent 100%); mask-composite: intersect; }
+.hero-panel { position: absolute; display: block; overflow: hidden; aspect-ratio: 920 / 660; border: 1px solid rgba(190,215,233,.17); border-radius: 7px; background: #191e23; box-shadow: 0 20px 70px #0007; cursor: zoom-in; }
+.hero-panel img { position: absolute; width: 121.7392%; max-width: none; height: auto; left: -21.7392%; top: -7.879%; }
+.hero-panel--rear { z-index: 1; width: 84%; left: 0; top: 10%; opacity: .6; }
+.hero-panel--front { z-index: 2; width: 80%; left: 25%; top: 0; }
+.hero-panel:focus-visible { outline: 2px solid #b7e2ff; outline-offset: -4px; }
+.hero-linear .product-composition figcaption { position: static; margin-top: -12px; padding-inline: 14%; font-size: 11px; gap: 6px 14px; color: #8da2b1; }
+.hero-linear .stack-strip { border-top: 0; padding-block: 18px 36px; }
+@media (min-width: 1440px) { .hero-linear .hero-layout { padding-block: 96px 68px; } }
+@media (max-width: 1050px) {
+ .hero-linear .hero-layout { grid-template-columns: 1fr; gap: 30px; padding-block: 58px 36px; }
+ .hero-linear .hero-copy { max-width: 580px; }
+ .hero-linear .product-composition { max-width: 760px; justify-self: center; }
+}
+@media (max-width: 560px) {
+ .hero-linear .hero-layout { padding-block: 48px 28px; gap: 28px; }
+ .hero-panel-field { aspect-ratio: 1.25; }
+ .hero-panel--rear { width: 92%; top: 12%; left: -4%; }
+ .hero-panel--front { width: 94%; left: 17%; top: 0; }
+ .hero-linear .product-composition figcaption { padding-inline: 0; margin-top: -10px; font-size: 10px; }
+ .hero-linear .stack-strip { padding-block: 14px 30px; }
+}
