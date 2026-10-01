@@ -6,3 +6,21 @@ dist/
 
 # Notarization scratch
 *-notarize.zip
+
+# Local evidence: keep written reports, not captures, logs or preserved app bundles.
+artifacts/**/*
+!artifacts/**/
+!artifacts/**/*.md
+artifacts/**/previous/
+artifacts/**/stage/
+artifacts/**/*.app/
+
+# Local tooling and credentials
+.swiftpm/
+.env
+.env.*
+!.env.example
+*.p12
+*.p8
+__pycache__/
+*.pyc

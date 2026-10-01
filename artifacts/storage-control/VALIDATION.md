@@ -1,5 +1,7 @@
 # Storage-control implementation checkpoint — 29 September 2026
 
+**Later continuation:** [M0–M5 implementation evidence](measurement/VALIDATION.md) supersedes the remaining implementation gaps below. This file remains the earlier checkpoint record.
+
 The pre-existing native app and PRD were preserved in local baseline commit `ae9d050`. This checkpoint adds a first integrated storage-control journey to that app. It is **not a public-release certification**. The currently running main `dist/Cairn.app` was not replaced or relaunched by this work.
 
 ## Implemented
