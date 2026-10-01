@@ -106,6 +106,41 @@ enum WorkspaceCheck {
               "Another volume cannot confirm a reserve alert")
         check(ReserveAlertPolicy.decide(current: .init(date: Date(timeIntervalSince1970: 900), volumeID: "internal-A", available: 33_000_000_000, total: 500_000_000_000), previous: secondLow, target: 30_000_000_000, alreadyAlerted: true) == .clear,
               "Reserve alert re-arms only after hysteresis")
+        let growthNow = Date(timeIntervalSince1970: 2_000_000)
+        let growthRoot = ObservedRoot(id: "npm-cache", title: "npm package cache", path: "/fixture/.npm/_cacache", icon: "shippingbox", observationOnly: false)
+        func growthReading(_ size: Int64, at date: Date, coverage: LocationCoverage = .complete, volume: String = "internal-A") -> LocationReading {
+            LocationReading(id: UUID(), root: growthRoot, started: date.addingTimeInterval(-2), ended: date,
+                volumeID: volume, identity: .init(device: 1, inode: 2), parentIdentity: .init(device: 1, inode: 1),
+                scope: "fixture-scope", coverage: coverage, allocated: size, logical: size, entries: 2,
+                hardLinksSkipped: 0, source: "fixture", metric: "allocated-and-logical-v1", adapterVersion: 1)
+        }
+        let growthBefore = growthReading(1_000_000_000, at: growthNow.addingTimeInterval(-3_600))
+        let growthAfter = growthReading(2_500_000_000, at: growthNow)
+        let growthPair = LocationComparison.changes([growthBefore, growthAfter])
+        check(GrowthSuggestions.evaluate(growthPair, selectedIDs: ["npm-cache"], minimumBytes: 1_000_000_000, now: growthNow).map(\.id) == ["npm-cache"],
+              "Selected, recent compatible growth produces an inspection suggestion")
+        check(GrowthSuggestions.evaluate(growthPair, selectedIDs: [], minimumBytes: 1_000_000_000, now: growthNow).isEmpty &&
+              GrowthSuggestions.evaluate(growthPair, selectedIDs: ["npm-cache"], minimumBytes: 2_000_000_000, now: growthNow).isEmpty,
+              "Unselected or below-threshold growth produces no suggestion")
+        check(GrowthSuggestions.evaluate(growthPair, selectedIDs: ["npm-cache"], minimumBytes: 1_000_000_000, now: growthNow.addingTimeInterval(8 * 86_400)).isEmpty,
+              "Stale growth is not presented as a current suggestion")
+        check(LocationComparison.changes([growthBefore, growthReading(3_000_000_000, at: growthNow, coverage: .partial)]).isEmpty &&
+              LocationComparison.changes([growthBefore, growthReading(3_000_000_000, at: growthNow, volume: "internal-B")]).isEmpty,
+              "Incomplete or replacement-volume readings cannot arm a rule")
+        check(StorageDrive.uniqueIdentity("drive-A", mountedIDs: ["drive-A", "drive-B"]) &&
+              !StorageDrive.uniqueIdentity("drive-A", mountedIDs: ["drive-A", "drive-A"]) &&
+              !StorageDrive.uniqueIdentity("", mountedIDs: [""]),
+              "Missing and duplicate external-drive identities are ineligible")
+        var ambiguousDrive = StorageDrive(url: URL(fileURLWithPath: "/fixture/drive"), name: "Fixture", uuid: "drive-A",
+            capacity: 10_000, available: 5_000, external: true, writable: true, encrypted: true, format: "apfs")
+        ambiguousDrive.identityAmbiguous = true
+        check(!ambiguousDrive.acceptsCopy && ambiguousDrive.exportStatus.contains("Duplicate"),
+              "Ambiguous mounted drive cannot be presented as export-ready")
+        check(NpmCacheInspection.parse("/Users/fixture/.npm\n") == "/Users/fixture/.npm" &&
+              NpmCacheInspection.parse("undefined\n") == nil &&
+              NpmCacheInspection.parse("/one\n/two\n") == nil &&
+              NpmCacheInspection.parse("/tmp/../other") == nil,
+              "npm cache inspection accepts one canonical absolute path only")
         let fm = FileManager.default
         let root = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("cairn-workspace-check-\(UUID().uuidString)")
         do {

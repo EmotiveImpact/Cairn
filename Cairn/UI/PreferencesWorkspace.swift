@@ -85,12 +85,37 @@ struct PreferencesWorkspace: View {
                     }
                     if !preview { StorageControl.shared.configureMonitoring() }
                 }
+            option("Watch known folders", "Observe metadata for build output, package and browser caches, Downloads and Codex local data. No file contents are read and no cleanup runs.", $settings.locationMonitoringEnabled)
+                .onChange(of: settings.locationMonitoringEnabled) { _, _ in
+                    if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
+                }
+            option("Suggest when a folder grows", "Show a review suggestion after two complete, comparable measurements. Cairn never removes files from a suggestion.", $settings.growthSuggestionsEnabled)
+                .onChange(of: settings.growthSuggestionsEnabled) { _, _ in
+                    if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
+                }
+            if settings.growthSuggestionsEnabled || preview {
+                HStack {
+                    Text("Growth threshold").font(.system(size: 13, weight: .medium))
+                    Spacer()
+                    Stepper("\(settings.growthSuggestionGB) GB", value: $settings.growthSuggestionGB, in: 1...20)
+                        .frame(width: 145)
+                }.padding(.vertical, 16)
+                ForEach(ObservedRoot.catalogue().filter { GrowthSuggestions.selectableIDs.contains($0.id) }) { root in
+                    option(root.title, root.id == "downloads" ? "Personal files: suggestion opens an inspection only." : "Suggest an inspection when this location grows by the chosen amount.",
+                           Binding(get: { settings.growthSuggestionIDs.contains(root.id) }, set: { selected in
+                               if selected { settings.growthSuggestionIDs = Array(Set(settings.growthSuggestionIDs + [root.id])).sorted() }
+                               else { settings.growthSuggestionIDs.removeAll { $0 == root.id } }
+                           }))
+                }
+                .onChange(of: settings.growthSuggestionIDs) { _, _ in
+                    if !preview { StorageControl.shared.configureMonitoring() }
+                }
+                fixed("Suggestion state", settings.locationMonitoringEnabled ? "Cairn will suggest inspections from recent compatible measurements. You can also measure known locations manually in Changes." : "Turn on Watch known folders for background measurements, or measure manually in Changes. Suggestions do not trigger cleanup.")
+            }
             if preview || settings.reserveEnabled {
-                option("Watch known folders", "Observe metadata for build output, package and browser caches, Downloads and Codex local data. No file contents are read and no cleanup runs.", $settings.locationMonitoringEnabled)
-                    .onChange(of: settings.locationMonitoringEnabled) { _, _ in
-                        if !preview { StorageControl.shared.configureMonitoring() }
-                    }
                 option("Quiet hours · 22:00–08:00", "Keep in-app reserve status visible but send no reserve notifications during these local hours.", $settings.reserveQuietHours)
+            }
+            if preview || settings.reserveEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled) {
                 if !preview {
                     HStack(spacing: 16) {
                         if settings.reservePaused {
@@ -121,7 +146,7 @@ struct PreferencesWorkspace: View {
                 Stepper("\(preview ? Int(PreviewStorageScenario.reserveBytes / 1_000_000_000) : settings.reserveGB) GB", value: $settings.reserveGB, in: 5...500, step: 5)
                     .frame(width: 150)
             }.padding(.vertical, 18)
-            fixed("How it works", "Capacity is checked roughly every five minutes. Optional folder monitoring waits at least a minute after writes and fifteen minutes between attempts, yields to your scans, and pauses under resource pressure. Quitting Cairn stops monitoring. Closing the window can leave the menu-bar app running.")
+            fixed("How it works", "Capacity is checked roughly every five minutes while monitoring runs. Optional folder monitoring waits at least a minute after writes and fifteen minutes between attempts, yields to your scans, and pauses under resource pressure. Quitting Cairn stops monitoring. Closing the window can leave the menu-bar app running.")
             if let checked = StorageControl.shared.lastChecked {
                 fixed("Last checked", checked.formatted(date: .abbreviated, time: .shortened))
             }

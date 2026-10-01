@@ -15,12 +15,13 @@ Read the [PRD](CAIRN-STORAGE-CONTROL-PRD.md) for requirements and the
 | Duplicates | DuplicateStore; explicit scan, keeper choice and full hash verification | Reviewed removal; shared gate and ActionJournal; separate duplicate protections; removal callback into Put Back log |
 | Apps | AppInventoryStore; explicit inventory | Reviewed bundle-only Trash; app must be closed, source snapshot must match; ActionJournal and removal callback |
 | Health | HealthStore; explicit check | Only supported fixable findings; HealthFixer policy, identity, exclusions, ActionJournal and removal callback |
-| Storage | StorageTransferStore; drive metadata, user-selected export | Encrypted local APFS eligibility, UUID and directory checks, bounded content copy/hash; original retained; export history; no configured relocation |
+| Storage | StorageTransferStore; drive metadata, user-selected export | Encrypted local APFS eligibility, UUID/duplicate-identity and directory checks, bounded content copy/hash; original retained; export history; no configured relocation |
 | Activity & Recovery | Removal log and ActionJournal | Put Back uses no-overwrite restore; uncertain actions block cleanup until explicit manual review; no replay |
 | Menu | Same native stores and volume-aware capacity history | Routes to window/review; no quick-delete action |
 | CLI clean | Preview-only; --yes and -y rejected before scanning | Exact-item review in the native app is required; no CLI mutation route |
 | Old autoClean / SmartTriggers | Compatibility declarations only | Inert, regardless of persisted clean-on-quit preference; no observers or collectors remain |
 | Reserve monitoring | Explicit opt-in; default off | Alert/observation only. No link to autoClean or SmartTriggers |
+| Growth suggestions | Explicit opt-in, selected known folders and threshold; recent comparable location readings | Inspect-only suggestions in Overview and Changes. No cleanup permission or unattended executor route |
 
 Heavy traversals and data operations share ScanGate. The new location worker keeps its lease
 until its detached traversal has stopped. Capacity metadata reads are cheap and coalesced.
@@ -63,7 +64,17 @@ placeholders. Allocated sizes remain estimates in the presence of APFS clones/sn
 | M3 | Typed capabilities, immutable reviewed plan, source/scope/permission/age checks, met/impossible/stale states, zero Trash reclaim | Fixtures pass; controlled personal workflow needs independent review |
 | M4 | Shared action intents/outcomes, identity-bound recovery reconciliation, journaled restore, common capacity receipts; isolated npm verify spike | No certified production reclaim adapter; actual kill-at-every-boundary and receipt interaction matrix remain |
 | M5 | Separate opt-in folder observation, bounded FSEvents mailbox, dirty-root coalescing/backoff, pressure/priority/pause/lifecycle guards, quiet hours and alert suppression | Live disposable event + scheduler fixtures pass; actual sleep/wake, notification-delivery and overnight energy tests remain |
-| M6–M9 | Separate later milestones | Independent Astra audit; release/commercial gates; physical SSD adapter testing; explicit rules consent |
+| M6–M8 | Separate later milestones | Independent audit; release/commercial gates; physical SSD adapter testing |
+| M9 suggest-only | Opt-in measured-growth inspection suggestions | Native visual/accessibility acceptance and prolonged monitoring; unattended execution remains a separate later gate |
+
+1 October follow-up: the suggest-only phase of M9 now has an opt-in location
+allowlist and growth threshold. With reserve alerts off, background observation
+is limited to the selected locations. No rule performs cleanup. External export
+now rejects duplicate mounted volume identities, including on recheck. Storage
+can inspect the npm cache path seen by Cairn but does not change its setting. This is
+not the M8 configured relocation adapter; actual drive, sleep/wake and prolonged
+energy testing remain outstanding. See
+[unfinished-feature validation](../artifacts/unfinished-features-20261001/VALIDATION.md).
 
 Passing a local fixture does not certify a public release or real personal cleanup.
 

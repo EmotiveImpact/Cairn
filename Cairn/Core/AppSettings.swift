@@ -41,6 +41,10 @@ final class AppSettings {
         else { d.removeObject(forKey: "cairn.reservePauseUntil") }
     } }
     var locationMonitoringEnabled: Bool { didSet { d.set(locationMonitoringEnabled, forKey: "cairn.locationMonitoringEnabled.v1") } }
+    /// Opt-in, read-only growth suggestions. No executor consults these keys.
+    var growthSuggestionsEnabled: Bool { didSet { d.set(growthSuggestionsEnabled, forKey: "cairn.growthSuggestionsEnabled.v1") } }
+    var growthSuggestionIDs: [String] { didSet { d.set(growthSuggestionIDs, forKey: "cairn.growthSuggestionIDs.v1") } }
+    var growthSuggestionGB: Int { didSet { d.set(growthSuggestionGB, forKey: "cairn.growthSuggestionGB.v1") } }
     var reserveQuietHours: Bool { didSet { d.set(reserveQuietHours, forKey: "cairn.reserveQuietHours") } }
     var reserveGB: Int { didSet { d.set(reserveGB, forKey: "cairn.reserveGB") } }
     var goalGB: Int { didSet { d.set(goalGB, forKey: "cairn.goalGB") } }
@@ -83,6 +87,10 @@ final class AppSettings {
         showSidebarFocus = b("cairn.showSidebarFocus", false)
         reserveEnabled = b("cairn.reserveEnabled", false)
         locationMonitoringEnabled = b("cairn.locationMonitoringEnabled.v1", false)
+        growthSuggestionsEnabled = b("cairn.growthSuggestionsEnabled.v1", false)
+        growthSuggestionIDs = (ud.stringArray(forKey: "cairn.growthSuggestionIDs.v1") ?? GrowthSuggestions.defaultIDs)
+            .filter { GrowthSuggestions.selectableIDs.contains($0) }
+        growthSuggestionGB = max(1, min(20, ud.object(forKey: "cairn.growthSuggestionGB.v1") == nil ? 1 : ud.integer(forKey: "cairn.growthSuggestionGB.v1")))
         reserveQuietHours = b("cairn.reserveQuietHours", false)
         reservePaused = b("cairn.reservePaused", false)
         reservePauseUntil = ud.object(forKey: "cairn.reservePauseUntil") as? Date

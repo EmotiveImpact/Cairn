@@ -16,6 +16,8 @@ struct StorageWorkspace: View {
     @State private var inspectedDrive: StorageDrive?
     @State private var localMessage = ""
     @State private var showCopyDetails = false
+    @State private var npmCacheStatus = ""
+    @State private var inspectingNpm = false
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private var drives: [StorageDrive] { preview ? (CommandLine.arguments.contains("--preview-empty-storage") ? Array(Self.samples.prefix(1)) : Self.samples) : store.drives }
     private var externalDrives: [StorageDrive] { drives.filter(\.external) }
@@ -82,6 +84,7 @@ struct StorageWorkspace: View {
                 WorkspaceDetail(title: "Format & protection", text: "\(item.format.uppercased()) · \(item.encrypted ? "encryption reported by macOS" : "encryption not confirmed") · \(item.writable ? "writable" : "read-only or unknown")")
                 WorkspaceDetail(title: "Location", text: item.url.path)
                 WorkspaceDetail(title: "Available capacity", text: "\(Fmt.size(item.available)) of \(Fmt.size(item.capacity)). Includes space macOS may reclaim.")
+                WorkspaceDetail(title: "Export readiness", text: item.exportStatus)
                 } }
             } actions: { Button("Done") { inspectedDrive = nil }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction) }
         }
@@ -196,7 +199,8 @@ struct StorageWorkspace: View {
                         }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 10)
                     }.font(.system(size: 12)).tint(Brand.textSecondary)
                     if !preview && drive?.acceptsCopy != true {
-                        Text("Connect a writable, encrypted APFS external drive to enable copying.").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                        Text(drive?.exportStatus ?? "Connect a writable, encrypted APFS external drive to enable copying.")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
 
@@ -209,6 +213,25 @@ struct StorageWorkspace: View {
                     Picker("Tool", selection: $selectedGuide) { ForEach(guides, id: \.self) { Text($0) } }.frame(width: 220)
                 }
                 Text(guideDetail(selectedGuide)).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
+                if selectedGuide == "npm cache" {
+                    HStack {
+                        Button(inspectingNpm ? "Checking npm…" : "Check current npm path") { inspectNpmCache() }
+                            .buttonStyle(ControlPanelButtonStyle()).disabled(preview || inspectingNpm)
+                        Spacer()
+                    }
+                    if !npmCacheStatus.isEmpty {
+                        Text(npmCacheStatus).font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
+                            .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
+                    }
+                    if let drive {
+                        info("Selected drive", "\(drive.name) · \(drive.exportStatus)")
+                        if drive.acceptsCopy {
+                            info("Potential tool location", drive.url.appendingPathComponent("Cairn Tool Data/npm-cache").path + " · planning only; this folder has not been created")
+                        }
+                    }
+                    Text("A safe migration still needs idle npm writers, a verified directory copy, configuration rollback and a missing-drive startup test. Cairn does not switch npm paths yet.")
+                        .font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+                }
                 Text("Cairn does not change these tool settings. Finish active work, verify a separate backup and plan for a missing drive before changing paths.").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                 if let url = guideURL(selectedGuide) { Link("Read official documentation ↗", destination: url).font(.system(size: 12)) }
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -283,6 +306,15 @@ struct StorageWorkspace: View {
             guard response == .OK, let url = panel.url else { return }
             do { try ArchiveCopy.validateSource(url); source = url; plannedDrive = drive; confirm = true; localMessage = "" }
             catch { localMessage = error.localizedDescription }
+        }
+    }
+    private func inspectNpmCache() {
+        guard !preview, !inspectingNpm else { return }
+        inspectingNpm = true
+        Task {
+            let status = await Task.detached(priority: .utility) { NpmCacheInspection.inspect() }.value
+            npmCacheStatus = status
+            inspectingNpm = false
         }
     }
     private func guideSummary(_ guide: String) -> String {

@@ -214,8 +214,12 @@ struct OverviewWorkspace: View {
         Text("\(sample.date.formatted(.dateTime.day().month(.abbreviated).hour().minute())) · \(Fmt.size(sample.available))").monospacedDigit()
     }
     private var suggestionSection: some View {
+        let suggestionIDs = Set(control.growthSuggestions.map(\.id))
         let observed = control.locationChanges.filter { $0.delta > 0 && (search.isEmpty || $0.after.root.title.localizedCaseInsensitiveContains(search)) }
-            .sorted { $0.delta > $1.delta }.prefix(2)
+            .sorted {
+                if suggestionIDs.contains($0.id) != suggestionIDs.contains($1.id) { return suggestionIDs.contains($0.id) }
+                return $0.delta > $1.delta
+            }.prefix(2)
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
                 Text("WHAT CHANGED").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
@@ -236,7 +240,7 @@ struct OverviewWorkspace: View {
                 }.font(.system(size: 12)).padding(.vertical, 18)
             } else {
                 ForEach(Array(observed), id: \.id) { change in
-                    growthRow(title: change.after.root.title, detail: "Measured folder growth · \(change.interval)",
+                    growthRow(title: change.after.root.title, detail: "\(suggestionIDs.contains(change.id) ? "Suggested inspection" : "Measured folder growth") · \(change.interval)",
                               icon: change.after.root.icon, amount: "+\(Fmt.size(change.delta))")
                     divider
                 }

@@ -60,6 +60,7 @@ struct ChangesWorkspace: View {
                     CairnSegmentedControl(label: "Period", selection: $period, options: [("24 hours", 1), ("7 days", 7), ("30 days", 30)]).frame(width: 228, height: 32)
                 }
                 history.padding(.top, 26)
+                if !suggestions.isEmpty { suggestionSection.padding(.top, 28) }
                 locationSection.padding(.top, 28)
                 if !legacyReadings.isEmpty {
                     DisclosureGroup("Earlier daily readings · volume unverified") {
@@ -133,6 +134,33 @@ struct ChangesWorkspace: View {
     private var visibleLocations: [LocationReading] {
         (preview ? Self.sampleLocations : control.latestLocations).filter {
             search.isEmpty || $0.root.title.localizedCaseInsensitiveContains(search)
+        }
+    }
+    private var suggestions: [GrowthSuggestion] {
+        preview ? GrowthSuggestions.evaluate(LocationComparison.changes(Self.sampleLocationHistory),
+            selectedIDs: GrowthSuggestions.defaultIDs, minimumBytes: 1_000_000_000) : control.growthSuggestions
+    }
+    private var suggestionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("SUGGESTED INSPECTIONS").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
+            ForEach(suggestions) { suggestion in
+                HStack(spacing: 14) {
+                    Image(systemName: suggestion.change.after.root.icon)
+                        .font(.system(size: 18)).foregroundStyle(Brand.blue).frame(width: 28)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(suggestion.change.after.root.title).font(.system(size: 13, weight: .medium))
+                        Text("Grew \(Fmt.size(suggestion.change.delta)) · \(suggestion.change.interval)")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    }
+                    Spacer()
+                    Button("Inspect") { onOpen(suggestion.change.id == "downloads" ? .largeFiles :
+                        (suggestion.change.id == "chrome-cache" || suggestion.change.id == "safari-cache" ? .browsers : .developer)) }
+                        .buttonStyle(ControlPanelButtonStyle())
+                }.padding(.vertical, 9)
+                Rectangle().fill(Brand.separator).frame(height: 0.5)
+            }
+            Text("Suggestions use measured growth, not a claim that these bytes can be freed. Review individual files and the owning app before any action.")
+                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
         }
     }
     private var locationSection: some View {

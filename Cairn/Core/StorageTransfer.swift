@@ -13,8 +13,28 @@ struct StorageDrive: Identifiable, Sendable {
     var writable: Bool
     var encrypted: Bool
     var format: String
-    var id: String { uuid.isEmpty ? url.path : uuid }
-    var acceptsCopy: Bool { external && writable && encrypted && !uuid.isEmpty && format.lowercased().contains("apfs") }
+    var identityAmbiguous = false
+    var id: String { "\(uuid)|\(url.path)" }
+    var acceptsCopy: Bool { external && writable && encrypted && !uuid.isEmpty && !identityAmbiguous && format.lowercased().contains("apfs") }
+    var exportStatus: String {
+        if !external { return "Internal drive · not an export destination" }
+        if uuid.isEmpty { return "Drive identity unavailable" }
+        if identityAmbiguous { return "Duplicate drive identity · disconnect the other copy" }
+        if !writable { return "Read-only drive" }
+        if !encrypted { return "Encryption could not be confirmed" }
+        if !format.lowercased().contains("apfs") { return "Encrypted APFS required for Cairn exports" }
+        return "Ready for verified file exports"
+    }
+
+    static func uniqueIdentity(_ uuid: String, mountedIDs: [String]) -> Bool {
+        !uuid.isEmpty && mountedIDs.filter { $0 == uuid }.count == 1
+    }
+    func hasUniqueMountedIdentity() -> Bool {
+        let ids = Volumes.mountedExternalVolumes().compactMap {
+            try? $0.resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString
+        }
+        return Self.uniqueIdentity(uuid, mountedIDs: ids)
+    }
 
     static func read(_ url: URL) -> StorageDrive? {
         guard let values = try? url.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsInternalKey, .volumeIsLocalKey, .volumeIsReadOnlyKey]),
@@ -32,7 +52,8 @@ struct StorageDrive: Identifiable, Sendable {
     }
     func stillMounted(requiresWritable: Bool = true) -> Bool {
         guard let values = try? URL(fileURLWithPath: url.path).resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsReadOnlyKey]) else { return false }
-        return !uuid.isEmpty && values.volumeUUIDString == uuid && (!requiresWritable || values.volumeIsReadOnly == false)
+        return !uuid.isEmpty && values.volumeUUIDString == uuid &&
+            (!requiresWritable || values.volumeIsReadOnly == false)
     }
 }
 
@@ -202,7 +223,14 @@ enum ArchiveCopy {
             let urls = [FileScan.volumeURL(of: FileScan.home)].compactMap { $0 } + Volumes.mountedExternalVolumes()
             return urls.compactMap(StorageDrive.read)
         }.value
-        drives = snapshot; refreshing = false
+        let ids = snapshot.filter(\.external).map(\.uuid)
+        drives = snapshot.map { drive in
+            var checked = drive
+            checked.identityAmbiguous = drive.external && !drive.uuid.isEmpty &&
+                !StorageDrive.uniqueIdentity(drive.uuid, mountedIDs: ids)
+            return checked
+        }
+        refreshing = false
         if refreshAgain { refreshAgain = false; await refresh() }
     }
     func load() {
@@ -260,12 +288,15 @@ enum ArchiveCopy {
             let outcome = await Task.detached(priority: .utility) { () -> Result<(URL, Int64, String), Error> in
                 do {
                     guard let fresh = StorageDrive.read(drive.url), fresh.uuid == drive.uuid, fresh.acceptsCopy,
+                          fresh.hasUniqueMountedIdentity(),
                           let attrs = try? source.resourceValues(forKeys: [.fileSizeKey]),
                           fresh.available > Int64(attrs.fileSize ?? 0) + 256_000_000 else { throw ArchiveCopy.Failure.rejected("Destination identity, encryption or free space could not be verified.") }
                     let throttle = ProgressThrottle()
-                    return .success(try ArchiveCopy.copy(source: source, directory: folder, cancel: cancel, destinationValid: { drive.stillMounted() }, progress: { bytes in
+                    let copy = try ArchiveCopy.copy(source: source, directory: folder, cancel: cancel, destinationValid: { drive.stillMounted() }, progress: { bytes in
                         if throttle.shouldPublish() { Task { @MainActor [weak self] in self?.copied = bytes } }
-                    }))
+                    })
+                    guard drive.hasUniqueMountedIdentity() else { throw ArchiveCopy.Failure.rejected("Drive identity became ambiguous. Original retained; inspect the destination before trusting this copy.") }
+                    return .success(copy)
                 } catch { return .failure(error) }
             }.value
             switch outcome {
@@ -287,7 +318,8 @@ enum ArchiveCopy {
     }
 
     func recheck(_ record: TransferRecord) {
-        guard !busy, journalError == nil, let drive = drives.first(where: { $0.uuid == record.volumeID }), !drive.uuid.isEmpty else {
+        guard !busy, journalError == nil, let drive = drives.first(where: { $0.uuid == record.volumeID }),
+              !drive.uuid.isEmpty, !drive.identityAmbiguous, drive.hasUniqueMountedIdentity() else {
             message = journalError ?? "Reconnect the original drive before checking this copy."; return
         }
         var destination = URL(fileURLWithPath: record.destination)
@@ -300,8 +332,12 @@ enum ArchiveCopy {
             guard await ScanGate.shared.acquire(.verify) else { busy = false; checkingCopy = false; cancellation = nil; task = nil; message = "Copy check cancelled."; return }
             defer { ScanGate.shared.release() }
             let outcome = await Task.detached(priority: .utility) { () -> Result<(Int64, String), Error> in
-                Result { try ArchiveCopy.verify(source: URL(fileURLWithPath: record.source), destination: target, bytes: record.bytes, digest: record.digest,
-                    cancel: cancel, destinationValid: { drive.stillMounted(requiresWritable: false) }) }
+                Result {
+                    let result = try ArchiveCopy.verify(source: URL(fileURLWithPath: record.source), destination: target, bytes: record.bytes, digest: record.digest,
+                        cancel: cancel, destinationValid: { drive.stillMounted(requiresWritable: false) })
+                    guard drive.hasUniqueMountedIdentity() else { throw ArchiveCopy.Failure.rejected("Drive identity became ambiguous during verification.") }
+                    return result
+                }
             }.value
             if let index = records.firstIndex(where: { $0.id == record.id }) {
                 switch outcome {

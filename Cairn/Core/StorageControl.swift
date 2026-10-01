@@ -197,6 +197,7 @@ enum ReserveAlertPolicy {
     private(set) var pendingLocationCount = 0
     private(set) var notificationStatus = "Notification permission not checked"
     @ObservationIgnored private var watcher: LocationEventWatcher?
+    @ObservationIgnored private var watchedRootIDs: Set<String> = []
     @ObservationIgnored private var dirty = DirtyLocationSchedule(rootIDs: Set(ObservedRoot.catalogue().map(\.id)))
     @ObservationIgnored private var workspaceTokens: [NSObjectProtocol] = []
     @ObservationIgnored private var pressureSource: DispatchSourceMemoryPressure?
@@ -221,6 +222,12 @@ enum ReserveAlertPolicy {
     }
     var changes: [CandidateChange] { CandidateComparison.changes(candidates) }
     var locationChanges: [LocationChange] { LocationComparison.changes(locations) }
+    var growthSuggestions: [GrowthSuggestion] {
+        let settings = AppSettings.shared
+        guard settings.growthSuggestionsEnabled else { return [] }
+        return GrowthSuggestions.evaluate(locationChanges, selectedIDs: settings.growthSuggestionIDs,
+                                          minimumBytes: Int64(settings.growthSuggestionGB) * 1_000_000_000)
+    }
     var latestLocations: [LocationReading] { LocationComparison.latest(locations) }
     var latestCapacity: [CapacityReading] { CapacitySeries.visible(stored: capacity, current: current) }
     var currentAvailable: Int64? { current?.available }
@@ -262,7 +269,8 @@ enum ReserveAlertPolicy {
         }
     }
     private var monitoringEnabled: Bool {
-        AppSettings.shared.reserveEnabled && !AppSettings.shared.reservePaused
+        let settings = AppSettings.shared
+        return (settings.reserveEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled && !settings.growthSuggestionIDs.isEmpty)) && !settings.reservePaused
     }
     func configureMonitoring() {
         let settings = AppSettings.shared
@@ -270,29 +278,37 @@ enum ReserveAlertPolicy {
             settings.reservePaused = false; settings.reservePauseUntil = nil
         }
         guard monitoringEnabled, !sleeping else {
-            watcher?.stop(); watcher = nil
+            watcher?.stop(); watcher = nil; watchedRootIDs = []
             if backgroundMeasurement { cancelLocationMeasurement() }
             monitoringStatus = sleeping ? "Paused while your Mac sleeps" : settings.reservePaused ? "Monitoring paused" : "Monitoring is off"
             return
         }
         guard settings.locationMonitoringEnabled else {
-            watcher?.stop(); watcher = nil
+            watcher?.stop(); watcher = nil; watchedRootIDs = []
             if backgroundMeasurement { cancelLocationMeasurement() }
-            monitoringStatus = "Capacity alerts active · folder monitoring is off"
+            monitoringStatus = settings.reserveEnabled ? "Capacity alerts active · folder monitoring is off" : "Monitoring is off"
             return
         }
-        if watcher == nil {
-            let roots = ObservedRoot.nonOverlapping(ObservedRoot.catalogue())
+        let roots = ObservedRoot.nonOverlapping(ObservedRoot.catalogue()).filter {
+            settings.reserveEnabled || settings.growthSuggestionIDs.contains($0.id)
+        }
+        let rootIDs = Set(roots.map(\.id))
+        if watcher != nil && rootIDs != watchedRootIDs {
+            watcher?.stop(); watcher = nil
+            if backgroundMeasurement { cancelLocationMeasurement() }
+        }
+        if watcher == nil && !roots.isEmpty {
+            watchedRootIDs = rootIDs
             watcher = LocationEventWatcher(roots: roots) { [weak self] ids, gap in
                 Task { @MainActor [weak self] in
                     guard let self, self.monitoringEnabled, AppSettings.shared.locationMonitoringEnabled, !self.sleeping else { return }
                     if gap { self.dirty.reconcile(at: Date()) }
                     else { self.dirty.mark(ids, at: Date()) }
-                    self.pendingLocationCount = self.dirty.pending.count
+                    self.pendingLocationCount = self.dirty.pending.keys.filter { self.watchedRootIDs.contains($0) }.count
                 }
             }
             dirty.reconcile(at: Date())
-            pendingLocationCount = dirty.pending.count
+            pendingLocationCount = dirty.pending.keys.filter { watchedRootIDs.contains($0) }.count
 
         }
         monitoringStatus = watcher == nil ? "Folder events unavailable; capacity alerts remain active" : traversalPauseReason ?? (pendingLocationCount > 0 ? "\(pendingLocationCount) locations waiting for a quiet measurement" : "Watching known locations · no cleanup")
@@ -330,7 +346,7 @@ enum ReserveAlertPolicy {
             if backgroundMeasurement && traversalPauseReason != nil { cancelLocationMeasurement() }
             return
         }
-        guard let id = dirty.ready(at: Date(), suspended: false).first,
+        guard let id = dirty.ready(at: Date(), suspended: false).first(where: { watchedRootIDs.contains($0) }),
               let root = ObservedRoot.catalogue().first(where: { $0.id == id }),
               ScanGate.shared.tryAcquireForMonitoring() else { return }
         let revision = dirty.begin(id, at: Date())!
@@ -431,7 +447,7 @@ enum ReserveAlertPolicy {
             defer {
                 measuringLocations = false; measurementStatus = ""; measurementTask = nil
                 measurementCancellation = nil; backgroundMeasurement = false
-                pendingLocationCount = dirty.pending.count
+                pendingLocationCount = dirty.pending.keys.filter { watchedRootIDs.contains($0) }.count
             }
             if !gateAlreadyHeld { guard await ScanGate.shared.acquire(.locations) else { return } }
             defer { ScanGate.shared.release() }
