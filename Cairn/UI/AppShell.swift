@@ -302,9 +302,7 @@ struct AppShell: View {
                              otherScanBusy: appStore.isScanning || dupStore.isScanning || healthStore.isScanning || control.measuringLocations,
                              categoryCount: store.displayBuckets.filter { $0.bytes > 0 }.count,
                              scanDate: store.lastScanDate, partial: store.phase == .cancelled, operationText: operationStatus,
-                             readyBytes: store.buckets.reduce(Int64(0)) { total, bucket in
-                                 total + bucket.items.reduce(Int64(0)) { $0 + ($1.severity == .safe && $1.isRegenerable && $1.isActionable ? $1.allocatedSize : 0) }
-                             },
+                             readyBytes: store.recommendedBytes,
                              projectItems: store.buckets.first { $0.id == ProjectIndex.categoryID }?.items ?? [])
     }
 

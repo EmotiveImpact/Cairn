@@ -152,7 +152,7 @@ struct ProjectsWorkspace: View {
             .buttonStyle(.plain)
         }
         .padding(.horizontal, 18).frame(height: 60)
-        .background(inspectorVisible && focused?.id == project.id ? Color.white.opacity(0.045) : Color.clear)
+        .background(inspectorVisible && focused?.id == project.id ? Brand.wash(0.045) : Color.clear)
         .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
         .accessibilityElement(children: .contain)
     }
