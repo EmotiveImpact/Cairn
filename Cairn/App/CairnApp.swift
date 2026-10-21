@@ -24,7 +24,10 @@ struct CairnMain {
             ComponentShowcaseRunner.run()
             return
         }
-        if !visualPreview, !CommandLine.arguments.contains(where: isolated.contains), !InstanceLease.claimApplication() {
+        // Read-only commands never open shared state, so an agent can use them
+        // while the app is open without taking over or activating it.
+        let readOnlyCommand = CLI.readOnlyCommands.contains(command)
+        if !visualPreview, !readOnlyCommand, !CommandLine.arguments.contains(where: isolated.contains), !InstanceLease.claimApplication() {
             if CLI.commands.contains(command) { exit(75) }
             return
         }

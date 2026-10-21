@@ -5,6 +5,98 @@ enum WorkspaceCheck {
     static func run() {
         var failures = 0
         func check(_ good: Bool, _ label: String) { print("\(good ? "PASS" : "FAIL") \(label)"); if !good { failures += 1 } }
+        // Projects grouping: a monorepo's packages collapse to the repository,
+        // a loose folder stands alone, and build output never dates activity.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-projects-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let repo = root.appendingPathComponent("mono")
+            let loose = root.appendingPathComponent("loose")
+            try fm.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: repo.appendingPathComponent("packages/web/node_modules"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: repo.appendingPathComponent("packages/api/node_modules"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: loose.appendingPathComponent(".venv"), withIntermediateDirectories: true)
+            let old = Date(timeIntervalSinceNow: -120 * 86_400)
+            fm.createFile(atPath: repo.appendingPathComponent(".git/HEAD").path, contents: Data("ref: refs/heads/main\n".utf8))
+            try fm.setAttributes([.modificationDate: old], ofItemAtPath: repo.appendingPathComponent(".git/HEAD").path)
+            fm.createFile(atPath: loose.appendingPathComponent("requirements.txt").path, contents: Data())
+            let items = [
+                ScanItem(url: repo.appendingPathComponent("packages/web/node_modules"), allocatedSize: 300, categoryID: ProjectIndex.categoryID, severity: .safe),
+                ScanItem(url: repo.appendingPathComponent("packages/api/node_modules"), allocatedSize: 200, categoryID: ProjectIndex.categoryID, severity: .safe),
+                ScanItem(url: loose.appendingPathComponent(".venv"), allocatedSize: 50, categoryID: ProjectIndex.categoryID, severity: .review, isRegenerable: false),
+                ScanItem(url: root.appendingPathComponent("elsewhere/cache"), allocatedSize: 999, categoryID: "app-caches", severity: .safe),
+            ]
+            let projects = ProjectIndex.build(from: items, stopAt: root)
+            let mono = projects.first { $0.url.path == repo.path }
+            let single = projects.first { $0.url.path == loose.path }
+            check(projects.count == 2, "Projects only group project build output")
+            check(mono?.isRepository == true && mono?.items.count == 2 && mono?.rebuildableBytes == 500,
+                  "Monorepo packages group under their repository")
+            check(single?.isRepository == false && single?.rebuildableBytes == 0 && single?.measuredBytes == 50,
+                  "A virtual environment without proof of rebuild is not counted as rebuildable")
+            check((mono?.idleDays() ?? 0) >= 119, "Project activity comes from git metadata, not build output")
+        } catch {
+            check(false, "Projects fixture could not be created: \(error)")
+        }
+        // MCP: protocol shape and read-only tool surface, without scanning.
+        let initialize = MCPServer.handle(["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ["protocolVersion": "2025-06-18"]])
+        check((initialize?["result"] as? [String: Any])?["protocolVersion"] as? String == "2025-06-18", "MCP initialize echoes the requested protocol")
+        check(MCPServer.handle(["jsonrpc": "2.0", "method": "notifications/initialized"]) == nil, "MCP notifications get no response")
+        let listed = ((MCPServer.handle(["jsonrpc": "2.0", "id": 2, "method": "tools/list"])?["result"] as? [String: Any])?["tools"] as? [[String: Any]]) ?? []
+        let names = Set(listed.compactMap { $0["name"] as? String })
+        check(names == ["storage_status", "list_projects", "find_reclaimable", "list_categories", "open_cairn"], "MCP lists only measuring and opening tools")
+        check(!names.contains { $0.contains("clean") || $0.contains("delete") || $0.contains("remove") }, "MCP exposes no removal tool")
+        let unknownTool = MCPServer.handle(["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": ["name": "empty_trash"]])?["result"] as? [String: Any]
+        check(unknownTool?["isError"] as? Bool == true, "MCP refuses tools it does not offer")
+        let badCategory = MCPServer.handle(["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": ["name": "find_reclaimable", "arguments": ["category": "__no_such_category__"]] as [String: Any]])?["result"] as? [String: Any]
+        check(badCategory?["isError"] as? Bool == true, "MCP rejects an unknown category before scanning")
+        check(MCPServer.handle(["jsonrpc": "2.0", "id": 5, "method": "nope"])?["error"] != nil, "MCP reports unknown methods")
+        check(CLI.readOnlyCommands == ["projects", "mcp"], "Only read-only CLI commands run beside the app")
+        // Offload: copy, verify, link, remove; restore; crash recovery; refusals.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-offload-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let source = root.appendingPathComponent("home/models")
+            let drive = root.appendingPathComponent("drive")
+            let destination = drive.appendingPathComponent("Cairn Offload/models")
+            try fm.createDirectory(at: source.appendingPathComponent("blobs"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(repeating: 7, count: 300_000).write(to: source.appendingPathComponent("blobs/sha256-a"))
+            try Data("manifest".utf8).write(to: source.appendingPathComponent("manifest.json"))
+            let cancel = CancelBox()
+            let moved = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true })
+            check(moved.files.count == 2 && moved.bytes == 300_008, "Offload copies every file")
+            check(Relocation.linkDestination(source) == destination.path, "Offload leaves a link to the drive copy")
+            check(!Relocation.exists(URL(fileURLWithPath: source.path + Relocation.movingSuffix)), "Offload removes the original after the link checks out")
+            check((try? Data(contentsOf: source.appendingPathComponent("manifest.json"))) == Data("manifest".utf8), "Apps still read offloaded files through the link")
+            let restored = try Relocation.restore(source: source, destination: destination, cancel: cancel, destinationValid: { true })
+            check(Relocation.isRealDirectory(source) && restored.files.count == 2, "Restore puts a real folder back")
+            check(Relocation.isRealDirectory(destination), "Restore keeps the drive copy")
+            // A crash after setting the original aside but before linking.
+            let moving = URL(fileURLWithPath: source.path + Relocation.movingSuffix)
+            try fm.moveItem(at: source, to: moving)
+            check(Relocation.reconcile(source: source) == .interrupted && Relocation.isRealDirectory(source), "Recovery puts an interrupted original back")
+            // A second offload must not replace an existing drive copy.
+            var refusedExisting = false
+            do { _ = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true }) }
+            catch { refusedExisting = true }
+            check(refusedExisting && Relocation.isRealDirectory(source), "Offload never replaces an existing drive copy")
+            // Folders containing links are not plain data stores.
+            try fm.createSymbolicLink(at: source.appendingPathComponent("escape"), withDestinationURL: root)
+            var refusedLink = false
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("other"), cancel: cancel, destinationValid: { true }) }
+            catch { refusedLink = true }
+            check(refusedLink && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("other")), "Offload refuses folders that contain links")
+            var refusedMissing = false
+            try fm.removeItem(at: source.appendingPathComponent("escape"))
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("gone"), cancel: cancel, destinationValid: { false }) }
+            catch { refusedMissing = true }
+            check(refusedMissing && Relocation.isRealDirectory(source), "Offload stops when the drive disappears")
+        } catch {
+            check(false, "Offload fixture failed: \(error)")
+        }
         let today = Calendar.current.startOfDay(for: Date())
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
         let oldDay = Calendar.current.date(byAdding: .day, value: -8, to: today)!
@@ -22,6 +114,10 @@ enum WorkspaceCheck {
         check(MenuAvailableSpace.title(42_600_000_000, checked: true).contains("GB"),
               "Menu bar labels measured available capacity with a size unit")
         check(MenuScanStatus().canStart, "Idle menu allows an explicit scan")
+        check(MenuGuardian.readyTitle(50_000_000) == nil && MenuGuardian.readyTitle(2_000_000_000)?.contains("ready to free") == true,
+              "Menu offers a review only when the latest results hold meaningful rebuildable space")
+        check(MenuGuardian.growthTitle(nil) == nil, "Menu shows no growth nudge without an opted-in suggestion")
+        check(MenuGuardian.idleProjectsTitle([]) == nil, "Menu shows no project nudge without idle projects")
         check(!MenuScanStatus(scanning: true).canStart && !MenuScanStatus(operationBusy: true).canStart && !MenuScanStatus(otherScanBusy: true).canStart, "Menu blocks overlapping operations")
         let chartStart = Date(timeIntervalSince1970: 100)
         let chartReadings = [0.0, 3600.0, 28 * 3600.0, 29 * 3600.0].map {
