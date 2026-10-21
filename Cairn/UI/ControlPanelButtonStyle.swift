@@ -27,13 +27,13 @@ struct CairnControlSurface<Label: View>: View {
             .foregroundStyle(primary && enabled ? Color.white : Brand.textPrimary)
             .background {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(primary && enabled ? AnyShapeStyle(Brand.brand) : AnyShapeStyle(Color.white.opacity(hovered && enabled ? 0.10 : 0.065)))
+                    .fill(primary && enabled ? AnyShapeStyle(Brand.brand) : AnyShapeStyle(Brand.wash(hovered && enabled ? 0.10 : 0.065)))
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(Color.white.opacity(enabled && (pressed || (primary && hovered)) ? 0.06 : 0))
+                    .fill(Brand.wash(enabled && (pressed || (primary && hovered)) ? 0.06 : 0))
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .strokeBorder(.white.opacity(contrast == .increased ? 0.45 : primary && enabled ? 0.14 : 0.06), lineWidth: 0.5)
+                    .strokeBorder(Brand.wash(contrast == .increased ? 0.45 : primary && enabled ? 0.14 : 0.06), lineWidth: 0.5)
             }
             .opacity(enabled ? 1 : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: 7))
@@ -47,7 +47,7 @@ struct CairnFilterSurface: ViewModifier {
     func body(content: Content) -> some View {
         content.pickerStyle(.menu).buttonStyle(.plain).controlSize(.regular)
             .padding(.leading, 8).padding(.trailing, 22).frame(minHeight: 32)
-            .background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+            .background(Brand.wash(0.045), in: RoundedRectangle(cornerRadius: 7))
             .overlay(alignment: .trailing) { Image(systemName: "chevron.down").font(.system(size: 9, weight: .medium)).foregroundStyle(Brand.textMuted).padding(.trailing, 9).allowsHitTesting(false).accessibilityHidden(true) }
     }
 }

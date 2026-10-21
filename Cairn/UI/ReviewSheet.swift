@@ -36,8 +36,8 @@ struct ReviewSheet: View {
     }
 
     var body: some View {
-        CairnDialog(title: cleaning ? "Freeing up space…" : "Review cleanup",
-                    subtitle: "\(runnable.count) \(runnable.count == 1 ? "item" : "items") selected", wide: true, height: 620) {
+        CairnDialog(title: cleaning ? "Freeing up space…" : freedNow > 0 ? "Free \(Fmt.size(freedNow))" : "Review cleanup",
+                    subtitle: "\(runnable.count) \(runnable.count == 1 ? "item" : "items") selected", wide: true, height: 640) {
             VStack(alignment: .leading, spacing: 18) {
                 summary
                 if !cleaning {
@@ -50,7 +50,15 @@ struct ReviewSheet: View {
                 }
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(runnable) { row($0) }
+                        ForEach(groups, id: \.title) { group in
+                            HStack {
+                                Text(group.title).eyebrow()
+                                Spacer()
+                                Text(Fmt.size(group.bytes))
+                                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(Brand.textMuted)
+                            }.padding(.top, 14).padding(.bottom, 4)
+                            ForEach(group.items) { row($0) }
+                        }
                     }
                 }
                 warnings
@@ -85,45 +93,61 @@ struct ReviewSheet: View {
         }
     }
 
-    private func row(_ item: ScanItem) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.url.lastPathComponent).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                Text(item.resolvedURL.path).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
-                if case .tool(let command) = item.cleanMethod {
-                    Text(command.display).font(.system(size: 11, design: .monospaced)).foregroundStyle(Brand.textSecondary)
-                }
-            }
-            Spacer(minLength: 8)
-            actionBadge(item)
-            Text(item.allocatedSize > 0 ? Fmt.size(item.allocatedSize) : "—")
-                .font(.system(size: 12, weight: .medium)).monospacedDigit().frame(width: 72, alignment: .trailing)
+    /// Items grouped by the tool or area that made them, largest group first.
+    private struct ReviewGroup { let title: String; let items: [ScanItem]; let bytes: Int64 }
+    private var groups: [ReviewGroup] {
+        Dictionary(grouping: runnable, by: \.categoryID).map { id, items in
+            ReviewGroup(title: store.buckets.first { $0.id == id }?.info.title ?? id.capitalized,
+                  items: items.sorted { $0.allocatedSize > $1.allocatedSize },
+                  bytes: items.reduce(0) { $0 + $1.allocatedSize })
         }
-        .padding(.vertical, 9)
-        .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+        .sorted { $0.bytes > $1.bytes }
     }
 
-    private func actionBadge(_ item: ScanItem) -> some View {
-        let (text, color): (String, Color) = {
-            switch item.cleanMethod {
-            case .tool: return ("Run command", Brand.purple)
-            case .emptyTrash: return ("Delete", Brand.safeCyan)
-            case .trash: return freesNow(item) ? ("Delete", Brand.safeCyan) : ("Trash", Brand.textSecondary)
-            case .adviceOnly: return ("Advice", Brand.textMuted)
+    private func row(_ item: ScanItem) -> some View {
+        HStack(alignment: .center, spacing: 12) {
+            ToolIcon.forCategory(item.categoryID, size: 28)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.url.lastPathComponent).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(detail(item)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    .help(item.resolvedURL.path)
             }
+            Spacer(minLength: 8)
+            statusPill(item)
+            Text(item.allocatedSize > 0 ? Fmt.size(item.allocatedSize) : "—")
+                .font(.system(size: 12.5, weight: .semibold)).monospacedDigit().frame(width: 72, alignment: .trailing)
+        }
+        .padding(.vertical, 9)
+        .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+    }
+
+    /// One short line: the tool's own command, where it goes, or the path.
+    private func detail(_ item: ScanItem) -> String {
+        if case .tool(let command) = item.cleanMethod { return "Cleaned by the tool: \(command.display)" }
+        if !freesNow(item), item.cleanMethod == .trash { return "Moves to Trash · \(item.resolvedURL.path)" }
+        return item.resolvedURL.path
+    }
+
+    /// Three states only: Ready, Close app first, Needs you.
+    private func statusPill(_ item: ScanItem) -> some View {
+        let running = RunningApps.displayNames(for: RunningApps.running(amongst: item.requiresQuitBundleIDs))
+        let (text, color): (String, Color) = {
+            if let app = running.first { return ("Close \(app) first", Brand.amber) }
+            if !item.isRegenerable || item.severity != .safe { return ("Needs you", Brand.textSecondary) }
+            return ("Ready", Brand.room)
         }()
-        return Text(text).font(.system(size: 11, weight: .semibold)).foregroundStyle(color)
-            .padding(.horizontal, 8).padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(0.13)))
+        return HStack(spacing: 5) {
+            Circle().fill(color).frame(width: 5, height: 5)
+            Text(text).font(.system(size: 11, weight: .medium)).lineLimit(1)
+        }
+        .foregroundStyle(color)
+        .padding(.horizontal, 9).padding(.vertical, 3)
+        .background(Capsule().fill(color.opacity(0.13)))
     }
 
     @ViewBuilder private var warnings: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if !runningBlockers.isEmpty {
-                warn(Brand.amber, "lock.fill", "Quit first: \(runningBlockers.joined(separator: ", "))",
-                     "Their caches are skipped while they are running.")
-            }
             if hasPersonalFilesToDelete {
                 warn(Brand.amber, "exclamationmark.triangle.fill", "Personal files will be deleted permanently",
                      "Delete now skips the Trash for everything. Choose Smart to send personal files to Trash instead.")
@@ -139,7 +163,16 @@ struct ReviewSheet: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(spacing: 10) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "checkmark.shield").foregroundStyle(Brand.room).font(.system(size: 13))
+                Text(runningBlockers.isEmpty
+                     ? "Your code, settings and AI chats are never listed. Cairn checks each item again just before removing it."
+                     : "Items from \(runningBlockers.joined(separator: ", ")) are skipped while it is open. Everything else goes ahead.")
+                    .font(.system(size: 11.5)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: 400, alignment: .leading)
+            Spacer(minLength: 8)
             Button("Cancel") { dismiss() }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction).disabled(cleaning)
             if cleaning { ProgressView().controlSize(.small) }
             Button {

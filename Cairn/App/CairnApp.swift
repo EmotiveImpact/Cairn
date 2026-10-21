@@ -91,6 +91,7 @@ struct CairnMain {
 
 struct CairnApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
+    @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     var body: some Scene {
         // Single `Window` (not `WindowGroup`): one AppShell, one set of stores/
         // scans/caches. A second window would mean a second full scan + duplicate
@@ -98,7 +99,8 @@ struct CairnApp: App {
         Window("Cairn", id: "main") {
             AppShell()
                 .background(Brand.chrome)
-            .preferredColorScheme(.dark)
+                .onAppear { CairnAppearance(rawValue: appearance)?.apply() }
+                .onChange(of: appearance) { _, next in CairnAppearance(rawValue: next)?.apply() }
         }
         .windowStyle(.hiddenTitleBar)
         // CRITICAL: do NOT use `.contentMinSize` together with a `.frame(minWidth:
@@ -200,6 +202,23 @@ private struct CairnFindCommands: Commands {
         CommandGroup(after: .textEditing) {
             Button("Find in Results") { find?() }
                 .keyboardShortcut("f", modifiers: .command).disabled(find == nil)
+        }
+    }
+}
+
+/// Window appearance. Dark is Cairn's default; Light and System use the same
+/// tokens, which carry a value for each (see `Brand`).
+enum CairnAppearance: String, CaseIterable {
+    case dark, light, system
+    static let key = "cairn.appearance"
+    var title: String {
+        switch self { case .dark: return "Dark"; case .light: return "Light"; case .system: return "Match System" }
+    }
+    func apply() {
+        switch self {
+        case .dark: NSApp.appearance = NSAppearance(named: .darkAqua)
+        case .light: NSApp.appearance = NSAppearance(named: .aqua)
+        case .system: NSApp.appearance = nil
         }
     }
 }

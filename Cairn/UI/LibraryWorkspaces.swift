@@ -83,7 +83,7 @@ struct AppsWorkspace: View {
                                 .foregroundStyle(Brand.textSecondary)
                                 .padding(.trailing, 16).frame(height: 61).contentShape(Rectangle())
                         }.buttonStyle(.plain)
-                    }.background(inspectorVisible && inspected?.id == app.id ? Color.white.opacity(0.045) : Color.clear)
+                    }.background(inspectorVisible && inspected?.id == app.id ? Brand.wash(0.045) : Color.clear)
                         .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
                 } } } }
                 Text("Application and related-data sizes are separate estimates. Removing an app bundle keeps its related data.")
@@ -210,7 +210,7 @@ struct DuplicatesWorkspace: View {
                                     .foregroundStyle(Brand.textMuted)
                             }.padding(.horizontal, 17).frame(height: 72).contentShape(Rectangle())
                         }.buttonStyle(.plain)
-                            .background(inspectorVisible && inspected?.id == group.id ? Color.white.opacity(0.045) : Color.clear)
+                            .background(inspectorVisible && inspected?.id == group.id ? Brand.wash(0.045) : Color.clear)
                             .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
                         if expanded.contains(group.id) { ForEach(group.files) { file in
                             HStack(spacing: 10) {

@@ -54,14 +54,14 @@ final class QuietSegments: NSSegmentedControl {
     override func draw(_ dirtyRect: NSRect) {
         guard segmentCount > 0 else { return }
         let area = bounds.insetBy(dx: 1, dy: 1)
-        NSColor.white.withAlphaComponent(0.035).setFill()
+        NSColor.labelColor.withAlphaComponent(0.035).setFill()
         NSBezierPath(roundedRect: area, xRadius: 8, yRadius: 8).fill()
         let width = (area.width - 4) / CGFloat(segmentCount)
         for index in 0..<segmentCount {
             let rect = NSRect(x: area.minX + 2 + CGFloat(index) * width, y: area.minY + 2, width: width, height: area.height - 4)
             let selected = selectedSegment == index
             if selected {
-                NSColor.white.withAlphaComponent(isEnabled ? 0.095 : 0.05).setFill()
+                NSColor.labelColor.withAlphaComponent(isEnabled ? 0.095 : 0.05).setFill()
                 NSBezierPath(roundedRect: rect, xRadius: 6, yRadius: 6).fill()
                 if NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast {
                     NSColor.secondaryLabelColor.setStroke()

@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import Charts
 
 /// New cleanup runs have durable receipts. Legacy actions remain individual
 /// records; we never infer run groupings from coincident timestamps.
@@ -7,6 +8,7 @@ struct RecoveryWorkspace: View {
     let store: ScanStore
     var search: String
     @Binding var inspectorVisible: Bool
+    var onOpen: (NavSection) -> Void = { _ in }
 
     @State private var showingAllActivity = false
     @State private var selectedRunID: UUID?
@@ -71,6 +73,25 @@ struct RecoveryWorkspace: View {
                                inProgress: run.map { store.isRunActive($0.id) } ?? false,
                                freedBytes: summary.accounting.freedBytes)
     }
+    private var freeSpaceReadings: [CapacityReading] {
+        if preview { return PreviewStorageScenario.capacityHistory }
+        let start = Date().addingTimeInterval(-30 * 86_400)
+        return StorageControl.shared.latestCapacity.filter { $0.date >= start }.sorted { $0.date < $1.date }
+    }
+    /// Cleans that released space, for the dots on the chart.
+    private var freeSpaceCleans: [FreeSpaceCard.Clean] {
+        if preview, let last = PreviewStorageScenario.capacityHistory.last {
+            return [.init(date: last.date, freed: 6_400_000_000)]
+        }
+        return store.cleanupRuns.compactMap { run in
+            let freed = Self.freed(run.summary)
+            return freed > 0 ? FreeSpaceCard.Clean(date: run.finished ?? run.started, freed: freed) : nil
+        }
+    }
+    static func freed(_ summary: ScanStore.CleanSummary) -> Int64 {
+        let gains = summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
+        return max(summary.accounting.freedBytes, gains)
+    }
     private var capacity: CapacityReading? {
         if preview { return PreviewStorageScenario.current }
         return currentCapacity ?? StorageControl.shared.current
@@ -80,6 +101,11 @@ struct RecoveryWorkspace: View {
         VStack(spacing: 0) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
+                    if inspected == nil {
+                        FreeSpaceCard(readings: freeSpaceReadings, cleans: freeSpaceCleans,
+                                      onChanges: { onOpen(.changes) })
+                            .padding(.bottom, 26)
+                    }
                     if let entry = inspected { itemDetail(entry) }
                     else if !showingAllActivity, let receipt { receiptDetail(receipt) }
                     else { activityList }
@@ -321,15 +347,31 @@ struct RecoveryWorkspace: View {
                         Button {
                             selectedRunID = run.id; focused = nil; showingAllActivity = false
                         } label: {
-                            HStack {
-                                Image(systemName: run.summary.interrupted ? "exclamationmark.circle" : "doc.text")
-                                    .foregroundStyle(Brand.textMuted)
-                                Text("\(run.kind ?? "Cleanup") · \(run.started.formatted(date: .abbreviated, time: .shortened))")
+                            let freed = Self.freed(run.summary)
+                            let verified = run.summary.capacityChanges.contains { ($0.delta ?? 0) > 0 }
+                            HStack(spacing: 14) {
+                                VStack(spacing: 0) {
+                                    Text(run.started.formatted(.dateTime.day())).font(.system(size: 17, weight: .semibold))
+                                    Text(run.started.formatted(.dateTime.month(.abbreviated))).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                                }.frame(width: 40)
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(freed > 0 ? "Freed \(Fmt.size(freed))" : "\(run.kind ?? "Cleanup"): \(run.summary.accounting.completedCount) items")
+                                        .font(.system(size: 13.5, weight: .semibold))
+                                    Text("\(run.kind ?? "Cleanup") · \(run.started.formatted(date: .omitted, time: .shortened))\(run.summary.failed > 0 ? " · \(run.summary.failed) skipped" : "")")
+                                        .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                                }
                                 Spacer()
-                                Text(store.isRunActive(run.id) ? "In progress" : run.summary.interrupted ? "Interrupted" : "\(run.summary.accounting.completedCount) completed · \(run.summary.failed) skipped")
-                                    .foregroundStyle(Brand.textMuted)
-                                Image(systemName: "chevron.right").font(.system(size: 10))
-                            }.font(.system(size: 12)).padding(.vertical, 14).contentShape(Rectangle())
+                                if store.isRunActive(run.id) {
+                                    ReceiptPill(text: "In progress", tint: Brand.blue)
+                                } else if run.summary.interrupted {
+                                    ReceiptPill(text: "Interrupted", tint: Brand.amber)
+                                } else if verified {
+                                    ReceiptPill(text: "Verified", tint: Brand.room)
+                                } else if run.summary.recoverableCount > 0 {
+                                    ReceiptPill(text: "Can put back", tint: Brand.textSecondary)
+                                }
+                                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
+                            }.padding(.vertical, 10).contentShape(Rectangle())
                         }.buttonStyle(.plain).overlay(alignment: .bottom) { sectionRule }
                     }
                 }.padding(.bottom, 24)
@@ -600,5 +642,91 @@ private struct ActivityReceipt {
              rows: [Row(id: "old-installer", name: "Old-installer.dmg", bytes: 940_000_000, recoveryID: nil, trashPath: nil),
                     Row(id: "assets-export", name: "Assets-export.zip", bytes: 2_160_000_000, recoveryID: nil, trashPath: nil)],
              hiddenRowCount: 0, issues: ["Product-demo.mov: file changed since review."], capacityChanges: [])
+    }
+}
+
+
+private struct ReceiptPill: View {
+    let text: String
+    let tint: Color
+    var body: some View {
+        HStack(spacing: 5) {
+            Circle().fill(tint).frame(width: 5, height: 5)
+            Text(text).font(.system(size: 11, weight: .medium))
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 9).padding(.vertical, 3)
+        .background(Capsule().fill(tint.opacity(0.13)))
+    }
+}
+
+/// Free space over the last month, with a dot for each clean that released space.
+/// Replaces the separate Changes chart as the first thing Activity shows.
+struct FreeSpaceCard: View {
+    struct Clean: Identifiable {
+        let date: Date
+        let freed: Int64
+        var id: Date { date }
+    }
+    let readings: [CapacityReading]
+    let cleans: [Clean]
+    var onChanges: () -> Void
+
+    private var freedThisMonth: Int64 { cleans.reduce(0) { $0 + $1.freed } }
+    private func available(near date: Date) -> Double {
+        let reading = readings.first { $0.date >= date } ?? readings.last
+        return Double(reading?.available ?? 0) / 1e9
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Free space, last 30 days").eyebrow()
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(readings.last.map { "\(Fmt.size($0.available)) free" } ?? "No readings yet")
+                            .font(.system(size: 22, weight: .semibold)).monospacedDigit()
+                        if freedThisMonth > 0 {
+                            Text("· \(Fmt.size(freedThisMonth)) freed this month")
+                                .font(.system(size: 12.5)).foregroundStyle(Brand.textMuted)
+                        }
+                    }
+                }
+                Spacer()
+                Button("What changed", action: onChanges)
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+            }
+            if readings.count >= 2 {
+                let high = (readings.map { Double($0.available) / 1e9 }.max() ?? 1) * 1.15
+                Chart {
+                    ForEach(readings) { reading in
+                        AreaMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
+                            .foregroundStyle(LinearGradient(colors: [Brand.blue.opacity(0.18), Brand.blue.opacity(0)], startPoint: .top, endPoint: .bottom))
+                        LineMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
+                            .foregroundStyle(Brand.blue).lineStyle(StrokeStyle(lineWidth: 1.8))
+                    }
+                    ForEach(cleans.filter { clean in readings.first.map { clean.date >= $0.date } ?? false }) { clean in
+                        PointMark(x: .value("Date", clean.date), y: .value("GB", available(near: clean.date)))
+                            .foregroundStyle(Brand.room).symbolSize(70)
+                            .annotation(position: .top, alignment: .center, spacing: 4) {
+                                Text("+\(Fmt.size(clean.freed))").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Brand.room)
+                            }
+                    }
+                }
+                .chartYScale(domain: 0...max(1, high))
+                .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
+                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(Brand.separator)
+                    AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB") } }
+                } }
+                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
+                .frame(height: 130)
+                .accessibilityLabel("Free space over the last 30 days, with \(cleans.count) cleans marked")
+            } else {
+                Text("A line appears here once Cairn has checked your free space a few times.")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            }
+        }
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
     }
 }

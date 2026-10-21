@@ -86,7 +86,7 @@ struct WorkspaceRow: View {
                 if !value.isEmpty { Text(value).font(.system(size: 12)).monospacedDigit().foregroundStyle(Brand.textSecondary) }
                 if !status.isEmpty { Text(status).font(.system(size: 11)).foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing) }
             }.padding(.horizontal, 18).frame(height: 68).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(focused ? Color.white.opacity(0.045) : Color.clear)
+        }.buttonStyle(.plain).background(focused ? Brand.wash(0.045) : Color.clear)
     }
 }
 struct WorkspaceColumns: View {
@@ -167,49 +167,78 @@ struct WorkspaceCompletion: View {
     private var inTrash: Int64 { summary.restorable.isEmpty ? 0 : max(0, summary.bytes - summary.accounting.freedBytes) }
     private var clean: Bool { !summary.interrupted && summary.failed == 0 && summary.errors.isEmpty }
 
+    /// The first volume Cairn measured before and after, usually Macintosh HD.
+    private var measured: (name: String, before: Int64, after: Int64, total: Int64?)? {
+        for change in summary.capacityChanges {
+            if let before = change.before, let after = change.after, change.delta != nil {
+                let total = (try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey]))?.volumeTotalCapacity.map(Int64.init)
+                return (change.name, before.available, after.available, total)
+            }
+        }
+        return nil
+    }
+    private static let settledStones: [StoneStack.Stone] = [
+        .init(title: "a", bytes: 9), .init(title: "b", bytes: 6), .init(title: "c", bytes: 4),
+        .init(title: "d", bytes: 2), .init(title: "e", bytes: 1)
+    ]
+
     var body: some View {
-        CairnDialog(title: summary.interrupted ? "Cleanup stopped" : "Done", subtitle: "", height: 560) {
+        CairnDialog(title: summary.interrupted ? "Cleanup stopped" : "Done", subtitle: "", wide: true, height: 560) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .center, spacing: 18) {
-                        ZStack {
-                            Circle().fill(Brand.safeCyan.opacity(0.18)).frame(width: 84, height: 84).blur(radius: 14)
-                            Image(systemName: clean ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                                .font(.system(size: 52)).foregroundStyle(clean ? Brand.safeCyan : Brand.amber)
-                                .symbolEffect(.bounce, value: appeared)
+                HStack(alignment: .center, spacing: 36) {
+                    StoneStack(stones: Self.settledStones, labelled: false, ready: false, maxWidth: 150, minWidth: 60)
+                        .frame(width: 170)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 0) {
+                        HStack(alignment: .firstTextBaseline, spacing: 12) {
+                            Text(freed > 0 ? "Freed" : "Cleaned").font(.system(size: 44, weight: .semibold))
+                            if freed > 0 {
+                                Text(Fmt.size(appeared ? freed : 0))
+                                    .font(.system(size: 44, weight: .semibold)).monospacedDigit()
+                                    .foregroundStyle(Brand.room)
+                                    .contentTransition(.numericText())
+                            }
+                        }.tracking(-1.2)
+                        if let measured, measuredGain != nil {
+                            Label("Verified on \(measured.name)", systemImage: "checkmark")
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.room).padding(.top, 10)
+                        } else if !clean {
+                            Label(summary.interrupted ? "Stopped before the end" : "\(summary.failed) skipped",
+                                  systemImage: "exclamationmark.circle")
+                                .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.amber).padding(.top, 10)
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("SPACE FREED").eyebrow()
-                            Text(Fmt.size(appeared ? freed : 0))
-                                .font(.system(size: 46, weight: .semibold, design: .rounded)).monospacedDigit()
-                                .foregroundStyle(Brand.textPrimary)
-                                .contentTransition(.numericText())
-                            Text("\(summary.trashed) \(summary.trashed == 1 ? "item" : "items") cleaned" + (summary.failed > 0 ? " · \(summary.failed) skipped" : ""))
-                                .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                        if let measured {
+                            VStack(spacing: 10) {
+                                bar("Before", measured.before, measured.total, Brand.blue)
+                                bar("Now", measured.after, measured.total, Brand.room)
+                            }.padding(.top, 22)
+                        }
+                        VStack(spacing: 0) {
+                            row("Items cleaned", "\(summary.trashed)")
+                            if summary.toolCount > 0 {
+                                row("Cleaned by their tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
+                            }
+                            if inTrash > 0 {
+                                row("Still in Trash", "\(Fmt.size(inTrash)) · can be put back")
+                            }
+                            if summary.failed > 0 {
+                                row("Skipped", "\(summary.failed) \(summary.failed == 1 ? "item" : "items")", tint: Brand.amber)
+                            }
+                        }.padding(.top, 20)
+                        if summary.accounting.missingRecoveryCount > 0 {
+                            Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
+                                .font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.top, 12)
+                        }
+                        ForEach(Array(summary.errors.prefix(4).enumerated()), id: \.offset) { _, error in
+                            Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled).padding(.top, 8)
                         }
                     }
-                    ForEach(summary.capacityChanges) { change in
-                        if let before = change.before, let after = change.after {
-                            row(change.name, "\(Fmt.size(before.available)) → \(Fmt.size(after.available)) available")
-                        }
-                    }
-                    if inTrash > 0 {
-                        row("Still in Trash", "\(Fmt.size(inTrash)) · Put Back available. Delete it from Activity to get this space back too.")
-                    }
-                    if summary.toolCount > 0 {
-                        row("Tool cleans", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands") completed")
-                    }
-                    if summary.accounting.missingRecoveryCount > 0 {
-                        Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
-                            .font(.system(size: 12)).foregroundStyle(Brand.amber)
-                    }
-                    ForEach(Array(summary.errors.enumerated()), id: \.offset) { _, error in
-                        Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .padding(.top, 8)
             }
         } actions: {
-            Button(inTrash > 0 ? "Delete from Trash…" : "Activity", action: onRecovery).buttonStyle(ControlPanelButtonStyle())
+            Button(inTrash > 0 ? "Delete from Trash…" : "View receipt", action: onRecovery).buttonStyle(ControlPanelButtonStyle())
             Button("Done", action: onClose).buttonStyle(ControlPanelButtonStyle(primary: true)).keyboardShortcut(.defaultAction)
         }
         .onAppear {
@@ -217,12 +246,28 @@ struct WorkspaceCompletion: View {
             else { withAnimation(.easeOut(duration: 0.9).delay(0.15)) { appeared = true } }
         }
     }
-    private func row(_ title: String, _ detail: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).font(.system(size: 12, weight: .medium))
-            Spacer()
-            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).multilineTextAlignment(.trailing)
+    private func bar(_ label: String, _ available: Int64, _ total: Int64?, _ tint: Color) -> some View {
+        HStack(spacing: 12) {
+            Text(label).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).frame(width: 52, alignment: .leading)
+            GeometryReader { geo in
+                let share = total.map { Double(available) / Double(max(1, $0)) } ?? 0
+                ZStack(alignment: .trailing) {
+                    Capsule().fill(Brand.stoneTop)
+                    Capsule().fill(tint).frame(width: max(6, geo.size.width * CGFloat(min(1, share))))
+                }
+            }.frame(height: 9)
+            Text("\(Fmt.size(available)) free").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                .frame(width: 96, alignment: .trailing)
         }
+    }
+    private func row(_ title: String, _ detail: String, tint: Color = Brand.textPrimary) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
+            Spacer()
+            Text(detail).font(.system(size: 12.5, weight: .medium)).foregroundStyle(tint).multilineTextAlignment(.trailing)
+        }
+        .padding(.vertical, 8)
+        .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 }
 

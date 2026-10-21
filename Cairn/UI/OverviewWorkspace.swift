@@ -70,24 +70,18 @@ struct OverviewWorkspace: View {
     }
     private var storageHeadline: String {
         guard displayedCapacity != nil else { return "Checking available storage." }
-        return lowSpace ? "Your Mac needs more room." : "Room for what’s next."
+        return lowSpace ? "Your Mac is running low on space" : "This Mac"
     }
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                cleanHero.padding(.top, 22)
-                historySection.padding(.top, 22)
-                HStack { Spacer(); Button("View history") { showHistory = true }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
-                }.padding(.top, 9)
-                divider.padding(.top, 19).padding(.bottom, 17)
-                suggestionSection
-                divider.padding(.top, 15).padding(.bottom, 16)
-                supportingSections
-            }.padding(.horizontal, 30).padding(.top, 24).padding(.bottom, 18)
+                cleanHero.padding(.top, 18)
+                diskCard.padding(.top, 22)
+                nextTiles.padding(.top, 16)
+            }.padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 22)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
-        }.background(Color(hex: 0x191D21)).foregroundStyle(Brand.textPrimary)
+        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
@@ -118,7 +112,15 @@ struct OverviewWorkspace: View {
             let bytes = bucket.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable }.reduce(0) { $0 + $1.allocatedSize }
             if bytes > 0 { totals[bucket.info.title, default: 0] += bytes }
         }
-        return totals.sorted { $0.value > $1.value }.prefix(3).map { ($0.key, $0.value) }
+        return totals.sorted { $0.value > $1.value }.prefix(6).map { ($0.key, $0.value) }
+    }
+    private var stones: [StoneStack.Stone] {
+        if preview {
+            return [.init(title: "Xcode", bytes: 6_400_000_000), .init(title: "Developer caches", bytes: 5_200_000_000),
+                    .init(title: "Browsers", bytes: 2_700_000_000), .init(title: "Docker", bytes: 2_300_000_000),
+                    .init(title: "npm", bytes: 1_800_000_000)]
+        }
+        return topCategories.map { StoneStack.Stone(title: $0.0, bytes: $0.1) }
     }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
@@ -133,46 +135,38 @@ struct OverviewWorkspace: View {
             .padding(20).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
         } else if recommendedBytes > 0 {
-            HStack(alignment: .center, spacing: 24) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("READY TO FREE").eyebrow()
-                    Text(Fmt.size(recommendedBytes))
-                        .font(.system(size: 40, weight: .semibold, design: .rounded)).monospacedDigit()
-                        .foregroundStyle(Brand.safeCyan)
-                    Text("Rebuildable caches and build files. Your documents are not included.")
-                        .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                }
-                Spacer(minLength: 12)
-                VStack(alignment: .leading, spacing: 7) {
-                    ForEach(Array(topCategories.enumerated()), id: \.offset) { _, entry in
-                        let (name, bytes) = entry
-                        HStack(spacing: 10) {
-                            Text(name).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).frame(width: 130, alignment: .leading).lineLimit(1)
-                            GeometryReader { geo in
-                                Capsule().fill(Brand.safeCyan.opacity(0.75))
-                                    .frame(width: max(4, geo.size.width * CGFloat(Double(bytes) / Double(max(1, recommendedBytes)))))
-                            }.frame(width: 110, height: 6)
-                            Text(Fmt.size(bytes)).font(.system(size: 11)).monospacedDigit().foregroundStyle(Brand.textMuted)
+            // One number, one button: what can safely go, and the way to free it.
+            HStack(alignment: .center, spacing: 28) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Ready to free").eyebrow()
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text(Fmt.size(recommendedBytes))
+                            .font(.system(size: 64, weight: .semibold)).tracking(-1.8).monospacedDigit()
+                            .foregroundStyle(Brand.room)
+                            .contentTransition(.numericText())
+                        Text("you can get back").font(.system(size: 22, weight: .medium)).foregroundStyle(Brand.textSecondary)
+                    }.padding(.top, 8)
+                    Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
+                        .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                        .padding(.top, 8)
+                    HStack(spacing: 10) {
+                        Button { onCleanRecommended() } label: {
+                            Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
                         }
-                    }
+                        .buttonStyle(ControlPanelButtonStyle(primary: true))
+                        .controlSize(.large)
+                        .disabled(preview || store.isCleaning)
+                        .help("Check the list once, then free the space")
+                        Button("See everything") { onOpen(.smartScan) }
+                            .buttonStyle(ControlPanelButtonStyle())
+                    }.padding(.top, 20)
                 }
-                VStack(spacing: 8) {
-                    Button { onCleanRecommended() } label: {
-                        Text("Free \(Fmt.size(recommendedBytes))").frame(minWidth: 130)
-                    }
-                    .buttonStyle(ControlPanelButtonStyle(primary: true))
-                    .disabled(preview || store.isCleaning)
-                    .help("Review the recommended items, then free the space")
-                    Button("See everything") { onOpen(.smartScan) }
-                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
-                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                StoneStack(stones: stones, maxWidth: 140, minWidth: 54)
+                    .frame(width: 290, alignment: .leading)
             }
-            .padding(22).frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: Brand.rHero)
-                    .fill(LinearGradient(colors: [Brand.safeCyan.opacity(0.12), Brand.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            )
-            .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.safeCyan.opacity(0.25), lineWidth: 1))
+            .padding(.vertical, 6)
         } else if !store.hasLiveResults {
             HStack(spacing: 16) {
                 Image(systemName: "sparkle.magnifyingglass").font(.system(size: 26)).foregroundStyle(Brand.blue)
@@ -186,60 +180,140 @@ struct OverviewWorkspace: View {
             }
             .padding(20).frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
-        }
-    }
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("THIS MAC").font(.system(size: 11, weight: .regular)).tracking(0.7).foregroundStyle(Brand.textMuted)
-                    Text("Available space").font(.system(size: 24, weight: .semibold))
+        } else {
+            HStack(spacing: 16) {
+                Image(systemName: "checkmark.circle").font(.system(size: 26)).foregroundStyle(Brand.room)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Nothing to free right now").font(.system(size: 15, weight: .semibold))
+                    Text("Your caches and build files are already tidy. Cairn will show a number here when they grow.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 }
                 Spacer()
-                HStack(spacing: 8) {
-                    Button { scan() } label: {
-                        Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
-                    }.buttonStyle(ControlPanelButtonStyle())
-                        .keyboardShortcut("r", modifiers: .command)
-                        .disabled(preview || store.isCleaning)
-                        .help(preview ? "Scanning is disabled in this sample preview." : "Scan this Mac (⌘R)")
-                    if canOpenScanResults {
-                        Button(store.phase == .cancelled ? "See partial results" : "See results") { onOpen(.smartScan) }
-                            .buttonStyle(ControlPanelButtonStyle())
-                            .help(preview ? "Open sample results; no disk action is available" : store.phase == .cancelled ? "Review the items found before the scan stopped" : "Review this scan's findings")
-                            .transition(.opacity)
-                    }
-                    Button("Make room") { onOpen(.makeRoom) }
-                        .buttonStyle(ControlPanelButtonStyle(primary: true))
-                        .help("Choose an available-space target and review your options")
-                }.animation(.easeInOut(duration: 0.22), value: store.phase)
+                Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle())
             }
-            HStack(alignment: .center, spacing: 24) {
-                HStack(alignment: .firstTextBaseline, spacing: 9) {
-                    Text(displayedCapacity.map { Fmt.size($0.available) } ?? "—")
-                        .font(.system(size: 48, weight: .regular)).tracking(-1.6).monospacedDigit()
-                    if let total = displayedCapacity?.total {
-                        Text("of \(Fmt.size(total))").font(.system(size: 17)).foregroundStyle(Brand.textMuted)
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+        }
+    }
+
+    /// The disk now, and what it will look like once the ready items are freed.
+    @ViewBuilder private var diskCard: some View {
+        if let capacity = displayedCapacity, capacity.total > 0 {
+            let total = Double(capacity.total)
+            let used = max(0, capacity.total - capacity.available)
+            let ready = min(store.isScanning ? 0 : recommendedBytes, used)
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("\(Fmt.size(capacity.available)) free of \(Fmt.size(capacity.total))")
+                        .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                    Spacer()
+                    if ready > 0 {
+                        (Text("After freeing: ").foregroundStyle(Brand.textMuted)
+                         + Text("\(Fmt.size(capacity.available + ready)) free").foregroundStyle(Brand.room).fontWeight(.semibold))
+                            .font(.system(size: 13)).monospacedDigit()
+                    } else if let reserve = shownReserve {
+                        Text(capacity.available >= reserve ? "Above your \(Fmt.size(reserve)) reserve" : "\(Fmt.size(reserve - capacity.available)) below your reserve")
+                            .font(.system(size: 12)).foregroundStyle(capacity.available >= reserve ? Brand.textMuted : Brand.amber)
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if let reserve = shownReserve, let available = displayedCapacity?.available {
-                    Rectangle().fill(Brand.separator).frame(width: 1, height: 60)
-                    HStack(alignment: .top, spacing: 10) {
-                        Circle().fill(available >= reserve ? Brand.safeCyan : Brand.amber).frame(width: 9, height: 9).padding(.top, 6)
-                        VStack(alignment: .leading, spacing: 5) {
-                            Text(available >= reserve ? "Above your \(Fmt.size(reserve)) reserve" : "Below your \(Fmt.size(reserve)) reserve")
-                                .font(.system(size: 13, weight: .semibold))
-                            Text(available >= reserve ? "\(Fmt.size(available - reserve)) above your chosen reserve." : "\(Fmt.size(reserve - available)) needed to meet your reserve.")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }.padding(.top, 14)
-            if !preview, let date = store.lastScanDate {
-                HStack(spacing: 6) {
-                    Image(systemName: store.phase == .cancelled ? "pause.circle" : "clock")
-                    Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Last scan \(date.formatted(date: .abbreviated, time: .shortened))")
-                }.font(.system(size: 11)).foregroundStyle(Brand.textMuted).padding(.top, 8)
+                GeometryReader { geo in
+                    HStack(spacing: 0) {
+                        Rectangle().fill(Brand.stoneTop)
+                            .frame(width: geo.size.width * CGFloat(Double(used - ready) / total))
+                        if ready > 0 {
+                            Rectangle().fill(Brand.room)
+                                .frame(width: geo.size.width * CGFloat(Double(ready) / total))
+                        }
+                        Rectangle().fill(Brand.blue)
+                    }
+                }
+                .frame(height: 10).clipShape(Capsule())
+                .accessibilityLabel("\(Fmt.size(capacity.available)) free, \(Fmt.size(ready)) ready to free")
+                HStack(spacing: 18) {
+                    legend(Brand.stoneTop, "In use")
+                    if ready > 0 { legend(Brand.room, "Ready to free") }
+                    legend(Brand.blue, "Free now")
+                    Spacer()
+                    if let date = store.lastScanDate, !preview {
+                        Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Scanned \(date.formatted(.relative(presentation: .named)))")
+                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                    }
+                }
+            }
+            .padding(18)
+            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+        }
+    }
+    private func legend(_ color: Color, _ title: String) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 2.5).fill(color).frame(width: 9, height: 9)
+            Text(title).font(.system(size: 11.5)).foregroundStyle(Brand.textSecondary)
+        }
+    }
+
+    /// The next useful thing, never a warning: what grew, the last result, the drive.
+    private var nextTiles: some View {
+        HStack(alignment: .top, spacing: 14) {
+            growthTile
+            lastCleanTile
+            driveTile
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Text(eyebrow).eyebrow()
+            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(2)
+            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+            Spacer(minLength: 2)
+            Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+        }
+        .padding(15).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
+    }
+    private var growthTile: some View {
+        let grew = control.locationChanges.filter { $0.delta > 0 }.max { $0.delta < $1.delta }
+        if preview { return tile("Recently", "Xcode build output grew by 4.2 GB", "DerivedData and build intermediates.", "See what changed") { onOpen(.changes) } }
+        if let grew {
+            return tile("Recently", "\(grew.after.root.title) grew by \(Fmt.size(grew.delta))", grew.interval, "See what changed") { onOpen(.changes) }
+        }
+        return tile("Recently", "No growth measured yet", "Cairn compares folder sizes between scans.", "Open Changes") { onOpen(.changes) }
+    }
+    private var lastCleanTile: some View {
+        if preview { return tile("Last clean", "3 October · 23.4 GB freed", "Verified on this Mac.", "See receipt") { onOpen(.activity) } }
+        if let run = store.cleanupRuns.first(where: { $0.finished != nil && $0.summary.accounting.completedCount > 0 }) {
+            let gains = run.summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
+            let freed = max(run.summary.accounting.freedBytes, gains)
+            let title = "\(run.started.formatted(.dateTime.day().month(.wide))) · " + (freed > 0 ? "\(Fmt.size(freed)) freed" : "\(run.summary.accounting.completedCount) items cleaned")
+            let detail = gains > 0 ? "Verified on this Mac." : run.summary.recoverableCount > 0 ? "\(run.summary.recoverableCount) can be put back." : "Recorded in Activity."
+            return tile("Last clean", title, detail, "See receipt") { onOpen(.activity) }
+        }
+        return tile("Last clean", "No cleans yet", "Every clean leaves a receipt in Activity.", "Open Activity") { onOpen(.activity) }
+    }
+    private var driveTile: some View {
+        if let drive = externalDrive {
+            return tile("External storage", drive.name, "\(Fmt.size(drive.available)) available\(drive.encrypted ? " · Encrypted" : "")", "Storage options") { onOpen(.storage) }
+        }
+        return tile("External storage", "No drive connected", "Connect a drive to see storage options.", "Storage options") { onOpen(.storage) }
+    }
+    private var header: some View {
+        HStack(alignment: .center) {
+            Text(storageHeadline).font(.system(size: 13, weight: .medium))
+                .foregroundStyle(lowSpace ? Brand.amber : Brand.textSecondary)
+            Spacer()
+            HStack(spacing: 8) {
+                Button { scan() } label: {
+                    Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
+                }.buttonStyle(ControlPanelButtonStyle())
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(preview || store.isCleaning)
+                    .help(preview ? "Scanning is disabled in this sample preview." : "Scan this Mac (⌘R)")
+                Button("Make room") { onOpen(.makeRoom) }
+                    .buttonStyle(ControlPanelButtonStyle())
+                    .help("Choose an available-space target and review your options")
+                Button("History") { showHistory = true }
+                    .buttonStyle(ControlPanelButtonStyle())
+                    .help("Available space over the last week or month")
             }
         }
     }
@@ -294,73 +368,6 @@ struct OverviewWorkspace: View {
     }
     private func readingLabel(_ sample: CapacityReading) -> some View {
         Text("\(sample.date.formatted(.dateTime.day().month(.abbreviated).hour().minute())) · \(Fmt.size(sample.available))").monospacedDigit()
-    }
-    private var suggestionSection: some View {
-        let suggestionIDs = Set(control.growthSuggestions.map(\.id))
-        let observed = control.locationChanges.filter { $0.delta > 0 && (search.isEmpty || $0.after.root.title.localizedCaseInsensitiveContains(search)) }
-            .sorted {
-                if suggestionIDs.contains($0.id) != suggestionIDs.contains($1.id) { return suggestionIDs.contains($0.id) }
-                return $0.delta > $1.delta
-            }.prefix(2)
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text("WHAT CHANGED").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
-                Spacer()
-                Button("See all changes") { onOpen(.changes) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
-            }.padding(.bottom, 8)
-            if preview {
-                growthRow(title: "Xcode build output", detail: "DerivedData and build intermediates grew.", icon: "hammer", amount: "+4.2 GB")
-                divider
-                growthRow(title: "Downloads", detail: "Downloaded files grew over the measured interval.", icon: "arrow.down.circle", amount: "+1.3 GB")
-            } else if observed.isEmpty {
-                HStack(spacing: 14) {
-                    Image(systemName: "chart.xyaxis.line").foregroundStyle(Brand.textSecondary)
-                    Text(control.measuringLocations ? control.measurementStatus : "Two comparable folder measurements reveal where known locations grew.")
-                        .foregroundStyle(Brand.textMuted)
-                    Spacer()
-                    Button("Open Changes") { onOpen(.changes) }.buttonStyle(ControlPanelButtonStyle())
-                }.font(.system(size: 12)).padding(.vertical, 18)
-            } else {
-                ForEach(Array(observed), id: \.id) { change in
-                    growthRow(title: change.after.root.title, detail: "\(suggestionIDs.contains(change.id) ? "Suggested inspection" : "Measured folder growth") · \(change.interval)",
-                              icon: change.after.root.icon, amount: "+\(Fmt.size(change.delta))")
-                    divider
-                }
-            }
-        }
-    }
-    private func growthRow(title: String, detail: String, icon: String, amount: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 19)).foregroundStyle(Brand.blue)
-                .frame(width: 40, height: 40).background(Brand.surfaceElevated, in: RoundedRectangle(cornerRadius: 9))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title).font(.system(size: 13, weight: .medium))
-                Text(detail).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(1)
-            }.frame(maxWidth: .infinity, alignment: .leading)
-            Text(amount).font(.system(size: 12, weight: .medium)).monospacedDigit()
-            Button("Inspect") { onOpen(.changes) }.buttonStyle(ControlPanelButtonStyle())
-        }.padding(.vertical, 10)
-    }
-    private var supportingSections: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("DRIVE").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
-            Button { onOpen(.storage) } label: {
-                HStack(spacing: 14) {
-                    Image(systemName: "externaldrive").font(.system(size: 23)).foregroundStyle(Brand.textSecondary).frame(width: 40)
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(externalDrive?.name ?? "External storage").font(.system(size: 13, weight: .medium))
-                        if let drive = externalDrive {
-                            Text("\(Fmt.size(drive.available)) available · \(drive.encrypted ? "Encrypted" : "Encryption unconfirmed")")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        } else {
-                            Text("Connect a drive to explore supported storage options.")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading)
-                    Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                }.contentShape(Rectangle())
-            }.buttonStyle(.plain)
-        }
     }
     private static let sampleDrive = StorageDrive(url: URL(fileURLWithPath: "/Volumes/Studio SSD"), name: "Studio SSD", uuid: "SAMPLE-DRIVE", capacity: 1_000_000_000_000, available: 186_000_000_000, external: true, writable: true, encrypted: true, format: "apfs")
     private func route(_ category: CandidateReading.Category) -> NavSection {
