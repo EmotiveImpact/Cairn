@@ -1,0 +1,66 @@
+/* Light-beam hero: layered over the original night.html styles. Scoped to .beam-hero. */
+.beam-hero{--glow:#8cc4ff;--panel:#11161c;--app:#0c1015;--hair:#1d242c;--ink-2:#9aa5b1;--ink-3:#66717d}
+.beam-hero .hero-layout{display:block;padding-block:112px 0}
+.beam-hero .hero-copy{position:relative;z-index:3;max-width:680px;container-type:normal}
+.beam-hero h1{font-size:clamp(38px,5.4vw,64px);line-height:1.06;letter-spacing:-.026em;text-wrap:balance}
+.beam-hero h1 > span{display:inline;white-space:normal;color:#6f7d89}
+.beam-hero .hero-description{max-width:520px}
+
+/* the beam */
+.beam-hero .bh-stage{position:relative;z-index:2;margin-top:80px;margin-bottom:56px}
+.beam-hero .fx{position:absolute;left:-12%;right:-12%;bottom:100%;height:min(980px,150vh);pointer-events:none;z-index:0;
+  -webkit-mask-image:linear-gradient(to right,transparent,#000 22%,#000 82%,transparent),linear-gradient(to bottom,transparent 8%,#000 30%);-webkit-mask-composite:source-in;
+  mask-image:linear-gradient(to right,transparent,#000 22%,#000 82%,transparent),linear-gradient(to bottom,transparent 8%,#000 30%);mask-composite:intersect}
+.beam-hero .fx canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.beam-hero .fx #spark{mix-blend-mode:screen}
+.beam-hero .fx .core{position:absolute;bottom:0;left:var(--hitx,72.6%);width:2px;height:88%;transform:translateX(-50%);
+  background:linear-gradient(to bottom,rgba(140,196,255,0),rgba(150,200,255,.45) 35%,#dcefff 88%,#fff);
+  box-shadow:0 0 6px 1px rgba(170,215,255,.8),0 0 18px 4px rgba(90,160,240,.45),0 0 60px 14px rgba(47,127,224,.22)}
+.beam-hero .flare{position:absolute;left:0;right:0;top:-1px;height:2px;z-index:3;border-radius:2px;
+  background:linear-gradient(90deg,transparent 0%,rgba(140,196,255,.25) 20%,#d8ecff calc(78% - 4px),#fff 78%,#d8ecff calc(78% + 4px),rgba(140,196,255,.25) 92%,transparent 100%)}
+.beam-hero .flare::after{content:"";position:absolute;left:calc(78% - 300px);width:600px;top:-90px;height:180px;background:radial-gradient(ellipse at center,rgba(200,230,255,.7),rgba(140,196,255,.35) 22%,rgba(47,127,224,.14) 50%,transparent 72%);filter:blur(4px)}
+
+/* the app window (new Night look, sample data) */
+.beam-hero .bh-window{position:relative;display:grid;grid-template-columns:220px 1fr;min-height:540px;overflow:hidden;border:1px solid #2a3a4c;border-radius:14px;background:var(--app);
+  box-shadow:0 -30px 80px -40px rgba(47,127,224,.55),0 40px 120px rgba(0,0,0,.6);font-size:14px;color:var(--white)}
+.beam-hero .bh-side{display:flex;flex-direction:column;gap:2px;padding:16px 12px;background:var(--panel);border-right:1px solid var(--hair)}
+.beam-hero .bh-lights{display:flex;gap:8px;padding:2px 6px 22px}
+.beam-hero .bh-lights i{width:12px;height:12px;border-radius:50%;background:#ff5f57}
+.beam-hero .bh-lights i:nth-child(2){background:#febc2e}.beam-hero .bh-lights i:nth-child(3){background:#28c840}
+.beam-hero .bh-nav{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;color:var(--ink-2)}
+.beam-hero .bh-nav svg{width:16px;height:16px;flex:none}
+.beam-hero .bh-nav.on{background:#1b222a;color:var(--white)}
+.beam-hero .bh-spacer{flex:1}
+.beam-hero .bh-main{min-width:0;padding:40px 48px;background:radial-gradient(800px 380px at 30% 0%,rgba(47,127,224,.08),transparent 70%)}
+.beam-hero .bh-eyebrow{font:500 11.5px/1 ui-monospace,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.beam-hero .bh-big{display:flex;align-items:baseline;flex-wrap:wrap;gap:4px 16px;margin:18px 0 10px}
+.beam-hero .bh-big b{font-weight:400;font-size:clamp(48px,7.4vw,92px);line-height:.95;letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.beam-hero .bh-big span{font-size:clamp(18px,2vw,24px);color:var(--ink-2)}
+.beam-hero .bh-main p{color:var(--ink-2);max-width:58ch;margin:0 0 22px;font-size:15px;line-height:1.55}
+.beam-hero .bh-btns{display:flex;gap:10px;flex-wrap:wrap}
+.beam-hero .bh-btn{font-size:14px;font-weight:500;padding:11px 16px;border-radius:8px;border:1px solid var(--hair)}
+.beam-hero .bh-btn.primary{background:#d6eaff;color:#0b1520;border-color:#d6eaff}
+.beam-hero .bh-chart{margin:32px 0 8px}
+.beam-hero .bh-chart-head{display:flex;justify-content:space-between;gap:12px;font-size:12.5px;color:var(--ink-3);margin-bottom:8px}
+.beam-hero .bh-chart-head b{color:var(--white);font-weight:500}
+.beam-hero .bh-chart svg{display:block;width:100%;height:120px}
+.beam-hero .bh-cards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:22px}
+.beam-hero .bh-card{min-width:0;padding:14px 16px;border:1px solid var(--hair);border-radius:10px;background:rgba(17,22,28,.6)}
+.beam-hero .bh-card small{display:block;font-size:12.5px;color:var(--ink-2)}
+.beam-hero .bh-card strong{display:block;font-weight:500;font-size:20px;margin:6px 0 4px;font-variant-numeric:tabular-nums}
+.beam-hero .bh-card em{font-style:normal;font-size:12px;color:var(--ink-3)}
+.beam-hero .bh-caption{display:flex;justify-content:space-between;gap:12px;margin-top:14px;font-size:12px;color:#8ea5b5}
+.beam-hero .stack-strip{position:relative;z-index:2}
+
+@media (max-width:860px){
+  .beam-hero .bh-window{grid-template-columns:1fr}
+  .beam-hero .bh-side{display:none}
+  .beam-hero .bh-main{padding:28px 20px}
+  .beam-hero .bh-cards{grid-template-columns:1fr}
+}
+@media (max-width:760px){
+  .beam-hero .hero-layout{padding-top:56px}
+  .beam-hero .bh-stage{margin-top:64px}
+  .beam-hero .flare{background:linear-gradient(90deg,transparent,rgba(140,196,255,.3) 30%,#fff 88%,rgba(140,196,255,.3) 96%,transparent)}
+  .beam-hero .flare::after{left:calc(88% - 160px);width:320px}
+}
