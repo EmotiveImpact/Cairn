@@ -107,14 +107,22 @@ struct OverviewWorkspace: View {
 
     /// The headline action: what a scan found that can be freed in one go.
     private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
-    private var topCategories: [(String, Int64)] {
-        if preview { return [("Xcode", 6_400_000_000), ("Developer caches", 5_200_000_000), ("Browsers", 2_700_000_000), ("Docker", 2_300_000_000)] }
+    private var topCategories: [(title: String, bytes: Int64, section: NavSection)] {
+        if preview { return [("Xcode", 6_400_000_000, .developer), ("Developer caches", 5_200_000_000, .developer), ("Browsers", 2_700_000_000, .browsers), ("Docker", 2_300_000_000, .developer)] }
         var totals: [String: Int64] = [:]
+        var sections: [String: NavSection] = [:]
         for bucket in store.buckets {
             let bytes = bucket.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable }.reduce(0) { $0 + $1.allocatedSize }
-            if bytes > 0 { totals[bucket.info.title, default: 0] += bytes }
+            if bytes > 0 {
+                totals[bucket.info.title, default: 0] += bytes
+                sections[bucket.info.title] = section(for: bucket.info)
+            }
         }
-        return totals.sorted { $0.value > $1.value }.prefix(6).map { ($0.key, $0.value) }
+        return totals.sorted { $0.value > $1.value }.prefix(6).map { ($0.key, $0.value, sections[$0.key] ?? .smartScan) }
+    }
+    private func section(for info: CategoryInfo) -> NavSection {
+        if info.id == "browser-caches" { return .browsers }
+        switch info.group { case .developer: return .developer; case .ai: return .ai; case .creative: return .creative; case .general: return .general }
     }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
@@ -289,22 +297,27 @@ struct OverviewWorkspace: View {
     /// The biggest things that can go, each with a bar against the largest.
     @ViewBuilder private var biggestRow: some View {
         let top = Array(topCategories.prefix(4))
-        if !store.isScanning || preview, let largest = top.first?.1, largest > 0 {
+        if !store.isScanning || preview, let largest = top.first?.bytes, largest > 0 {
             HStack(alignment: .top, spacing: 22) {
                 ForEach(top.indices, id: \.self) { index in
-                    let (title, bytes) = top[index]
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(title).eyebrow().lineLimit(1)
-                        Text(Fmt.size(bytes)).font(.system(size: 24, weight: .light)).monospacedDigit()
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(Brand.track)
-                                Capsule().fill(Brand.room.opacity(0.8))
-                                    .frame(width: max(4, geo.size.width * CGFloat(Double(bytes) / Double(largest))))
-                            }
-                        }.frame(height: 3).padding(.top, 2)
+                    let (title, bytes, section) = top[index]
+                    Button { onOpen(section) } label: {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(title).eyebrow().lineLimit(1)
+                            Text(Fmt.size(bytes)).font(.system(size: 24, weight: .light)).monospacedDigit()
+                            GeometryReader { geo in
+                                ZStack(alignment: .leading) {
+                                    Capsule().fill(Brand.track)
+                                    Capsule().fill(Brand.room.opacity(0.8))
+                                        .frame(width: max(4, geo.size.width * CGFloat(Double(bytes) / Double(largest))))
+                                }
+                            }.frame(height: 3).padding(.top, 2)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .buttonStyle(.plain)
+                    .help("Open \(title)")
                     .accessibilityElement(children: .combine)
                 }
                 ForEach(top.count..<4, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
