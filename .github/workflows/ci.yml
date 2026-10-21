@@ -28,13 +28,17 @@ jobs:
 
       # Disposable-fixture suites only. None of these touch personal data.
       - name: Safety check
-        run: "$(swift build --show-bin-path)/Cairn" --safetycheck
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --safetycheck
 
       - name: Workspace check
-        run: "$(swift build --show-bin-path)/Cairn" --workspacecheck
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --workspacecheck
 
       - name: Evidence check
-        run: "$(swift build --show-bin-path)/Cairn" --evidencecheck
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --evidencecheck
 
       - name: CLI refusal check
-        run: sh Support/Checks/cli-clean-refusal.sh "$(swift build --show-bin-path)/Cairn"
+        run: |
+          sh Support/Checks/cli-clean-refusal.sh "$(swift build --show-bin-path)/Cairn"
