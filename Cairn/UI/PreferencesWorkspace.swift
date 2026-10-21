@@ -9,7 +9,7 @@ struct PreferencesWorkspace: View {
     @State private var message = ""
     @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
+    private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "AI tools", "License", "About & CLI"]
     var body: some View {
         CairnWorkspace(title: "Settings", subtitle: preview ? "Preview · changes disabled" : "How Cairn observes and protects your Mac", inspectorVisible: false) {
             VStack(spacing: 0) {
@@ -182,6 +182,8 @@ struct PreferencesWorkspace: View {
                 HStack { Text(path).font(.system(size: 11)).textSelection(.enabled); Spacer(); Button("Remove") { settings.remove(path) }.buttonStyle(.borderless) }.padding(.vertical, 14)
             }
             Button("Add location…") { let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; panel.begin { response in if response == .OK, let url = panel.url { settings.add(url) } } }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 18)
+        case "AI tools":
+            AgentConnectionsPanel()
         case "License":
             ProStatusCard(license: license).padding(.vertical, 20)
         default:

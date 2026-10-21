@@ -97,6 +97,61 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Offload fixture failed: \(error)")
         }
+        // AI tool connections: only the cairn entry changes, and unreadable files are left alone.
+        do {
+            let fm = FileManager.default
+            let home = fm.temporaryDirectory.appendingPathComponent("cairn-agents-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: home) }
+            let tools = AgentTool.all(home: home)
+            func tool(_ id: String) -> AgentTool { tools.first { $0.id == id }! }
+            let command = "/Applications/Cairn.app/Contents/MacOS/Cairn"
+            check(AgentConnections.state(tool("cursor"), command: command) == .notInstalled, "Missing AI tools show as not installed")
+            let cursor = tool("cursor")
+            try fm.createDirectory(at: cursor.marker, withIntermediateDirectories: true)
+            try Data(#"{"mcpServers":{"other":{"command":"x"}},"theme":"dark"}"#.utf8).write(to: cursor.config)
+            check(AgentConnections.state(cursor, command: command) == .available, "An installed AI tool can be connected")
+            try AgentConnections.connect(cursor, command: command)
+            let written = AgentConnections.readJSON(cursor.config) ?? [:]
+            let servers = written["mcpServers"] as? [String: Any] ?? [:]
+            check(servers["other"] != nil && written["theme"] as? String == "dark", "Connecting keeps the tool's other settings")
+            check((servers["cairn"] as? [String: Any])?["args"] as? [String] == ["mcp"], "Connecting adds the cairn mcp entry")
+            check(fm.fileExists(atPath: cursor.config.path + AgentConnections.backupSuffix), "Connecting keeps a backup of the original file")
+            check(AgentConnections.state(cursor, command: command) == .connected(current: true), "A connected tool reads as connected")
+            check(AgentConnections.state(cursor, command: "/elsewhere/Cairn") == .connected(current: false), "An entry for another copy reads as out of date")
+            try AgentConnections.disconnect(cursor)
+            let after = AgentConnections.readJSON(cursor.config) ?? [:]
+            check((after["mcpServers"] as? [String: Any])?["cairn"] == nil && (after["mcpServers"] as? [String: Any])?["other"] != nil, "Disconnecting removes only the cairn entry")
+            let vscode = tool("vscode")
+            try fm.createDirectory(at: vscode.marker, withIntermediateDirectories: true)
+            try AgentConnections.connect(vscode, command: command)
+            let vsEntry = (AgentConnections.readJSON(vscode.config)?["servers"] as? [String: Any])?["cairn"] as? [String: Any]
+            check(vsEntry?["type"] as? String == "stdio", "VS Code gets its servers key and stdio type")
+            let gemini = tool("gemini")
+            try fm.createDirectory(at: gemini.marker, withIntermediateDirectories: true)
+            let commented = Data("// my settings\n{\"a\": 1}".utf8)
+            try commented.write(to: gemini.config)
+            var refusedComments = false
+            do { try AgentConnections.connect(gemini, command: command) } catch { refusedComments = true }
+            check(refusedComments && (try? Data(contentsOf: gemini.config)) == commented, "Settings with comments are left untouched")
+            if case .unreadable = AgentConnections.state(gemini, command: command) { check(true, "Unparseable settings are reported, not edited") }
+            else { check(false, "Unparseable settings are reported, not edited") }
+            let codex = tool("codex")
+            try fm.createDirectory(at: codex.marker, withIntermediateDirectories: true)
+            let toml = "model = \"o4\"\n\n[mcp_servers.other]\ncommand = \"x\"\n"
+            try Data(toml.utf8).write(to: codex.config)
+            try AgentConnections.connect(codex, command: command)
+            try AgentConnections.connect(codex, command: command)
+            let codexText = (try? String(contentsOf: codex.config, encoding: .utf8)) ?? ""
+            check(codexText.components(separatedBy: "[mcp_servers.cairn]").count == 2 && codexText.contains("[mcp_servers.other]"), "Codex gets one cairn table beside its others")
+            check(AgentConnections.state(codex, command: command) == .connected(current: true), "Codex reads as connected")
+            try AgentConnections.disconnect(codex)
+            check((try? String(contentsOf: codex.config, encoding: .utf8)) == toml, "Disconnecting Codex restores its settings exactly")
+            var refusedClaude = false
+            do { try AgentConnections.connect(tool("claude-code"), command: command, claudeBinary: nil) } catch { refusedClaude = true }
+            check(refusedClaude && !fm.fileExists(atPath: tool("claude-code").config.path), "Claude Code settings are never written directly")
+        } catch {
+            check(false, "AI tool connection fixture failed: \(error)")
+        }
         let today = Calendar.current.startOfDay(for: Date())
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
         let oldDay = Calendar.current.date(byAdding: .day, value: -8, to: today)!

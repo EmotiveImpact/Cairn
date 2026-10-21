@@ -4,11 +4,15 @@ Cairn includes a read-only [Model Context Protocol](https://modelcontextprotocol
 
 ## Set up
 
-Install the command line link from Cairn's preferences (it creates `/usr/local/bin/cairn`), then register the server:
+Open **Settings › AI tools** in Cairn and press **Connect** beside each tool. Cairn finds Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code and Windsurf, adds a single `cairn` entry to that tool's own MCP settings and keeps a `.cairn-backup` copy of the file first. Claude Code is connected through its own `claude mcp add` command. Settings files Cairn cannot parse, such as JSON with comments, are left alone. Restart the tool afterwards.
+
+To set it up by hand, point the tool at Cairn's binary with the argument `mcp`:
 
 ```sh
-claude mcp add cairn -- /usr/local/bin/cairn mcp
+claude mcp add --scope user cairn -- /Applications/Cairn.app/Contents/MacOS/Cairn mcp
 ```
+
+ChatGPT and Grok only connect to online MCP servers, so they cannot reach Cairn on this Mac.
 
 The server runs alongside the Cairn app. It never opens Cairn's stores, journals or recovery data.
 
