@@ -4,7 +4,7 @@ import Observation
 
 /// Routes menu actions to the existing window. The menu never owns a scanner.
 @MainActor @Observable final class MenuBarRoute {
-    enum Action: Equatable { case overview, changes, makeRoom, scan, stop, results, activity, storage(String?), preferences(String) }
+    enum Action: Equatable { case overview, changes, makeRoom, projects, scan, stop, results, activity, storage(String?), preferences(String) }
     struct Request: Equatable { let id = UUID(); let action: Action }
     static let shared = MenuBarRoute()
     var pending: Request?
@@ -25,7 +25,33 @@ struct MenuScanStatus {
     var scanDate: Date?
     var partial = false
     var operationText: String?
+    /// Safe, rebuildable and actionable bytes in the latest results.
+    var readyBytes: Int64 = 0
+    /// The latest project build-output findings, grouped off the main thread.
+    var projectItems: [ScanItem] = []
     var canStart: Bool { !scanning && !operationBusy && !otherScanBusy }
+}
+
+/// What the menu offers to free, built from saved results only. A nudge
+/// opens a review page; it never selects or removes anything by itself.
+enum MenuGuardian {
+    static let idleDays = 30
+
+    static func readyTitle(_ bytes: Int64) -> String? {
+        bytes >= 100_000_000 ? "Review \(Fmt.size(bytes)) ready to free" : nil
+    }
+
+    static func idleProjectsTitle(_ projects: [ProjectSummary], now: Date = Date()) -> String? {
+        let idle = projects.filter { ($0.idleDays(now: now) ?? 0) >= idleDays && $0.rebuildableBytes > 0 }
+        guard !idle.isEmpty else { return nil }
+        let bytes = idle.reduce(Int64(0)) { $0 + $1.rebuildableBytes }
+        return "\(idle.count) idle project\(idle.count == 1 ? "" : "s") · \(Fmt.size(bytes)) rebuildable"
+    }
+
+    static func growthTitle(_ suggestion: GrowthSuggestion?) -> String? {
+        guard let suggestion else { return nil }
+        return "\(suggestion.change.after.root.title) grew \(Fmt.size(suggestion.change.delta))"
+    }
 }
 
 enum MenuStorageSummary {
@@ -79,6 +105,8 @@ enum MenuAvailableSpace {
     private var reserveRow: NSMenuItem?
     private var pauseRow: NSMenuItem?
     private var drivesRow: NSMenuItem?
+    private var projectsRow: NSMenuItem?
+    private var idleProjectsTitle: String?
     private var preview: Bool { CommandLine.arguments.contains("--preview-ui") }
 
     private struct Drive: Sendable {
@@ -91,6 +119,7 @@ enum MenuAvailableSpace {
         var available: Int64?
         var change: String
         var drives: [Drive]
+        var idleProjects: String?
     }
 
     func setVisible(_ visible: Bool) {
@@ -186,6 +215,7 @@ enum MenuAvailableSpace {
         guard !preview, refreshTask == nil else { return }
         let generation = visibilityGeneration
         let history = StorageControl.shared.latestCapacity
+        let projectItems = scanStatus().projectItems
         // Only volume metadata and Cairn's small saved history; no directory walks
         // or diskutil processes. One in-flight task even after repeated menu opens.
         refreshTask = Task {
@@ -201,12 +231,14 @@ enum MenuAvailableSpace {
                     return Drive(id: values.volumeUUIDString ?? url.path, name: values.volumeName ?? url.lastPathComponent,
                                  available: values.volumeAvailableCapacityForImportantUsage, readOnly: values.volumeIsReadOnly != false)
                 }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
-                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: internalCapacity?.volumeID, readings: history), drives: drives)
+                let idle = projectItems.isEmpty ? nil : MenuGuardian.idleProjectsTitle(ProjectIndex.build(from: projectItems))
+                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: internalCapacity?.volumeID, readings: history), drives: drives, idleProjects: idle)
             }.value
             guard !Task.isCancelled, generation == visibilityGeneration, statusItem != nil else { return }
             available = reading.available
             change = reading.change
             drives = reading.drives
+            idleProjectsTitle = reading.idleProjects
             drivesRead = true
             readAt = Date()
             updateStorageRows()
@@ -220,8 +252,23 @@ enum MenuAvailableSpace {
         capacityRow = info("Reading storage…")
         changeRow = info(change)
         reserveRow = AppSettings.shared.reserveEnabled ? info("Reading your chosen reserve…") : nil
-        menu.addItem(.separator())
         let status = scanStatus()
+        let ready = preview ? MenuGuardian.readyTitle(8_500_000_000) : MenuGuardian.readyTitle(status.readyBytes)
+        let growth = preview ? nil : MenuGuardian.growthTitle(StorageControl.shared.growthSuggestions.first)
+        if ready != nil || growth != nil || !status.projectItems.isEmpty || preview {
+            menu.addItem(.separator())
+            heading("READY TO FREE")
+            if let ready { action(ready, symbol: "sparkles", route: .results, enabled: !status.operationBusy) }
+            projectsRow = NSMenuItem(title: "", action: #selector(performAction(_:)), keyEquivalent: "")
+            projectsRow?.target = self
+            projectsRow?.representedObject = RouteBox(.projects)
+            projectsRow?.image = symbol("folder.badge.gearshape")
+            if let projectsRow { menu.addItem(projectsRow) }
+            if let growth { action(growth, symbol: "chart.line.uptrend.xyaxis", route: .changes) }
+        } else {
+            projectsRow = nil
+        }
+        menu.addItem(.separator())
         if let text = status.operationText { info(text) }
         action(status.scanning ? "Stop scan" : "Scan Mac", symbol: status.scanning ? "stop.circle" : "magnifyingglass", key: "r", route: status.scanning ? .stop : .scan,
                enabled: !preview && (status.scanning || status.canStart))
@@ -288,6 +335,11 @@ enum MenuAvailableSpace {
             ])
         }
         changeRow?.title = change
+        if let projectsRow {
+            let title = preview ? "3 idle projects · 6.2 GB rebuildable" : idleProjectsTitle
+            projectsRow.title = title ?? "Projects"
+            projectsRow.isHidden = title == nil
+        }
         if let reserveRow {
             let settings = AppSettings.shared
             if settings.reservePaused { reserveRow.title = "Space alerts paused · target \(settings.reserveGB) GB" }

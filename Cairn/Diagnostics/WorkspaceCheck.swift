@@ -70,6 +70,10 @@ enum WorkspaceCheck {
         check(MenuAvailableSpace.title(42_600_000_000, checked: true).contains("GB"),
               "Menu bar labels measured available capacity with a size unit")
         check(MenuScanStatus().canStart, "Idle menu allows an explicit scan")
+        check(MenuGuardian.readyTitle(50_000_000) == nil && MenuGuardian.readyTitle(2_000_000_000)?.contains("ready to free") == true,
+              "Menu offers a review only when the latest results hold meaningful rebuildable space")
+        check(MenuGuardian.growthTitle(nil) == nil, "Menu shows no growth nudge without an opted-in suggestion")
+        check(MenuGuardian.idleProjectsTitle([]) == nil, "Menu shows no project nudge without idle projects")
         check(!MenuScanStatus(scanning: true).canStart && !MenuScanStatus(operationBusy: true).canStart && !MenuScanStatus(otherScanBusy: true).canStart, "Menu blocks overlapping operations")
         let chartStart = Date(timeIntervalSince1970: 100)
         let chartReadings = [0.0, 3600.0, 28 * 3600.0, 29 * 3600.0].map {
