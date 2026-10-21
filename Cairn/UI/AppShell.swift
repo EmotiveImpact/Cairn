@@ -33,7 +33,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "house"
         case .changes: return "chart.xyaxis.line"
-        case .projects: return "folder.badge.gearshape"
+        case .projects: return "folder"
         case .makeRoom: return "plus.circle"
         case .smartScan: return "scope"
         case .general: return "sparkles"
@@ -43,11 +43,11 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .creative: return "film"
         case .largeFiles: return "folder"
         case .duplicates: return "doc.on.doc"
-        case .apps: return "square.stack.3d.up"
+        case .apps: return "square.grid.2x2"
         case .storage: return "externaldrive"
         case .bugs: return "heart.text.square"
-        case .activity: return "clock.arrow.circlepath"
-        case .settings: return "gearshape"
+        case .activity: return "clock"
+        case .settings: return "circle.circle"
         }
     }
 
@@ -552,8 +552,8 @@ struct NavSidebar: View {
                 VStack(spacing: 4) {
                     NavRow(item: .dashboard, section: $section)
                     NavRow(item: .projects, section: $section)
-                    SidebarDisclosure(title: "Clean", icon: "paintbrush", items: cleanItems, section: $section)
-                    SidebarDisclosure(title: "Files", icon: "doc.on.doc", items: fileItems, section: $section)
+                    SidebarDisclosure(title: "Clean", icon: "plus", items: cleanItems, section: $section)
+                    SidebarDisclosure(title: "Files", icon: "doc", items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)
                     NavRow(item: .activity, section: $section, also: [.changes])
                         .help("Free space over time, cleanup receipts and recovery")
@@ -589,9 +589,9 @@ private struct SidebarDisclosure: View {
                 manuallyExpanded = expanded
             } label: {
                 HStack(spacing: 11) {
-                    Image(systemName: icon).font(.system(size: 15))
-                        .frame(width: 21).foregroundStyle(items.contains(section) ? Brand.blue : Brand.textSecondary)
-                    Text(title).font(.system(size: 14, weight: .regular)).foregroundStyle(Brand.textPrimary)
+                    Image(systemName: icon).font(.system(size: 15, weight: .light))
+                        .frame(width: 21).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
+                    Text(title).font(.system(size: 14, weight: .regular)).foregroundStyle(Brand.textSecondary)
                     Spacer(minLength: 0)
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
@@ -669,8 +669,8 @@ private struct NavRow: View {
             HStack(spacing: 11) {
                 if !child {
                     Image(systemName: item.icon)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(selected ? Brand.blue : Brand.textSecondary)
+                        .font(.system(size: 15, weight: .light))
+                        .foregroundStyle(selected ? Brand.room : Brand.textSecondary)
                         .frame(width: 21)
                 }
                 Text(label ?? item.title).lineLimit(1)
