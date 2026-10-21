@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#090b0d" />
     <meta name="description" content="A Mac cleaner built for developers. Find what grew, review what can go, and protect the code and conversations behind your next build." />
-    <title>Cairn: finds the junk in your coding projects</title>
+    <title>Cairn — A Mac cleaner built for developers</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&amp;display=swap" rel="stylesheet" />
@@ -18,8 +18,8 @@
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="storage-story.css?v=20260929-4" />
     <link rel="stylesheet" href="flow-story.css?v=20260930-1" />
-    <link rel="stylesheet" href="beam-hero.css?v=1" />
-    <script src="beam-hero.js?v=1" defer></script>
+    <link rel="stylesheet" href="beam-hero.css?v=2" />
+    <script src="beam-hero.js?v=2" defer></script>
     <script src="assets/cairn-storage-story.js?v=20260930-1" defer></script>
   </head>
   <body>
@@ -37,11 +37,13 @@
     </header>
 
     <main id="main">
-      <section class="hero beam-hero" aria-labelledby="hero-title">
+      <section class="hero beam-hero" data-option="1" aria-labelledby="hero-title">
+        <div class="hero-atmosphere" aria-hidden="true"><img src="assets/stone-seam.png" width="1536" height="1024" alt="" fetchpriority="high" /></div>
         <div class="shell hero-layout">
           <div class="hero-copy">
             <p class="section-label">More space. Same momentum.</p>
-            <h1 id="hero-title">Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
+            <h1 id="hero-title" data-headline="original">A Mac cleaner.<span>Built for developers.</span></h1>
+            <h1 data-headline="new" hidden>Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
             <p class="hero-description">Make room for your next build. Review the caches and tools taking up space, while protecting the code and conversations that got you here.</p>
             <div class="hero-actions">
               <a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a>
@@ -49,47 +51,14 @@
             </div>
             <p class="hero-availability">Native to macOS. In development.</p>
           </div>
-
-          <div class="bh-stage" id="product">
+          <figure class="product-composition" id="product">
             <div class="fx" id="fx" aria-hidden="true"><canvas id="rays"></canvas><div class="core"></div><canvas id="spark"></canvas></div>
             <div class="flare" aria-hidden="true"></div>
-            <div class="bh-window" role="img" aria-label="Cairn home screen: 38.6 GB you can get back, a free-space graph for the last 14 days, and the three biggest items. Sample data.">
-              <div class="bh-side">
-                <div class="bh-lights"><i></i><i></i><i></i></div>
-                <div class="bh-nav on"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 7.5 8 3l5.5 4.5V13H2.5z"/></svg>Home</div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2 4h4l1.5 1.5H14V13H2z"/></svg>Projects</div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3v10M3 8h10"/></svg>Clean</div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 2h5l3 3v9H4z"/></svg>Files</div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="4.5" height="4.5"/><rect x="9" y="2.5" width="4.5" height="4.5"/><rect x="2.5" y="9" width="4.5" height="4.5"/><rect x="9" y="9" width="4.5" height="4.5"/></svg>Apps</div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>Activity</div>
-                <div class="bh-spacer"></div>
-                <div class="bh-nav"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="5.5"/></svg>Settings</div>
-              </div>
-              <div class="bh-main">
-                <div class="bh-eyebrow">Macintosh HD · Ready to free</div>
-                <div class="bh-big"><b>38.6 GB</b><span>you can get back</span></div>
-                <p>Build files and caches your tools rebuild on their own. Your code, documents and AI conversations are never included.</p>
-                <div class="bh-btns"><span class="bh-btn primary">Review and free</span><span class="bh-btn">See everything</span></div>
-                <div class="bh-chart">
-                  <div class="bh-chart-head"><span>Free space, last 14 days</span><span><b>9.9 GB</b> free of 494 GB</span></div>
-                  <svg viewBox="0 0 600 120" preserveAspectRatio="none" aria-hidden="true">
-                    <defs><linearGradient id="bh-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8cc4ff" stop-opacity=".28"/><stop offset="1" stop-color="#8cc4ff" stop-opacity="0"/></linearGradient></defs>
-                    <g stroke="#1d242c" stroke-width="1"><line x1="0" y1="30" x2="600" y2="30"/><line x1="0" y1="70" x2="600" y2="70"/><line x1="0" y1="110" x2="600" y2="110"/></g>
-                    <path d="M0 22 L46 26 L92 25 L138 34 L184 38 L230 37 L276 48 L322 55 L368 54 L414 66 L460 74 L506 81 L552 92 L596 101 L596 120 L0 120Z" fill="url(#bh-fill)"/>
-                    <path d="M0 22 L46 26 L92 25 L138 34 L184 38 L230 37 L276 48 L322 55 L368 54 L414 66 L460 74 L506 81 L552 92 L596 101" fill="none" stroke="#8cc4ff" stroke-width="2" vector-effect="non-scaling-stroke"/>
-                    <circle cx="596" cy="101" r="4" fill="#fff"/>
-                  </svg>
-                  <div class="bh-chart-head" style="margin:6px 0 0"><span>7 Oct · 31.2 GB</span><span>Today · 9.9 GB</span></div>
-                </div>
-                <div class="bh-cards">
-                  <div class="bh-card"><small>Xcode build files</small><strong>14.2 GB</strong><em>Rebuilt on next build</em></div>
-                  <div class="bh-card"><small>Docker build cache</small><strong>9.8 GB</strong><em>Grew 12 GB this week</em></div>
-                  <div class="bh-card"><small>node_modules · 6 projects</small><strong>9.5 GB</strong><em>Untouched for 30+ days</em></div>
-                </div>
-              </div>
-            </div>
-            <div class="bh-caption"><span>Inside Cairn</span><span>Native app preview · Sample data</span></div>
-          </div>
+            <a class="product-screen" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog" aria-label="View the Cairn Overview preview">
+              <img src="assets/app-overview-current.png" width="1120" height="740" alt="Cairn Overview with 9.9 GB available and a chart of falling free space" fetchpriority="high" />
+            </a>
+            <figcaption><span>Inside Cairn</span><span>Native app preview · Sample data</span></figcaption>
+          </figure>
         </div>
         <div class="shell stack-strip" aria-label="Developer tools covered by Cairn">
           <p><strong>Built around your stack.</strong></p>
@@ -186,7 +155,7 @@
     </main>
 
     <footer class="site-footer">
-      <div class="shell footer-hero" aria-labelledby="closing-title"><p class="section-label">For the work ahead</p><h2 id="closing-title">More room.<br />Keep your momentum.</h2><p>Your next idea needs room. Your current work needs care.<br />Cairn is being built for both.</p><a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a><span class="footer-availability">In development for macOS</span></div>
+      <div class="shell footer-hero" aria-labelledby="closing-title"><div class="footer-beam" aria-hidden="true"></div><p class="section-label">For the work ahead</p><h2 id="closing-title">More room.<br />Keep your momentum.</h2><p>Your next idea needs room. Your current work needs care.<br />Cairn is being built for both.</p><a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a><span class="footer-availability">In development for macOS</span></div>
       <div class="shell footer-main">
         <div class="footer-about"><a class="brand" href="#top" aria-label="Cairn, back to top"><span class="brand-mark" aria-hidden="true"><img src="../assets/cairn-stones-transparent.png" width="44" height="44" alt="" /></span><span>Cairn</span></a><p>Mac cleaning built around<br />the work behind every build.</p></div>
         <nav class="footer-links" aria-label="Footer navigation">
@@ -211,5 +180,15 @@
       <div class="preview-image-wrap" id="preview-canvas" role="region" aria-label="App screenshot; scroll to inspect when viewing at actual size" tabindex="0"><img class="preview-image" width="1120" height="740" alt="" /></div>
       <p id="preview-note">Sample data. Disk actions are disabled in these native app captures.</p>
     </dialog>
+
+    <div class="option-switch" role="group" aria-label="Hero options for review">
+      <span>Hero option</span>
+      <button type="button" data-option="1" aria-pressed="true">1 · Original + beam</button>
+      <button type="button" data-option="2" aria-pressed="false">2 · New headline</button>
+      <button type="button" data-option="3" aria-pressed="false">3 · Centred</button>
+      <span>Footer</span>
+      <button type="button" data-footer="original" aria-pressed="true">Original</button>
+      <button type="button" data-footer="beam" aria-pressed="false">With beam</button>
+    </div>
   </body>
 </html>

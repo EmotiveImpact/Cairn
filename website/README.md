@@ -1,6 +1,6 @@
 # Cairn website
 
-The active website is [v2/night.html](v2/night.html). [v2/night-beam.html](v2/night-beam.html) is the same page with the new light-beam hero, new headline and Night app window (`beam-hero.css`, `beam-hero.js`). Source, assets and package scripts live in `v2/`; its documentation source is `v2/docs/`.
+The active website is [v2/night.html](v2/night.html). [v2/night-beam.html](v2/night-beam.html) is the same page, images and footer included, with switchable light-beam options for review: hero option 1 (original + beam), 2 (new headline) or 3 (centred), and the footer with or without a beam (`beam-hero.css`, `beam-hero.js`; link straight to one with `#o2-beam` and so on). Source, assets and package scripts live in `v2/`; its documentation source is `v2/docs/`.
 
 This folder is separate from the native app in `Cairn/`. The root HTML/CSS files are the earlier version-one concept, retained because historical references link to them. The original brand-exploration workspace was copied, not moved or deleted.
 

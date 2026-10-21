@@ -9,10 +9,11 @@
   var raysCanvas = document.getElementById('rays');
   var sparkCanvas = document.getElementById('spark');
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  var narrow = window.matchMedia('(max-width:760px)');
   if (!fx) return;
-  function hitFraction() { var h = narrow.matches ? 0.88 : 0.78; return (0.12 + h) / 1.24; }
-  function placeCore() { fx.style.setProperty('--hitx', (hitFraction() * 100).toFixed(2) + '%'); }
+  var hitCache = 0.46;
+  function readHit() { var v = parseFloat(getComputedStyle(fx).getPropertyValue('--hit')); if (!isNaN(v)) hitCache = v / 100; }
+  function hitFraction() { return (0.12 + hitCache) / 1.24; }
+  function placeCore() { readHit(); }
   placeCore();
 
   var VERTEX = `#version 300 es
@@ -183,7 +184,7 @@ void main() {
     sctx.setTransform(sparkCanvas.width / W, 0, 0, sparkCanvas.height / H, 0, 0);
     placeCore();
   }
-  new ResizeObserver(resize).observe(fx); resize();
+  new ResizeObserver(resize).observe(fx); window.addEventListener("resize", resize); resize();
 
   // pointer gently steers the beam, click sends a pulse down it (as in the original component)
   var pointer = { x: 0.5, seen: false }, aimX = 0, pulses = [], pulseData = new Float32Array(16);
@@ -263,4 +264,35 @@ void main() {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+})();
+
+// ---- Review options: hero layout and footer (stored in the address hash, e.g. #o3-beam) ----
+(function () {
+  var hero = document.querySelector('.beam-hero');
+  if (!hero) return;
+  var state = { option: '1', footer: 'original' };
+  var m = /^#o([123])(?:-(beam|original))?$/.exec(location.hash);
+  if (m) { state.option = m[1]; state.footer = m[2] || 'original'; }
+  function apply() {
+    hero.dataset.option = state.option;
+    document.body.dataset.footer = state.footer;
+    var newHeadline = state.option !== '1';
+    document.querySelectorAll('[data-headline]').forEach(function (el) {
+      var on = (el.dataset.headline === 'new') === newHeadline;
+      el.hidden = !on;
+      if (on) el.id = 'hero-title'; else el.removeAttribute('id');
+    });
+    document.querySelectorAll('.option-switch [data-option]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.option === state.option)); });
+    document.querySelectorAll('.option-switch [data-footer]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.footer === state.footer)); });
+    window.dispatchEvent(new Event('resize'));
+  }
+  document.querySelectorAll('.option-switch button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      if (b.dataset.option) state.option = b.dataset.option;
+      if (b.dataset.footer) state.footer = b.dataset.footer;
+      apply();
+      try { history.replaceState(null, '', '#o' + state.option + '-' + state.footer); } catch (e) {}
+    });
+  });
+  apply();
 })();
