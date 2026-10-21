@@ -15,8 +15,13 @@ import Foundation
 ///     cairn scan [--json] [--category <id>]
 ///     cairn clean --safe [--category <id>] [--dry-run]
 ///     cairn categories
+///     cairn projects [--json] [--idle <days>]
+///     cairn mcp
 enum CLI {
-    static let commands: Set<String> = ["status", "scan", "clean", "categories", "help", "--help", "-h"]
+    static let commands: Set<String> = ["status", "scan", "clean", "categories", "projects", "mcp", "help", "--help", "-h"]
+    /// Commands that only read file sizes and timestamps. They run alongside
+    /// the app because they never open its stores, journals or recovery data.
+    static let readOnlyCommands: Set<String> = ["projects", "mcp"]
 
     static func run(_ args: [String]) {
         let command = args.first ?? "help"
@@ -36,6 +41,8 @@ enum CLI {
             }
             clean(category: category)
         case "categories":  categories()
+        case "projects":    projects(json: flags.contains("--json"), idleDays: value(of: "--idle", in: args).flatMap(Int.init))
+        case "mcp":         MCPServer.run()
         default:            help()
         }
     }
@@ -117,6 +124,30 @@ enum CLI {
         print("\nPreview only — nothing was removed. Open Cairn to select exact items and review cleanup.")
     }
 
+    private static func projects(json: Bool, idleDays: Int?) {
+        let minimumIdle = max(0, idleDays ?? 0)
+        let projects = ProjectIndex.build(from: collect(category: ProjectIndex.categoryID))
+            .filter { minimumIdle == 0 || ($0.idleDays() ?? 0) >= minimumIdle }
+            .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
+        if json {
+            printJSON(["projects": projects.map { project -> [String: Any] in
+                var entry: [String: Any] = ["name": project.name, "path": project.url.path,
+                                            "repository": project.isRepository, "rebuildableBytes": project.rebuildableBytes]
+                if let days = project.idleDays() { entry["idleDays"] = days }
+                return entry
+            }])
+            return
+        }
+        guard !projects.isEmpty else { print("No projects with rebuildable build output found."); return }
+        for project in projects.prefix(30) {
+            let idle = project.idleDays().map { "\($0)d idle" } ?? "activity unknown"
+            print("\(Fmt.size(project.rebuildableBytes).padding(toLength: 10, withPad: " ", startingAt: 0)) \(idle.padding(toLength: 18, withPad: " ", startingAt: 0)) \(project.url.path)")
+        }
+        if projects.count > 30 { print("… and \(projects.count - 30) more") }
+        let total = projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes }
+        print("\nRebuildable across \(projects.count) projects: \(Fmt.size(total)). Review and remove it in Cairn → Projects.")
+    }
+
     private static func categories() {
         for scanner in ScannerRegistry.all() {
             print("\(scanner.info.id.padding(toLength: 16, withPad: " ", startingAt: 0)) \(scanner.info.title)")
@@ -131,9 +162,11 @@ enum CLI {
           cairn scan [--category <id>]     measure cleanup candidates
           cairn clean --safe               preview eligible Trash candidates only
           cairn categories                 list scanner ids
+          cairn projects [--idle <days>]   repositories and their rebuildable build output
+          cairn mcp                        MCP server for coding agents (read-only)
 
         Flags
-          --json          machine-readable output (status, scan)
+          --json          machine-readable output (status, scan, projects)
           --category <id> restrict to one category
           --dry-run       explicit preview (the CLI never removes files)
           --yes, -y       unavailable; CLI cleanup requires exact-item review
@@ -141,6 +174,8 @@ enum CLI {
         Use the app to select and review exact items before cleanup. The CLI
         never removes files. Cairn protects AI assistant history, iCloud
         mirrors, Keychains, ssh keys and Documents.
+
+        Claude Code:  claude mcp add cairn -- /usr/local/bin/cairn mcp
         """)
     }
 
@@ -156,7 +191,7 @@ enum CLI {
     }
 
     /// Runs the scanners synchronously — a CLI has no run loop to return to.
-    private static func collect(category: String?) -> [ScanItem] {
+    static func collect(category: String?) -> [ScanItem] {
         let scanners = ScannerRegistry.all().filter { category == nil || $0.info.id == category }
         if scanners.isEmpty, let category {
             print("Unknown category '\(category)'. Try: cairn categories")

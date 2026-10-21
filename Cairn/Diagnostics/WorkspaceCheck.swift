@@ -39,6 +39,20 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Projects fixture could not be created: \(error)")
         }
+        // MCP: protocol shape and read-only tool surface, without scanning.
+        let initialize = MCPServer.handle(["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ["protocolVersion": "2025-06-18"]])
+        check((initialize?["result"] as? [String: Any])?["protocolVersion"] as? String == "2025-06-18", "MCP initialize echoes the requested protocol")
+        check(MCPServer.handle(["jsonrpc": "2.0", "method": "notifications/initialized"]) == nil, "MCP notifications get no response")
+        let listed = ((MCPServer.handle(["jsonrpc": "2.0", "id": 2, "method": "tools/list"])?["result"] as? [String: Any])?["tools"] as? [[String: Any]]) ?? []
+        let names = Set(listed.compactMap { $0["name"] as? String })
+        check(names == ["storage_status", "list_projects", "find_reclaimable", "list_categories", "open_cairn"], "MCP lists only measuring and opening tools")
+        check(!names.contains { $0.contains("clean") || $0.contains("delete") || $0.contains("remove") }, "MCP exposes no removal tool")
+        let unknownTool = MCPServer.handle(["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": ["name": "empty_trash"]])?["result"] as? [String: Any]
+        check(unknownTool?["isError"] as? Bool == true, "MCP refuses tools it does not offer")
+        let badCategory = MCPServer.handle(["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": ["name": "find_reclaimable", "arguments": ["category": "__no_such_category__"]] as [String: Any]])?["result"] as? [String: Any]
+        check(badCategory?["isError"] as? Bool == true, "MCP rejects an unknown category before scanning")
+        check(MCPServer.handle(["jsonrpc": "2.0", "id": 5, "method": "nope"])?["error"] != nil, "MCP reports unknown methods")
+        check(CLI.readOnlyCommands == ["projects", "mcp"], "Only read-only CLI commands run beside the app")
         let today = Calendar.current.startOfDay(for: Date())
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
         let oldDay = Calendar.current.date(byAdding: .day, value: -8, to: today)!
