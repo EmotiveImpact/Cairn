@@ -177,64 +177,59 @@ struct WorkspaceCompletion: View {
         }
         return nil
     }
-    private static let settledStones: [StoneStack.Stone] = [
-        .init(title: "a", bytes: 9), .init(title: "b", bytes: 6), .init(title: "c", bytes: 4),
-        .init(title: "d", bytes: 2), .init(title: "e", bytes: 1)
-    ]
-
     var body: some View {
         CairnDialog(title: summary.interrupted ? "Cleanup stopped" : "Done", subtitle: "", wide: true, height: 560) {
             ScrollView {
-                HStack(alignment: .center, spacing: 36) {
-                    StoneStack(stones: Self.settledStones, labelled: false, ready: false, maxWidth: 150, minWidth: 60)
-                        .frame(width: 170)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack(alignment: .firstTextBaseline, spacing: 12) {
-                            Text(freed > 0 ? "Freed" : "Cleaned").font(.system(size: 44, weight: .semibold))
-                            if freed > 0 {
-                                Text(Fmt.size(appeared ? freed : 0))
-                                    .font(.system(size: 44, weight: .semibold)).monospacedDigit()
-                                    .foregroundStyle(Brand.room)
-                                    .contentTransition(.numericText())
-                            }
-                        }.tracking(-1.2)
-                        if let measured, measuredGain != nil {
-                            Label("Verified on \(measured.name)", systemImage: "checkmark")
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.room).padding(.top, 10)
-                        } else if !clean {
-                            Label(summary.interrupted ? "Stopped before the end" : "\(summary.failed) skipped",
-                                  systemImage: "exclamationmark.circle")
-                                .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.amber).padding(.top, 10)
-                        }
-                        if let measured {
-                            VStack(spacing: 10) {
-                                bar("Before", measured.before, measured.total, Brand.blue)
-                                bar("Now", measured.after, measured.total, Brand.room)
-                            }.padding(.top, 22)
-                        }
-                        VStack(spacing: 0) {
-                            row("Items cleaned", "\(summary.trashed)")
-                            if summary.toolCount > 0 {
-                                row("Cleaned by their tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
-                            }
-                            if inTrash > 0 {
-                                row("Still in Trash", "\(Fmt.size(inTrash)) · can be put back")
-                            }
-                            if summary.failed > 0 {
-                                row("Skipped", "\(summary.failed) \(summary.failed == 1 ? "item" : "items")", tint: Brand.amber)
-                            }
-                        }.padding(.top, 20)
-                        if summary.accounting.missingRecoveryCount > 0 {
-                            Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
-                                .font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.top, 12)
-                        }
-                        ForEach(Array(summary.errors.prefix(4).enumerated()), id: \.offset) { _, error in
-                            Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled).padding(.top, 8)
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        if freed > 0 {
+                            Text(Fmt.size(appeared ? freed : 0))
+                                .font(.system(size: 64, weight: .light)).tracking(-2.2).monospacedDigit()
+                                .contentTransition(.numericText())
+                            Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textSecondary)
+                        } else {
+                            Text("Cleaned").font(.system(size: 52, weight: .light)).tracking(-1.6)
                         }
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if let measured, measuredGain != nil {
+                        HStack(spacing: 8) {
+                            Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)
+                            Text("Checked on \(measured.name)")
+                        }
+                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.room).padding(.top, 12)
+                    } else if !clean {
+                        Label(summary.interrupted ? "Stopped before the end" : "\(summary.failed) skipped",
+                              systemImage: "exclamationmark.circle")
+                            .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.amber).padding(.top, 12)
+                    }
+                    if let measured {
+                        VStack(spacing: 10) {
+                            bar("Before", measured.before, measured.total, Brand.inUse)
+                            bar("Now", measured.after, measured.total, Brand.room)
+                        }.padding(.top, 22)
+                    }
+                    VStack(spacing: 0) {
+                        row("Items cleaned", "\(summary.trashed)")
+                        if summary.toolCount > 0 {
+                            row("Cleaned by their tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
+                        }
+                        if inTrash > 0 {
+                            row("Still in Trash", "\(Fmt.size(inTrash)) · can be put back")
+                        }
+                        if summary.failed > 0 {
+                            row("Skipped", "\(summary.failed) \(summary.failed == 1 ? "item" : "items")", tint: Brand.amber)
+                        }
+                    }.padding(.top, 20)
+                    if summary.accounting.missingRecoveryCount > 0 {
+                        Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
+                            .font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.top, 12)
+                    }
+                    ForEach(Array(summary.errors.prefix(4).enumerated()), id: \.offset) { _, error in
+                        Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled).padding(.top, 8)
+                    }
                 }
+                .frame(maxWidth: 560, alignment: .leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 8)
             }
         } actions: {
@@ -252,10 +247,11 @@ struct WorkspaceCompletion: View {
             GeometryReader { geo in
                 let share = total.map { Double(available) / Double(max(1, $0)) } ?? 0
                 ZStack(alignment: .trailing) {
-                    Capsule().fill(Brand.stoneTop)
+                    Capsule().fill(Brand.track)
                     Capsule().fill(tint).frame(width: max(6, geo.size.width * CGFloat(min(1, share))))
+                        .shadow(color: tint == Brand.room ? Brand.room.opacity(0.5) : .clear, radius: 6)
                 }
-            }.frame(height: 9)
+            }.frame(height: 6)
             Text("\(Fmt.size(available)) free").font(.system(size: 12, weight: .semibold)).monospacedDigit()
                 .frame(width: 96, alignment: .trailing)
         }

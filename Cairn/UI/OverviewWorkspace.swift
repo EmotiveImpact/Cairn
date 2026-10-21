@@ -8,7 +8,7 @@ struct OverviewWorkspace: View {
     var search: String
     var onOpen: (NavSection) -> Void
     var onCleanRecommended: () -> Void = {}
-    @State private var period = 7
+    @State private var period = 30
     @State private var showHistory = false
     @State private var selectedDate: Date?
     private var selectedSample: CapacityReading? {
@@ -76,12 +76,14 @@ struct OverviewWorkspace: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                cleanHero.padding(.top, 18)
-                diskCard.padding(.top, 22)
-                nextTiles.padding(.top, 16)
-            }.padding(.horizontal, 32).padding(.top, 24).padding(.bottom, 22)
+                cleanHero.padding(.top, 22)
+                biggestRow.padding(.top, 26)
+                graphPanel.padding(.top, 24)
+                diskCard.padding(.top, 24)
+                nextTiles.padding(.top, 22)
+            }.padding(.horizontal, 36).padding(.top, 24).padding(.bottom, 26)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
-        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
+        }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
@@ -106,21 +108,13 @@ struct OverviewWorkspace: View {
     /// The headline action: what a scan found that can be freed in one go.
     private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
     private var topCategories: [(String, Int64)] {
-        if preview { return [("Xcode", 6_400_000_000), ("Developer caches", 5_200_000_000), ("Browsers", 2_700_000_000)] }
+        if preview { return [("Xcode", 6_400_000_000), ("Developer caches", 5_200_000_000), ("Browsers", 2_700_000_000), ("Docker", 2_300_000_000)] }
         var totals: [String: Int64] = [:]
         for bucket in store.buckets {
             let bytes = bucket.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable }.reduce(0) { $0 + $1.allocatedSize }
             if bytes > 0 { totals[bucket.info.title, default: 0] += bytes }
         }
         return totals.sorted { $0.value > $1.value }.prefix(6).map { ($0.key, $0.value) }
-    }
-    private var stones: [StoneStack.Stone] {
-        if preview {
-            return [.init(title: "Xcode", bytes: 6_400_000_000), .init(title: "Developer caches", bytes: 5_200_000_000),
-                    .init(title: "Browsers", bytes: 2_700_000_000), .init(title: "Docker", bytes: 2_300_000_000),
-                    .init(title: "npm", bytes: 1_800_000_000)]
-        }
-        return topCategories.map { StoneStack.Stone(title: $0.0, bytes: $0.1) }
     }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
@@ -138,18 +132,16 @@ struct OverviewWorkspace: View {
             // One number, one button: what can safely go, and the way to free it.
             HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("Ready to free").eyebrow()
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(Fmt.size(recommendedBytes))
-                            .font(.system(size: 64, weight: .semibold)).tracking(-1.8).monospacedDigit()
-                            .foregroundStyle(Brand.room)
+                            .font(.system(size: 76, weight: .light)).tracking(-3).monospacedDigit()
                             .contentTransition(.numericText())
-                        Text("you can get back").font(.system(size: 22, weight: .medium)).foregroundStyle(Brand.textSecondary)
-                    }.padding(.top, 8)
+                        Text("you can get back").font(.system(size: 21)).foregroundStyle(Brand.textSecondary)
+                    }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
                         .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
-                        .padding(.top, 8)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 460, alignment: .leading)
+                        .padding(.top, 12)
                     HStack(spacing: 10) {
                         Button { onCleanRecommended() } label: {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
@@ -163,10 +155,7 @@ struct OverviewWorkspace: View {
                     }.padding(.top, 20)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                StoneStack(stones: stones, maxWidth: 140, minWidth: 54)
-                    .frame(width: 290, alignment: .leading)
             }
-            .padding(.vertical, 6)
         } else if !store.hasLiveResults {
             HStack(spacing: 16) {
                 Image(systemName: "sparkle.magnifyingglass").font(.system(size: 26)).foregroundStyle(Brand.blue)
@@ -218,21 +207,23 @@ struct OverviewWorkspace: View {
                 }
                 GeometryReader { geo in
                     HStack(spacing: 0) {
-                        Rectangle().fill(Brand.stoneTop)
+                        Capsule().fill(Brand.inUse)
                             .frame(width: geo.size.width * CGFloat(Double(used - ready) / total))
                         if ready > 0 {
-                            Rectangle().fill(Brand.room)
+                            Capsule().fill(Brand.room)
                                 .frame(width: geo.size.width * CGFloat(Double(ready) / total))
+                                .shadow(color: Brand.room.opacity(0.55), radius: 7)
                         }
-                        Rectangle().fill(Brand.blue)
+                        Spacer(minLength: 0)
                     }
+                    .background(Capsule().fill(Brand.track))
                 }
-                .frame(height: 10).clipShape(Capsule())
+                .frame(height: 6)
                 .accessibilityLabel("\(Fmt.size(capacity.available)) free, \(Fmt.size(ready)) ready to free")
                 HStack(spacing: 18) {
-                    legend(Brand.stoneTop, "In use")
+                    legend(Brand.inUse, "In use")
                     if ready > 0 { legend(Brand.room, "Ready to free") }
-                    legend(Brand.blue, "Free now")
+                    legend(Brand.track, "Free now")
                     Spacer()
                     if let date = store.lastScanDate, !preview {
                         Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Scanned \(date.formatted(.relative(presentation: .named)))")
@@ -240,8 +231,6 @@ struct OverviewWorkspace: View {
                     }
                 }
             }
-            .padding(18)
-            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
         }
     }
     private func legend(_ color: Color, _ title: String) -> some View {
@@ -269,6 +258,7 @@ struct OverviewWorkspace: View {
             Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
         }
         .padding(15).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
         .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
     }
     private var growthTile: some View {
@@ -295,6 +285,64 @@ struct OverviewWorkspace: View {
             return tile("External storage", drive.name, "\(Fmt.size(drive.available)) available\(drive.encrypted ? " · Encrypted" : "")", "Storage options") { onOpen(.storage) }
         }
         return tile("External storage", "No drive connected", "Connect a drive to see storage options.", "Storage options") { onOpen(.storage) }
+    }
+    /// The biggest things that can go, each with a bar against the largest.
+    @ViewBuilder private var biggestRow: some View {
+        let top = Array(topCategories.prefix(4))
+        if !store.isScanning || preview, let largest = top.first?.1, largest > 0 {
+            HStack(alignment: .top, spacing: 22) {
+                ForEach(top.indices, id: \.self) { index in
+                    let (title, bytes) = top[index]
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(title).eyebrow().lineLimit(1)
+                        Text(Fmt.size(bytes)).font(.system(size: 24, weight: .light)).monospacedDigit()
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(Brand.track)
+                                Capsule().fill(Brand.room.opacity(0.8))
+                                    .frame(width: max(4, geo.size.width * CGFloat(Double(bytes) / Double(largest))))
+                            }
+                        }.frame(height: 3).padding(.top, 2)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+                }
+                ForEach(top.count..<4, id: \.self) { _ in Color.clear.frame(maxWidth: .infinity, maxHeight: 1) }
+            }
+        }
+    }
+    /// Free space over time, with a ring on the day of each clean.
+    private var graphPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .center) {
+                Text("Free space · last \(period) days").eyebrow()
+                Spacer()
+                if !cleanMarks.isEmpty {
+                    HStack(spacing: 6) {
+                        Circle().strokeBorder(Brand.room, lineWidth: 1.5).frame(width: 8, height: 8)
+                        Text("Clean").font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                    }.padding(.trailing, 8)
+                }
+                CairnSegmentedControl(label: "Period", selection: $period, options: [("7 days", 7), ("30 days", 30)])
+                    .frame(width: 150, height: 28)
+            }
+            historySection
+        }
+        .padding(.horizontal, 18).padding(.vertical, 16)
+        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
+        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
+    }
+    /// Cleans that released space inside the chart's period.
+    private struct CleanMark: Identifiable { let date: Date; let available: Double; var id: Date { date } }
+    private var cleanMarks: [CleanMark] {
+        guard let first = points.first?.date else { return [] }
+        let runs: [Date] = preview
+            ? [first.addingTimeInterval(Double(period) * 86_400 * 0.35)]
+            : store.cleanupRuns.filter { RecoveryWorkspace.freed($0.summary) > 0 }.map { $0.finished ?? $0.started }
+        return runs.filter { $0 >= first }.compactMap { date in
+            guard let reading = points.first(where: { $0.date >= date }) ?? points.last else { return nil }
+            return CleanMark(date: date, available: Double(reading.available) / 1e9)
+        }
     }
     private var header: some View {
         HStack(alignment: .center) {
@@ -329,10 +377,15 @@ struct OverviewWorkspace: View {
                     ForEach(plot.points) { point in
                         let sample = point.reading
                         AreaMark(x: .value("Date", sample.date), yStart: .value("GB", chartLow), yEnd: .value("GB", Double(sample.available) / 1e9), series: .value("Observation segment", point.segment))
-                            .foregroundStyle(LinearGradient(colors: [Brand.blue.opacity(0.17), Brand.blue.opacity(0)], startPoint: .top, endPoint: .bottom))
+                            .foregroundStyle(LinearGradient(colors: [Brand.room.opacity(0.16), Brand.room.opacity(0)], startPoint: .top, endPoint: .bottom))
                         LineMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9), series: .value("Observation segment", point.segment))
-                            .foregroundStyle(Brand.blue).lineStyle(StrokeStyle(lineWidth: 1.7))
-                        if sample.date == last.date { PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.blue).symbolSize(25) }
+                            .foregroundStyle(Brand.room).lineStyle(StrokeStyle(lineWidth: 1.7, lineJoin: .round))
+                            .shadow(color: Brand.room.opacity(0.6), radius: 4)
+                        if sample.date == last.date { PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.room).symbolSize(40) }
+                    }
+                    ForEach(cleanMarks) { mark in
+                        PointMark(x: .value("Date", mark.date), y: .value("GB", mark.available))
+                            .symbol { Circle().fill(Brand.background).overlay(Circle().strokeBorder(Brand.room, lineWidth: 1.6)).frame(width: 9, height: 9) }
                     }
                     if shownReserve != nil {
                         RuleMark(y: .value("Chosen reserve", chosenReserve))
@@ -340,7 +393,7 @@ struct OverviewWorkspace: View {
                     }
                     if let sample = selectedSample {
                         RuleMark(x: .value("Reading", sample.date)).foregroundStyle(Brand.textMuted.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
-                        PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.blue).symbolSize(35)
+                        PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.room).symbolSize(45)
                     }
                 }
                 .chartOverlay { proxy in
@@ -355,7 +408,7 @@ struct OverviewWorkspace: View {
                     AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB") } }
                 } }
                 .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
-                .frame(height: 178)
+                .frame(height: 170)
                 .accessibilityLabel("Available space from \(Fmt.size(first.available)) to \(Fmt.size(last.available))")
                 CapacityChartReadout(text: selectedDetail)
             } else {

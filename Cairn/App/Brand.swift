@@ -1,40 +1,44 @@
 import SwiftUI
 import AppKit
 
-/// Cairn's graphite identity. The same tokens are used by the established
+/// Cairn's Night identity: deep blue-black, light type and one ice-blue accent. The same tokens are used by the established
 /// screens and the compact native shell, so navigation never changes theme.
 /// Every colour carries a light and a dark value; the window's appearance
 /// (Settings › Appearance) decides which one is drawn.
 enum Brand {
     // Neutral layers carry the interface; colour identifies actions and status.
-    static let chrome = Color(light: 0xE9ECEF, dark: 0x282D33)
-    static let background = Color(light: 0xFBFCFD, dark: 0x191D21)
-    static let deepPanel = Color(light: 0xF4F6F8, dark: 0x1D2227)
-    static let surfaceElevated = Color(light: 0xF1F3F6, dark: 0x252B31)
-    static let surfaceSubtle = Color(light: 0xE6EAEE, dark: 0x2A3139)
+    static let chrome = Color(light: 0xE9ECEF, dark: 0x0E131A)
+    static let background = Color(light: 0xFBFCFD, dark: 0x0B0F14)
+    static let deepPanel = Color(light: 0xF4F6F8, dark: 0x0D1218)
+    static let surfaceElevated = Color(light: 0xF1F3F6, dark: 0x121820)
+    static let surfaceSubtle = Color(light: 0xE6EAEE, dark: 0x19212A)
 
-    static let border = Color(light: 0xD3D9DF, dark: 0x363C43)
+    static let border = Color(light: 0xD3D9DF, dark: 0x232B34)
     // Sparse structural separators; surfaces and spacing do most of the work.
     static let separator = wash(0.07)
-    static let inputBorder = Color(light: 0xB9C2CB, dark: 0x48525D)
+    static let inputBorder = Color(light: 0xB9C2CB, dark: 0x37414C)
 
-    static let textPrimary = Color(light: 0x14191E, dark: 0xF2F4F7)
-    static let textSecondary = Color(light: 0x46515C, dark: 0xC4CBD3)
-    static let textMuted = Color(light: 0x68727D, dark: 0xABB4BE)
+    static let textPrimary = Color(light: 0x14191E, dark: 0xE9EEF4)
+    static let textSecondary = Color(light: 0x46515C, dark: 0xA9B4BF)
+    static let textMuted = Color(light: 0x68727D, dark: 0x8592A0)
 
-    static let blue = Color(light: 0x1A73E0, dark: 0x58A8F8)
-    static let deepBlue = Color(light: 0x1666C9, dark: 0x75BAFF)
+    static let blue = Color(light: 0x1A73E0, dark: 0x8CC4FF)
+    static let deepBlue = Color(light: 0x1666C9, dark: 0x9FCAFF)
     static let cyan = Color(light: 0x1D8BB0, dark: 0x55B5D7)
     static let purple = Color(light: 0x6A5FD6, dark: 0xA39CF2)
     static let safeCyan = Color(light: 0x178A66, dark: 0x61C7A7)
-    /// Space you can free, or have freed. Kept for that meaning only.
-    static let room = safeCyan
+    /// The ice accent: space you can free, or have freed. Kept for that meaning,
+    /// the primary button and the chart line.
+    static let room = Color(light: 0x1A6FD1, dark: 0xCFE6FF)
+    /// Text drawn on a `room` fill.
+    static let onRoom = Color(light: 0xFFFFFF, dark: 0x0B1520)
     static let amber = Color(light: 0xA86A08, dark: 0xF0BB61)
     static let danger = Color(light: 0xC93C44, dark: 0xF08086)
 
-    /// The stones in the Home cairn and the result screen.
-    static let stoneTop = Color(light: 0xCFD6DD, dark: 0x3A434C)
-    static let stoneBase = Color(light: 0xB7C0C9, dark: 0x2B3239)
+    /// Space in use, in disk bars.
+    static let inUse = Color(light: 0xC3CBD3, dark: 0x4A525C)
+    /// The empty part of a bar.
+    static let track = wash(0.07)
 
     /// A neutral tint over the current surface: white on dark, black on light.
     /// Use instead of `Color.white.opacity(_:)` so hovers and fills work in both.
@@ -49,6 +53,9 @@ enum Brand {
                                       startPoint: .top, endPoint: .bottom)
     static let textGradient = LinearGradient(colors: [blue, cyan],
                                               startPoint: .leading, endPoint: .trailing)
+    /// The soft wash behind the top of each page.
+    static let glow = RadialGradient(colors: [Color(light: 0x1A73E0, dark: 0x58A8F8).opacity(0.10), .clear],
+                                     center: UnitPoint(x: 0.3, y: 0.12), startRadius: 0, endRadius: 520)
     static let ring = AngularGradient(colors: [blue, cyan, blue.opacity(0.45)], center: .center)
     static let panel = LinearGradient(colors: [Color(light: 0xF4F6F8, dark: 0x252B31), Color(light: 0xEDF0F3, dark: 0x181D23)],
                                       startPoint: .top, endPoint: .bottom)

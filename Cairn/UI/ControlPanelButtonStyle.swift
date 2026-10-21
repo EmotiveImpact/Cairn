@@ -21,18 +21,18 @@ struct CairnControlSurface<Label: View>: View {
     @State private var hovered = false
     private var enabled: Bool { isEnabled && available }
     var body: some View {
-        label.font(.system(size: 12, weight: .medium))
+        label.font(.system(size: 12, weight: primary ? .semibold : .medium))
             .padding(.horizontal, 13).frame(minHeight: 32)
             .frame(maxWidth: prominent ? .infinity : nil)
-            .foregroundStyle(primary && enabled ? Color.white : Brand.textPrimary)
+            .foregroundStyle(primary && enabled ? Brand.onRoom : Brand.textPrimary)
             .background {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(primary && enabled ? AnyShapeStyle(Brand.brand) : AnyShapeStyle(Brand.wash(hovered && enabled ? 0.10 : 0.065)))
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(primary && enabled ? AnyShapeStyle(Brand.room) : AnyShapeStyle(Brand.wash(hovered && enabled ? 0.10 : 0.065)))
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Brand.wash(enabled && (pressed || (primary && hovered)) ? 0.06 : 0))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .strokeBorder(Brand.wash(contrast == .increased ? 0.45 : primary && enabled ? 0.14 : 0.06), lineWidth: 0.5)
             }
             .opacity(enabled ? 1 : 0.45)
