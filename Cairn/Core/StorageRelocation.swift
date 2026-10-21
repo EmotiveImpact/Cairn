@@ -366,8 +366,9 @@ enum Relocation {
         busyTarget = target.id
         copied = 0
         message = record.detail
-        var current = record
+        let initial = record
         Task {
+            var current = initial
             defer { busyTarget = nil; cancellation = nil }
             guard await ScanGate.shared.acquire(gate) else {
                 current.status = .interrupted; current.detail = "Cancelled before starting. Nothing was changed."
