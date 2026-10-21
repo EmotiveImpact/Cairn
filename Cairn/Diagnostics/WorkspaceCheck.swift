@@ -5,6 +5,40 @@ enum WorkspaceCheck {
     static func run() {
         var failures = 0
         func check(_ good: Bool, _ label: String) { print("\(good ? "PASS" : "FAIL") \(label)"); if !good { failures += 1 } }
+        // Projects grouping: a monorepo's packages collapse to the repository,
+        // a loose folder stands alone, and build output never dates activity.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-projects-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let repo = root.appendingPathComponent("mono")
+            let loose = root.appendingPathComponent("loose")
+            try fm.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: repo.appendingPathComponent("packages/web/node_modules"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: repo.appendingPathComponent("packages/api/node_modules"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: loose.appendingPathComponent(".venv"), withIntermediateDirectories: true)
+            let old = Date(timeIntervalSinceNow: -120 * 86_400)
+            fm.createFile(atPath: repo.appendingPathComponent(".git/HEAD").path, contents: Data("ref: refs/heads/main\n".utf8))
+            try fm.setAttributes([.modificationDate: old], ofItemAtPath: repo.appendingPathComponent(".git/HEAD").path)
+            fm.createFile(atPath: loose.appendingPathComponent("requirements.txt").path, contents: Data())
+            let items = [
+                ScanItem(url: repo.appendingPathComponent("packages/web/node_modules"), allocatedSize: 300, categoryID: ProjectIndex.categoryID, severity: .safe),
+                ScanItem(url: repo.appendingPathComponent("packages/api/node_modules"), allocatedSize: 200, categoryID: ProjectIndex.categoryID, severity: .safe),
+                ScanItem(url: loose.appendingPathComponent(".venv"), allocatedSize: 50, categoryID: ProjectIndex.categoryID, severity: .review, isRegenerable: false),
+                ScanItem(url: root.appendingPathComponent("elsewhere/cache"), allocatedSize: 999, categoryID: "app-caches", severity: .safe),
+            ]
+            let projects = ProjectIndex.build(from: items, stopAt: root)
+            let mono = projects.first { $0.url.path == repo.path }
+            let single = projects.first { $0.url.path == loose.path }
+            check(projects.count == 2, "Projects only group project build output")
+            check(mono?.isRepository == true && mono?.items.count == 2 && mono?.rebuildableBytes == 500,
+                  "Monorepo packages group under their repository")
+            check(single?.isRepository == false && single?.rebuildableBytes == 0 && single?.measuredBytes == 50,
+                  "A virtual environment without proof of rebuild is not counted as rebuildable")
+            check((mono?.idleDays() ?? 0) >= 119, "Project activity comes from git metadata, not build output")
+        } catch {
+            check(false, "Projects fixture could not be created: \(error)")
+        }
         let today = Calendar.current.startOfDay(for: Date())
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
         let oldDay = Calendar.current.date(byAdding: .day, value: -8, to: today)!

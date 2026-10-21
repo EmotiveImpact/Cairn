@@ -3,13 +3,14 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, makeRoom, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .dashboard: return "Home"
         case .changes: return "Changes"
+        case .projects: return "Projects"
         case .makeRoom: return "Make room"
         case .smartScan: return "Smart Scan"
         case .general: return "General Cleanup"
@@ -32,6 +33,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "house"
         case .changes: return "chart.xyaxis.line"
+        case .projects: return "folder.badge.gearshape"
         case .makeRoom: return "plus.circle"
         case .smartScan: return "scope"
         case .general: return "sparkles"
@@ -175,7 +177,7 @@ struct AppShell: View {
             developerSearch = ""
             searchFocused = false
             showResultFilter = false
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps].contains(next)
+            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(next)
         }
         .onChange(of: appStore.isUninstalling) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
         .onChange(of: dupStore.isRemoving) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
@@ -192,7 +194,7 @@ struct AppShell: View {
         .onReceive(NotificationCenter.default.publisher(for: ScanGate.changed)) { _ in operation = ScanGate.shared.snapshot }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
         .onAppear {
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps].contains(section)
+            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(section)
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }
             CairnMenuBar.shared.scanStatus = { menuScanStatus }
             handleMenuRequest()
@@ -476,6 +478,9 @@ struct AppShell: View {
         case .changes:
             ChangesWorkspace(control: control, store: store, search: developerSearch,
                              onOpen: { section = $0 })
+        case .projects:
+            ProjectsWorkspace(store: store, search: developerSearch, inspectorVisible: $showDeveloperInspector,
+                              onReview: { if !previewMode { showReview = true } })
         case .makeRoom:
             MakeRoomWorkspace(store: store, control: control, receiptRunID: goalReceiptRunID,
                 onBack: { section = .dashboard },
@@ -543,6 +548,7 @@ struct NavSidebar: View {
             ScrollView {
                 VStack(spacing: 4) {
                     NavRow(item: .dashboard, section: $section)
+                    NavRow(item: .projects, section: $section)
                     SidebarDisclosure(title: "Clean", icon: "paintbrush", items: cleanItems, section: $section)
                     SidebarDisclosure(title: "Files", icon: "doc.on.doc", items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)
