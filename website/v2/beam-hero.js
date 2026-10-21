@@ -266,33 +266,37 @@ void main() {
   requestAnimationFrame(frame);
 })();
 
-// ---- Review options: hero layout and footer (stored in the address hash, e.g. #o3-beam) ----
+// ---- How it works: four steps, auto-advancing while in view until someone picks one ----
 (function () {
-  var hero = document.querySelector('.beam-hero');
-  if (!hero) return;
-  var state = { option: '1', footer: 'original' };
-  var m = /^#o([123])(?:-(beam|original))?$/.exec(location.hash);
-  if (m) { state.option = m[1]; state.footer = m[2] || 'original'; }
-  function apply() {
-    hero.dataset.option = state.option;
-    document.body.dataset.footer = state.footer;
-    var newHeadline = state.option !== '1';
-    document.querySelectorAll('[data-headline]').forEach(function (el) {
-      var on = (el.dataset.headline === 'new') === newHeadline;
-      el.hidden = !on;
-      if (on) el.id = 'hero-title'; else el.removeAttribute('id');
-    });
-    document.querySelectorAll('.option-switch [data-option]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.option === state.option)); });
-    document.querySelectorAll('.option-switch [data-footer]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.footer === state.footer)); });
-    window.dispatchEvent(new Event('resize'));
+  var section = document.querySelector('.steps');
+  if (!section) return;
+  var tabs = [].slice.call(section.querySelectorAll('[data-step]'));
+  var panels = [].slice.call(section.querySelectorAll('.step-panel'));
+  var still = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var current = 0, timer = 0, auto = !still, inView = false, STEP_MS = 7000;
+  section.style.setProperty('--step-time', STEP_MS / 1000 + 's');
+  function show(i) {
+    current = i;
+    tabs.forEach(function (t, k) { t.setAttribute('aria-selected', String(k === i)); t.tabIndex = k === i ? 0 : -1; });
+    panels.forEach(function (p, k) { p.hidden = k !== i; });
+    schedule();
   }
-  document.querySelectorAll('.option-switch button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      if (b.dataset.option) state.option = b.dataset.option;
-      if (b.dataset.footer) state.footer = b.dataset.footer;
-      apply();
-      try { history.replaceState(null, '', '#o' + state.option + '-' + state.footer); } catch (e) {}
+  function schedule() {
+    clearTimeout(timer);
+    section.classList.remove('is-playing');
+    if (!auto || !inView) return;
+    void section.offsetWidth;
+    section.classList.add('is-playing');
+    timer = setTimeout(function () { show((current + 1) % tabs.length); }, STEP_MS);
+  }
+  tabs.forEach(function (t, k) {
+    t.addEventListener('click', function () { auto = false; show(k); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (!d) return;
+      e.preventDefault(); auto = false; show((current + d + tabs.length) % tabs.length); tabs[current].focus();
     });
   });
-  apply();
+  new IntersectionObserver(function (entries) { inView = entries[0].isIntersecting; schedule(); }, { threshold: 0.35 }).observe(section);
+  show(0);
 })();

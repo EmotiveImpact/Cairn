@@ -1,7 +1,33 @@
-/* Light-beam options for night-beam.html. The original hero, images and footer stay;
-   these rules only add the beam and switch between the review options. */
-.beam-hero { --hit: 46%; }
-.beam-hero .product-composition { position: relative; }
+/* night-beam.html: the original Cairn page, restyled around the light-beam hero.
+   Loaded after the original stylesheets; everything here layers on top of them. */
+:root { --glow: #8cc4ff; --glow-deep: #2f7fe0; --muted-head: #6f7d89; --card: rgba(255,255,255,.022); --card-line: rgba(220,235,247,.09); }
+
+/* ---------- shared section language ---------- */
+.section { position: relative; border-top: 0; }
+.section::before { content: ""; position: absolute; top: 0; left: 50%; width: min(1260px, 100% - 64px); height: 1px; transform: translateX(-50%);
+  background: linear-gradient(90deg, transparent, rgba(160,205,255,.24) 50%, transparent); }
+.section-label { color: var(--glow); }
+.section h2 > span, .product-tour-copy h2 > span { display: block; text-wrap: balance; }
+.section h2 > span + span, .product-tour-copy h2 > span + span { color: var(--muted-head); }
+.text-link span[aria-hidden] { transition: transform .2s ease; display: inline-block; margin-left: 6px; }
+.text-link:hover span[aria-hidden] { transform: translateX(3px); }
+
+/* ---------- hero: copy on top, real screenshot below, beam landing on it ---------- */
+.beam-hero { --hit: 72%; }
+.beam-hero .hero-layout { display: block; padding-block: 120px 72px; }
+.beam-hero .hero-copy { max-width: 700px; container-type: normal; position: relative; z-index: 3; }
+.beam-hero h1 { font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; text-wrap: balance; }
+.beam-hero h1 > span { display: inline; white-space: normal; color: var(--muted-head); }
+.beam-hero .hero-atmosphere img { opacity: .4; }
+.beam-hero .product-composition { position: relative; width: 100%; margin-top: 96px; }
+.beam-hero .product-screen { width: 100%; max-width: 100%; -webkit-mask-image: none; mask-image: none; border-color: rgba(160,205,255,.42);
+  box-shadow: 0 -30px 80px -40px rgba(47,127,224,.55), 0 26px 70px rgba(0,0,0,.4); }
+.beam-hero .product-composition::after { display: none; }
+.beam-hero .product-composition figcaption { position: static; }
+@media (min-width: 1051px) {
+  .beam-hero .hero-layout { padding-block: 120px 72px; }
+  .beam-hero .product-screen { width: 100%; max-width: 100%; }
+}
 
 /* the beam: React Bits "Light Rays" shader + bright core + impact sparks (beam-hero.js) */
 .beam-hero .fx { position: absolute; left: -12%; width: 124%; bottom: calc(100% - 1px); height: min(980px, 150vh); pointer-events: none; z-index: 2;
@@ -16,41 +42,72 @@
   background: linear-gradient(90deg, transparent 0%, rgba(140,196,255,.25) calc(var(--hit) - 30%), #d8ecff calc(var(--hit) - 4px), #fff var(--hit), #d8ecff calc(var(--hit) + 4px), rgba(140,196,255,.25) calc(var(--hit) + 30%), transparent 100%); }
 .beam-hero .flare::after { content: ""; position: absolute; left: calc(var(--hit) - 300px); width: 600px; top: -90px; height: 180px;
   background: radial-gradient(ellipse at center, rgba(200,230,255,.7), rgba(140,196,255,.35) 22%, rgba(47,127,224,.14) 50%, transparent 72%); filter: blur(4px); }
-.beam-hero .product-screen { border-color: rgba(160,205,255,.42); box-shadow: 0 -30px 80px -40px rgba(47,127,224,.55), 0 26px 70px rgba(0,0,0,.4); }
-
-/* option 1 and 2: original two-column hero; drop the screenshot a little so the beam has room */
-@media (min-width: 1051px) {
-  .beam-hero[data-option="1"] .hero-layout, .beam-hero[data-option="2"] .hero-layout { align-items: end; padding-top: 150px; }
-  .beam-hero[data-option="2"] h1 { font-size: min(58px, 9.4cqi); }
+@media (max-width: 760px) {
+  .beam-hero { --hit: 80%; }
+  .beam-hero .hero-layout { padding-block: 64px 48px; }
+  .beam-hero .product-composition { margin-top: 80px; }
+  .beam-hero .flare::after { left: calc(var(--hit) - 160px); width: 320px; }
 }
-.beam-hero[data-option="2"] h1 > span, .beam-hero[data-option="3"] h1 > span { display: inline; white-space: normal; color: #6f7d89; }
-.beam-hero[data-option="2"] h1, .beam-hero[data-option="3"] h1 { text-wrap: balance; }
 
-/* option 3: copy on top, the real screenshot full width below, beam landing on it */
-.beam-hero[data-option="3"] { --hit: 72%; }
-.beam-hero[data-option="3"] .hero-layout { display: block; padding-block: 120px 72px; }
-.beam-hero[data-option="3"] .hero-copy { max-width: 700px; container-type: normal; }
-.beam-hero[data-option="3"] h1 { font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; }
-.beam-hero[data-option="3"] .hero-atmosphere img { opacity: .4; }
-.beam-hero[data-option="3"] .product-composition { width: 100%; margin-top: 96px; }
-.beam-hero[data-option="3"] .product-screen { width: 100%; max-width: 100%; -webkit-mask-image: none; mask-image: none; }
-.beam-hero[data-option="3"] .product-composition::after { display: none; }
-.beam-hero[data-option="3"] .product-composition figcaption { position: static; }
+/* ---------- problem: two quiet cards ---------- */
+.problem { background: transparent; }
+.work-map { gap: 24px; }
+.work-group { padding: 28px 28px 14px; border: 1px solid var(--card-line); border-radius: 16px; background: var(--card); }
+.work-group-protected { border-color: rgba(140,196,255,.3); background: linear-gradient(180deg, rgba(47,127,224,.07), rgba(255,255,255,.015) 60%);
+  box-shadow: inset 0 1px 0 rgba(200,230,255,.18), 0 -24px 70px -50px rgba(47,127,224,.9); }
+.work-group-heading > span { padding: 5px 10px; border: 1px solid var(--card-line); border-radius: 999px; font-size: 11.5px; }
+.work-group-protected .work-group-heading > span { border-color: rgba(140,196,255,.4); color: var(--glow); }
+.work-group li:last-child { border-bottom: 0; }
+.work-group code { display: inline-block; padding: 3px 8px; border-radius: 6px; background: rgba(255,255,255,.04); color: #dbe6ee; }
+.work-group-protected code { background: rgba(140,196,255,.08); color: #d6eaff; }
 
-/* footer option: a beam drops onto "More room" */
-.site-footer .footer-beam { display: none; }
-body[data-footer="beam"] .site-footer .footer-hero { position: relative; padding-top: 150px; }
-body[data-footer="beam"] .site-footer .footer-beam { display: block; position: absolute; left: 50%; top: 0; width: 2px; height: 130px; transform: translateX(-50%);
-  background: linear-gradient(to bottom, transparent, #cfe6ff); box-shadow: 0 0 8px 1px rgba(170,215,255,.7), 0 0 40px 10px rgba(47,127,224,.3); }
-body[data-footer="beam"] .site-footer .footer-beam::after { content: ""; position: absolute; left: 50%; bottom: -40px; width: 360px; height: 80px; transform: translateX(-50%);
-  background: radial-gradient(ellipse at center, rgba(200,230,255,.45), rgba(47,127,224,.12) 50%, transparent 72%); }
+/* ---------- how it works: four steps with the real screens ---------- */
+.step-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 56px; }
+.step-tabs button { position: relative; display: flex; align-items: baseline; gap: 10px; padding: 0 0 18px; border: 0; background: none; color: #7d8b97; text-align: left; font-size: 16px; font-weight: 500; }
+.step-tabs button small { font: 500 11.5px/1 ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: .06em; }
+.step-tabs button i { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; border-radius: 2px; background: rgba(220,235,247,.1); overflow: hidden; }
+.step-tabs button i::after { content: ""; position: absolute; inset: 0; transform: scaleX(0); transform-origin: left; background: var(--glow); box-shadow: 0 0 12px rgba(140,196,255,.8); }
+.step-tabs button:hover { color: #c5d6e3; }
+.step-tabs button[aria-selected="true"] { color: var(--white); }
+.step-tabs button[aria-selected="true"] small { color: var(--glow); }
+.step-tabs button[aria-selected="true"] i::after { transform: scaleX(1); }
+.steps.is-playing .step-tabs button[aria-selected="true"] i::after { animation: step-fill var(--step-time, 7s) linear forwards; }
+@keyframes step-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.step-stage { margin-top: 40px; }
+.step-panel { display: grid; grid-template-columns: minmax(0, .36fr) minmax(0, .64fr); gap: 56px; align-items: center; }
+.step-panel:not([hidden]) { animation: step-in .45s ease-out; }
+@keyframes step-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.step-kicker { margin-bottom: 18px; color: var(--glow); font: 500 12px/1 ui-monospace, "SFMono-Regular", Menlo, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.step-copy h3 { font-size: clamp(30px, 3.2vw, 44px); line-height: 1.1; text-wrap: balance; }
+.step-description { margin-top: 20px; font-size: 17px; color: #b3c1cc; }
+.step-note { margin-top: 14px; font-size: 14px; color: #8597a5; }
+.step-link { margin-top: 18px; }
+.step-shot { position: relative; display: block; overflow: hidden; border: 1px solid rgba(160,205,255,.3); border-radius: 12px; background: #191e23; cursor: zoom-in;
+  box-shadow: 0 -30px 80px -50px rgba(47,127,224,.7), 0 30px 80px rgba(0,0,0,.45); transition: border-color .25s ease, transform .25s ease; }
+.step-shot::before { content: ""; position: absolute; z-index: 1; top: 0; left: 10%; right: 10%; height: 1px; background: linear-gradient(90deg, transparent, #d8ecff, transparent); }
+.step-shot:hover { border-color: rgba(190,225,255,.6); transform: translateY(-2px); }
+.step-shot img { width: 100%; }
+@media (max-width: 900px) {
+  .step-tabs { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 20px; }
+  .step-panel { grid-template-columns: 1fr; gap: 32px; }
+}
 
-@media (max-width: 1050px) { .beam-hero .product-composition { margin-top: 90px; } }
-@media (max-width: 760px) { .beam-hero, .beam-hero[data-option="3"] { --hit: 80%; } .beam-hero .flare::after { left: calc(var(--hit) - 160px); width: 320px; } }
+/* ---------- inside Cairn ---------- */
+.screen-showcase { position: relative; }
+.product-tour-copy h2 { line-height: 1.12; font-size: clamp(30px, 3.2vw, 46px); }
+.product-tour-copy .section-label { margin-bottom: 18px; }
+.product-tour-screen { border-color: rgba(160,205,255,.3) !important; border-radius: 12px !important; box-shadow: 0 -30px 80px -50px rgba(47,127,224,.7), 0 30px 80px rgba(0,0,0,.45) !important; }
+.product-tour-trigger[data-state=open] .product-tour-number { border-color: var(--glow); color: var(--glow); }
 
-/* review-only switcher */
-.option-switch { position: fixed; z-index: 40; left: 50%; bottom: max(16px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px;
-  width: max-content; max-width: calc(100% - 24px); padding: 5px; border: 1px solid rgba(220,235,247,.18); border-radius: 12px; background: rgba(12,16,20,.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); font-size: 12px; }
-.option-switch span { padding: 0 8px; color: #8ea5b5; }
-.option-switch button { border: 0; border-radius: 8px; padding: 8px 11px; background: transparent; color: #c5d6e3; font-size: 12px; }
-.option-switch button[aria-pressed="true"] { background: var(--ice); color: #14212a; }
+/* ---------- features: card grid ---------- */
+.feature-grid { gap: 16px; }
+.feature-grid article { padding: 26px 26px 28px; border: 1px solid var(--card-line); border-radius: 16px; background: var(--card); transition: border-color .25s ease, background .25s ease, box-shadow .25s ease; }
+.feature-grid article:hover { border-color: rgba(140,196,255,.35); background: linear-gradient(180deg, rgba(47,127,224,.06), rgba(255,255,255,.015)); box-shadow: 0 -20px 60px -45px rgba(47,127,224,.9); }
+.feature-grid h3 { flex-direction: column; gap: 18px; font-size: 19px; }
+.feature-grid .feature-icon { box-sizing: content-box; width: 20px; height: 20px; flex: none; margin: 0; padding: 10px; border: 1px solid rgba(140,196,255,.25); border-radius: 10px; background: rgba(140,196,255,.07); color: var(--glow); }
+@media (max-width: 560px) { .feature-grid { row-gap: 12px; } .work-group { padding: 22px 18px 8px; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .step-panel:not([hidden]) { animation: none; }
+  .step-shot, .feature-grid article { transition: none; }
+}
