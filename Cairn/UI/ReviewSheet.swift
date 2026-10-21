@@ -51,12 +51,13 @@ struct ReviewSheet: View {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(groups, id: \.title) { group in
-                            HStack {
-                                Text(group.title).eyebrow()
+                            HStack(spacing: 11) {
+                                ToolIcon.forCategory(group.id, size: 28)
+                                Text(group.title).font(.system(size: 14, weight: .medium))
                                 Spacer()
                                 Text(Fmt.size(group.bytes))
-                                    .font(.system(size: 11)).monospacedDigit().foregroundStyle(Brand.textMuted)
-                            }.padding(.top, 14).padding(.bottom, 4)
+                                    .font(.system(size: 13, weight: .medium)).monospacedDigit()
+                            }.padding(.top, 16).padding(.bottom, 6)
                             ForEach(group.items) { row($0) }
                         }
                     }
@@ -72,32 +73,31 @@ struct ReviewSheet: View {
         HStack(alignment: .firstTextBaseline, spacing: 28) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("FREED NOW").eyebrow()
-                Text(Fmt.size(freedNow)).font(.system(size: 40, weight: .semibold)).monospacedDigit()
-                    .foregroundStyle(Brand.safeCyan)
+                Text(Fmt.size(freedNow)).font(.system(size: 48, weight: .light)).tracking(-1.4).monospacedDigit()
             }
             if toTrash > 0 {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("TO TRASH").eyebrow()
-                    Text(Fmt.size(toTrash)).font(.system(size: 24, weight: .medium)).monospacedDigit()
+                    Text(Fmt.size(toTrash)).font(.system(size: 26, weight: .light)).monospacedDigit()
                         .foregroundStyle(Brand.textSecondary)
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 Text("AVAILABLE NOW").eyebrow()
-                Text(freeBytes.map(Fmt.size) ?? "…").font(.system(size: 18, weight: .medium)).monospacedDigit()
+                Text(freeBytes.map(Fmt.size) ?? "…").font(.system(size: 20, weight: .light)).monospacedDigit()
                 if let freeBytes, freedNow > 0 {
-                    Text("about \(Fmt.size(freeBytes + freedNow)) after").font(.system(size: 11)).foregroundStyle(Brand.safeCyan)
+                    Text("about \(Fmt.size(freeBytes + freedNow)) after").font(.system(size: 11.5)).foregroundStyle(Brand.room)
                 }
             }
         }
     }
 
     /// Items grouped by the tool or area that made them, largest group first.
-    private struct ReviewGroup { let title: String; let items: [ScanItem]; let bytes: Int64 }
+    private struct ReviewGroup { let id: String; let title: String; let items: [ScanItem]; let bytes: Int64 }
     private var groups: [ReviewGroup] {
         Dictionary(grouping: runnable, by: \.categoryID).map { id, items in
-            ReviewGroup(title: store.buckets.first { $0.id == id }?.info.title ?? id.capitalized,
+            ReviewGroup(id: id, title: store.buckets.first { $0.id == id }?.info.title ?? id.capitalized,
                   items: items.sorted { $0.allocatedSize > $1.allocatedSize },
                   bytes: items.reduce(0) { $0 + $1.allocatedSize })
         }
@@ -106,9 +106,8 @@ struct ReviewSheet: View {
 
     private func row(_ item: ScanItem) -> some View {
         HStack(alignment: .center, spacing: 12) {
-            ToolIcon.forCategory(item.categoryID, size: 28)
             VStack(alignment: .leading, spacing: 3) {
-                Text(item.url.lastPathComponent).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                Text(item.url.lastPathComponent).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary).lineLimit(1)
                 Text(detail(item)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     .lineLimit(1).truncationMode(.middle).textSelection(.enabled)
                     .help(item.resolvedURL.path)
@@ -116,9 +115,9 @@ struct ReviewSheet: View {
             Spacer(minLength: 8)
             statusPill(item)
             Text(item.allocatedSize > 0 ? Fmt.size(item.allocatedSize) : "—")
-                .font(.system(size: 12.5, weight: .semibold)).monospacedDigit().frame(width: 72, alignment: .trailing)
+                .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).monospacedDigit().frame(width: 72, alignment: .trailing)
         }
-        .padding(.vertical, 9)
+        .padding(.vertical, 8).padding(.leading, 39)
         .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 
@@ -137,13 +136,12 @@ struct ReviewSheet: View {
             if !item.isRegenerable || item.severity != .safe { return ("Needs you", Brand.textSecondary) }
             return ("Ready", Brand.room)
         }()
-        return HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 5, height: 5)
-            Text(text).font(.system(size: 11, weight: .medium)).lineLimit(1)
-        }
-        .foregroundStyle(color)
-        .padding(.horizontal, 9).padding(.vertical, 3)
-        .background(Capsule().fill(color.opacity(0.13)))
+        let quiet = color == Brand.textSecondary
+        return Text(text).font(.system(size: 11.5)).lineLimit(1)
+            .foregroundStyle(color)
+            .padding(.horizontal, 9).padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(quiet ? 0 : 0.07)))
+            .overlay(Capsule().strokeBorder(color.opacity(quiet ? 0.25 : 0.32), lineWidth: 0.75))
     }
 
     @ViewBuilder private var warnings: some View {

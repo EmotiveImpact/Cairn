@@ -90,7 +90,7 @@ struct LargeFilesWorkspace: View {
     private var header: some View {
         HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 5) {
-                Text("Large files").font(.system(size: 28, weight: .semibold))
+                Text("Large files").font(.system(size: 30, weight: .light))
                 Text("Look inside before you decide.")
                     .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             }

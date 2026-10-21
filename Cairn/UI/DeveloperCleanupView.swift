@@ -131,6 +131,9 @@ struct DeveloperCleanupView: View {
                                 }
                                 protectedRow
                             }
+                            .clipShape(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                            .padding(.horizontal, 22).padding(.vertical, 12)
                         }
                     }
                 }
@@ -161,7 +164,7 @@ struct DeveloperCleanupView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(section.title).font(.system(size: 28, weight: .semibold)).foregroundStyle(Brand.textPrimary)
+                    Text(section.title).font(.system(size: 30, weight: .light)).foregroundStyle(Brand.textPrimary)
                     Text(headerSubtitle).font(.system(size: 12.5, weight: .regular))
                         .foregroundStyle(Brand.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -313,9 +316,7 @@ struct DeveloperCleanupView: View {
             Text("Requirement").frame(width: 140, alignment: .leading)
         }
         .font(.system(size: 11, weight: .medium)).foregroundStyle(Brand.textSecondary)
-        .padding(.horizontal, 14).frame(height: 40)
-        .background(Brand.background)
-        .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
+        .padding(.horizontal, 36).frame(height: 34)
     }
 
     private func bucketRow(_ group: VisibleBucket) -> some View {
@@ -333,7 +334,7 @@ struct DeveloperCleanupView: View {
                     inspectedItemID = nil
                 } label: {
                     Image(systemName: selected ? "checkmark.square.fill" : "square")
-                        .font(.system(size: 17)).foregroundStyle(selected ? Brand.blue : Brand.textMuted)
+                        .font(.system(size: 17)).foregroundStyle(selected ? Brand.room : Brand.textMuted)
                         .frame(width: 23)
                 }
                 .buttonStyle(.plain)
@@ -380,7 +381,8 @@ struct DeveloperCleanupView: View {
             requirement(for: group.items).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 68)
-        .background(focused ? Brand.wash(0.045) : Brand.background)
+        .background(focused ? Brand.wash(0.045) : Brand.wash(0.02))
+        .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 
     private func itemRow(_ item: ScanItem, bucketID: String) -> some View {
@@ -396,7 +398,7 @@ struct DeveloperCleanupView: View {
                 Image(systemName: item.selected ? "checkmark.square.fill" :
                     (canSelect ? "square" : "minus.square"))
                     .font(.system(size: 15))
-                    .foregroundStyle(item.selected ? Brand.blue : Brand.textMuted)
+                    .foregroundStyle(item.selected ? Brand.room : Brand.textMuted)
                     .frame(width: 23)
             }
             .buttonStyle(.plain).disabled(!canSelect)
@@ -429,7 +431,7 @@ struct DeveloperCleanupView: View {
             requirement(for: [item]).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 40)
-        .background(focused ? Brand.wash(0.045) : Brand.surfaceSubtle.opacity(0.17))
+        .background(focused ? Brand.wash(0.045) : Brand.wash(0.01))
         .contextMenu {
             if section == .largeFiles {
                 Button("Quick Look") { quickLook(item) }
@@ -493,8 +495,9 @@ struct DeveloperCleanupView: View {
     private var actionBar: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(developerSelected.count) item\(developerSelected.count == 1 ? "" : "s") selected · \(Fmt.size(developerSelectedBytes))")
-                    .font(.system(size: 15, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                (Text(Fmt.size(developerSelectedBytes)).foregroundStyle(Brand.textPrimary).font(.system(size: 17, weight: .regular))
+                 + Text("  selected · \(developerSelected.count) item\(developerSelected.count == 1 ? "" : "s")").foregroundStyle(Brand.textSecondary).font(.system(size: 13)))
+                    .monospacedDigit()
                 if outsideSelectedCount > 0 {
                     Text("Review also includes \(outsideSelectedCount) selection\(outsideSelectedCount == 1 ? "" : "s") from other sections.")
                         .font(.system(size: 12)).foregroundStyle(Brand.amber)
@@ -509,8 +512,7 @@ struct DeveloperCleanupView: View {
                 .buttonStyle(ControlPanelButtonStyle(primary: true))
                 .disabled(previewMode || store.selectedCount == 0)
         }
-        .padding(.horizontal, 22).frame(height: 72)
-        .background(Brand.deepPanel.opacity(0.35))
+        .padding(.horizontal, 26).frame(height: 72)
         .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     }
 
@@ -665,18 +667,19 @@ struct DeveloperCleanupView: View {
         let text = mixed ? "Mixed · review" : item.map(requirementText(for:)) ?? "Review"
         let color: Color = mixed ? Brand.amber : item?.isActionable == false ? Brand.textMuted :
             item?.cleanMethod.isPaid == true ? Brand.blue :
-            item?.severity == .safe && item?.isRegenerable == true && item?.requiresQuitBundleIDs.isEmpty == true ? Brand.safeCyan : Brand.amber
+            item?.severity == .safe && item?.isRegenerable == true && item?.requiresQuitBundleIDs.isEmpty == true ? Brand.room : Brand.amber
         let icon: String
         if mixed { icon = "exclamationmark.triangle.fill" }
         else if item?.isActionable == false { icon = "info.circle.fill" }
         else if item?.cleanMethod.isPaid == true { icon = "info.circle.fill" }
         else if item?.severity == .safe && item?.isRegenerable == true && item?.requiresQuitBundleIDs.isEmpty == true { icon = "checkmark.circle.fill" }
         else { icon = "exclamationmark.triangle.fill" }
-        return HStack(spacing: 5) {
-            Image(systemName: icon)
-            Text(text).lineLimit(1)
-        }
-        .font(.system(size: 12)).foregroundStyle(color)
+        _ = icon
+        return Text(text).lineLimit(1)
+            .font(.system(size: 11.5)).foregroundStyle(color == Brand.textMuted ? Brand.textSecondary : color)
+            .padding(.horizontal, 9).padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(color == Brand.textMuted ? 0 : 0.07)))
+            .overlay(Capsule().strokeBorder(color.opacity(color == Brand.textMuted ? 0.25 : 0.32), lineWidth: 0.75))
     }
 
     private func requirementText(for item: ScanItem) -> String {
@@ -686,7 +689,7 @@ struct DeveloperCleanupView: View {
         if case .emptyTrash = item.cleanMethod { return "Frees space now" }
         if item.severity == .review { return "Review required" }
         if !item.requiresQuitBundleIDs.isEmpty { return "Close app first" }
-        return item.isRegenerable ? "Rebuildable" : "Review required"
+        return item.isRegenerable ? "Ready" : "Review required"
     }
 
     private func consequence(for item: ScanItem) -> String {

@@ -163,7 +163,7 @@ struct RecoveryWorkspace: View {
                     .foregroundStyle(receipt.interrupted || receipt.skippedCount > 0 ? Brand.amber : Brand.safeCyan)
                     .frame(width: 44, alignment: .leading).padding(.top, 2)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(receipt.title).font(.system(size: 28, weight: .semibold))
+                    Text(receipt.title).font(.system(size: 30, weight: .light))
                     Text(receipt.date.map { "\($0.formatted(date: .abbreviated, time: .shortened)) · Clean receipt" } ?? "Clean receipt · this session")
                         .font(.system(size: 13)).foregroundStyle(Brand.textMuted)
                 }
@@ -323,7 +323,7 @@ struct RecoveryWorkspace: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Activity").font(.system(size: 26, weight: .semibold))
+                    Text("Activity").font(.system(size: 30, weight: .light))
                     Text("Reviewed actions and the recovery paths Cairn recorded.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 }
@@ -351,12 +351,12 @@ struct RecoveryWorkspace: View {
                             let verified = run.summary.capacityChanges.contains { ($0.delta ?? 0) > 0 }
                             HStack(spacing: 14) {
                                 VStack(spacing: 0) {
-                                    Text(run.started.formatted(.dateTime.day())).font(.system(size: 17, weight: .semibold))
+                                    Text(run.started.formatted(.dateTime.day())).font(.system(size: 20, weight: .light))
                                     Text(run.started.formatted(.dateTime.month(.abbreviated))).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                                 }.frame(width: 40)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(freed > 0 ? "Freed \(Fmt.size(freed))" : "\(run.kind ?? "Cleanup"): \(run.summary.accounting.completedCount) items")
-                                        .font(.system(size: 13.5, weight: .semibold))
+                                        .font(.system(size: 14, weight: .medium))
                                     Text("\(run.kind ?? "Cleanup") · \(run.started.formatted(date: .omitted, time: .shortened))\(run.summary.failed > 0 ? " · \(run.summary.failed) skipped" : "")")
                                         .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
                                 }
@@ -366,15 +366,18 @@ struct RecoveryWorkspace: View {
                                 } else if run.summary.interrupted {
                                     ReceiptPill(text: "Interrupted", tint: Brand.amber)
                                 } else if verified {
-                                    ReceiptPill(text: "Verified", tint: Brand.room)
+                                    ReceiptPill(text: "Checked", tint: Brand.room)
                                 } else if run.summary.recoverableCount > 0 {
                                     ReceiptPill(text: "Can put back", tint: Brand.textSecondary)
                                 }
                                 Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
-                            }.padding(.vertical, 10).contentShape(Rectangle())
-                        }.buttonStyle(.plain).overlay(alignment: .bottom) { sectionRule }
+                            }.padding(.vertical, 12).padding(.horizontal, 16).contentShape(Rectangle())
+                        }.buttonStyle(.plain).overlay(alignment: .top) { if run.id != store.cleanupRuns.first?.id { sectionRule } }
                     }
-                }.padding(.bottom, 24)
+                }
+                .background(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).fill(Brand.wash(0.02)))
+                .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                .padding(.bottom, 24)
             }
             HStack {
                 Text("Recorded actions").font(.system(size: 14, weight: .medium))
@@ -425,7 +428,7 @@ struct RecoveryWorkspace: View {
                     .foregroundStyle(entry.restoredAt != nil ? Brand.safeCyan : availableTrash.contains(entry.id) ? Brand.deepBlue : Brand.amber)
                     .frame(width: 44, alignment: .leading).padding(.top, 2)
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(entry.name).font(.system(size: 28, weight: .semibold))
+                    Text(entry.name).font(.system(size: 30, weight: .light))
                     Text("\(entry.date.formatted(date: .abbreviated, time: .shortened)) · Recorded action")
                         .font(.system(size: 13)).foregroundStyle(Brand.textMuted)
                 }
@@ -650,13 +653,12 @@ private struct ReceiptPill: View {
     let text: String
     let tint: Color
     var body: some View {
-        HStack(spacing: 5) {
-            Circle().fill(tint).frame(width: 5, height: 5)
-            Text(text).font(.system(size: 11, weight: .medium))
-        }
-        .foregroundStyle(tint)
-        .padding(.horizontal, 9).padding(.vertical, 3)
-        .background(Capsule().fill(tint.opacity(0.13)))
+        let quiet = tint == Brand.textSecondary
+        Text(text).font(.system(size: 11.5))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 9).padding(.vertical, 3)
+            .background(Capsule().fill(tint.opacity(quiet ? 0 : 0.07)))
+            .overlay(Capsule().strokeBorder(tint.opacity(quiet ? 0.25 : 0.32), lineWidth: 0.75))
     }
 }
 
@@ -685,7 +687,7 @@ struct FreeSpaceCard: View {
                     Text("Free space, last 30 days").eyebrow()
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(readings.last.map { "\(Fmt.size($0.available)) free" } ?? "No readings yet")
-                            .font(.system(size: 22, weight: .semibold)).monospacedDigit()
+                            .font(.system(size: 30, weight: .light)).monospacedDigit()
                         if freedThisMonth > 0 {
                             Text("· \(Fmt.size(freedThisMonth)) freed this month")
                                 .font(.system(size: 12.5)).foregroundStyle(Brand.textMuted)
@@ -701,13 +703,14 @@ struct FreeSpaceCard: View {
                 Chart {
                     ForEach(readings) { reading in
                         AreaMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
-                            .foregroundStyle(LinearGradient(colors: [Brand.blue.opacity(0.18), Brand.blue.opacity(0)], startPoint: .top, endPoint: .bottom))
+                            .foregroundStyle(LinearGradient(colors: [Brand.room.opacity(0.16), Brand.room.opacity(0)], startPoint: .top, endPoint: .bottom))
                         LineMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
-                            .foregroundStyle(Brand.blue).lineStyle(StrokeStyle(lineWidth: 1.8))
+                            .foregroundStyle(Brand.room).lineStyle(StrokeStyle(lineWidth: 1.7, lineJoin: .round))
+                            .shadow(color: Brand.room.opacity(0.6), radius: 4)
                     }
                     ForEach(cleans.filter { clean in readings.first.map { clean.date >= $0.date } ?? false }) { clean in
                         PointMark(x: .value("Date", clean.date), y: .value("GB", available(near: clean.date)))
-                            .foregroundStyle(Brand.room).symbolSize(70)
+                            .symbol { Circle().fill(Brand.background).overlay(Circle().strokeBorder(Brand.room, lineWidth: 1.6)).frame(width: 9, height: 9) }
                             .annotation(position: .top, alignment: .center, spacing: 4) {
                                 Text("+\(Fmt.size(clean.freed))").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Brand.room)
                             }
@@ -727,6 +730,7 @@ struct FreeSpaceCard: View {
             }
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
+        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
     }
 }

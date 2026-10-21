@@ -99,7 +99,7 @@ struct MakeRoomWorkspace: View {
                             .font(.system(size: 10)).tracking(0.8).foregroundStyle(Brand.textMuted)
                     }
                     HStack(alignment: .firstTextBaseline) {
-                        Text("Make room").font(.system(size: 28, weight: .semibold))
+                        Text("Make room").font(.system(size: 30, weight: .light))
                         Spacer()
                         Button { checkSpace() } label: {
                             Label(checkingSpace ? "Checking…" : "Check space", systemImage: "arrow.clockwise")

@@ -16,9 +16,9 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(title).font(.system(size: 28, weight: .semibold))
+                        Text(title).font(.system(size: 30, weight: .light))
                         if !subtitle.isEmpty { Text(subtitle).font(.system(size: 13)).foregroundStyle(Brand.textSecondary) }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 28)
+                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 30)
                         .padding(.trailing, headerTrailingInset).padding(.top, 27).padding(.bottom, 21)
                     content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 }.frame(minWidth: 490, maxWidth: .infinity)
@@ -30,8 +30,7 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
                 }
             }
             HStack(spacing: 12) { actions() }.font(.system(size: 12))
-                .padding(.horizontal, 22).frame(height: 72)
-                .background(Brand.deepPanel.opacity(0.35))
+                .padding(.horizontal, 26).frame(height: 72)
                 .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
         }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Brand.background).foregroundStyle(Brand.textPrimary)

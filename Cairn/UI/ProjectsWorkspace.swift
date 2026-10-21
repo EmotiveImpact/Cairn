@@ -51,8 +51,10 @@ struct ProjectsWorkspace: View {
     }
 
     var body: some View {
-        CairnWorkspace(title: "Projects",
-                       subtitle: "Your repositories, how long since you worked on them, and what can be rebuilt",
+        CairnWorkspace(title: totalBytes > 0 ? "\(Fmt.size(totalBytes)) of build output" : "Projects",
+                       subtitle: projects.isEmpty
+                           ? "Your repositories, how long since you worked on them, and what can be rebuilt"
+                           : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.",
                        inspectorVisible: inspectorVisible, headerTrailingInset: 150) {
             VStack(spacing: 0) {
                 controls
@@ -82,6 +84,9 @@ struct ProjectsWorkspace: View {
         }
         .padding(.horizontal, 18).padding(.top, 4).padding(.bottom, 11)
     }
+
+    private var totalBytes: Int64 { projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes } }
+    private var largestBytes: Int64 { max(1, projects.map(\.rebuildableBytes).max() ?? 1) }
 
     private var summaryLine: String {
         let total = projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes }
@@ -114,6 +119,10 @@ struct ProjectsWorkspace: View {
                 LazyVStack(spacing: 0) {
                     ForEach(visible) { project in row(project) }
                 }
+                .background(Brand.wash(0.02))
+                .clipShape(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                .padding(.horizontal, 18).padding(.vertical, 8)
             }
         }
     }
@@ -124,7 +133,7 @@ struct ProjectsWorkspace: View {
             Button { toggle(project) } label: {
                 Image(systemName: state == .all ? "checkmark.square.fill" : state == .some ? "minus.square.fill" : "square")
                     .font(.system(size: 15))
-                    .foregroundStyle(state == .none ? Brand.textMuted : Brand.blue)
+                    .foregroundStyle(state == .none ? Brand.textMuted : Brand.room)
             }
             .buttonStyle(.plain)
             .disabled(project.rebuildable.isEmpty)
@@ -135,13 +144,19 @@ struct ProjectsWorkspace: View {
                 inspectorVisible = true
             } label: {
                 HStack(spacing: 12) {
-                    Image(systemName: project.isRepository ? "folder.badge.gearshape" : "folder")
-                        .font(.system(size: 20, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 28)
+                    IconTile(systemImage: "folder.fill", tint: Color(hex: 0x2FB59A), size: 30)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(project.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
                         Text(displayPath(project.url)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                             .lineLimit(1).truncationMode(.middle)
                     }.frame(maxWidth: .infinity, alignment: .leading)
+                    GeometryReader { geo in
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(Brand.track)
+                            Capsule().fill(Brand.room.opacity(0.8))
+                                .frame(width: max(3, geo.size.width * CGFloat(Double(project.rebuildableBytes) / Double(largestBytes))))
+                        }
+                    }.frame(width: 120, height: 3).accessibilityHidden(true)
                     Text(Fmt.size(project.rebuildableBytes)).font(.system(size: 12, weight: .medium)).monospacedDigit()
                         .foregroundStyle(Brand.textPrimary).frame(width: Brand.colSize, alignment: .trailing)
                     Text(idleText(project)).font(.system(size: 11)).foregroundStyle(idleTint(project))
@@ -151,9 +166,9 @@ struct ProjectsWorkspace: View {
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 18).frame(height: 60)
+        .padding(.horizontal, 16).frame(height: 62)
         .background(inspectorVisible && focused?.id == project.id ? Brand.wash(0.045) : Color.clear)
-        .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+        .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
         .accessibilityElement(children: .contain)
     }
 
@@ -277,7 +292,7 @@ struct ProjectsWorkspace: View {
     }
 
     private func idleTint(_ project: ProjectSummary) -> Color {
-        (project.idleDays() ?? 0) >= 30 ? Brand.amber : Brand.textMuted
+        (project.idleDays() ?? 0) >= 30 ? Brand.textSecondary : Brand.textMuted
     }
 
     private func activitySentence(_ project: ProjectSummary) -> String {
