@@ -72,16 +72,22 @@ struct OverviewWorkspace: View {
         guard displayedCapacity != nil else { return "Checking available storage." }
         return lowSpace ? "Your Mac is running low on space" : "This Mac"
     }
+    /// Height the chart can take so Home fits the window without scrolling.
+    /// Everything else on the page is about 580 pt tall at the default size.
+    @State private var chartHeight: CGFloat = 150
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                cleanHero.padding(.top, 22)
-                graphPanel.padding(.top, 28)
-                diskCard.padding(.top, 24)
-                nextTiles.padding(.top, 22)
-            }.padding(.horizontal, 36).padding(.top, 24).padding(.bottom, 26)
+                cleanHero.padding(.top, 16)
+                graphPanel.padding(.top, 20)
+                diskCard.padding(.top, 18)
+                nextTiles.padding(.top, 18)
+            }.padding(.horizontal, 36).padding(.top, 18).padding(.bottom, 20)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            chartHeight = min(240, max(110, height - 580))
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
@@ -124,14 +130,14 @@ struct OverviewWorkspace: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(Fmt.size(recommendedBytes))
-                            .font(.system(size: 76, weight: .light)).tracking(-3).monospacedDigit()
+                            .font(.system(size: 62, weight: .light)).tracking(-2.5).monospacedDigit()
                             .contentTransition(.numericText())
-                        Text("you can get back").font(.system(size: 21)).foregroundStyle(Brand.textSecondary)
+                        Text("you can get back").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
                     }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
                         .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 460, alignment: .leading)
-                        .padding(.top, 12)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
+                        .padding(.top, 6)
                     HStack(spacing: 10) {
                         Button { onCleanRecommended() } label: {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
@@ -142,7 +148,7 @@ struct OverviewWorkspace: View {
                         .help("Check the list once, then free the space")
                         Button("See everything") { onOpen(.smartScan) }
                             .buttonStyle(ControlPanelButtonStyle())
-                    }.padding(.top, 20)
+                    }.padding(.top, 16)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -181,7 +187,7 @@ struct OverviewWorkspace: View {
             let total = Double(capacity.total)
             let used = max(0, capacity.total - capacity.available)
             let ready = min(store.isScanning ? 0 : recommendedBytes, used)
-            VStack(alignment: .leading, spacing: 12) {
+            VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .firstTextBaseline) {
                     Text("\(Fmt.size(capacity.available)) free of \(Fmt.size(capacity.total))")
                         .font(.system(size: 14, weight: .semibold)).monospacedDigit()
@@ -240,14 +246,14 @@ struct OverviewWorkspace: View {
         .fixedSize(horizontal: false, vertical: true)
     }
     private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow).eyebrow()
-            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(2)
+            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
             Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
             Spacer(minLength: 2)
             Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
         }
-        .padding(15).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(13).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
         .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
     }
@@ -278,7 +284,7 @@ struct OverviewWorkspace: View {
     }
     /// Free space over time, with a ring on the day of each clean.
     private var graphPanel: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
                 Text("Free space · last \(period) days").eyebrow()
                 Spacer()
@@ -293,7 +299,7 @@ struct OverviewWorkspace: View {
             }
             historySection
         }
-        .padding(.horizontal, 18).padding(.vertical, 16)
+        .padding(.horizontal, 18).padding(.vertical, 13)
         .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
         .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
     }
@@ -331,7 +337,7 @@ struct OverviewWorkspace: View {
         }
     }
     private var historySection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 4) {
             if let first = points.first, let last = points.last, points.count >= 2 {
                 let observedLow = Double(points.map(\.available).min() ?? 0) / 1e9
                 let observedHigh = Double(points.map(\.available).max() ?? 0) / 1e9
@@ -373,7 +379,7 @@ struct OverviewWorkspace: View {
                     AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB") } }
                 } }
                 .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
-                .frame(height: 170)
+                .frame(height: chartHeight)
                 .accessibilityLabel("Available space from \(Fmt.size(first.available)) to \(Fmt.size(last.available))")
                 CapacityChartReadout(text: selectedDetail)
             } else {
