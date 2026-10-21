@@ -53,6 +53,50 @@ enum WorkspaceCheck {
         check(badCategory?["isError"] as? Bool == true, "MCP rejects an unknown category before scanning")
         check(MCPServer.handle(["jsonrpc": "2.0", "id": 5, "method": "nope"])?["error"] != nil, "MCP reports unknown methods")
         check(CLI.readOnlyCommands == ["projects", "mcp"], "Only read-only CLI commands run beside the app")
+        // Offload: copy, verify, link, remove; restore; crash recovery; refusals.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-offload-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let source = root.appendingPathComponent("home/models")
+            let drive = root.appendingPathComponent("drive")
+            let destination = drive.appendingPathComponent("Cairn Offload/models")
+            try fm.createDirectory(at: source.appendingPathComponent("blobs"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(repeating: 7, count: 300_000).write(to: source.appendingPathComponent("blobs/sha256-a"))
+            try Data("manifest".utf8).write(to: source.appendingPathComponent("manifest.json"))
+            let cancel = CancelBox()
+            let moved = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true })
+            check(moved.files.count == 2 && moved.bytes == 300_008, "Offload copies every file")
+            check(Relocation.linkDestination(source) == destination.path, "Offload leaves a link to the drive copy")
+            check(!Relocation.exists(URL(fileURLWithPath: source.path + Relocation.movingSuffix)), "Offload removes the original after the link checks out")
+            check((try? Data(contentsOf: source.appendingPathComponent("manifest.json"))) == Data("manifest".utf8), "Apps still read offloaded files through the link")
+            let restored = try Relocation.restore(source: source, destination: destination, cancel: cancel, destinationValid: { true })
+            check(Relocation.isRealDirectory(source) && restored.files.count == 2, "Restore puts a real folder back")
+            check(Relocation.isRealDirectory(destination), "Restore keeps the drive copy")
+            // A crash after setting the original aside but before linking.
+            let moving = URL(fileURLWithPath: source.path + Relocation.movingSuffix)
+            try fm.moveItem(at: source, to: moving)
+            check(Relocation.reconcile(source: source) == .interrupted && Relocation.isRealDirectory(source), "Recovery puts an interrupted original back")
+            // A second offload must not replace an existing drive copy.
+            var refusedExisting = false
+            do { _ = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true }) }
+            catch { refusedExisting = true }
+            check(refusedExisting && Relocation.isRealDirectory(source), "Offload never replaces an existing drive copy")
+            // Folders containing links are not plain data stores.
+            try fm.createSymbolicLink(at: source.appendingPathComponent("escape"), withDestinationURL: root)
+            var refusedLink = false
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("other"), cancel: cancel, destinationValid: { true }) }
+            catch { refusedLink = true }
+            check(refusedLink && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("other")), "Offload refuses folders that contain links")
+            var refusedMissing = false
+            try fm.removeItem(at: source.appendingPathComponent("escape"))
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("gone"), cancel: cancel, destinationValid: { false }) }
+            catch { refusedMissing = true }
+            check(refusedMissing && Relocation.isRealDirectory(source), "Offload stops when the drive disappears")
+        } catch {
+            check(false, "Offload fixture failed: \(error)")
+        }
         let today = Calendar.current.startOfDay(for: Date())
         let yesterday = Calendar.current.date(byAdding: .day, value: -1, to: today)!
         let oldDay = Calendar.current.date(byAdding: .day, value: -8, to: today)!

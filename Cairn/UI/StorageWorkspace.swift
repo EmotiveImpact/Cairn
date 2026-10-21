@@ -27,7 +27,7 @@ struct StorageWorkspace: View {
     }
     private var record: TransferRecord? { store.records.first { $0.id == selectedRecord } ?? store.records.first }
     private let guides = ["Xcode build output", "npm cache", "Docker disk image", "Cloud & remote machines", "Sessions, databases & swap"]
-    private let areas = ["Build output", "Finished exports", "Conversations & source"]
+    private let areas = ["Models & archives", "Build output", "Finished exports", "Conversations & source"]
 
     var body: some View {
         ScrollView {
@@ -155,13 +155,13 @@ struct StorageWorkspace: View {
                     }
                 }.frame(maxWidth: .infinity, alignment: .leading)
                 VStack(alignment: .leading, spacing: 5) {
-                    Label(area == "Conversations & source" ? "Protected locations" : (area == "Finished exports" ? "Choose a local file" : "Tool-managed paths"), systemImage: area == "Conversations & source" ? "lock.shield" : "laptopcomputer")
+                    Label(area == "Models & archives" ? "Moved to your drive" : area == "Conversations & source" ? "Protected locations" : (area == "Finished exports" ? "Choose a local file" : "Tool-managed paths"), systemImage: area == "Conversations & source" ? "lock.shield" : area == "Models & archives" ? "externaldrive" : "laptopcomputer")
                         .font(.system(size: 12))
-                    Text(area == "Build output" ? "Check in the owning tool" : (area == "Finished exports" ? "Original kept in place" : "No relocation offered"))
+                    Text(area == "Models & archives" ? "Link left behind" : area == "Build output" ? "Check in the owning tool" : (area == "Finished exports" ? "Original kept in place" : "No relocation offered"))
                         .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
                 }.frame(width: 190, alignment: .leading)
                 HStack {
-                    Text(area == "Build output" ? "Supported-path guidance" : (area == "Finished exports" ? "Copy and verify" : "Keep protected")).font(.system(size: 12))
+                    Text(area == "Models & archives" ? "Move and link" : area == "Build output" ? "Supported-path guidance" : (area == "Finished exports" ? "Copy and verify" : "Keep protected")).font(.system(size: 12))
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                 }.frame(width: 175, alignment: .leading)
@@ -169,7 +169,9 @@ struct StorageWorkspace: View {
         }.buttonStyle(.plain).background(selected == area ? Brand.wash(0.045) : Color.clear)
     }
     @ViewBuilder private var detail: some View {
-        if selected == "Finished exports" {
+        if selected == "Models & archives" {
+            OffloadPanel(drive: drive)
+        } else if selected == "Finished exports" {
             HStack(alignment: .top, spacing: 28) {
                 Image(systemName: "folder").font(.system(size: 31, weight: .light)).foregroundStyle(Brand.textSecondary)
                 VStack(alignment: .leading, spacing: 15) {
@@ -291,12 +293,13 @@ struct StorageWorkspace: View {
     }
     private func areaSubtitle(_ area: String) -> String {
         switch area {
+        case "Models & archives": return "Local AI models and Xcode archives."
         case "Build output": return "Build folders and tool-managed data."
         case "Finished exports": return "Saved archives, PDFs and media."
         default: return "Sessions, repositories and credentials."
         }
     }
-    private func areaIcon(_ area: String) -> String { area == "Build output" ? "hammer" : (area == "Finished exports" ? "folder" : "doc.text") }
+    private func areaIcon(_ area: String) -> String { area == "Models & archives" ? "cpu" : area == "Build output" ? "hammer" : (area == "Finished exports" ? "folder" : "doc.text") }
     private func chooseSource() {
         guard !preview, !store.busy, let drive, drive.acceptsCopy else { return }
         let panel = NSOpenPanel(); panel.canChooseDirectories = false; panel.allowsMultipleSelection = false
