@@ -53,12 +53,12 @@ enum Cleaner {
               let current = SourceIdentity.read(item.resolvedURL), scanned == current else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The file at this location changed since scanning. Run a fresh scan.")
         }
-        let verdict = SafePaths.evaluate(item.url, allowedRoots: allowedRoots)
+        let verdict = SafePaths.evaluate(item.url, allowedRoots: allowedRoots, rebuildable: item.isRebuildable)
         guard verdict.isAllowed else {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: rejectReason(verdict))
         }
-        let contentsVerdict = SafePaths.evaluateContents(item.resolvedURL)
+        let contentsVerdict = SafePaths.evaluateContents(item.resolvedURL, rebuildable: item.isRebuildable)
         guard contentsVerdict.isAllowed else {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: rejectReason(contentsVerdict))

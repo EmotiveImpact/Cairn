@@ -32,7 +32,34 @@ enum SafetyCheck {
             let v = SafePaths.evaluate(u, allowedRoots: [home])
             if v.isAllowed { print("❌ ALLOWED (should be blocked): \(rel)"); fails += 1 }
             else { print("✅ blocked: \(rel)") }
+            if SafePaths.evaluate(u, allowedRoots: [home], rebuildable: true).isAllowed {
+                print("❌ ALLOWED as rebuildable (should be blocked): \(rel)"); fails += 1
+            }
         }
+        // Rebuildable project output may be deleted even where personal files may not.
+        let mustBlockRebuildable = [
+            ".claude/plugins/x/node_modules", ".codex/x/node_modules", ".cursor/extensions/x/node_modules",
+            "Code/app/.git/node_modules", "Documents", "Documents/Taxes", "Library/Application Support/Claude/Cache",
+            "Library/Caches/Codex", "Library/Caches/com.openai.chat",
+        ]
+        for rel in mustBlockRebuildable {
+            if SafePaths.evaluate(home.appendingPathComponent(rel), allowedRoots: [home], rebuildable: true).isAllowed {
+                print("❌ rebuildable ALLOWED (should be blocked): \(rel)"); fails += 1
+            } else { print("✅ blocked even as rebuildable: \(rel)") }
+        }
+        for rel in ["Documents/site/node_modules", "Code/claude-app/node_modules", "Code/sessions-api/target", "Library/Caches/com.example.app"] {
+            if SafePaths.evaluate(home.appendingPathComponent(rel), allowedRoots: [home], rebuildable: true).isAllowed {
+                print("✅ rebuildable output cleanable: \(rel)")
+            } else { print("❌ rebuildable output wrongly blocked: \(rel)"); fails += 1 }
+        }
+        let personal = ScanItem(url: home.appendingPathComponent("Documents/site/notes.txt"), allocatedSize: 1,
+                                categoryID: "large-old", severity: .review, isRegenerable: false)
+        let reviewModules = ScanItem(url: home.appendingPathComponent("Code/app/node_modules"), allocatedSize: 1,
+                                     categoryID: "dev-projects", severity: .review, isRegenerable: false)
+        if !personal.isRebuildable && reviewModules.isRebuildable && !RemovalMode.smart.deletesImmediately(personal)
+            && RemovalMode.smart.deletesImmediately(reviewModules) {
+            print("✅ Smart mode deletes rebuildable output and sends personal files to Trash")
+        } else { print("❌ rebuildable classification wrong"); fails += 1 }
         // sanity: a real cache target must still be cleanable
         let ok = home.appendingPathComponent("Library/Caches/some-app")
         if SafePaths.evaluate(ok, allowedRoots: [home]).isAllowed {
@@ -60,6 +87,18 @@ enum SafetyCheck {
                 print("❌ nested conversation data was not protected")
                 fails += 1
             } else { print("✅ nested conversation data blocked") }
+            // A rebuildable tree is not refused for SDK-named folders or .db files inside...
+            try Data().write(to: nested.appendingPathComponent("cache.sqlite"))
+            if SafePaths.evaluateContents(nestedFixture, rebuildable: true).isAllowed {
+                print("✅ rebuildable tree with .db files and SDK-named folders cleanable")
+            } else { print("❌ rebuildable tree wrongly blocked"); fails += 1 }
+            // ...but a Settings exclusion inside it still wins.
+            let saved = SafePaths.userExcluded
+            SafePaths.userExcluded = [nested.path]
+            if SafePaths.evaluateContents(nestedFixture, rebuildable: true).isAllowed {
+                print("❌ exclusion inside rebuildable tree ignored"); fails += 1
+            } else { print("✅ exclusion inside rebuildable tree blocks it") }
+            SafePaths.userExcluded = saved
         } catch {
             print("❌ nested safety fixture failed: \(error.localizedDescription)")
             fails += 1
@@ -142,6 +181,26 @@ enum SafetyCheck {
                 print("✅ delete-now removes the item instead of parking it in Trash")
             } else {
                 print("❌ delete-now left data behind: \(deleteResult.error ?? "unknown")")
+                fails += 1
+            }
+
+            // End to end: a review-level node_modules holding a .sqlite file and an
+            // SDK folder named "openai" is deleted outright in Smart mode.
+            let modules = deleteRoot.appendingPathComponent("web/node_modules")
+            try FileManager.default.createDirectory(at: modules.appendingPathComponent("openai/sessions"), withIntermediateDirectories: true)
+            try Data(repeating: 2, count: 4096).write(to: modules.appendingPathComponent("openai/sessions/test.sqlite"))
+            var moduleItem = ScanItem(url: modules, allocatedSize: 4096, categoryID: "dev-projects", severity: .review,
+                                      isRegenerable: false, selected: true)
+            moduleItem.deleteImmediately = RemovalMode.smart.deletesImmediately(moduleItem)
+            let movedModules = fixtureTrash.appendingPathComponent("node_modules")
+            let moduleResult = Cleaner.clean(moduleItem, allowedRoots: [deleteRoot], proEnabled: false, moveToTrash: { url in
+                try FileManager.default.moveItem(at: url, to: movedModules); return movedModules
+            })
+            if moduleResult.ok && moduleResult.deleted && !FileManager.default.fileExists(atPath: modules.path)
+                && !FileManager.default.fileExists(atPath: movedModules.path) {
+                print("✅ node_modules with databases inside is deleted and its space freed")
+            } else {
+                print("❌ node_modules was not deleted: \(moduleResult.error ?? "unknown")")
                 fails += 1
             }
         } catch {

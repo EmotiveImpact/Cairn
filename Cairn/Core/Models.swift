@@ -79,7 +79,7 @@ enum RemovalMode: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .delete: return true
         case .trash: return false
-        case .smart: return item.isRegenerable
+        case .smart: return item.isRebuildable
         }
     }
 }
@@ -196,6 +196,13 @@ struct ScanItem: Identifiable {
     }
 
     var isActionable: Bool { cleanMethod.isActionable }
+
+    /// Contents a reinstall or rebuild restores: verified-regenerable caches and
+    /// build output, plus any node_modules (dependencies, never personal data).
+    var isRebuildable: Bool {
+        guard case .trash = cleanMethod, severity != .risky else { return false }
+        return (isRegenerable && severity == .safe) || resolvedURL.lastPathComponent == "node_modules"
+    }
 }
 
 // MARK: - Formatting
