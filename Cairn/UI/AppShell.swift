@@ -8,7 +8,7 @@ enum NavSection: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .dashboard: return "Overview"
+        case .dashboard: return "Home"
         case .changes: return "Changes"
         case .makeRoom: return "Make room"
         case .smartScan: return "Smart Scan"
@@ -22,7 +22,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .apps: return "Apps"
         case .storage: return "Storage"
         case .bugs: return "Health"
-        case .activity: return "Activity & Recovery"
+        case .activity: return "Activity"
         case .settings: return "Settings"
         }
     }
@@ -504,7 +504,8 @@ struct AppShell: View {
         case .bugs:
             HealthWorkspace(store: healthStore, search: developerSearch, inspectorVisible: $showDeveloperInspector)
         case .activity:
-            RecoveryWorkspace(store: store, search: developerSearch, inspectorVisible: $showDeveloperInspector)
+            RecoveryWorkspace(store: store, search: developerSearch, inspectorVisible: $showDeveloperInspector,
+                              onOpen: { section = $0 })
         case .settings:
             PreferencesWorkspace(store: store, license: license, tab: $preferencesTab)
         }
@@ -524,8 +525,10 @@ struct AppBackground: View {
 struct NavSidebar: View {
     @Binding var section: NavSection
 
-    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative]
-    private let fileItems: [NavSection] = [.largeFiles, .duplicates]
+    // Six top-level places. Health sits with the other cleanups, external
+    // storage with files, and Changes is reached from Activity.
+    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .bugs]
+    private let fileItems: [NavSection] = [.largeFiles, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -540,15 +543,11 @@ struct NavSidebar: View {
             ScrollView {
                 VStack(spacing: 4) {
                     NavRow(item: .dashboard, section: $section)
-                    NavRow(item: .changes, section: $section)
                     SidebarDisclosure(title: "Clean", icon: "paintbrush", items: cleanItems, section: $section)
                     SidebarDisclosure(title: "Files", icon: "doc.on.doc", items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)
-                    NavRow(item: .storage, section: $section)
-                    NavRow(item: .bugs, section: $section)
-                    NavRow(item: .activity, section: $section, label: "Activity")
-                        .accessibilityLabel("Activity & Recovery")
-                        .help("Review past actions and available recovery")
+                    NavRow(item: .activity, section: $section, also: [.changes])
+                        .help("Free space over time, cleanup receipts and recovery")
                 }
                 .padding(.horizontal, 11).padding(.top, 2)
             }
@@ -598,7 +597,9 @@ private struct SidebarDisclosure: View {
                     NavRow(item: item, section: $section, child: true,
                            label: item == .general ? "General" :
                                   item == .developer ? "Developer" :
-                                  item == .creative ? "Creative" : nil)
+                                  item == .creative ? "Creative" :
+                                  item == .bugs ? "Mac health" :
+                                  item == .storage ? "External storage" : nil)
                 }
             }
             .padding(.top, 4)
@@ -647,9 +648,11 @@ private struct NavRow: View {
     @Binding var section: NavSection
     var child = false
     var label: String? = nil
+    /// Pages reached from this row that should keep it highlighted.
+    var also: [NavSection] = []
 
     var body: some View {
-        let selected = section == item
+        let selected = section == item || also.contains(section)
         Button {
             guard section != item else { return }
             SidebarNavigation.update { section = item }
@@ -668,6 +671,11 @@ private struct NavRow: View {
             }
             .padding(.leading, child ? 17 : 11).padding(.trailing, 11)
             .frame(height: child ? 34 : 44)
+            .background {
+                if selected && !child {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Brand.surfaceSubtle)
+                }
+            }
             .padding(.leading, child ? 38 : 0)
             .contentShape(Rectangle())
         }

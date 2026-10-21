@@ -166,7 +166,7 @@ struct StorageWorkspace: View {
                     Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                 }.frame(width: 175, alignment: .leading)
             }.padding(.horizontal, 19).frame(height: 58).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(selected == area ? Color.white.opacity(0.045) : Color.clear)
+        }.buttonStyle(.plain).background(selected == area ? Brand.wash(0.045) : Color.clear)
     }
     @ViewBuilder private var detail: some View {
         if selected == "Finished exports" {

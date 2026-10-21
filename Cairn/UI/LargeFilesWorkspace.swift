@@ -196,7 +196,7 @@ struct LargeFilesWorkspace: View {
             }.buttonStyle(.plain)
         }
         .padding(.horizontal, 11)
-        .background(focused ? Color.white.opacity(0.045) : Color.clear,
+        .background(focused ? Brand.wash(0.045) : Color.clear,
                     in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay(alignment: .bottom) {
             if !focused { Rectangle().fill(Brand.separator).frame(height: 0.5).padding(.leading, 48) }

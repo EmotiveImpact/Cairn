@@ -7,6 +7,7 @@ struct PreferencesWorkspace: View {
     @Bindable private var settings = AppSettings.shared
     @Binding var tab: String
     @State private var message = ""
+    @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
     var body: some View {
@@ -62,6 +63,13 @@ struct PreferencesWorkspace: View {
     @ViewBuilder private var preferences: some View {
         switch tab {
         case "General":
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Appearance").font(.system(size: 13, weight: .medium))
+                CairnSegmentedControl(label: "Appearance", selection: $appearance,
+                                      options: CairnAppearance.allCases.map { ($0.title, $0.rawValue) })
+                    .frame(width: 330)
+            }.padding(.vertical, 18)
+            Rectangle().fill(Brand.separator).frame(height: 0.5)
             option("Sidebar focus outline", "Show an outline around the sidebar control reached with the keyboard.", $settings.showSidebarFocus)
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
             option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)

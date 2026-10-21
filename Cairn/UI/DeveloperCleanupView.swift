@@ -380,7 +380,7 @@ struct DeveloperCleanupView: View {
             requirement(for: group.items).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 68)
-        .background(focused ? Color.white.opacity(0.045) : Brand.background)
+        .background(focused ? Brand.wash(0.045) : Brand.background)
     }
 
     private func itemRow(_ item: ScanItem, bucketID: String) -> some View {
@@ -429,7 +429,7 @@ struct DeveloperCleanupView: View {
             requirement(for: [item]).frame(width: 140, alignment: .leading)
         }
         .padding(.horizontal, 14).frame(height: 40)
-        .background(focused ? Color.white.opacity(0.045) : Brand.surfaceSubtle.opacity(0.17))
+        .background(focused ? Brand.wash(0.045) : Brand.surfaceSubtle.opacity(0.17))
         .contextMenu {
             if section == .largeFiles {
                 Button("Quick Look") { quickLook(item) }

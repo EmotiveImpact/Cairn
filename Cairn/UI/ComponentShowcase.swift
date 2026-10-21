@@ -43,7 +43,7 @@ struct ComponentShowcase: View {
                         HStack(spacing: 9) {
                             Button { scanning.toggle() } label: { Label(scanning ? "Stop scan" : "Scan Mac", systemImage: scanning ? "stop" : "arrow.clockwise") }.buttonStyle(ControlPanelButtonStyle(primary: true))
                             Button("Review…") { showDialog = true }.buttonStyle(ControlPanelButtonStyle())
-                            Menu { Button("All files") { filter = "All files" }; Button("Archives") { filter = "Archives" } } label: { Label(filter, systemImage: "line.3.horizontal.decrease") }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 10).frame(height: 32).background(.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 7))
+                            Menu { Button("All files") { filter = "All files" }; Button("Archives") { filter = "Archives" } } label: { Label(filter, systemImage: "line.3.horizontal.decrease") }.menuStyle(.borderlessButton).fixedSize().padding(.horizontal, 10).frame(height: 32).background(Brand.wash(0.045), in: RoundedRectangle(cornerRadius: 7))
                         }
                         HStack(spacing: 10) {
                             badge("Review required", icon: "exclamationmark.circle", tint: Brand.amber)
@@ -80,7 +80,7 @@ struct ComponentShowcase: View {
                             Text("64%").monospacedDigit().foregroundStyle(Brand.textMuted)
                         }
                         GeometryReader { g in
-                            Capsule().fill(.white.opacity(0.06)).overlay(alignment: .leading) { Capsule().fill(Brand.blue).frame(width: g.size.width * 0.64) }
+                            Capsule().fill(Brand.wash(0.06)).overlay(alignment: .leading) { Capsule().fill(Brand.blue).frame(width: g.size.width * 0.64) }
                         }.frame(height: 4)
                         HStack { Text("Developer files"); Spacer(); Text("12,408 checked") }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                         HStack(spacing: 10) {
