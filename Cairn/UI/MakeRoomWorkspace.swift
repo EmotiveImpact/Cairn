@@ -31,9 +31,9 @@ enum MakeRoomCandidates {
     }
 }
 
-/// A capacity target with a reviewed path into the existing cleaner. Trash
-/// actions carry zero immediate-reclaim credit, including when their file sizes
-/// are large. Only a fresh capacity observation can complete the user's goal.
+/// A capacity target with a reviewed path into the cleaner. Items the removal
+/// mode deletes count towards the target; items sent to Trash do not until they
+/// are deleted from Trash.
 struct MakeRoomWorkspace: View {
     let store: ScanStore
     let control: StorageControl
@@ -66,6 +66,22 @@ struct MakeRoomWorkspace: View {
     }
     private var selectedActions: [ScanItem] { actions.filter { selected.contains($0.id) } }
     private var affectedBytes: Int64 { selectedActions.reduce(0) { $0 + $1.allocatedSize } }
+    private var freedNowBytes: Int64 { selectedActions.reduce(0) { $0 + SpaceActionCapability.forItem($1).immediateReclaim } }
+    /// Select the fewest options that cover the shortfall: deletable rebuildable
+    /// items first, largest first, then anything else if still short.
+    private func pickForMe() {
+        guard let need = shortfall, need > 0 else { return }
+        let ranked = actions.sorted { a, b in
+            let ra = SpaceActionCapability.forItem(a).immediateReclaim, rb = SpaceActionCapability.forItem(b).immediateReclaim
+            if (ra > 0) != (rb > 0) { return ra > 0 }
+            return a.allocatedSize > b.allocatedSize
+        }
+        var picked = Set<UUID>(), total: Int64 = 0
+        for item in ranked where total < need {
+            picked.insert(item.id); total += item.allocatedSize
+        }
+        selected = picked
+    }
     private var lastReceipt: ScanStore.CleanSummary? {
         guard !preview, let receiptRunID, store.lastCleanRunID == receiptRunID else { return nil }
         return store.lastCleanSummary
@@ -89,7 +105,7 @@ struct MakeRoomWorkspace: View {
                             Label(checkingSpace ? "Checking…" : "Check space", systemImage: "arrow.clockwise")
                         }.buttonStyle(ControlPanelButtonStyle()).disabled(preview || checkingSpace)
                     }.padding(.top, 16)
-                    Text("Set the space you want available on your internal drive. Cairn will show what it can safely review.")
+                    Text("Set how much free space you want. Cairn finds what to remove to get there.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted).padding(.top, 6)
                     HStack(alignment: .firstTextBaseline, spacing: 18) {
                         VStack(alignment: .leading, spacing: 7) {
@@ -121,13 +137,19 @@ struct MakeRoomWorkspace: View {
                         Text("\(Fmt.size(abs(observedChange))) \(observedChange > 0 ? "more" : "less") available since opening this plan. Other Mac activity may also affect this reading.")
                             .font(.system(size: 11)).foregroundStyle(Brand.textSecondary).padding(.top, 8)
                     }
-                    Text("This is a final available-space target. Copying to an SSD or moving files to Trash does not by itself free internal space.")
+                    Text(RemovalMode.current.detail + " Change this in Settings › Cleaning.")
                         .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                         .padding(.top, 15).fixedSize(horizontal: false, vertical: true)
                     Rectangle().fill(Brand.separator).frame(height: 0.5).padding(.vertical, 26)
-                    Text("NEEDS YOUR REVIEW").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
+                    HStack {
+                        Text("OPTIONS").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.textMuted)
+                        Spacer()
+                        if !actions.isEmpty, (shortfall ?? 0) > 0 {
+                            Button("Pick for me") { pickForMe() }.buttonStyle(ControlPanelButtonStyle()).disabled(preview)
+                        }
+                    }
                     if let lastReceipt {
-                        Text("Last action: \(Fmt.size(lastReceipt.bytes)) in affected file-size estimates. Check the current capacity above to see whether your target is met.")
+                        Text("Last cleanup freed \(Fmt.size(lastReceipt.accounting.freedBytes)) straight away.")
                             .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.top, 12)
                     }
                     if let planError {
@@ -144,7 +166,7 @@ struct MakeRoomWorkspace: View {
                             .padding(.top, 17)
                     } else if actions.isEmpty {
                         CairnStateView(kind: .empty, title: store.hasScanned ? "No eligible actions for this target" : "Scan to build a plan",
-                            message: "Cairn cannot currently promise enough immediate space for this target. Review large files or storage options below; scan again if the evidence is old.")
+                            message: store.hasScanned ? "Nothing in the latest scan can be removed for this target. Try Large Files, or scan again." : "Scan your Mac to see what can be removed.")
                             .padding(.top, 17)
                         Button("Scan this Mac") { onScan() }.buttonStyle(ControlPanelButtonStyle(primary: true)).padding(.top, 12)
                     } else {
@@ -169,13 +191,9 @@ struct MakeRoomWorkspace: View {
                                 Rectangle().fill(Brand.separator).frame(height: 0.5)
                             }
                         }.padding(.top, 14)
-                        Text(preview ? "Sample choices only · actions disabled. Trash sizes are not immediate space gains." : "Showing up to 60 recoverable Trash options from your latest scan. App state, permissions and each target are checked again before an action runs.")
+                        Text(preview ? "Sample choices only · actions disabled." : "The largest 60 options from your latest scan. Each one is checked again just before it runs.")
                             .font(.system(size: 11)).foregroundStyle(Brand.textMuted).padding(.top, 18)
                     }
-                    DisclosureGroup("Not available now · guaranteed immediate reclaim") {
-                        Text("This build offers reviewed Trash actions and retained-source exports. Both receive zero immediate-reclaim credit. A certified tool cleanup needs its own tested adapter and explicit recovery disclosure.")
-                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted).padding(.top, 8)
-                    }.font(.system(size: 12)).padding(.top, 20)
                     Rectangle().fill(Brand.separator).frame(height: 0.5).padding(.vertical, 24)
                     HStack(spacing: 18) {
                         Button("Review large files") { onOpen(.largeFiles) }.buttonStyle(.plain).foregroundStyle(Brand.deepBlue)
@@ -185,7 +203,7 @@ struct MakeRoomWorkspace: View {
                 }.padding(30).frame(maxWidth: 980, alignment: .leading).frame(maxWidth: .infinity)
             }
             HStack(spacing: 12) {
-                Text(selected.isEmpty ? "Choose exact items to review" : "\(Fmt.size(affectedBytes)) selected file size · immediate space gain unconfirmed")
+                Text(selected.isEmpty ? "Choose items, or let Cairn pick for you" : "\(Fmt.size(affectedBytes)) selected · \(Fmt.size(freedNowBytes)) freed straight away")
                     .foregroundStyle(Brand.textMuted).lineLimit(1)
                 Spacer()
                 Button("Review \(selectedActions.count) item\(selectedActions.count == 1 ? "" : "s")…") {
@@ -230,7 +248,7 @@ struct MakeRoomWorkspace: View {
     }
     private func effect(_ item: ScanItem) -> String {
         switch item.cleanMethod {
-        case .trash: return "Trash · recoverable"
+        case .trash: return SpaceActionCapability.forItem(item).immediateReclaim > 0 ? "Deleted now" : "Trash · recoverable"
         case .tool: return "Tool · review elsewhere"
         default: return "Review only"
         }

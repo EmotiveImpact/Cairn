@@ -63,7 +63,7 @@ enum EvidenceCheck {
             var plan = ReviewedSpacePlan.capture(items: [planItem], capacity: planCapacity, target: 30_000_000_000,
                 scanStarted: now.addingTimeInterval(-60), exclusions: [], fullDiskAccess: false, developerCaches: true, simulators: true,
                 now: now, volume: { _ in "fixture-volume" })
-            check(plan != nil && plan?.expectedImmediateReclaim == 0 && plan?.matchesSource(planItem) == true, "Reviewed plan binds source metadata and credits no Trash reclaim")
+            check(plan != nil && plan?.expectedImmediateReclaim == (RemovalMode.current.deletesImmediately(planItem) ? planItem.allocatedSize : 0) && plan?.matchesSource(planItem) == true, "Reviewed plan binds source metadata and credits reclaim only for deletions")
             check(plan?.invalidReason(itemIDs: [planItem.id], scanStarted: now.addingTimeInterval(-60), exclusions: ["/new-exclusion"], fullDiskAccess: false, developerCaches: true, simulators: true, capacity: planCapacity, now: now) != nil, "Changed exclusions invalidate reviewed plan")
             check(plan?.invalidReason(itemIDs: [UUID()], scanStarted: now.addingTimeInterval(-60), exclusions: [], fullDiskAccess: false, developerCaches: true, simulators: true, capacity: planCapacity, now: now) != nil, "Reviewed plan cannot substitute another selection")
             check(plan?.invalidReason(itemIDs: [planItem.id], scanStarted: now.addingTimeInterval(-60), exclusions: [], fullDiskAccess: false, developerCaches: true, simulators: true, capacity: planCapacity, now: now.addingTimeInterval(901)) != nil, "Consent scope expires after fifteen minutes")

@@ -10,8 +10,8 @@ import Foundation
 /// project's `.nvmrc` / `.tool-versions` / `.python-version` / `.ruby-version`.
 /// So everything here is REVIEW and never pre-selected. We prefer the manager's
 /// own `uninstall` (which also rewrites shims) but `.trash` is acceptable for v1.
-/// conda environments are irreversible once removed; the conda package cache
-/// remains advice-only until Cairn can verify the configured root and writers.
+/// conda environments are irreversible once removed; the conda package cache is
+/// pruned via `conda clean --all`, never rm.
 struct LanguageRuntimesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "runtimes",
@@ -115,6 +115,7 @@ struct LanguageRuntimesScanner: CairnScanner {
 
             let stats = FileScan.measure(pkgs)
             guard stats.allocatedSize >= ctx.minSizeBytes else { continue }
+            let clean = ToolCommand(tool: "conda", arguments: ["clean", "--all", "-y"], display: "conda clean --all -y")
             ctx.emit(ScanItem(
                 url: pkgs,
                 allocatedSize: stats.allocatedSize,
@@ -122,11 +123,11 @@ struct LanguageRuntimesScanner: CairnScanner {
                 latestModified: stats.latestModified,
                 categoryID: info.id,
                 severity: .review,
-                isRegenerable: false,
+                isRegenerable: true,
                 requiresQuitBundleIDs: [],
                 requiresRunning: false,
-                cleanMethod: .adviceOnly,
-                note: "Conda package cache — verify the configured package root, environments, and active operations before using conda's own maintenance. Cairn will not remove it.",
+                cleanMethod: .tool(clean),
+                note: "Conda package cache — pruned with conda clean, which keeps packages used by environments",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: pkgs),
                 selected: false

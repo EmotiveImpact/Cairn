@@ -154,50 +154,76 @@ struct WorkspaceCompletion: View {
     let summary: ScanStore.CleanSummary
     let onRecovery: () -> Void
     let onClose: () -> Void
+    @State private var appeared = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    /// The measured gain on the internal volume when macOS reports one,
+    /// otherwise the size of what was deleted or cleaned.
+    private var measuredGain: Int64? {
+        let gains = summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }
+        return gains.isEmpty ? nil : gains.reduce(0, +)
+    }
+    private var freed: Int64 { max(summary.accounting.freedBytes, measuredGain ?? 0) }
+    private var inTrash: Int64 { summary.restorable.isEmpty ? 0 : max(0, summary.bytes - summary.accounting.freedBytes) }
+    private var clean: Bool { !summary.interrupted && summary.failed == 0 && summary.errors.isEmpty }
+
     var body: some View {
-        CairnDialog(title: "Cleanup results", subtitle: "File actions and measured capacity are shown separately", height: 590) {
+        CairnDialog(title: summary.interrupted ? "Cleanup stopped" : "Done", subtitle: "", height: 560) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    CairnStateView(kind: summary.interrupted ? .interrupted : summary.failed == 0 && summary.errors.isEmpty ? .completed : .attention,
-                        title: summary.interrupted ? "Cleanup stopped" : summary.failed == 0 && summary.errors.isEmpty ? "Cleanup finished" : "Finished with skipped items",
-                        message: "\(summary.trashed) \(summary.trashed == 1 ? "action" : "actions") completed · \(summary.failed) skipped", compact: true, horizontalInset: 0)
-                    receiptRow("Moved to Trash", value: Fmt.size(summary.accounting.trashBytes), detail: "\(itemCount(summary.accounting.trashCount)) · estimated file size. Files in Trash still occupy disk space.")
-                    receiptRow("Recovery recorded", value: itemCount(summary.recoverableCount), detail: "Put Back is available while the recorded Trash entries remain accessible.")
-                    if summary.accounting.missingRecoveryCount > 0 {
-                        Text("Recovery could not be recorded for \(itemCount(summary.accounting.missingRecoveryCount)). Review Finder’s Trash; app recovery may be unavailable after relaunch.").font(.system(size: 12)).foregroundStyle(Brand.amber)
-                    }
-                    if summary.toolCount > 0 {
-                        receiptRow("Tool actions completed", value: "\(summary.toolCount)", detail: "\(Fmt.size(summary.accounting.toolBytes)) in scanned input estimates. This is not a measurement of bytes removed by the tool.")
-                    }
-                    Text("Available space after cleanup").font(.system(size: 13, weight: .medium))
-                    if summary.capacityChanges.isEmpty {
-                        Text("No comparable capacity readings were recorded.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .center, spacing: 18) {
+                        ZStack {
+                            Circle().fill(Brand.safeCyan.opacity(0.18)).frame(width: 84, height: 84).blur(radius: 14)
+                            Image(systemName: clean ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                                .font(.system(size: 52)).foregroundStyle(clean ? Brand.safeCyan : Brand.amber)
+                                .symbolEffect(.bounce, value: appeared)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SPACE FREED").eyebrow()
+                            Text(Fmt.size(appeared ? freed : 0))
+                                .font(.system(size: 46, weight: .semibold, design: .rounded)).monospacedDigit()
+                                .foregroundStyle(Brand.textPrimary)
+                                .contentTransition(.numericText())
+                            Text("\(summary.trashed) \(summary.trashed == 1 ? "item" : "items") cleaned" + (summary.failed > 0 ? " · \(summary.failed) skipped" : ""))
+                                .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                        }
                     }
                     ForEach(summary.capacityChanges) { change in
-                        receiptRow(change.name, value: change.changeText,
-                                   detail: change.delta == nil ? "The volume was unavailable or its identity changed." : "Before \(change.before.map { Fmt.size($0.available) } ?? "—") · After \(change.after.map { Fmt.size($0.available) } ?? "—")")
+                        if let before = change.before, let after = change.after {
+                            row(change.name, "\(Fmt.size(before.available)) → \(Fmt.size(after.available)) available")
+                        }
                     }
-                    Text("These are macOS capacity readings, not guaranteed savings from Cairn. Other apps and purgeable data can affect them. Cairn does not empty Trash automatically.").font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
-                    ForEach(Array(summary.errors.enumerated()), id: \.offset) { _, error in Text(error).font(.system(size: 12)).textSelection(.enabled) }
+                    if inTrash > 0 {
+                        row("Still in Trash", "\(Fmt.size(inTrash)) · Put Back available. Delete it from Activity to get this space back too.")
+                    }
+                    if summary.toolCount > 0 {
+                        row("Tool cleans", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands") completed")
+                    }
+                    if summary.accounting.missingRecoveryCount > 0 {
+                        Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
+                            .font(.system(size: 12)).foregroundStyle(Brand.amber)
+                    }
+                    ForEach(Array(summary.errors.enumerated()), id: \.offset) { _, error in
+                        Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled)
+                    }
                 }
             }
         } actions: {
-            Button("Activity & Recovery", action: onRecovery).buttonStyle(ControlPanelButtonStyle())
-            Button("Done", action: onClose).buttonStyle(ControlPanelButtonStyle(primary: true)).keyboardShortcut(.cancelAction)
+            Button(inTrash > 0 ? "Delete from Trash…" : "Activity", action: onRecovery).buttonStyle(ControlPanelButtonStyle())
+            Button("Done", action: onClose).buttonStyle(ControlPanelButtonStyle(primary: true)).keyboardShortcut(.defaultAction)
+        }
+        .onAppear {
+            if reduceMotion { appeared = true }
+            else { withAnimation(.easeOut(duration: 0.9).delay(0.15)) { appeared = true } }
         }
     }
-    private func itemCount(_ count: Int) -> String { "\(count) \(count == 1 ? "item" : "items")" }
-    private func receiptRow(_ title: String, value: String, detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(title).font(.system(size: 12, weight: .medium))
-                Spacer()
-                Text(value).font(.system(size: 12)).monospacedDigit()
-            }
-            Text(detail).font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+    private func row(_ title: String, _ detail: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.system(size: 12, weight: .medium))
+            Spacer()
+            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).multilineTextAlignment(.trailing)
         }
     }
-
 }
 
 /// Shared specialist receipt: file estimates, recovery records and observed

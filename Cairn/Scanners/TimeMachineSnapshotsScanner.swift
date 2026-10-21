@@ -8,8 +8,9 @@ import Foundation
 /// reports them only as aggregate purgeable space), so every item here carries an
 /// unknown (0) allocatedSize and is surfaced for explicit REVIEW — never pre-selected.
 ///
-/// Discovery: `tmutil listlocalsnapshots /`. Snapshots are recovery points, so
-/// Cairn lists them for context but never deletes them.
+/// Discovery: `tmutil listlocalsnapshots /`. Deleting one with
+/// `tmutil deletelocalsnapshots <date>` only shrinks the LOCAL rollback window;
+/// it never touches networked or external-disk Time Machine backups.
 struct TimeMachineSnapshotsScanner: CairnScanner {
     let info = CategoryInfo(
         id: "tm-snapshots",
@@ -59,6 +60,9 @@ struct TimeMachineSnapshotsScanner: CairnScanner {
             if ctx.isCancelled() { return }
             ctx.progress(token)
 
+            let thin = ToolCommand(tool: "tmutil", arguments: ["deletelocalsnapshots", token],
+                                   display: "tmutil deletelocalsnapshots \(token)")
+
             // Snapshot path is on "/" (the data volume); use it for volume-aware UI.
             let displayURL = URL(fileURLWithPath: "/.snapshots/com.apple.TimeMachine.\(token).local")
 
@@ -73,8 +77,8 @@ struct TimeMachineSnapshotsScanner: CairnScanner {
                 isRegenerable: false,
                 requiresQuitBundleIDs: [],
                 requiresRunning: false,
-                cleanMethod: .adviceOnly,
-                note: "Local Time Machine recovery point from \(token). Manage snapshots with macOS or Time Machine after checking your backup state.",
+                cleanMethod: .tool(thin),
+                note: "Local Time Machine snapshot from \(token) — deleting it shortens your local rollback window but never touches backups on other disks",
                 permissionDenied: false,
                 volumeURL: FileScan.volumeURL(of: snapshotRoot),
                 selected: false

@@ -24,11 +24,12 @@ This compiles the executable. For normal use, launch a packaged `Cairn.app`; a r
 
 ## Safety model
 
-- File actions require exact-item review and revalidation.
-- Known sessions, repositories, credentials and recovery data are protected from generic cleanup.
-- Moving files to Trash does not immediately free space. Capacity readings and file-size estimates are separate.
-- External storage currently provides verified copies with originals retained—not managed relocation or backup.
-- Generic tool cleanup, permanent Trash deletion and unattended cleanup remain disabled.
+- Every cleanup is reviewed first: exact paths, sizes and any tool command are shown before anything runs.
+- Removal mode (Settings › Cleaning): **Smart** (default) deletes rebuildable caches and build output so the space is freed straight away and sends personal files to Trash; **Delete now** deletes everything selected; **Move to Trash** keeps Put Back for everything.
+- Tool-owned stores are cleaned with the tool's own command (`docker … prune`, `pnpm store prune`, `go clean -modcache`, `brew cleanup`, `conda clean`, `xcrun simctl delete unavailable`, `git gc`, `tmutil deletelocalsnapshots`). Commands that destroy data, such as `docker system prune --volumes`, never run.
+- Trash items can be emptied from Clean, and items Cairn moved to Trash can be deleted from Activity to release their space.
+- System files, credentials, Mail, Messages, Photos, iCloud, source repositories and AI conversation history are protected by the shared safety guard whichever mode is chosen. File identity is rechecked immediately before each action.
+- External storage provides verified copies with originals retained, not managed relocation or backup.
 
 ## Repository map
 

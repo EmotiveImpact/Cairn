@@ -65,27 +65,42 @@ enum SafetyCheck {
             fails += 1
         }
 
-        // A stale scan or crafted review item must not bypass the executor's
-        // tool/cache policy. Only disposable paths are used for the command
-        // fixture; the npm URL is a string and is never read or modified.
+        // Tool commands run only with an explicit argument array; commands that
+        // destroy data never run. A stale review item for a real cache path must
+        // fail the identity check without touching it.
         let toolFixture = FileManager.default.temporaryDirectory
             .appendingPathComponent("cairn-tool-safety-\(UUID().uuidString)")
         do {
             try FileManager.default.createDirectory(at: toolFixture, withIntermediateDirectories: false)
             defer { try? FileManager.default.removeItem(at: toolFixture) }
-            let marker = toolFixture.appendingPathComponent("must-not-be-created")
-            let toolItem = ScanItem(
+            let destroyMarker = toolFixture.appendingPathComponent("must-not-be-created")
+            let destructive = ScanItem(
                 url: toolFixture, resolvedURL: toolFixture, allocatedSize: 1024,
-                categoryID: "fixture", severity: .safe,
-                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [marker.path], display: "touch fixture")),
+                categoryID: "fixture", severity: .review,
+                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [destroyMarker.path], display: "touch fixture", destroysData: true)),
                 selected: true
             )
-            let toolResult = Cleaner.clean(toolItem, allowedRoots: [toolFixture], proEnabled: true)
-            if !toolResult.ok && !toolResult.usedTool && toolResult.bytesAffected == 0 &&
-                toolResult.error?.contains("review-only") == true && !FileManager.default.fileExists(atPath: marker.path) {
-                print("✅ broad tool action blocked in executor")
+            let destructiveResult = Cleaner.clean(destructive, allowedRoots: [toolFixture], proEnabled: true)
+            if !destructiveResult.ok && destructiveResult.bytesAffected == 0 && !FileManager.default.fileExists(atPath: destroyMarker.path) {
+                print("✅ data-destroying tool command blocked in executor")
             } else {
-                print("❌ broad tool action escaped executor guard")
+                print("❌ data-destroying tool command escaped executor guard")
+                fails += 1
+            }
+
+            let runMarker = toolFixture.appendingPathComponent("tool-ran")
+            let supported = ScanItem(
+                url: toolFixture, resolvedURL: toolFixture, allocatedSize: 2048,
+                categoryID: "fixture", severity: .safe,
+                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [runMarker.path], display: "touch fixture")),
+                selected: true
+            )
+            let supportedResult = Cleaner.clean(supported, allowedRoots: [toolFixture], proEnabled: true)
+            if supportedResult.ok && supportedResult.usedTool && supportedResult.deleted && supportedResult.bytesAffected == 2048
+                && FileManager.default.fileExists(atPath: runMarker.path) {
+                print("✅ reviewed tool command runs with its argument array")
+            } else {
+                print("❌ reviewed tool command did not run: \(supportedResult.error ?? "unknown")")
                 fails += 1
             }
 
@@ -97,13 +112,37 @@ enum SafetyCheck {
                     cleanMethod: .trash, selected: true,
                     sourceIdentity: SourceIdentity(device: 0, inode: 0)
                 )
-                let result = Cleaner.clean(staleCacheItem, allowedRoots: [home], proEnabled: true)
-                if !result.ok && result.bytesAffected == 0 && result.error?.contains("review-only") == true {
-                    print("✅ stale tool-cache Trash item blocked: \(rel)")
+                let result = Cleaner.clean(staleCacheItem, allowedRoots: [home], proEnabled: true,
+                                           moveToTrash: { _ in throw CocoaError(.featureUnsupported) })
+                if !result.ok && result.bytesAffected == 0 && result.error?.contains("changed since scanning") == true {
+                    print("✅ stale cache review item blocked by identity check: \(rel)")
                 } else {
-                    print("❌ stale tool-cache Trash item escaped executor guard: \(rel)")
+                    print("❌ stale cache review item escaped identity check: \(rel)")
                     fails += 1
                 }
+            }
+
+            // Delete-now: the item is moved (here into a fixture Trash) and then
+            // removed, so nothing is left to occupy space.
+            let deleteRoot = toolFixture.appendingPathComponent("delete-root")
+            let fixtureTrash = toolFixture.appendingPathComponent("fixture-trash")
+            try FileManager.default.createDirectory(at: deleteRoot, withIntermediateDirectories: false)
+            try FileManager.default.createDirectory(at: fixtureTrash, withIntermediateDirectories: false)
+            let doomed = deleteRoot.appendingPathComponent("cache-dir")
+            try FileManager.default.createDirectory(at: doomed, withIntermediateDirectories: false)
+            try Data(repeating: 1, count: 4096).write(to: doomed.appendingPathComponent("blob"))
+            var deleteItem = ScanItem(url: doomed, allocatedSize: 4096, categoryID: "fixture", severity: .safe, selected: true)
+            deleteItem.deleteImmediately = true
+            let moved = fixtureTrash.appendingPathComponent("cache-dir")
+            let deleteResult = Cleaner.clean(deleteItem, allowedRoots: [deleteRoot], proEnabled: true, moveToTrash: { url in
+                try FileManager.default.moveItem(at: url, to: moved); return moved
+            })
+            if deleteResult.ok && deleteResult.deleted && deleteResult.movedToTrashURL == nil
+                && !FileManager.default.fileExists(atPath: doomed.path) && !FileManager.default.fileExists(atPath: moved.path) {
+                print("✅ delete-now removes the item instead of parking it in Trash")
+            } else {
+                print("❌ delete-now left data behind: \(deleteResult.error ?? "unknown")")
+                fails += 1
             }
         } catch {
             print("❌ tool safety fixture failed: \(error.localizedDescription)")

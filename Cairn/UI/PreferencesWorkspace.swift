@@ -8,7 +8,7 @@ struct PreferencesWorkspace: View {
     @Binding var tab: String
     @State private var message = ""
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private let tabs = ["General", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
+    private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "License", "About & CLI"]
     var body: some View {
         CairnWorkspace(title: "Settings", subtitle: preview ? "Preview · changes disabled" : "How Cairn observes and protects your Mac", inspectorVisible: false) {
             VStack(spacing: 0) {
@@ -50,9 +50,9 @@ struct PreferencesWorkspace: View {
             }
         } detail: {
             WorkspaceHeading(title: tab, subtitle: "Cairn settings", icon: "gearshape")
-            WorkspaceDetail(title: "A deliberate default", text: "Cleanup requires a review. Protected paths cannot be made removable by switching off a setting.")
+            WorkspaceDetail(title: "Review, then free", text: "Every cleanup is reviewed first. Protected paths cannot be made removable by switching off a setting.")
             WorkspaceDetail(title: "External storage", text: "Storage shows drive identity and supported path guidance. Cairn does not redirect macOS swap or synchronize active database folders.")
-            WorkspaceDetail(title: "Recovery", text: "Removal history is retained. Put Back works only while the corresponding Trash item still exists. Trash is not a backup.")
+            WorkspaceDetail(title: "Recovery", text: "Items sent to Trash can be put back from Activity until you delete them. Deleted items cannot be put back.")
         } actions: {
             Text(message.isEmpty ? "Settings take effect immediately" : message).foregroundStyle(Brand.textMuted).lineLimit(2)
             Spacer()
@@ -66,13 +66,24 @@ struct PreferencesWorkspace: View {
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
             option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)
             option("Scan notifications", "Notify when a scan completes. macOS permission is required.", $settings.scanNotifications)
+        case "Cleaning":
+            VStack(alignment: .leading, spacing: 10) {
+                Text("When you clean").font(.system(size: 13, weight: .medium))
+                CairnSegmentedControl(label: "Removal", selection: $settings.removalMode,
+                                      options: RemovalMode.allCases.map { ($0.title, $0) })
+                    .frame(width: 360)
+                Text(settings.removalMode.detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.padding(.vertical, 18)
+            Rectangle().fill(Brand.separator).frame(height: 0.5)
+            fixed("Tool cleans", "Docker, pnpm, Go, Homebrew, conda, simctl, git gc and Time Machine snapshots are cleaned with each tool's own command, so nothing is deleted behind the tool's back.")
+            fixed("Always protected", "System files, credentials, Mail, Messages, Photos, iCloud, source repositories and AI conversation history are never removed, whichever mode you choose.")
         case "Scanning":
             option("Refresh older scans", "On launch, rescan if the previous scan is more than a week old.", $settings.autoScanWeekly)
             option("Skip external drives", "Keep general scans on this Mac.", $settings.ignoreExternalDrives)
-            option("Developer caches", "Measure developer-tool cache categories. Package-manager stores are review-only.", $settings.includeDeveloperCaches)
-            option("Simulator data", "Include simulator measurements; device contents are inspection-only.", $settings.includeSimulators)
+            option("Developer caches", "Include package-manager, build and tool caches.", $settings.includeDeveloperCaches)
+            option("Simulator data", "Include simulator caches and simulators for runtimes that are no longer installed.", $settings.includeSimulators)
             option("Extra large-file confirmation", "Request an additional confirmation for large file removal.", $settings.askBeforeDeleting)
-            fixed("Local snapshots", "Current supported cleanup moves reviewed items to Trash. Cairn does not request a local snapshot or treat one as a backup.")
             option("Recommendations", "Show relevant cleanup suggestions from measured results.", $settings.smartRecommendations)
         case "Monitoring":
             option("Space reserve alerts", "Check available space while Cairn is running and alert when it remains below your chosen reserve. Nothing is removed.", preview ? .constant(true) : $settings.reserveEnabled)
@@ -155,9 +166,8 @@ struct PreferencesWorkspace: View {
             fixed("System files & credentials", "Protected by the shared safety guard at scan and action time.")
             fixed("Running applications", "Cache cleanup skips known owners that are still running.")
             fixed("Source & recovery data", "Source, Git metadata, worktrees and recovery locations are protected.")
-            fixed("No automatic Trash emptying", "Cairn does not permanently empty Trash.")
+            fixed("Nothing runs without review", "Every deletion, Trash emptying and tool clean is shown to you first.")
             fixed("Unknown application data", "An absent application or old folder date never proves its data is disposable.")
-            Text("Automatic cleanup on app quit is disabled in this build. Review the measured paths before every removal.").font(.system(size: 12)).foregroundStyle(Brand.textMuted).padding(.vertical, 18)
         case "Excluded locations":
             Text("Excluded paths and their children are blocked by cleanup.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.vertical, 18)
             ForEach(settings.excludedPaths, id: \.self) { path in

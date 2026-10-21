@@ -4,8 +4,8 @@ import Foundation
 /// directory-only DFS (mirroring DevProjectsScanner's traversal) looking for
 /// two things:
 ///
-///   1. Large `.git` directories (>= 200 MB) — advice only. Git objects can be
-///      recovery data, so Cairn never runs garbage collection for the user.
+///   1. Large `.git` directories (>= 200 MB) — a `.tool` item running
+///      `git gc --prune=now`, which compacts history without losing commits.
 ///      The `.git` dir is pruned from the walk once matched.
 ///   2. Abandoned project roots (a dir directly containing `.git`,
 ///      `package.json`, `Cargo.toml`, or a `*.xcodeproj`/`*.xcworkspace`) whose
@@ -108,13 +108,13 @@ struct GitMaintenanceScanner: CairnScanner {
                     subdirs.append(child)
                 }
 
-                // 1) Large .git → inspect manually, never automatic maintenance.
+                // 1) Large .git → git gc.
                 if let gitDir = dotGitDir {
                     ctx.progress("Sizing .git in \(dir.lastPathComponent)")
                     let stats = FileScan.measure(gitDir, maxFiles: gitMaxFiles)
                     if stats.allocatedSize >= gitBloatFloor {
                         let project = dir.lastPathComponent
-                        var note = "Large .git for \(project) (\(Fmt.size(stats.allocatedSize))) — inspect with Git before changing it; unreachable objects may be recovery data"
+                        var note = "Large .git for \(project) — git gc compacts history; no commits are lost"
                         if stats.truncated { note += " · large (partial size)" }
                         let item = ScanItem(
                             url: gitDir,
@@ -126,7 +126,11 @@ struct GitMaintenanceScanner: CairnScanner {
                             isRegenerable: false,
                             requiresQuitBundleIDs: [],
                             requiresRunning: false,
-                            cleanMethod: .adviceOnly,
+                            cleanMethod: .tool(ToolCommand(
+                                tool: "git",
+                                arguments: ["-C", dir.path, "gc", "--prune=now"],
+                                display: "git gc --prune=now"
+                            )),
                             note: note,
                             permissionDenied: stats.permissionDenied,
                             volumeURL: FileScan.volumeURL(of: gitDir),

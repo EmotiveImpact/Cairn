@@ -505,7 +505,7 @@ struct DeveloperCleanupView: View {
                 clearDeveloperSelection()
             }
             .buttonStyle(ControlPanelButtonStyle()).disabled(developerSelected.isEmpty)
-            Button("Review cleanup…") { onReview() }
+            Button(developerSelected.isEmpty ? "Review cleanup…" : "Free \(Fmt.size(store.selectedTotal))…") { onReview() }
                 .buttonStyle(ControlPanelButtonStyle(primary: true))
                 .disabled(previewMode || store.selectedCount == 0)
         }
@@ -560,7 +560,7 @@ struct DeveloperCleanupView: View {
                 Text("\(bucket.selectedCount) · \(Fmt.size(bucket.selectedSize))").monospacedDigit()
             }.font(.system(size: 12))
             if bucket.items.contains(where: { $0.cleanMethod.isPaid }) {
-                inspectorSection("Tool-managed finding", "Broad tool commands are review-only until Cairn can verify their exact scope and active writers.")
+                inspectorSection("Cleaned by the tool", "These are cleaned with the tool's own command, so the tool stays consistent. The exact command is shown before it runs.")
             }
             detailDivider
             DisclosureGroup("Protected data") {
@@ -683,7 +683,7 @@ struct DeveloperCleanupView: View {
         if !item.isActionable { return "Advice only" }
         if item.severity == .risky { return "Protected" }
         if case .tool(let command) = item.cleanMethod { return "Use \(command.tool)" }
-        if case .emptyTrash = item.cleanMethod { return "Permanent" }
+        if case .emptyTrash = item.cleanMethod { return "Frees space now" }
         if item.severity == .review { return "Review required" }
         if !item.requiresQuitBundleIDs.isEmpty { return "Close app first" }
         return item.isRegenerable ? "Rebuildable" : "Review required"
@@ -697,9 +697,11 @@ struct DeveloperCleanupView: View {
     }
     private func methodText(for item: ScanItem) -> String {
         switch item.cleanMethod {
-        case .trash: return "Move to Trash, with recovery available while the Trash entry remains."
-        case .emptyTrash: return "Empty Trash; this action cannot be put back by Cairn."
-        case .tool(let command): return "Run \(command.display) through the tool's own interface."
+        case .trash: return RemovalMode.current.deletesImmediately(item)
+            ? "Deleted straight away so the space is freed now (Settings › Cleaning)."
+            : "Moved to Trash. Put Back is available from Activity until you delete it."
+        case .emptyTrash: return "Deleted from the Trash; the space is freed now."
+        case .tool(let command): return "Runs \(command.display)."
         case .adviceOnly: return "No removal action."
         }
     }

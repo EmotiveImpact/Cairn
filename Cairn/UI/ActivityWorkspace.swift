@@ -23,6 +23,10 @@ struct RecoveryWorkspace: View {
     @State private var currentCapacity: CapacityReading?
     @State private var checkingSpace = false
     @State private var reclaimBaseline: CapacityReading?
+    @State private var purged: Set<UUID> = []
+    @State private var purgedBytes: Int64 = 0
+    @State private var purging = false
+    @State private var confirmPurge = false
 
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let inset: CGFloat = 34
@@ -64,7 +68,8 @@ struct RecoveryWorkspace: View {
                                interrupted: summary.interrupted, rows: rows,
                                hiddenRowCount: max(0, summary.restorable.count - rows.count),
                                issues: summary.errors, capacityChanges: summary.capacityChanges,
-                               inProgress: run.map { store.isRunActive($0.id) } ?? false)
+                               inProgress: run.map { store.isRunActive($0.id) } ?? false,
+                               freedBytes: summary.accounting.freedBytes)
     }
     private var capacity: CapacityReading? {
         if preview { return PreviewStorageScenario.current }
@@ -139,30 +144,44 @@ struct RecoveryWorkspace: View {
             }.padding(.top, 33)
 
             HStack(alignment: .top, spacing: 30) {
-                metric(title: "Moved to Trash", value: Fmt.size(receipt.movedBytes),
-                       detail: "\(receipt.movedCount) \(receipt.movedCount == 1 ? "item" : "items") · estimated file size")
+                metric(title: "Space freed", value: Fmt.size(receipt.freedBytes + purgedBytes),
+                       detail: "Deleted, emptied or cleaned by tools", accent: Brand.safeCyan)
+                Rectangle().fill(Brand.separator).frame(width: 1, height: 91)
+                metric(title: "Still in Trash", value: Fmt.size(max(0, receipt.inTrashBytes - purgedBytes)),
+                       detail: "Put Back is available until you delete it")
                 Rectangle().fill(Brand.separator).frame(width: 1, height: 91)
                 metric(title: capacity.map { Date().timeIntervalSince($0.date) < 120 ? "Available now" : "Latest available reading" } ?? "Available space",
                        value: capacity.map { Fmt.size($0.available) } ?? "Unavailable",
                        detail: capacityDetail(receipt))
             }.padding(.leading, 44).padding(.top, 34).padding(.bottom, 23)
 
-            Label("Files in Trash still occupy disk space. A capacity reading is not proof that this cleanup freed that amount.", systemImage: "info.circle")
-                .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 44).padding(.bottom, 27)
-
-            if receipt.movedCount > 0 {
-                DisclosureGroup("Ready to release the space?") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("Use Show in Trash beside an item below. Check it in Finder, then Control-click that item and choose Delete Immediately only if you no longer need it.")
-                        Text("This permanently removes that item. Cairn cannot Put Back a permanently deleted file. Avoid Empty Trash unless you have reviewed everything in it.")
-                            .foregroundStyle(Brand.amber)
-                        Text("Return here and check available space. A missing Trash item alone does not prove space was freed; other Mac activity and snapshots can affect the reading.")
-                        Link("Apple’s guide to deleting individual Trash items", destination: URL(string: "https://support.apple.com/guide/mac-help/mchlp1093/mac")!)
-                    }.font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true).padding(.vertical, 12)
-                }.font(.system(size: 13, weight: .medium)).padding(.bottom, 20)
+            let deletable = receipt.rows.filter { row in
+                row.recoveryID.map { availableTrash.contains($0) && !purged.contains($0) } ?? false
+            }
+            if !deletable.isEmpty && !preview {
+                HStack(spacing: 14) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(Fmt.size(deletable.reduce(0) { $0 + ($1.bytes ?? 0) })) is still sitting in the Trash")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("Delete it now to get the space back. This cannot be put back.")
+                            .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                    }
+                    Spacer()
+                    Button(purging ? "Deleting…" : "Delete from Trash") { confirmPurge = true }
+                        .buttonStyle(ControlPanelButtonStyle(primary: true))
+                        .disabled(purging || store.isCleaning)
+                }
+                .padding(16)
+                .background(RoundedRectangle(cornerRadius: Brand.rCard).fill(Brand.blue.opacity(0.10)))
+                .padding(.leading, 44).padding(.bottom, 24)
+                .confirmationDialog("Delete \(deletable.count) \(deletable.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
+                    Button("Delete permanently", role: .destructive) {
+                        let ids = Set(deletable.compactMap(\.recoveryID))
+                        purgeFromTrash(ids)
+                    }
+                } message: {
+                    Text("The space is released straight away. Put Back will no longer be possible for these items.")
+                }
             }
             if let change = SpaceGoal.observedChange(from: reclaimBaseline, to: capacity) {
                 Text(change == 0 ? "No measured change since opening this activity." : "\(Fmt.size(abs(change))) \(change > 0 ? "more" : "less") available since opening this activity. Other Mac activity may contribute.")
@@ -186,7 +205,8 @@ struct RecoveryWorkspace: View {
                             Text(row.bytes.map(Fmt.size) ?? "Size unavailable")
                                 .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                         }.frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Moved to Trash").font(.system(size: 12)).frame(width: 138, alignment: .leading)
+                        Text(row.recoveryID.map { purged.contains($0) } == true ? "Deleted" : "Moved to Trash")
+                            .font(.system(size: 12)).frame(width: 138, alignment: .leading)
                         if preview {
                             Button("Show in Trash") {}.buttonStyle(ControlPanelButtonStyle())
                                 .disabled(true).frame(width: 150, alignment: .leading)
@@ -470,10 +490,24 @@ struct RecoveryWorkspace: View {
         Text("Design preview · Sample data · Actions disabled")
             .font(.system(size: 10)).foregroundStyle(Brand.textMuted).padding(.top, 26)
     }
-    private func metric(title: String, value: String, detail: String) -> some View {
+    private func purgeFromTrash(_ ids: Set<UUID>) {
+        guard !purging else { return }
+        purging = true
+        Task {
+            let result = await store.deleteFromTrash(ids)
+            purged.formUnion(ids)
+            purgedBytes += result.bytes
+            await StorageControl.shared.refreshCapacity(force: true)
+            currentCapacity = StorageControl.shared.current
+            await refresh()
+            purging = false
+        }
+    }
+    private func metric(title: String, value: String, detail: String, accent: Color = Brand.textPrimary) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title).font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             Text(value).font(.system(size: 43, weight: .regular)).monospacedDigit().minimumScaleFactor(0.68).lineLimit(1)
+                .foregroundStyle(accent)
             Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 .fixedSize(horizontal: false, vertical: true)
         }.frame(maxWidth: .infinity, alignment: .leading)
@@ -490,6 +524,7 @@ struct RecoveryWorkspace: View {
         if entry.restoredAt != nil { return "Restored" }
         if availableTrash.contains(entry.id) { return "In Trash" }
         if entry.actionKind == "tool" { return "Tool action" }
+        if entry.actionKind == "delete" || purged.contains(entry.id) { return "Deleted" }
         return "Unavailable"
     }
     private func capacityDetail(_ receipt: ActivityReceipt) -> String {
@@ -549,6 +584,8 @@ private struct ActivityReceipt {
     let issues: [String]
     let capacityChanges: [CleanupCapacityChange]
     var inProgress = false
+    var freedBytes: Int64 = 0
+    var inTrashBytes: Int64 { max(0, movedBytes + toolBytes - freedBytes) }
 
     var title: String {
         if inProgress { return "Cleanup in progress" }

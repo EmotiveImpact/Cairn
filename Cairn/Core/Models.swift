@@ -44,11 +44,44 @@ enum CleanMethod: Equatable {
     case tool(ToolCommand)     // run a CLI tool (paid)
     case adviceOnly            // non-actionable advice card (Docker.raw, Nix, sleepimage)
 
-    // Only a reviewed Trash move currently has an enabled executor. Legacy
-    // tool and permanent-Trash items remain readable in old scan/recovery data,
-    // but cannot enter a new selection or cleanup plan.
-    var isActionable: Bool { if case .trash = self { return true } else { return false } }
+    // Everything except advice has a reviewed executor in Cleaner.
+    var isActionable: Bool { if case .adviceOnly = self { return false } else { return true } }
     var isPaid: Bool { if case .tool = self { return true } else { return false } }
+}
+
+/// What happens to reviewed files. Trash keeps Put Back but frees nothing until
+/// the Trash is emptied; deleting frees the space straight away.
+enum RemovalMode: String, CaseIterable, Identifiable, Sendable {
+    case smart    // rebuildable caches and build output are deleted, personal files go to Trash
+    case delete   // everything is deleted immediately
+    case trash    // everything goes to Trash (recoverable, frees nothing yet)
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .smart: return "Smart"
+        case .delete: return "Delete now"
+        case .trash: return "Move to Trash"
+        }
+    }
+    var detail: String {
+        switch self {
+        case .smart: return "Rebuildable caches and build files are deleted so space is freed now. Personal files go to Trash."
+        case .delete: return "Everything selected is deleted and the space is freed now. No Put Back."
+        case .trash: return "Everything selected goes to Trash. Space is freed when the Trash is emptied."
+        }
+    }
+    /// The saved preference, readable off the main actor.
+    static var current: RemovalMode {
+        UserDefaults.standard.string(forKey: "cairn.removalMode").flatMap(RemovalMode.init(rawValue:)) ?? .smart
+    }
+    /// Whether a reviewed item should skip the Trash under this mode.
+    func deletesImmediately(_ item: ScanItem) -> Bool {
+        switch self {
+        case .delete: return true
+        case .trash: return false
+        case .smart: return item.isRegenerable
+        }
+    }
 }
 
 // MARK: - Category
@@ -118,6 +151,8 @@ struct ScanItem: Identifiable {
     var volumeURL: URL?                // the volume this lives on (for volume-aware trash)
     var selected: Bool
     let sourceIdentity: SourceIdentity?
+    /// Set by ScanStore from the reviewed RemovalMode just before execution.
+    var deleteImmediately = false
 
     init(
         url: URL,

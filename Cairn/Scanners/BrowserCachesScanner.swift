@@ -62,10 +62,10 @@ struct BrowserCachesScanner: CairnScanner {
                 at: url,
                 severity: uncertain ? .review : .safe,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: !uncertain,
+                isRegenerable: true,
                 requiresQuitBundleIDs: t.bundleID.isEmpty ? [] : [t.bundleID],
-                cleanMethod: uncertain ? .adviceOnly : .trash,
-                note: uncertain ? "\(t.browser) storage may include offline site data; inspect it before manual removal" :
+                cleanMethod: .trash,
+                note: uncertain ? "\(t.browser) offline site storage — sites may need to download it again" :
                     "\(t.browser) web cache — re-downloaded as you browse",
                 selectedIfSafe: !uncertain
             ) {
