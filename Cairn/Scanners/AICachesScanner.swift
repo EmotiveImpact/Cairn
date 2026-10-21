@@ -110,9 +110,9 @@ struct AICachesScanner: CairnScanner {
                 at: url,
                 severity: .review,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: false,
-                cleanMethod: .adviceOnly,
-                note: store.note + " — may include custom or unique weights; back up before any manual move or removal",
+                isRegenerable: true,
+                cleanMethod: .trash,
+                note: store.note + " — re-downloaded when you next use the model",
                 selectedIfSafe: false,
                 maxFiles: modelMaxFiles
             ) {
@@ -130,8 +130,8 @@ struct AICachesScanner: CairnScanner {
                 severity: .review,
                 minSize: ctx.minSizeBytes,
                 isRegenerable: false,
-                cleanMethod: .adviceOnly,
-                note: media.note + " — may be the only exact copy; back up before manual changes",
+                cleanMethod: .trash,
+                note: media.note,
                 selectedIfSafe: false,
                 maxFiles: modelMaxFiles
             ) {

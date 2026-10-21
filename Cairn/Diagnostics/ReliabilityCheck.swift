@@ -138,23 +138,28 @@ import Darwin
         do {
             try fm.createDirectory(at: root, withIntermediateDirectories: false)
             defer { try? fm.removeItem(at: root) }
-            let unsupportedTool = ScanItem(
+            let destroyMarker = root.appendingPathComponent("must-not-exist")
+            let destructiveTool = ScanItem(
                 url: root, resolvedURL: root, allocatedSize: 1024,
                 categoryID: "fixture", severity: .safe,
-                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [root.appendingPathComponent("must-not-exist").path], display: "touch fixture")),
+                cleanMethod: .tool(ToolCommand(tool: "touch", arguments: [destroyMarker.path], display: "touch fixture", destroysData: true)),
                 selected: true
             )
             var toolBucket = ScanStore.Bucket(info: .init(id: "fixture", title: "Fixture", subtitle: "", systemImage: "folder", group: .general, requiresFDA: false))
-            toolBucket.append(unsupportedTool)
-            check(!unsupportedTool.isActionable && toolBucket.selectedCount == 0 && !toolBucket.items[0].selected,
-                  "Legacy tool findings cannot enter a new cleanup selection")
+            toolBucket.append(destructiveTool)
+            check(destructiveTool.isActionable && toolBucket.selectedCount == 1,
+                  "Tool findings can enter a reviewed cleanup selection")
+            let destructiveResult = Cleaner.clean(destructiveTool, allowedRoots: [root], proEnabled: true)
+            check(!destructiveResult.ok && !fm.fileExists(atPath: destroyMarker.path),
+                  "Data-destroying tool commands never run")
+            let advice = ScanItem(url: root, resolvedURL: root, allocatedSize: 1024, categoryID: "fixture",
+                                  severity: .review, cleanMethod: .adviceOnly, selected: true)
             let unsupportedJournal = root.appendingPathComponent("unsupported-clean.actions")
             let unsupportedStore = ScanStore(removalLogURL: root.appendingPathComponent("unsupported-clean"),
                                              actionJournal: ActionJournal(url: unsupportedJournal))
-            let unsupportedResult = await unsupportedStore.clean([unsupportedTool], proEnabled: true)
-            check(unsupportedResult.failed == 1 && !fm.fileExists(atPath: unsupportedJournal.path) &&
-                  !fm.fileExists(atPath: root.appendingPathComponent("must-not-exist").path),
-                  "Legacy tool cleanup stops before journal or command work")
+            let unsupportedResult = await unsupportedStore.clean([advice], proEnabled: true)
+            check(unsupportedResult.failed == 1 && !fm.fileExists(atPath: unsupportedJournal.path),
+                  "Advice-only findings stop before journal or file work")
             let duplicatesRoot = root.appendingPathComponent("duplicate-fixtures")
             try fm.createDirectory(at: duplicatesRoot, withIntermediateDirectories: false)
             let duplicateData = Data(repeating: 0x42, count: 2 * 1_048_576)

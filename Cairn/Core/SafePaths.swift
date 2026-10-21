@@ -109,16 +109,49 @@ enum SafePaths {
         set { rulesLock.lock(); defer { rulesLock.unlock() }; exclusions = newValue }
     }
 
+    /// Ancestor folders that still protect a rebuildable item. Narrower than
+    /// `protectedSessionReason`: a project named "claude-app" or "sessions" can
+    /// hold a node_modules that is safe to rebuild, but the agent stores
+    /// themselves and version-control internals never are.
+    static let projectArtifactNames: Set<String> = [
+        "node_modules", "target", ".venv", "venv", "Pods", ".build", ".next", ".nuxt", ".output",
+        ".turbo", ".svelte-kit", ".expo", "dist", "build", "DerivedData", "__pycache__", ".gradle",
+    ]
+
+    static func rebuildableAncestorReason(_ url: URL) -> String? {
+        let paths = [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
+        for configured in protectedSessionRoots {
+            let root = URL(fileURLWithPath: configured).resolvingSymlinksInPath().standardizedFileURL.path
+            if paths.contains(where: { isUnder($0.path, root) || isUnder($0.path, configured) }) {
+                return "protected custom conversation location"
+            }
+        }
+        for path in paths {
+            for part in path.pathComponents.map({ $0.lowercased() }) {
+                if [".git", ".hg", ".svn", ".jj", ".ssh", ".gnupg", ".claude", ".codex", ".cursor", ".continue", ".aider"].contains(part)
+                    || part.hasPrefix("com.openai.") || part.hasPrefix("group.com.openai.") {
+                    return "protected source or agent data (\(part))"
+                }
+            }
+        }
+        return nil
+    }
+
     /// Evaluate whether `url` may be moved to the Trash by a scanner whose
-    /// declared allowlist-of-roots is `allowedRoots`.
-    static func evaluate(_ url: URL, allowedRoots: [URL]) -> Verdict {
+    /// declared allowlist-of-roots is `allowedRoots`. `rebuildable` items (caches
+    /// and build output a reinstall or rebuild restores) skip the name heuristics
+    /// meant for personal data, and may sit in a project under ~/Documents.
+    static func evaluate(_ url: URL, allowedRoots: [URL], rebuildable: Bool = false) -> Verdict {
         let resolved = url.resolvingSymlinksInPath().standardizedFileURL
         let path = resolved.path
 
         if path == "/" || path.isEmpty { return .reject("refuses to act on the filesystem root") }
         if resolved == home { return .reject("refuses to act on the home folder itself") }
 
-        if let reason = protectedSessionReason(url) { return .reject(reason) }
+        // App support and cache folders under ~/Library keep the full agent-name
+        // guard; the narrower one is for project build output only.
+        let projectArtifact = rebuildable && !isUnder(path, home.appendingPathComponent("Library").path)
+        if let reason = projectArtifact ? rebuildableAncestorReason(url) : protectedSessionReason(url) { return .reject(reason) }
 
         // Denylist always wins.
         for prefix in denyAbsolutePrefixes where isUnder(path, prefix) {
@@ -129,6 +162,9 @@ enum SafePaths {
         }
         for rel in denyHomeRelative {
             let denied = home.appendingPathComponent(rel).path
+            // Project build output inside ~/Documents is still build output.
+            if rebuildable && rel == "Documents" && path != denied
+                && resolved.pathComponents.contains(where: projectArtifactNames.contains) { continue }
             if path == denied || isUnder(path, denied) {
                 return .reject("protected data location (~/\(rel))")
             }
@@ -152,8 +188,20 @@ enum SafePaths {
     /// A generic parent folder can hide an agent session several levels down.
     /// Verify immediately before moving a directory; fail closed on unreadable
     /// or exceptionally large trees rather than silently skipping descendants.
-    static func evaluateContents(_ url: URL) -> Verdict {
+    /// A `rebuildable` tree is not walked: package stores and caches routinely
+    /// hold .db files and folders named after AI SDKs, and large ones exceed any
+    /// reasonable walk budget. Settings exclusions inside it still block it.
+    static func evaluateContents(_ url: URL, rebuildable: Bool = false) -> Verdict {
         let root = url.resolvingSymlinksInPath().standardizedFileURL
+        if rebuildable {
+            for excluded in userExcluded {
+                let resolvedEx = URL(fileURLWithPath: excluded).resolvingSymlinksInPath().standardizedFileURL.path
+                if isUnder(resolvedEx, root.path) || isUnder(excluded, url.standardizedFileURL.path) {
+                    return .reject("contains a location excluded in Settings")
+                }
+            }
+            return .allow
+        }
         guard let values = try? root.resourceValues(forKeys: [.isDirectoryKey]) else {
             return .reject("could not inspect the selected path")
         }

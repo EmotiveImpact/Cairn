@@ -97,10 +97,10 @@ struct CommunicationCachesScanner: CairnScanner {
             at: url,
             severity: uncertain ? .review : .safe,
             minSize: ctx.minSizeBytes,
-            isRegenerable: !uncertain,
+            isRegenerable: true,
             requiresQuitBundleIDs: quit,
-            cleanMethod: uncertain ? .adviceOnly : .trash,
-            note: uncertain ? "\(app) app storage may include offline or diagnostic data; inspect before manual removal" :
+            cleanMethod: .trash,
+            note: uncertain ? "\(app) offline and diagnostic storage — review before removing" :
                 "\(app) transient cache — recreated on launch",
             selectedIfSafe: !uncertain,
             maxFiles: Self.maxCacheFiles

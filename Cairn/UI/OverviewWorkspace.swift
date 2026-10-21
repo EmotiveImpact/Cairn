@@ -7,6 +7,7 @@ struct OverviewWorkspace: View {
     let control: StorageControl
     var search: String
     var onOpen: (NavSection) -> Void
+    var onCleanRecommended: () -> Void = {}
     @State private var period = 7
     @State private var showHistory = false
     @State private var selectedDate: Date?
@@ -75,6 +76,7 @@ struct OverviewWorkspace: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
+                cleanHero.padding(.top, 22)
                 historySection.padding(.top, 22)
                 HStack { Spacer(); Button("View history") { showHistory = true }
                     .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
@@ -106,6 +108,86 @@ struct OverviewWorkspace: View {
         }
     }
     private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+
+    /// The headline action: what a scan found that can be freed in one go.
+    private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    private var topCategories: [(String, Int64)] {
+        if preview { return [("Xcode", 6_400_000_000), ("Developer caches", 5_200_000_000), ("Browsers", 2_700_000_000)] }
+        var totals: [String: Int64] = [:]
+        for bucket in store.buckets {
+            let bytes = bucket.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable }.reduce(0) { $0 + $1.allocatedSize }
+            if bytes > 0 { totals[bucket.info.title, default: 0] += bytes }
+        }
+        return totals.sorted { $0.value > $1.value }.prefix(3).map { ($0.key, $0.value) }
+    }
+    @ViewBuilder private var cleanHero: some View {
+        if store.isScanning && !preview {
+            HStack(spacing: 16) {
+                ProgressView().controlSize(.small)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Scanning · \(Fmt.size(store.grandTotal)) found so far").font(.system(size: 15, weight: .semibold)).monospacedDigit()
+                    Text(store.progressText).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(1)
+                }
+                Spacer()
+            }
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+        } else if recommendedBytes > 0 {
+            HStack(alignment: .center, spacing: 24) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("READY TO FREE").eyebrow()
+                    Text(Fmt.size(recommendedBytes))
+                        .font(.system(size: 40, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .foregroundStyle(Brand.safeCyan)
+                    Text("Rebuildable caches and build files. Your documents are not included.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                }
+                Spacer(minLength: 12)
+                VStack(alignment: .leading, spacing: 7) {
+                    ForEach(Array(topCategories.enumerated()), id: \.offset) { _, entry in
+                        let (name, bytes) = entry
+                        HStack(spacing: 10) {
+                            Text(name).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).frame(width: 130, alignment: .leading).lineLimit(1)
+                            GeometryReader { geo in
+                                Capsule().fill(Brand.safeCyan.opacity(0.75))
+                                    .frame(width: max(4, geo.size.width * CGFloat(Double(bytes) / Double(max(1, recommendedBytes)))))
+                            }.frame(width: 110, height: 6)
+                            Text(Fmt.size(bytes)).font(.system(size: 11)).monospacedDigit().foregroundStyle(Brand.textMuted)
+                        }
+                    }
+                }
+                VStack(spacing: 8) {
+                    Button { onCleanRecommended() } label: {
+                        Text("Free \(Fmt.size(recommendedBytes))").frame(minWidth: 130)
+                    }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true))
+                    .disabled(preview || store.isCleaning)
+                    .help("Review the recommended items, then free the space")
+                    Button("See everything") { onOpen(.smartScan) }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                }
+            }
+            .padding(22).frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: Brand.rHero)
+                    .fill(LinearGradient(colors: [Brand.safeCyan.opacity(0.12), Brand.blue.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+            )
+            .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.safeCyan.opacity(0.25), lineWidth: 1))
+        } else if !store.hasLiveResults {
+            HStack(spacing: 16) {
+                Image(systemName: "sparkle.magnifyingglass").font(.system(size: 26)).foregroundStyle(Brand.blue)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Find out what you can free").font(.system(size: 15, weight: .semibold))
+                    Text("A scan takes a minute or two. Nothing is removed until you review it.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                }
+                Spacer()
+                Button("Scan this Mac") { scan() }.buttonStyle(ControlPanelButtonStyle(primary: true)).disabled(preview)
+            }
+            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+        }
+    }
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top) {

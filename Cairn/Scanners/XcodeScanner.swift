@@ -4,7 +4,7 @@ import Foundation
 /// DerivedData rebuilds on demand → SAFE. DeviceSupport debug symbols re-extract
 /// on the next device attach → REVIEW. Archives hold the only local dSYMs used to
 /// symbolicate shipped crashes → never trashable, advice-only / RISKY. Simulator
-/// caches are regenerable; Devices may hold app databases and is advice-only.
+/// caches are regenerable; unavailable Devices are pruned via `simctl`, never rm.
 /// These live under plain user dirs (0700) → no Full Disk Access needed.
 struct XcodeScanner: CairnScanner {
     let info = CategoryInfo(
@@ -119,6 +119,8 @@ struct XcodeScanner: CairnScanner {
         let devices = coreSimulator.appendingPathComponent("Devices")
         if FileScan.exists(devices) {
             let stats = FileScan.measure(devices)
+            let prune = ToolCommand(tool: "xcrun", arguments: ["simctl", "delete", "unavailable"],
+                                    display: "xcrun simctl delete unavailable")
             ctx.emit(ScanItem(
                 url: devices,
                 allocatedSize: stats.allocatedSize,
@@ -126,11 +128,11 @@ struct XcodeScanner: CairnScanner {
                 latestModified: stats.latestModified,
                 categoryID: info.id,
                 severity: .review,
-                isRegenerable: false,
+                isRegenerable: true,
                 requiresQuitBundleIDs: [simulatorBundleID],
                 requiresRunning: false,
-                cleanMethod: .adviceOnly,
-                note: "Simulator devices may hold installed-app data and databases. Inspect and back them up before any manual deletion.",
+                cleanMethod: .tool(prune),
+                note: "Simulators for runtimes that are no longer installed — removed with simctl. Available simulators are kept.",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: devices),
                 selected: false

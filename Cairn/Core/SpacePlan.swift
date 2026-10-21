@@ -24,8 +24,11 @@ struct SpaceActionCapability {
         }
         switch item.cleanMethod {
         case .trash:
-            return .init(kind: .trash, adapter: "reviewed-trash", version: 1, recovery: .trashWhilePresent,
-                immediateReclaim: 0, consequence: item.isRegenerable ? "May need rebuilding or downloading again. Trash still occupies space." : "Removes the original from this location. Trash still occupies space.",
+            let deletes = RemovalMode.current.deletesImmediately(item)
+            return .init(kind: .trash, adapter: deletes ? "reviewed-delete" : "reviewed-trash", version: 1, recovery: deletes ? .noUndo : .trashWhilePresent,
+                immediateReclaim: deletes ? item.allocatedSize : 0,
+                consequence: deletes ? (item.isRegenerable ? "Deleted now; rebuilt or downloaded again when needed." : "Deleted now; cannot be put back.")
+                                     : "Moved to Trash; space is freed when you delete it from Trash.",
                 requirements: "Unchanged source and scan scope; exclusions, contents and running owners checked again", executableAfterReview: true)
         case .tool:
             return .init(kind: .guide, adapter: "tool-guidance", version: 1, recovery: .noUndo,
@@ -81,8 +84,8 @@ struct ReviewedSpacePlan {
     let items: [ScanItem]
     let sources: [UUID: ReviewedSource]
     var itemIDs: Set<UUID> { Set(items.map(\.id)) }
-    var expectedImmediateReclaim: Int64 { 0 }
-    var recoveryText: String { "Put Back is available only while each recorded Trash item still exists." }
+    var expectedImmediateReclaim: Int64 { items.reduce(0) { $0 + SpaceActionCapability.forItem($1).immediateReclaim } }
+    var recoveryText: String { "Items sent to Trash can be put back from Activity until you delete them." }
 
     static func internalVolumeID(_ url: URL) -> String? {
         guard let values = try? url.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsInternalKey]), values.volumeIsInternal == true else { return nil }

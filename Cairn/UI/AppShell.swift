@@ -467,7 +467,12 @@ struct AppShell: View {
         switch section {
         case .dashboard:
             OverviewWorkspace(store: store, storage: storageStore, control: control,
-                              search: developerSearch, onOpen: { section = $0 })
+                              search: developerSearch, onOpen: { section = $0 },
+                              onCleanRecommended: {
+                                  guard !previewMode else { return }
+                                  store.selectRecommended()
+                                  if store.selectedCount > 0 { showReview = true }
+                              })
         case .changes:
             ChangesWorkspace(control: control, store: store, search: developerSearch,
                              onOpen: { section = $0 })

@@ -75,6 +75,11 @@ final class AppSettings {
     var includeDeveloperCaches: Bool { didSet { d.set(includeDeveloperCaches, forKey: "cairn.includeDeveloperCaches") } }
     var includeSimulators: Bool { didSet { d.set(includeSimulators, forKey: "cairn.includeSimulators") } }
 
+    // Removal
+    /// How reviewed files are removed. Smart deletes rebuildable caches so the
+    /// space is freed straight away and sends personal files to Trash.
+    var removalMode: RemovalMode { didSet { d.set(removalMode.rawValue, forKey: "cairn.removalMode") } }
+
     // Restore Bin
     var restoreBinKeepDays: Int { didSet { d.set(restoreBinKeepDays, forKey: "cairn.restoreBinKeepDays") } }
 
@@ -108,6 +113,7 @@ final class AppSettings {
         smartRecommendations = b("cairn.smartRecommendations", true)
         includeDeveloperCaches = b("cairn.includeDeveloperCaches", true)
         includeSimulators = b("cairn.includeSimulators", true)
+        removalMode = ud.string(forKey: "cairn.removalMode").flatMap(RemovalMode.init(rawValue:)) ?? .smart
         restoreBinKeepDays = ud.object(forKey: "cairn.restoreBinKeepDays") == nil ? 30 : ud.integer(forKey: "cairn.restoreBinKeepDays")
         SafePaths.userExcluded = excludedPaths
     }

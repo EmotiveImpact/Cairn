@@ -89,8 +89,8 @@ struct OrphanedAppDataScanner: CairnScanner {
                     severity: .review,
                     minSize: ctx.minSizeBytes,
                     isRegenerable: false,
-                    cleanMethod: .adviceOnly,
-                    note: "No installed app matches '\(name)' (stale >6mo). This folder may still hold valuable app data; inspect and back it up before any manual action.",
+                    cleanMethod: .trash,
+                    note: "No installed app matches '\(name)' (untouched for 6+ months) — review before removing",
                     selectedIfSafe: false
                 ) else { continue }
 

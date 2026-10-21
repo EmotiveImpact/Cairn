@@ -565,6 +565,18 @@ final class ScanStore {
         }
     }
 
+    /// Safe, rebuildable findings: what "Clean recommended" removes.
+    var recommendedItems: [ScanItem] {
+        buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }
+    }
+    var recommendedBytes: Int64 { recommendedItems.reduce(0) { $0 + $1.allocatedSize } }
+
+    /// Replace the selection with every recommended finding.
+    func selectRecommended() {
+        clearSelection()
+        select { item, _ in item.severity == .safe && item.isRegenerable }
+    }
+
     /// Greedily select the largest SAFE+regenerable items until the running total
     /// reaches `target` bytes (the "Free N GB fast" missions).
     func selectSafeUpTo(bytes target: Int64) {
@@ -595,12 +607,19 @@ final class ScanStore {
 
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
-    func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil) async -> CleanSummary {
-        // A stale review can still hand us a legacy `.tool` or permanent Trash
-        // item even though current scanners do not select them. Reject before
-        // journaling, snapshot creation, or any operation on the filesystem.
-        guard items.allSatisfy({ $0.isActionable && $0.severity != .risky }) else {
-            return CleanSummary(failed: items.count, errors: ["One or more items no longer have a supported cleanup action. Run a fresh scan and review again."])
+    func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil,
+               removal: RemovalMode? = nil) async -> CleanSummary {
+        // Advice and risky findings never execute. Drop them and run the rest
+        // rather than refusing the whole reviewed selection.
+        let mode = removal ?? AppSettings.shared.removalMode
+        let skipped = items.filter { !$0.isActionable || $0.severity == .risky }
+        let items = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
+            var item = item
+            item.deleteImmediately = mode.deletesImmediately(item)
+            return item
+        }
+        guard !items.isEmpty else {
+            return CleanSummary(failed: skipped.count, errors: ["Nothing selected has a cleanup action. Advice items are for review only."])
         }
         guard !isCleaning, !isScanning, !isRestoring else { return CleanSummary(failed: items.count, errors: ["Finish the current operation before cleanup."]) }
         isCleaning = true
@@ -637,6 +656,10 @@ final class ScanStore {
             uniquingKeysWith: { a, _ in a }
         )
         var summary = CleanSummary()
+        if !skipped.isEmpty {
+            summary.failed += skipped.count
+            summary.errors.append("\(skipped.count) advice-only item\(skipped.count == 1 ? " was" : "s were") skipped.")
+        }
         var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary)
         guard await saveRun(run) else { return CleanSummary(failed: items.count, errors: [receiptError ?? "Receipt history unavailable."]) }
         activeRunIDs.insert(run.id)
@@ -676,7 +699,8 @@ final class ScanStore {
             }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
             guard let actionID = await Task.detached(priority: .utility, operation: {
-                journal.begin(path: item.resolvedURL.path, category: item.categoryID, affectedBytes: item.allocatedSize, actionKind: item.cleanMethod == .trash ? "trash" : "tool", runID: runID)
+                journal.begin(path: item.resolvedURL.path, category: item.categoryID, affectedBytes: item.allocatedSize,
+                              actionKind: Self.actionKind(item), runID: runID)
             }).value else {
                 summary.interrupted = true
                 summary.errors.append(journal.error ?? "Action intent could not be recorded; further cleanup stopped.")
@@ -706,7 +730,7 @@ final class ScanStore {
                                                       trashPath: nil, bytes: outcome.bytesAffected, date: Date(), category: item.categoryID)
                 }
             }
-            logEntry?.actionKind = outcome.usedTool ? "tool" : "trash"
+            logEntry?.actionKind = outcome.usedTool ? "tool" : outcome.deleted ? "delete" : "trash"
             if let entry = logEntry, !(await appendRemovals([entry])) {
                 summary.accounting.record(outcome, recoveryRecorded: false)
                 summary.interrupted = true
@@ -741,6 +765,35 @@ final class ScanStore {
         // (otherwise the next launch over-reports the reclaimable space).
         if hasScanned, customRemovalLogURL == nil { saveSnapshot() }
         return summary
+    }
+
+    /// Permanently delete recorded Trash items so their space is released now.
+    /// Only the exact recorded Trash object (same identity) is removed.
+    func deleteFromTrash(_ ids: Set<UUID>) async -> (count: Int, bytes: Int64) {
+        guard !isCleaning, !isRestoring else { return (0, 0) }
+        let entries = removalLog.filter { ids.contains($0.id) && $0.recoverable && $0.trashPath != nil }
+        guard !entries.isEmpty else { return (0, 0) }
+        isCleaning = true
+        defer { isCleaning = false }
+        let result = await Task.detached(priority: .userInitiated) { () -> (Int, Int64) in
+            var count = 0, bytes: Int64 = 0
+            for entry in entries {
+                guard let path = entry.trashPath else { continue }
+                if Cleaner.deleteTrashedCopy(at: URL(fileURLWithPath: path), identity: entry.trashIdentity) {
+                    count += 1; bytes += entry.bytes
+                }
+            }
+            return (count, bytes)
+        }.value
+        return result
+    }
+
+    nonisolated static func actionKind(_ item: ScanItem) -> String {
+        switch item.cleanMethod {
+        case .tool: return "tool"
+        case .emptyTrash: return "delete"
+        default: return item.deleteImmediately ? "delete" : "trash"
+        }
     }
 
     /// Undo the last clean by restoring trashed items. Restored items are also

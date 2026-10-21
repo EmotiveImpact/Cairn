@@ -10,7 +10,7 @@ struct AppCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "app-caches",
         title: "Application Caches",
-        subtitle: "Review per-app cache folders in ~/Library/Caches",
+        subtitle: "Per-app caches in ~/Library/Caches — apps recreate these",
         systemImage: "app.badge.fill",
         group: .general,
         requiresFDA: true
@@ -83,13 +83,13 @@ struct AppCachesScanner: CairnScanner {
 
             if let item = makeItem(
                 at: child,
-                severity: .review,
+                severity: .safe,
                 minSize: ctx.minSizeBytes,
-                isRegenerable: false,
+                isRegenerable: true,
                 requiresQuitBundleIDs: bundleIDs(for: name),
-                cleanMethod: .adviceOnly,
-                note: "Unclassified cache for \(name). It may hold recovery or work data; inspect its contents before any manual removal.",
-                selectedIfSafe: false
+                cleanMethod: .trash,
+                note: "Cache for \(name) — the app recreates this",
+                selectedIfSafe: true
             ) {
                 ctx.emit(item)
             }
