@@ -147,16 +147,23 @@ struct OverviewWorkspace: View {
     private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
-            HStack(spacing: 16) {
-                ProgressView().controlSize(.small)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Scanning · \(Fmt.size(store.grandTotal)) found so far").font(.system(size: 15, weight: .semibold)).monospacedDigit()
-                    Text(store.progressText).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(1)
+            // Same big number as the result, counting up while the scan runs.
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(Fmt.size(store.grandTotal))
+                        .font(.system(size: 62, weight: .light)).tracking(-2.5).monospacedDigit()
+                        .contentTransition(.numericText())
+                        .animation(.easeOut(duration: 0.3), value: store.grandTotal)
+                    Text("found so far").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
                 }
-                Spacer()
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("Scanning · \(store.progressText)").font(.system(size: 13)).foregroundStyle(Brand.textSecondary).lineLimit(1)
+                }.padding(.top, 8)
+                Text("Nothing is removed until you review it.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textMuted).padding(.top, 14)
             }
-            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else if recommendedBytes > 0 {
             // One number, one button: what can safely go, and the way to free it.
             HStack(alignment: .center, spacing: 28) {
@@ -371,8 +378,8 @@ struct OverviewWorkspace: View {
                                 Text("Connected").font(.system(size: 11.5)).foregroundStyle(Brand.safeCyan)
                             }
                         } else {
-                            Button(connecting == tool.id ? "Connecting" : "Connect") { connect(tool) }
-                                .buttonStyle(ControlPanelButtonStyle(primary: true)).controlSize(.small)
+                            Button(connecting == tool.id ? "Connecting…" : "Connect") { connect(tool) }
+                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
                                 .disabled(preview || connecting != nil)
                         }
                     }
@@ -499,7 +506,7 @@ struct OverviewWorkspace: View {
                     }
                     if shownReserve != nil {
                         RuleMark(y: .value("Chosen reserve", chosenReserve))
-                            .foregroundStyle(Brand.amber.opacity(0.55)).lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                            .foregroundStyle(Brand.amber.opacity(0.3)).lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                     }
                     if let sample = selectedSample {
                         RuleMark(x: .value("Reading", sample.date)).foregroundStyle(Brand.textMuted.opacity(0.5)).lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 4]))
