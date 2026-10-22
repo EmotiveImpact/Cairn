@@ -43,11 +43,7 @@
   function stage() {
     if (!staged) return;
     var len = track.offsetHeight - innerHeight;
-    var raw = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * N;
-    // each stop holds still for a stretch of scrolling, then moves quickly on to the next
-    var seg = Math.min(Math.floor(raw), N - 1), f = raw - seg;
-    var m = clamp((f - 0.3) / 0.4);
-    stageAt = seg + m * m * (3 - 2 * m);
+    stageAt = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * N;
     layers.forEach(function (el, i) {
       var d = stageAt < starts[i] ? stageAt - starts[i] : stageAt > ends[i] ? stageAt - ends[i] : 0;
       var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
@@ -68,20 +64,81 @@
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
 
-  // when scrolling stops between two chapters, glide to the nearer one so every chapter feels like a stop
+  // one flick, one stop: inside the stack, a wheel, swipe or key press moves exactly one stop,
+  // glides there, and then holds until the gesture has finished
   if (staged) {
-    var settleTimer, gliding = false;
-    var settle = function () {
-      if (gliding) { gliding = false; return; }
-      var len = track.offsetHeight - innerHeight, top = track.offsetTop, n = N;
-      if (scrollY < top - 2 || scrollY > top + len + 2) return;
-      var raw = (scrollY - top) / Math.max(1, len) * n, k = Math.round(raw);
-      var y = Math.round(top + len * k / n);
-      if (Math.abs(y - scrollY) > 2) { gliding = true; window.scrollTo({ top: y, behavior: 'smooth' }); }
+    document.documentElement.style.scrollBehavior = 'auto';
+    var moving = false, quietUntil = 0, lastWheel = 0, lastMag = 0;
+    var stopY = function (k) { return Math.round(track.offsetTop + (track.offsetHeight - innerHeight) * k / N); };
+    var stopNow = function () { return Math.round(clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - innerHeight)) * N); };
+    var inside = function () { return scrollY >= track.offsetTop - 2 && scrollY <= stopY(N) + 2; };
+    var go = function (k) {
+      k = Math.max(0, Math.min(N, k));
+      var from = scrollY, to = stopY(k), s0 = performance.now(), dur = Math.min(1100, 650 + Math.abs(to - from) / innerHeight * 180);
+      if (Math.abs(to - from) < 2) return;
+      moving = true;
+      (function step(now) {
+        var t = clamp((now - s0) / dur), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        window.scrollTo(0, from + (to - from) * e);
+        if (t < 1) requestAnimationFrame(step); else { moving = false; quietUntil = performance.now() + 250; }
+      })(s0);
     };
-    if ('onscrollend' in window) window.addEventListener('scrollend', settle);
-    else window.addEventListener('scroll', function () { clearTimeout(settleTimer); settleTimer = setTimeout(settle, 160); }, { passive: true });
+    // a new gesture, rather than the tail of the last one: a pause, or a clearly harder push
+    // (every wheel event updates the record, even mid-glide, so a long trackpad tail never counts twice)
+    var rising = 0, peak = 0, held = false;   // held: this gesture has already moved a stop
+    var newGesture = function (mag, now) {
+      // a tail only ever fades, so once it has faded, a push that builds again is a new flick
+      rising = mag > lastMag + 3 ? rising + 1 : 0;
+      var faded = lastMag < peak * 0.6;
+      var isNew = now - lastWheel > 220 || (faded && (mag > lastMag * 1.8 + 12 || rising >= 2));
+      peak = isNew ? mag : Math.max(peak, mag);
+      lastWheel = now; lastMag = mag;
+      return isNew;
+    };
+    window.addEventListener('wheel', function (e) {
+      if (e.ctrlKey || Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+      var now = performance.now(), mag = Math.abs(e.deltaY), down = e.deltaY > 0, k = stopNow();
+      if (newGesture(mag, now)) held = false;
+      if (!inside()) return;
+      // at either end, a new gesture scrolls on as normal; the tail of the one that brought us here does not
+      if (!moving && ((down && k >= N && scrollY >= stopY(N) - 2) || (!down && k <= 0 && scrollY <= stopY(0) + 2))) { if (held) e.preventDefault(); return; }
+      e.preventDefault();
+      if (moving || held || now < quietUntil || mag < 2) return;
+      held = true;
+      // caught between two stops (say, coming back up from below): settle on the next one in that direction,
+      // or back on the one just passed if it is only a little way behind
+      var raw = clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - innerHeight)) * N, f = raw - Math.floor(raw);
+      if (Math.abs(raw - Math.round(raw)) * (track.offsetHeight - innerHeight) / N > 2) { go(down ? (f < 0.3 ? Math.floor(raw) : Math.ceil(raw)) : (f > 0.7 ? Math.ceil(raw) : Math.floor(raw))); return; }
+      go(k + (down ? 1 : -1));
+    }, { passive: false });
+    // coming back up from the page below: land on the last stop rather than part-way
+    window.addEventListener('scroll', function () {
+      if (moving) return;
+      var y = scrollY, end = stopY(N);
+      if (y < end - 2 && y > track.offsetTop + 2 && Math.abs(y - stopY(stopNow())) > 2 && performance.now() - lastWheel > 120) {
+        clearTimeout(window.__stackSettle); window.__stackSettle = setTimeout(function () { if (!moving && inside()) go(stopNow()); }, 140);
+      }
+    }, { passive: true });
+    var ty = null;
+    window.addEventListener('touchstart', function (e) { ty = inside() ? e.touches[0].clientY : null; }, { passive: true });
+    window.addEventListener('touchmove', function (e) { if (ty !== null && (moving || inside())) { var k = stopNow(), d = ty - e.touches[0].clientY; if ((d > 0 && k < N) || (d < 0 && k > 0)) e.preventDefault(); } }, { passive: false });
+    window.addEventListener('touchend', function (e) {
+      if (ty === null || moving) return; var d = ty - e.changedTouches[0].clientY, k = stopNow(); ty = null;
+      if (Math.abs(d) > 40) go(k + (d > 0 ? 1 : -1));
+    }, { passive: true });
+    window.addEventListener('keydown', function (e) {
+      if (!inside() || e.target.closest('input, textarea, button, [contenteditable]')) return;
+      var k = stopNow(), dir = { ArrowDown: 1, PageDown: 1, ' ': e.shiftKey ? -1 : 1, ArrowUp: -1, PageUp: -1 }[e.key];
+      if (!dir || (dir > 0 && k >= N) || (dir < 0 && k <= 0)) return;
+      e.preventDefault(); if (!moving) go(k + dir);
+    });
+    // the menu links go to a chapter's first stop
+    document.querySelectorAll('a[href^="#"]').forEach(function (a) {
+      var el = document.getElementById(a.getAttribute('href').slice(1)), i = layers.indexOf(el);
+      if (i >= 0) a.addEventListener('click', function (e) { e.preventDefault(); go(starts[i]); });
+    });
   }
+
 
 
 
