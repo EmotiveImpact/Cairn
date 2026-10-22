@@ -13,7 +13,7 @@
     if (name === 'tunnel' && window.startTunnel) window.startTunnel();
   }
   if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
-  if (/^#(profile|desk|window)$/.test(location.hash)) pick(location.hash.slice(1));
+  if (/^#(valley|profile|desk|window)$/.test(location.hash)) pick(location.hash.slice(1));
   // review only: the floating pill menu, or the earlier full-width bar
   function menu(style) {
     document.body.classList.toggle('menu-bar', style === 'bar');
@@ -22,16 +22,6 @@
   }
   document.querySelectorAll('.menu-switch button').forEach(function (b) { b.addEventListener('click', function () { menu(b.dataset.menu); }); });
   try { if (localStorage.getItem('cairn-menu') === 'bar') menu('bar'); } catch (e) {}
-  // review only: try the pictures behind the app panel
-  var appSec = document.getElementById('app');
-  if (appSec) appSec.querySelectorAll('.app-switch button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var n = b.dataset.bg, img = appSec.querySelector('.app-photo img');
-      appSec.dataset.bg = n;
-      if (n !== 'none') img.src = 'assets/app-bg/' + n + '.jpg';
-      appSec.querySelectorAll('.app-switch button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
-    });
-  });
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 

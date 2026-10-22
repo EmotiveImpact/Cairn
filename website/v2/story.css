@@ -269,7 +269,13 @@ body:not(.staged) .disk-next { display: none; }
 .story-app.beam-hero .product-composition { margin-top: clamp(64px, calc(46vw - 300px), 560px); }
 .story-app[data-bg="none"] .product-composition { margin-top: 64px; }
 .story-app .product-screen { position: relative; }
-.app-switch { bottom: 24px; }
-@media (max-width: 900px) { .story-app.beam-hero .product-composition { margin-top: 64vw; } .app-switch { top: auto; bottom: 16px; } }
+@media (max-width: 900px) { .story-app.beam-hero .product-composition { margin-top: 64vw; } }
 .story-app .hero-copy h2 { text-shadow: 0 2px 28px rgba(9,11,13,.7), 0 1px 3px rgba(9,11,13,.4); }
 .story-app:not([data-bg="none"]) .hero-copy h2 span { color: rgba(220,232,243,.72); }
+
+/* header option: the valley at first light, words low on the left as in Edem's reference, stones in the middle */
+/* the photo is drawn a little larger and anchored low, which lifts the stones above the words and to the right of them */
+.look-photo[data-photo="valley"] .open-photo { object-position: 50% 58%; transform: scale(1.25); transform-origin: 17% 99%; }
+@media (max-width: 900px) { .look-photo[data-photo="valley"] .open-photo { transform: scale(1.5); transform-origin: 50% 100%; } }
+.look-photo[data-photo="valley"]::after { background: linear-gradient(to top, rgba(7,9,12,.92), rgba(7,9,12,.55) 30%, transparent 55%), linear-gradient(to bottom, rgba(7,9,12,.55), transparent 22%); }
+.look-photo[data-photo="valley"] .open-main { justify-content: flex-end; padding-bottom: 8px; }
