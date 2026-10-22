@@ -39,7 +39,7 @@
   var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
   var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 1;   // read by the tunnel on every frame
-  var LOW = innerWidth < 760 ? 0.29 : 0.31;             // how far below the middle the hallway's far end sits, as a share of the height
+  var LOW = innerWidth < 760 ? 0.29 : 0.21;             // how far below the middle the hallway's far end sits, as a share of the height
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
   if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
