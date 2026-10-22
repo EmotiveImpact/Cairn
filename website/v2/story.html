@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=7" />
+    <link rel="stylesheet" href="story.css?v=8" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=6" defer></script>
+    <script src="story.js?v=7" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -77,24 +77,28 @@
         </div>
       </section>
 
-      <section class="chapter story-disk" id="disk" aria-labelledby="disk-title">
+      <section class="chapter story-disk" id="disk" data-stops="2" aria-labelledby="disk-title">
         <div class="shell">
           <div class="centre"><p class="label reveal">See it at a glance</p>
           <h2 id="disk-title" class="reveal">Your whole disk, in one picture. <span>The junk lights up. Your work stays put.</span></h2></div>
-          <div class="head reveal"><span>Macintosh HD · <b>494 GB</b></span><span class="ready"><b>38.6 GB</b> ready to free</span></div>
-          <div class="disk-bar" role="img" aria-label="Macintosh HD, 494 GB: your projects 142 GB and AI conversations 3.1 GB are protected; Xcode build files 14.2 GB, Docker build cache 9.8 GB, node_modules 9.5 GB and npm 5.1 GB are ready to free; photos 61 GB, apps 48 GB and system 160 GB are left alone.">
-            <div class="seg safe" style="--g:142;--i:0"><span>Your projects</span><b>142 GB</b></div>
-            <div class="seg" style="--g:61;--i:1"><span>Photos</span><b>61 GB</b></div>
-            <div class="seg junk" style="--g:24;--i:2"><span>Xcode</span><b>14.2</b></div>
-            <div class="seg" style="--g:48;--i:3"><span>Apps</span><b>48 GB</b></div>
-            <div class="seg junk" style="--g:20;--i:4"><span>Docker</span><b>9.8</b></div>
-            <div class="seg safe" style="--g:14;--i:5"><span>AI chats</span><b>3.1</b></div>
-            <div class="seg junk" style="--g:20;--i:6"><span>node_modules</span><b>9.5</b></div>
-            <div class="seg" style="--g:70;--i:7"><span>System</span><b>160 GB</b></div>
-            <div class="seg junk" style="--g:14;--i:8"><span>npm</span><b>5.1</b></div>
-            <div class="seg free" style="--g:34;--i:9"><span>Free</span><b>33.8 GB</b></div>
+          <div class="disk-graphic">
+            <div class="head"><span>Macintosh HD · <b>494 GB</b></span><span class="ready"><b>38.6 GB</b> <em class="ready-a">ready to free</em><em class="ready-b">cleaned up</em></span></div>
+            <div class="disk-bar" role="img" aria-label="Macintosh HD, 494 GB: your projects 142 GB and AI conversations 3.1 GB are protected; Xcode build files 14.2 GB, Docker build cache 9.8 GB, node_modules 9.5 GB and npm 5.1 GB are ready to free; photos 61 GB, apps 48 GB and system 160 GB are left alone. After cleaning, free space grows from 33.8 GB to 72.4 GB.">
+              <div class="seg safe" style="--g:142;--i:0"><span>Your projects</span><b>142 GB</b></div>
+              <div class="seg" style="--g:61;--i:1"><span>Photos</span><b>61 GB</b></div>
+              <div class="seg junk" style="--g:24;--i:2;--k:0"><span>Xcode</span><b>14.2</b></div>
+              <div class="seg" style="--g:48;--i:3"><span>Apps</span><b>48 GB</b></div>
+              <div class="seg junk" style="--g:20;--i:4;--k:1"><span>Docker</span><b>9.8</b></div>
+              <div class="seg safe" style="--g:14;--i:5"><span>AI chats</span><b>3.1</b></div>
+              <div class="seg junk" style="--g:20;--i:6;--k:2"><span>node_modules</span><b>9.5</b></div>
+              <div class="seg" style="--g:70;--i:7"><span>System</span><b>160 GB</b></div>
+              <div class="seg junk" style="--g:14;--i:8;--k:3"><span>npm</span><b>5.1</b></div>
+              <div class="seg free" style="--g:34;--i:9"><span>Free</span><b><span id="free-gb">33.8</span> GB</b></div>
+            </div>
+            <div class="legend"><span class="j"><i></i>Ready to free</span><span><i></i>Left alone</span><span class="p"><i></i>Protected, never touched</span><span class="f"><i></i>Free space</span></div>
+            <p class="disk-next">Scroll to clean it up</p>
+            <p class="disk-done"><b>38.6 GB back.</b> Your projects, photos and AI chats didn’t move.</p>
           </div>
-          <div class="legend reveal"><span class="j"><i></i>Ready to free</span><span><i></i>Left alone</span><span class="p"><i></i>Protected, never touched</span><span class="f"><i></i>Free space</span></div>
         </div>
       </section>
 

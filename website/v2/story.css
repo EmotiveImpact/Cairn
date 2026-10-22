@@ -136,7 +136,7 @@ body { background: #090b0d; }
   -webkit-mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent); mask-image: linear-gradient(to bottom, transparent, #000 30%, #000 70%, transparent);
   animation: streak 3.2s linear infinite; }
 @keyframes streak { from { background-position: 0 0; } to { background-position: 28px 0; } }
-.in .seg { opacity: 1; filter: none; }
+.build .seg { opacity: 1; filter: none; transition-delay: calc(300ms + var(--i) * 80ms); }
 .lit .seg.junk { background: linear-gradient(180deg, rgba(140,196,255,.42), rgba(47,127,224,.2)); box-shadow: 0 0 40px -4px rgba(90,160,240,.7), inset 0 1px 0 rgba(255,255,255,.35); transition-delay: calc(var(--i) * 110ms); }
 .lit .seg.junk::after { opacity: 1; }
 .lit .seg.junk span { color: #e6f2ff; } .lit .seg.junk b { color: #fff; }
@@ -154,7 +154,7 @@ body { background: #090b0d; }
 .chat-body { min-height: 440px; }
 
 /* ---------- the stack: chapters hold still and dissolve into one another ---------- */
-.staged .stage-track { height: calc(100svh + 3 * 115svh); }
+.staged .stage-track { height: calc(100svh + 4 * 115svh); }
 .staged .stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
 .staged .stage > .chapter { position: absolute; inset: 0; min-height: 0; padding-top: 88px; will-change: opacity, transform, filter; }
 .staged .stage > .chapter .reveal { opacity: 1; transform: none; filter: none; }
@@ -216,3 +216,33 @@ body { background: #090b0d; }
 .look-photo[data-photo="tunnel"]::after { background: linear-gradient(to right, rgba(5,8,13,.8), rgba(5,8,13,.35) 40%, transparent 60%), linear-gradient(to top, rgba(5,8,13,.7), transparent 35%); }
 .story-page .header-action { display: inline-flex; align-items: center; gap: 8px; }
 .story-page .header-action .apple { flex: 0 0 auto; margin-top: -2px; }
+
+/* the disk, told in order: words, then the bar builds, then the junk lights up, then it is cleaned away */
+.disk-graphic .head, .disk-graphic .legend { opacity: 0; filter: blur(8px); transition: opacity .8s ease, filter .8s ease; }
+.build .disk-graphic .head, .build .disk-graphic .legend { opacity: 1; filter: none; transition-delay: .2s; }
+.build .disk-graphic .legend { transition-delay: 1.1s; }
+.ready em { font-style: normal; transition: opacity .5s ease; }
+.ready .ready-b { position: absolute; opacity: 0; }
+.ready { position: relative; }
+.cleaned .ready .ready-a { opacity: 0; } .cleaned .ready .ready-b { position: static; opacity: 1; transition-delay: .9s; }
+.cleaned .ready .ready-a { position: absolute; }
+.seg { transition: opacity .8s ease, filter .8s ease, background .7s ease, box-shadow .7s ease, border-color .7s ease, flex-grow 1s cubic-bezier(.65,0,.35,1), padding 1s cubic-bezier(.65,0,.35,1), margin 1s cubic-bezier(.65,0,.35,1); }
+.cleaned .seg.junk { flex-grow: 0; padding-inline: 0; margin-left: -3px; opacity: 0; filter: blur(6px);
+  transition: opacity .45s ease calc(var(--k) * 110ms), filter .45s ease calc(var(--k) * 110ms), flex-grow 1s cubic-bezier(.65,0,.35,1) .55s, padding 1s cubic-bezier(.65,0,.35,1) .55s, margin 1s cubic-bezier(.65,0,.35,1) .55s; }
+.seg.free { transition: flex-grow 1s cubic-bezier(.65,0,.35,1) .55s, background .8s ease .9s, border-color .8s ease .9s, box-shadow .8s ease .9s, opacity .8s ease, filter .8s ease; }
+.cleaned .seg.free { flex-grow: 112; border: 1px solid rgba(207,230,255,.45); background: linear-gradient(180deg, rgba(207,230,255,.1), rgba(207,230,255,.03)); box-shadow: 0 0 40px -10px rgba(140,196,255,.5); }
+.cleaned .seg.free span { color: #cfe6ff; } .cleaned .seg.free b { color: #fff; }
+.disk-next, .disk-done { margin: 22px 0 0; text-align: center; font-size: 15px; color: #8b98a4; transition: opacity .6s ease, filter .6s ease; }
+.disk-next { opacity: 0; } .lit .disk-next { opacity: 1; transition-delay: 1.2s; }
+.disk-done { position: absolute; left: 0; right: 0; opacity: 0; filter: blur(6px); }
+.disk-done b { color: #fff; font-weight: 500; }
+.cleaned .disk-next { opacity: 0; transition-delay: 0s; }
+.cleaned .disk-done { opacity: 1; filter: none; transition-delay: 1.5s; }
+.disk-graphic { position: relative; }
+body:not(.staged) .disk-next { display: none; }
+@media (prefers-reduced-motion: reduce) { .seg, .seg.free, .cleaned .seg.junk { transition: none; } }
+.seg b span { font-size: inherit; color: inherit; white-space: nowrap; overflow: visible; }
+.disk-bar { opacity: 0; transition: opacity .6s ease; }
+.build .disk-bar { opacity: 1; }
+.legend span { transition: opacity .6s ease; }
+.cleaned .legend .j { opacity: .35; transition-delay: .6s; }

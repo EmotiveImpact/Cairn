@@ -23,22 +23,27 @@
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
-  var stageAt = 0;            // 0 = opening, 1 = number, 2 = disk, 3 = ask
+  var stageAt = 0;            // stops: 0 opening, 1 number, 2 disk, 3 disk cleaned, 4 ask
+  // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
+  var starts = [], ends = [], N = 0;
+  layers.forEach(function (el, i) { var s = +(el.dataset.stops || 1); starts[i] = N; ends[i] = N + s - 1; N += s; });
+  N = Math.max(1, N - 1);
+  var disk = document.getElementById('disk');
   var open = document.getElementById('open'), number = document.getElementById('number');
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
-  if (staged) document.body.classList.add('staged');
+  if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function stage() {
     if (!staged) return;
     var len = track.offsetHeight - innerHeight;
-    var raw = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * (layers.length - 1);
-    // each chapter holds still for a stretch of scrolling, then dissolves quickly into the next
-    var seg = Math.min(Math.floor(raw), layers.length - 2), f = raw - seg;
+    var raw = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * N;
+    // each stop holds still for a stretch of scrolling, then moves quickly on to the next
+    var seg = Math.min(Math.floor(raw), N - 1), f = raw - seg;
     var m = clamp((f - 0.3) / 0.4);
     stageAt = seg + m * m * (3 - 2 * m);
     layers.forEach(function (el, i) {
-      var d = stageAt - i;
+      var d = stageAt < starts[i] ? stageAt - starts[i] : stageAt > ends[i] ? stageAt - ends[i] : 0;
       var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
       var out = i === layers.length - 1 ? 0 : clamp((d - 0.2) / 0.4); // and out from 0.2 to 0.6
       var o = Math.min(inn, 1 - out);
@@ -52,6 +57,7 @@
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
       if (here[i] && !at[i] && Math.abs(d) < 0.06) { at[i] = true; here[i].forEach(function (p) { p[0](); }); }
       if (here[i] && at[i] && Math.abs(d) > 0.7) { at[i] = false; here[i].forEach(function (p) { p[1](); }); }
+      if (el === disk && ends[i] > starts[i] && built) setCleaned(stageAt >= starts[i] + 0.5);
     });
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
@@ -61,7 +67,7 @@
     var settleTimer, gliding = false;
     var settle = function () {
       if (gliding) { gliding = false; return; }
-      var len = track.offsetHeight - innerHeight, top = track.offsetTop, n = layers.length - 1;
+      var len = track.offsetHeight - innerHeight, top = track.offsetTop, n = N;
       if (scrollY < top - 2 || scrollY > top + len + 2) return;
       var raw = (scrollY - top) / Math.max(1, len) * n, k = Math.round(raw);
       var y = Math.round(top + len * k / n);
@@ -270,8 +276,26 @@
     (function step(now) { if (mine !== run) return; var t = clamp((now - s) / 1800); count.textContent = (38.6 * ease(t)).toFixed(1); if (t < 1) requestAnimationFrame(step); else number.classList.add('done'); })(s);
   }, function () { run++; count.textContent = '0.0'; number.classList.remove('done'); });
 
-  var disk = document.getElementById('disk');
-  once(disk, 0.4, function () { setTimeout(function () { disk.classList.add('lit'); }, reduced ? 0 : 1100); });
+  // the disk: words first, then the bar builds, the junk lights up, and scrolling on cleans it away
+  var freeGb = document.getElementById('free-gb'), built = false, cleaned = false, freeRun = 0;
+  function countFree(to) {
+    var from = parseFloat(freeGb.textContent), s = performance.now(), mine = ++freeRun;
+    if (reduced) { freeGb.textContent = to.toFixed(1); return; }
+    setTimeout(function () {
+      (function step(now) { if (mine !== freeRun) return; var t = clamp((now - s - 500) / 1200); freeGb.textContent = (from + (to - from) * ease(t)).toFixed(1); if (t < 1) requestAnimationFrame(step); })(performance.now());
+    }, 0);
+  }
+  function setCleaned(on) {
+    if (on === cleaned) return;
+    cleaned = on; disk.classList.toggle('cleaned', on); countFree(on ? 72.4 : 33.8);
+  }
+  once(disk, 0.4, function () {
+    disk.classList.add('build');
+    setTimeout(function () {
+      disk.classList.add('lit'); built = true;
+      if (staged) stage(); else setTimeout(function () { setCleaned(true); }, reduced ? 0 : 2600);
+    }, reduced ? 0 : 1900);
+  });
 
   // chat tabs: the same answer in whichever tool you use
   document.querySelectorAll('.chat-tabs button').forEach(function (b) {
