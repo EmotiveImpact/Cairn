@@ -16,8 +16,8 @@
     <script src="assets/cairn-interactions.js?v=20260930-1" defer></script>
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
-    <link rel="stylesheet" href="beam-hero.css?v=3" />
-    <script src="beam-hero.js?v=3" defer></script>
+    <link rel="stylesheet" href="beam-hero.css?v=4" />
+    <script src="beam-hero.js?v=4" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -38,22 +38,45 @@
         <div class="hero-atmosphere" aria-hidden="true"><img src="assets/stone-seam.png" width="1536" height="1024" alt="" fetchpriority="high" /></div>
         <div class="shell hero-layout">
           <div class="hero-copy">
-            <p class="section-label">More space. Same momentum.</p>
+            <p class="section-label">A Mac cleaner for developers</p>
             <h1 id="hero-title">Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
-            <p class="hero-description">Make room for your next build. Review the caches and tools taking up space, while protecting the code and conversations that got you here.</p>
+            <p class="hero-description">Get back the space your build files and caches took. Your code and AI conversations are never touched.</p>
             <div class="hero-actions">
               <a class="button button-light" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">View app preview</a>
-              <a class="text-link" href="#problem">Why Cairn</a>
+              <a class="text-link" href="#changes">See how it works</a>
             </div>
             <p class="hero-availability">Native to macOS. In development.</p>
           </div>
           <figure class="product-composition" id="product">
             <div class="fx" id="fx" aria-hidden="true"><canvas id="rays"></canvas><div class="core"></div><canvas id="spark"></canvas></div>
             <div class="flare" aria-hidden="true"></div>
-            <a class="product-screen" href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog" aria-label="View the Cairn Overview preview">
-              <img src="assets/app-overview-current.png" width="1120" height="740" alt="Cairn Overview with 9.9 GB available and a chart of falling free space" fetchpriority="high" />
-            </a>
-            <figcaption><span>Inside Cairn</span><span>Native app preview · Sample data</span></figcaption>
+            <div class="product-screen night-window" role="img" aria-label="The Cairn home screen: 38.6 GB you can get back, free space going from 9.9 GB to 48.5 GB, and the three biggest items.">
+              <div class="nw-glow" aria-hidden="true"></div>
+              <aside class="nw-side" aria-hidden="true">
+                <div class="nw-lights"><i></i><i></i><i></i></div>
+                <span class="on"><svg viewBox="0 0 16 16"><path d="M2.5 7.5 8 3l5.5 4.5V13H2.5z"/></svg>Home</span>
+                <span><svg viewBox="0 0 16 16"><path d="M2 4h4l1.5 1.5H14V13H2z"/></svg>Projects</span>
+                <span><svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg>Clean</span>
+                <span><svg viewBox="0 0 16 16"><path d="M4 2h5l3 3v9H4z"/></svg>Files</span>
+                <span><svg viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5"/><rect x="9" y="2.5" width="4.5" height="4.5"/><rect x="2.5" y="9" width="4.5" height="4.5"/><rect x="9" y="9" width="4.5" height="4.5"/></svg>Apps</span>
+                <span><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.5"/><path d="M8 5v3.2l2 1.3"/></svg>Activity</span>
+                <span class="nw-end"><svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><circle cx="8" cy="8" r="5.5"/></svg>Settings</span>
+              </aside>
+              <div class="nw-main" aria-hidden="true">
+                <p class="nw-eyebrow">Macintosh HD · Ready to free</p>
+                <p class="nw-big"><b><span id="nw-count">38.6</span> GB</b><span>you can get back</span></p>
+                <p class="nw-text">Build files and caches your tools rebuild on their own. Your code, documents and AI conversations are never included.</p>
+                <div class="nw-btns"><span class="primary">Review and free</span><span>See everything</span></div>
+                <div class="nw-bar"><i></i><em></em></div>
+                <div class="nw-bar-text"><span><b>9.9 GB</b> free of 494 GB</span><span><b>48.5 GB</b> free after</span></div>
+                <div class="nw-cards">
+                  <div><small>Xcode build files</small><strong>14.2 GB</strong><em>Rebuilt on next build</em></div>
+                  <div><small>Docker build cache</small><strong>9.8 GB</strong><em>Grew 12 GB this week</em></div>
+                  <div><small>node_modules · npm</small><strong>9.5 GB</strong><em>6 idle projects</em></div>
+                </div>
+              </div>
+            </div>
+            <figcaption><span>The new Cairn home screen</span><span>Sample data · <a href="assets/app-overview-current.png" data-preview="overview" aria-haspopup="dialog">See the current app</a></span></figcaption>
           </figure>
         </div>
         <div class="shell stack-strip" aria-label="Developer tools covered by Cairn">

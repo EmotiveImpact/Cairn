@@ -13,12 +13,14 @@
 .text-link:hover span[aria-hidden] { transform: translateX(3px); }
 
 /* ---------- hero: copy on top, real screenshot below, beam landing on it ---------- */
-.beam-hero { --hit: 72%; }
+.beam-hero { --hit: 66%; }
 .beam-hero .hero-layout { display: block; padding-block: 120px 72px; }
 .beam-hero .hero-copy { max-width: 700px; container-type: normal; position: relative; z-index: 3; }
+.beam-hero .hero-description { max-width: 520px; }
 .beam-hero h1 { font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; text-wrap: balance; }
 .beam-hero h1 > span { display: inline; white-space: normal; color: var(--muted-head); }
-.beam-hero .hero-atmosphere img { opacity: .4; }
+/* the stone photo stays, faded right down so the beam has a dark stage */
+.beam-hero .hero-atmosphere img { opacity: .14; filter: saturate(.6); -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 70%); mask-image: linear-gradient(to bottom, #000 30%, transparent 70%); }
 .beam-hero .product-composition { position: relative; width: 100%; margin-top: 96px; }
 .beam-hero .product-screen { width: 100%; max-width: 100%; -webkit-mask-image: none; mask-image: none; border-color: rgba(160,205,255,.42);
   box-shadow: 0 -30px 80px -40px rgba(47,127,224,.55), 0 26px 70px rgba(0,0,0,.4); }
@@ -43,11 +45,59 @@
 .beam-hero .flare::after { content: ""; position: absolute; left: calc(var(--hit) - 300px); width: 600px; top: -90px; height: 180px;
   background: radial-gradient(ellipse at center, rgba(200,230,255,.7), rgba(140,196,255,.35) 22%, rgba(47,127,224,.14) 50%, transparent 72%); filter: blur(4px); }
 @media (max-width: 760px) {
-  .beam-hero { --hit: 80%; }
+  .beam-hero { --hit: 50%; }
+  .beam-hero .fx { height: 170px; }
+  .beam-hero .fx .core { height: 100%; }
   .beam-hero .hero-layout { padding-block: 64px 48px; }
-  .beam-hero .product-composition { margin-top: 80px; }
+  .beam-hero .product-composition { margin-top: 150px; }
   .beam-hero .flare::after { left: calc(var(--hit) - 160px); width: 320px; }
 }
+
+/* ---------- the new Night app window the beam lands on ---------- */
+.beam-hero .product-composition { perspective: 1600px; }
+.beam-hero .night-window { position: relative; display: grid; grid-template-columns: 210px 1fr; min-height: 560px; overflow: hidden; cursor: default;
+  border-radius: 14px; background: linear-gradient(180deg, #0f141a, #0a0d11 60%); color: #eef3f7; text-align: left;
+  transform-origin: 50% 0; transform: rotateX(var(--tilt, 0deg)) scale(var(--shrink, 1)); will-change: transform; }
+.night-window .nw-glow { position: absolute; left: calc(var(--hit) - 520px); top: -200px; width: 900px; height: 620px; pointer-events: none;
+  background: radial-gradient(ellipse at 50% 30%, rgba(140,196,255,.2), rgba(47,127,224,.08) 40%, transparent 70%); opacity: var(--lit, 1); }
+.night-window svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.4; flex: none; }
+.nw-side { position: relative; display: flex; flex-direction: column; gap: 2px; padding: 16px 10px; border-right: 1px solid rgba(220,235,247,.07); background: rgba(255,255,255,.015); font-size: 14px; color: #aab6c0; }
+.nw-side > span { display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 8px; }
+.nw-side > span.on { background: rgba(255,255,255,.06); color: #fff; }
+.nw-side .nw-end { margin-top: auto; }
+.nw-lights { display: flex; gap: 8px; padding: 2px 6px 22px; }
+.nw-lights i { width: 12px; height: 12px; border-radius: 50%; background: #ff5f57; }
+.nw-lights i + i { background: #febc2e; } .nw-lights i + i + i { background: #28c840; }
+.nw-main { position: relative; padding: 52px 56px 48px; }
+.nw-eyebrow { margin: 0; font-size: 11.5px; letter-spacing: .16em; text-transform: uppercase; color: #8b98a4; }
+.nw-big { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; margin: 18px 0 14px; }
+.nw-big b { font-weight: 300; font-size: clamp(54px, 7.6vw, 104px); line-height: .95; letter-spacing: -.035em; font-variant-numeric: tabular-nums; color: #fff;
+  text-shadow: 0 0 calc(30px * var(--lit, 1)) rgba(140,196,255,calc(.45 * var(--lit, 1))); }
+.nw-big > span { font-size: clamp(18px, 2vw, 26px); color: #8b98a4; }
+.nw-text { max-width: 520px; margin: 0; color: #b3bfc9; font-size: 15px; line-height: 1.55; }
+.nw-btns { display: flex; gap: 12px; margin-top: 22px; }
+.nw-btns span { padding: 11px 20px; border: 1px solid rgba(220,235,247,.12); border-radius: 9px; font-size: 14.5px; }
+.nw-btns .primary { border-color: #cfe6ff; background: #cfe6ff; color: #0e1a26; font-weight: 500; }
+.nw-bar { position: relative; height: 5px; margin-top: 34px; border-radius: 9px; background: rgba(255,255,255,.12); }
+.nw-bar i { position: absolute; inset: 0 auto 0 0; width: 98%; border-radius: inherit; background: rgba(255,255,255,.22); }
+.nw-bar em { position: absolute; top: 0; bottom: 0; right: 2%; width: calc(7.9% * var(--fill, 1)); border-radius: inherit; background: #e2f0ff; box-shadow: 0 0 12px rgba(140,196,255,.8); }
+.nw-bar-text { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; color: #8b98a4; }
+.nw-bar-text b { color: #fff; font-weight: 500; }
+.nw-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 32px; }
+.nw-cards > div { padding: 18px 20px; border: 1px solid rgba(220,235,247,.08); border-radius: 12px; background: rgba(255,255,255,.015); }
+.nw-cards small { display: block; font-size: 13px; color: #aab6c0; }
+.nw-cards strong { display: block; margin: 8px 0 6px; font-weight: 500; font-size: 22px; color: #fff; font-variant-numeric: tabular-nums; }
+.nw-cards em { font-style: normal; font-size: 12.5px; color: #77848f; }
+.beam-hero figcaption a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 900px) {
+  .beam-hero .night-window { grid-template-columns: 1fr; min-height: 0; }
+  .nw-side { display: none; }
+  .nw-main { padding: 34px 22px 26px; }
+  .nw-cards { grid-template-columns: 1fr; gap: 10px; }
+  .nw-cards > div:nth-child(3) { display: none; }
+  .nw-btns span { padding: 10px 14px; font-size: 13.5px; }
+}
+@media (prefers-reduced-motion: reduce) { .beam-hero .night-window { transform: none; } }
 
 /* ---------- problem: two quiet cards ---------- */
 .problem { background: transparent; }

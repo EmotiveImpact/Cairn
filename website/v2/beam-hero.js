@@ -300,3 +300,43 @@ void main() {
   new IntersectionObserver(function (entries) { inView = entries[0].isIntersecting; schedule(); }, { threshold: 0.35 }).observe(section);
   show(0);
 })();
+
+// Hero arrival: the window starts tilted back and flattens as you scroll,
+// and the number counts up to 38.6 GB as the beam lands on it.
+(function () {
+  var win = document.querySelector('.night-window');
+  var count = document.getElementById('nw-count');
+  if (!win || !count) return;
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var TARGET = 38.6;
+  if (reduced) return;
+
+  function ease(t) { return 1 - Math.pow(1 - t, 3); }
+  function tilt() {
+    var r = win.getBoundingClientRect(), vh = window.innerHeight;
+    var t = Math.min(1, Math.max(0, (vh - r.top) / (vh * 0.75)));
+    win.style.setProperty('--tilt', (16 * (1 - ease(t))).toFixed(2) + 'deg');
+    win.style.setProperty('--shrink', (0.94 + 0.06 * ease(t)).toFixed(4));
+  }
+  window.addEventListener('scroll', tilt, { passive: true });
+  window.addEventListener('resize', tilt);
+  tilt();
+
+  var started = false;
+  function run() {
+    if (started) return; started = true;
+    var t0 = performance.now(), DUR = 1800;
+    count.textContent = '0.0';
+    (function step(now) {
+      var t = Math.min(1, (now - t0) / DUR), e = ease(t);
+      count.textContent = (TARGET * e).toFixed(1);
+      win.style.setProperty('--fill', e.toFixed(3));
+      win.style.setProperty('--lit', (0.35 + 0.65 * e).toFixed(3));
+      if (t < 1) requestAnimationFrame(step);
+    })(t0);
+  }
+  count.textContent = '0.0'; win.style.setProperty('--fill', 0); win.style.setProperty('--lit', 0.35);
+  new IntersectionObserver(function (entries, io) {
+    if (entries[0].isIntersecting) { setTimeout(run, 350); io.disconnect(); }
+  }, { threshold: 0.3 }).observe(win);
+})();
