@@ -390,7 +390,8 @@ struct AppShell: View {
         if let result = celebration {
             WorkspaceCompletion(summary: result.summary,
                                 onRecovery: { celebration = nil; section = .activity },
-                                onClose: { celebration = nil })
+                                onClose: { celebration = nil },
+                                store: store)
         } else {
             content.id(section)
         }
