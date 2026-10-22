@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=10" />
+    <link rel="stylesheet" href="story.css?v=11" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=10" defer></script>
+    <script src="story.js?v=11" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -133,7 +133,9 @@
 
       </div></div>
 
-      <section class="chapter story-app beam-hero" id="app" data-option="beam" aria-labelledby="app-title">
+      <section class="chapter story-app beam-hero" id="app" data-option="beam" data-bg="valley" aria-labelledby="app-title">
+        <div class="app-photo" aria-hidden="true"><img src="assets/app-bg/valley.jpg" width="2560" height="1440" alt="" loading="lazy" /></div>
+        <div class="photo-switch app-switch" role="group" aria-label="Try another picture"><button type="button" data-bg="valley" aria-pressed="true">Valley</button><button type="button" data-bg="lake-blue" aria-pressed="false">Blue lake</button><button type="button" data-bg="lake-dawn" aria-pressed="false">Grey dawn</button><button type="button" data-bg="shore-night" aria-pressed="false">Night shore</button><button type="button" data-bg="none" aria-pressed="false">None</button></div>
         <div class="shell hero-layout">
           <div class="hero-copy">
             <p class="section-label">The app</p>

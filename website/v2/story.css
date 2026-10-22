@@ -258,3 +258,18 @@ body:not(.staged) .disk-next { display: none; }
 .menu-bar .site-header .brand-mark img { width: 32px; height: 32px; }
 .menu-bar .header-action { min-height: 40px; border-radius: 10px; }
 @media (max-width: 900px) { .menu-switch { right: auto; left: 50%; transform: translateX(-50%); bottom: 16px; } .menu-bar .header-inner { width: calc(100% - 32px); } .menu-bar .header-status { display: none; } }
+
+/* the app: a dark lake with a small stack of stones; the words sit in the sky and the panel
+   rises over the water, so the stones show between them (switchable while we choose) */
+.story-app { isolation: isolate; }
+.app-photo { position: absolute; inset: 0 0 auto 0; height: max(56.25vw, 720px); z-index: -1; overflow: hidden; }
+.app-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 50%; }
+.app-photo::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to bottom, var(--night) 0%, rgba(9,11,13,.5) 14%, rgba(9,11,13,.12) 40%, rgba(9,11,13,.1) 70%, rgba(9,11,13,.6) 88%, var(--night) 100%); }
+.story-app[data-bg="none"] .app-photo { display: none; }
+.story-app.beam-hero .product-composition { margin-top: clamp(64px, calc(46vw - 300px), 560px); }
+.story-app[data-bg="none"] .product-composition { margin-top: 64px; }
+.story-app .product-screen { position: relative; }
+.app-switch { bottom: 24px; }
+@media (max-width: 900px) { .story-app.beam-hero .product-composition { margin-top: 64vw; } .app-switch { top: auto; bottom: 16px; } }
+.story-app .hero-copy h2 { text-shadow: 0 2px 28px rgba(9,11,13,.7), 0 1px 3px rgba(9,11,13,.4); }
+.story-app:not([data-bg="none"]) .hero-copy h2 span { color: rgba(220,232,243,.72); }
