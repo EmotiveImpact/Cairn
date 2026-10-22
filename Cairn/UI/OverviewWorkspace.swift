@@ -36,7 +36,17 @@ struct OverviewWorkspace: View {
     }
     private var points: [CapacityReading] {
         let start = Calendar.current.startOfDay(for: Date()).addingTimeInterval(-Double(period - 1) * 86400)
-        return history.filter { $0.date >= start && $0.date <= Date() }.sorted { $0.date < $1.date }
+        let inRange = history.filter { $0.date >= start && $0.date <= Date() }.sorted { $0.date < $1.date }
+        // Several readings close together draw as a vertical spike at this scale,
+        // so keep the latest one per day (30 days) or per hour (7 days).
+        let bucket: TimeInterval = period == 30 ? 86_400 : 3_600
+        var kept: [CapacityReading] = []
+        for reading in inRange {
+            if let last = kept.last, floor(last.date.timeIntervalSince1970 / bucket) == floor(reading.date.timeIntervalSince1970 / bucket) {
+                kept[kept.count - 1] = reading
+            } else { kept.append(reading) }
+        }
+        return kept
     }
     private var plot: CapacityPlot {
         let maxGap: TimeInterval = preview ? 2 * 86_400 : period == 30 ? 36 * 3_600 : 8 * 3_600
@@ -192,32 +202,38 @@ struct OverviewWorkspace: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
-        } else if !store.hasLiveResults {
-            HStack(spacing: 16) {
-                Image(systemName: "sparkle.magnifyingglass").font(.system(size: 26)).foregroundStyle(Brand.blue)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Find out what you can free").font(.system(size: 15, weight: .semibold))
-                    Text("A scan takes a minute or two. Nothing is removed until you review it.")
-                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                }
-                Spacer()
-                Button("Scan this Mac") { scan() }.buttonStyle(ControlPanelButtonStyle(primary: true)).disabled(preview)
+        } else if !store.hasLiveResults || store.phase == .cancelled {
+            // Same big, open type as the result. No box: just say what is missing and offer the scan.
+            VStack(alignment: .leading, spacing: 0) {
+                Text(store.phase == .cancelled ? "Finish the scan" : "Find what you can get back")
+                    .font(.system(size: 44, weight: .light)).tracking(-1.4)
+                Text(store.phase == .cancelled
+                     ? "The last scan was stopped early, so Cairn can't give you a number yet. A full scan takes a minute or two."
+                     : "A scan takes a minute or two. Nothing is removed until you review it.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
+                    .padding(.top, 6)
+                HStack(spacing: 10) {
+                    Button { scan() } label: { Text("Scan this Mac").frame(minWidth: 140) }
+                        .buttonStyle(ControlPanelButtonStyle(primary: true)).controlSize(.large)
+                        .disabled(preview || store.isCleaning)
+                    Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle())
+                }.padding(.top, 16)
             }
-            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
-            HStack(spacing: 16) {
-                Image(systemName: "checkmark.circle").font(.system(size: 26)).foregroundStyle(Brand.room)
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Nothing to free right now").font(.system(size: 15, weight: .semibold))
-                    Text("Your caches and build files are already tidy. Cairn will show a number here when they grow.")
-                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text("All tidy").font(.system(size: 62, weight: .light)).tracking(-2.5)
+                    Text("nothing to get back right now").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
                 }
-                Spacer()
-                Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle())
+                Text("Your caches and build files are already small. Cairn will show a number here when they grow.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
+                    .padding(.top, 6)
+                Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle()).padding(.top, 16)
             }
-            .padding(20).frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.surfaceElevated))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 
@@ -289,7 +305,6 @@ struct OverviewWorkspace: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow).eyebrow().padding(.bottom, 2)
             content()
-            Spacer(minLength: 2)
             if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 2) }
         }
         .padding(.top, 14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -468,8 +483,7 @@ struct OverviewWorkspace: View {
     }
     private var header: some View {
         HStack(alignment: .center) {
-            Text(storageHeadline).font(.system(size: 13, weight: .medium))
-                .foregroundStyle(lowSpace ? Brand.amber : Brand.textSecondary)
+            Text("This Mac").font(.system(size: 17)).foregroundStyle(Brand.textSecondary)
             if let drive = externalDrive { drivePill(drive).padding(.leading, 12) }
             Spacer()
             HStack(spacing: 8) {
