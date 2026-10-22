@@ -21,6 +21,16 @@
   }
   document.querySelectorAll('.menu-switch button').forEach(function (b) { b.addEventListener('click', function () { menu(b.dataset.menu); }); });
   try { if (localStorage.getItem('cairn-menu') === 'bar') menu('bar'); } catch (e) {}
+  // review only: the hallway as it first looked, or darker in the middle behind the words
+  var numberEl = document.getElementById('number');
+  function hall(look) {
+    if (!numberEl) return;
+    numberEl.dataset.hall = look;
+    numberEl.querySelectorAll('.hall-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.hall === look)); });
+    try { localStorage.setItem('cairn-hall', look); } catch (e) {}
+  }
+  if (numberEl) numberEl.querySelectorAll('.hall-switch button').forEach(function (b) { b.addEventListener('click', function () { hall(b.dataset.hall); }); });
+  try { if (localStorage.getItem('cairn-hall') === 'darker') hall('darker'); } catch (e) {}
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -268,7 +278,7 @@
     '  else if (rd.y > 0.0) col = wall(vec2(z, p.x + 3.0), d) * 0.7;',
     '  else {',
     // the floor: dark glossy tiles, with the light of the walls and the far end reflected in it
-    '    vec2 tile = abs(fract(vec2(p.x / 0.32, z / 0.32)) - 0.5);',
+    '    vec2 tile = abs(fract(vec2(p.x / 0.32 + 0.5, z / 0.32)) - 0.5);',
     '    float seam = smoothstep(0.47, 0.5, max(tile.x, tile.y));',
     '    col = vec3(0.02, 0.04, 0.08) + vec3(0.08, 0.16, 0.3) * seam * 0.6;',
     '    col += vec3(0.2, 0.45, 0.9) * exp(-abs(abs(p.x) - W) * 6.0) * 0.5;',

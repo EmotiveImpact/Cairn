@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=24" />
+    <link rel="stylesheet" href="story.css?v=25" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=24" defer></script>
+    <script src="story.js?v=25" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -61,8 +61,9 @@
         </div>
       </section>
 
-      <section class="chapter story-number" id="number" aria-labelledby="number-title">
+      <section class="chapter story-number" id="number" data-hall="original" aria-labelledby="number-title">
         <canvas class="dive-tunnel" id="tunnel" aria-hidden="true"></canvas>
+        <div class="photo-switch hall-switch" role="group" aria-label="Try another hallway"><button type="button" data-hall="original" aria-pressed="true">Original</button><button type="button" data-hall="darker" aria-pressed="false">Darker</button></div>
         <div class="shell dive-words">
           <p class="label reveal">On a typical developer Mac</p>
           <p class="big-num reveal" aria-label="38.6 gigabytes"><span id="count">0.0</span><small>GB</small></p>
