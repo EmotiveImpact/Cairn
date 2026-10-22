@@ -251,6 +251,11 @@ struct AppShell: View {
                 return parts.joined(separator: "  ")
             }
         }
+        // AI tools reach the running app through this bridge to plan and run cleanups.
+        .task {
+            guard !previewMode else { return }
+            AgentBridge.shared.attach(store: store, proEnabled: { license.isUnlocked })
+        }
         .task {
             guard !previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--scan-memory-report=") }) else { return }
             try? await Task.sleep(nanoseconds: 1_000_000_000)
