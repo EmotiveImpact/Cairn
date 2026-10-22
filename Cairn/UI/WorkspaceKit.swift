@@ -76,6 +76,8 @@ struct WorkspaceRow: View {
     var status: String = ""
     var focused = false
     var action: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovered = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
@@ -87,7 +89,9 @@ struct WorkspaceRow: View {
                 if !value.isEmpty { Text(value).font(.system(size: 12)).monospacedDigit().foregroundStyle(Brand.textSecondary) }
                 if !status.isEmpty { Text(status).font(.system(size: 11)).foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing) }
             }.padding(.horizontal, 18).frame(height: 68).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(focused ? Brand.wash(0.045) : Color.clear)
+        }.buttonStyle(.plain).background(focused ? Brand.wash(0.045) : hovered ? Brand.wash(0.025) : Color.clear)
+            .onHover { hovered = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovered)
     }
 }
 struct WorkspaceColumns: View {

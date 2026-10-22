@@ -104,6 +104,7 @@ struct AppShell: View {
         else { return .dashboard }
         return s
     }()
+    @Environment(\.accessibilityReduceMotion) private var shellReduceMotion
     @State private var showReview = false
     @State private var reviewedGoalPlan: ReviewedSpacePlan?
     @State private var goalReviewPending = false
@@ -137,7 +138,11 @@ struct AppShell: View {
                     if showFDABanner { fdaBanner }
                     // Shell-owned stores survive navigation.
                     if showResultFilter && supportsResultFilter { resultFilter }
-                    content
+                    ZStack {
+                        content.id(section)
+                            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 6)), removal: .opacity))
+                    }
+                        .animation(shellReduceMotion ? nil : .easeOut(duration: 0.22), value: section)
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
                         .overlay(alignment: .topTrailing) { inPanelTools }

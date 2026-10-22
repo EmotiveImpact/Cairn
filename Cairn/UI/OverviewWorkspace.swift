@@ -9,6 +9,11 @@ struct OverviewWorkspace: View {
     var onOpen: (NavSection) -> Void
     var onCleanRecommended: () -> Void = {}
     @State private var period = 30
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// Home settles in once: sections rise in turn, then the graph line draws left to right.
+    @State private var appeared = false
+    @State private var reveal: CGFloat = 0
+    @State private var todayPulse = false
     @State private var showHistory = false
     @State private var selectedDate: Date?
     private var selectedSample: CapacityReading? {
@@ -120,11 +125,11 @@ struct OverviewWorkspace: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header
-                cleanHero.padding(.top, 14)
-                graphPanel.padding(.top, 14)
-                diskCard.padding(.top, 14)
-                nextTiles.padding(.top, 14)
+                header.modifier(Rise(on: appeared, order: 0, still: reduceMotion))
+                cleanHero.padding(.top, 14).modifier(Rise(on: appeared, order: 1, still: reduceMotion))
+                graphPanel.padding(.top, 14).modifier(Rise(on: appeared, order: 2, still: reduceMotion))
+                diskCard.padding(.top, 14).modifier(Rise(on: appeared, order: 3, still: reduceMotion))
+                nextTiles.padding(.top, 14).modifier(Rise(on: appeared, order: 4, still: reduceMotion))
             }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 26)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
@@ -133,7 +138,12 @@ struct OverviewWorkspace: View {
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
-        .onAppear(perform: refreshAgents)
+        .onAppear {
+            refreshAgents()
+            appeared = true
+            drawChart()
+        }
+        .onChange(of: period) { _, _ in drawChart() }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
         .onChange(of: store.isScanning) { _, running in if !running && !preview { Task { await control.refreshCapacity() } } }
@@ -181,7 +191,8 @@ struct OverviewWorkspace: View {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(Fmt.size(recommendedBytes))
                             .font(.system(size: 58, weight: .light)).tracking(-2.3).monospacedDigit()
-                            .contentTransition(.numericText())
+                            .contentTransition(.numericText(countsDown: true))
+                            .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: recommendedBytes)
                         Text("you can get back").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                     }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
@@ -269,6 +280,8 @@ struct OverviewWorkspace: View {
                         Spacer(minLength: 0)
                     }
                     .background(Capsule().fill(Brand.track))
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: ready)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: capacity.available)
                 }
                 .frame(height: 6)
                 .accessibilityLabel("\(Fmt.size(capacity.available)) free, \(Fmt.size(ready)) ready to free")
@@ -305,7 +318,7 @@ struct OverviewWorkspace: View {
         VStack(alignment: .leading, spacing: 4) {
             Text(eyebrow).eyebrow()
             content()
-            if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 4) }
+            if let link { Button(link, action: action).buttonStyle(QuietLinkStyle()).font(.system(size: 12)).padding(.top, 4) }
         }
         .padding(.top, 12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
@@ -393,7 +406,7 @@ struct OverviewWorkspace: View {
                             }
                         } else {
                             Button(connecting == tool.id ? "Connecting…" : "Connect") { connect(tool) }
-                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                                .buttonStyle(QuietLinkStyle()).font(.system(size: 12))
                                 .disabled(preview || connecting != nil)
                         }
                     }
@@ -423,6 +436,13 @@ struct OverviewWorkspace: View {
                 refreshAgents()
             }
         }
+    }
+    private func drawChart() {
+        guard !reduceMotion else { reveal = 1; return }
+        reveal = 0
+        todayPulse = false
+        withAnimation(.easeInOut(duration: 1.1).delay(0.25)) { reveal = 1 }
+        withAnimation(.easeOut(duration: 0.9).delay(1.3)) { todayPulse = true }
     }
     /// Free space over time, with a ring on the day of each clean.
     private var graphPanel: some View {
@@ -520,7 +540,11 @@ struct OverviewWorkspace: View {
                         LineMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9), series: .value("Observation segment", point.segment))
                             .foregroundStyle(Brand.room).lineStyle(StrokeStyle(lineWidth: 1.7, lineJoin: .round))
                             .shadow(color: Brand.room.opacity(0.6), radius: 4)
-                        if sample.date == last.date { PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.room).symbolSize(40) }
+                        if sample.date == last.date {
+                            PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9))
+                                .foregroundStyle(Brand.room.opacity(todayPulse ? 0 : 0.25)).symbolSize(todayPulse ? 420 : 40)
+                            PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.room).symbolSize(40)
+                        }
                     }
                     if let projected {
                         // Its own segment number so it never joins the observed line.
@@ -561,6 +585,9 @@ struct OverviewWorkspace: View {
                 } }
                 .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)).font(.system(size: 10.5)).foregroundStyle(Brand.textMuted.opacity(0.75)) } }
                 .frame(height: chartHeight)
+                .mask(alignment: .leading) {
+                    GeometryReader { geo in Rectangle().frame(width: max(0, geo.size.width * reveal + 12)) }
+                }
                 .accessibilityLabel("Available space from \(Fmt.size(first.available)) to \(Fmt.size(last.available))")
                 CapacityChartReadout(text: selectedDetail)
             } else {
@@ -589,4 +616,15 @@ struct OverviewWorkspace: View {
         .init(category: .init(id: "browser-caches", title: "Browser caches", icon: "globe", group: .general, bytes: 2_700_000_000, complete: true), delta: 1_100_000_000, before: Date().addingTimeInterval(-86400), after: Date()),
         .init(category: .init(id: "large-old", title: "Large downloads", icon: "folder", group: .general, bytes: 4_800_000_000, complete: true), delta: 850_000_000, before: Date().addingTimeInterval(-86400), after: Date())
     ]
+}
+
+/// One section of Home settling in: a short fade and 8 pt rise, each a little after the last.
+private struct Rise: ViewModifier {
+    let on: Bool
+    let order: Int
+    let still: Bool
+    func body(content: Content) -> some View {
+        content.opacity(on || still ? 1 : 0).offset(y: on || still ? 0 : 8)
+            .animation(still ? nil : .easeOut(duration: 0.45).delay(0.06 * Double(order)), value: on)
+    }
 }
