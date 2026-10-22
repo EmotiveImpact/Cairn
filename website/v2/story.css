@@ -246,3 +246,7 @@ body:not(.staged) .disk-next { display: none; }
 .build .disk-bar { opacity: 1; }
 .legend span { transition: opacity .6s ease; }
 .cleaned .legend .j { opacity: .35; transition-delay: .6s; }
+/* the app chapter: no beam, just the app in a quiet frame */
+.story-app.beam-hero .product-screen { border-color: rgba(220,235,247,.14); box-shadow: 0 40px 100px rgba(0,0,0,.5); }
+.story-app.beam-hero .hero-copy::before { display: none; }
+.story-app.beam-hero .product-composition { margin-top: 64px; }
