@@ -215,13 +215,25 @@ struct WorkspaceCompletion: View {
     /// Bytes from this clean still in the Trash now, when known (a receipt opened
     /// later). Nil means "just cleaned", so everything moved is still there.
     var stillInTrash: Int64? = nil
+    /// Straight after a clean: lets the screen offer to empty this clean's items
+    /// from the Trash, so the space actually comes back. Asks first.
+    var store: ScanStore? = nil
     @State private var shownAt = Date()
+    @State private var confirmEmpty = false
+    @State private var emptying = false
+    @State private var emptiedBytes: Int64 = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var finished: Date { date ?? shownAt }
 
-    private var freed: Int64 { summary.freedBytes }
+    private var freed: Int64 { summary.freedBytes + emptiedBytes }
     private var movedToTrash: Int64 { max(0, summary.accounting.trashBytes - summary.accounting.freedBytes) }
-    private var inTrash: Int64 { min(movedToTrash, stillInTrash ?? (summary.restorable.isEmpty ? 0 : movedToTrash)) }
+    private var inTrash: Int64 { max(0, min(movedToTrash, stillInTrash ?? (summary.restorable.isEmpty ? 0 : movedToTrash)) - emptiedBytes) }
+    /// This clean's recorded Trash items that have not been put back.
+    private var trashIDs: Set<UUID> {
+        guard let store else { return [] }
+        let paths = Set(summary.restorable.map(\.trash.path))
+        return Set(store.removalLog.filter { $0.recoverable && $0.trashPath.map { paths.contains($0) } == true }.map(\.id))
+    }
     private var confirmed: Bool { summary.capacityChanges.contains { ($0.delta ?? 0) > 0 } }
 
     /// The first volume Cairn measured before and after, usually Macintosh HD.
@@ -265,6 +277,9 @@ struct WorkspaceCompletion: View {
                     Text("Checked on \(measured.name)")
                 }
                 .font(.system(size: 13)).foregroundStyle(Brand.room)
+            } else if emptiedBytes > 0 {
+                Text("Emptied from the Trash. The space is free now.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             } else if freed == 0 && movedToTrash > 0 {
                 Text(inTrash > 0 ? "The space comes back when the Trash is emptied."
                                  : "Free space did not rise after this clean.")
@@ -310,6 +325,11 @@ struct WorkspaceCompletion: View {
                     .keyboardShortcut(.defaultAction)
                 Button(recoveryTitle, action: onRecovery)
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
+                if store != nil, onEmptyTrash == nil, inTrash > 0, !trashIDs.isEmpty {
+                    Button(emptying ? "Emptying…" : "Empty Trash to free \(Fmt.size(inTrash))") { confirmEmpty = true }
+                        .buttonStyle(ControlPanelButtonStyle(size: .large))
+                        .disabled(emptying)
+                }
                 if let onEmptyTrash, inTrash > 0 {
                     Button("Empty from Trash…", action: onEmptyTrash)
                         .buttonStyle(ControlPanelButtonStyle(size: .large))
@@ -318,12 +338,28 @@ struct WorkspaceCompletion: View {
             .padding(.top, 4)
         }
         .frame(maxWidth: 600, alignment: .leading)
+        .confirmationDialog("Empty \(Fmt.size(inTrash)) from the Trash?", isPresented: $confirmEmpty) {
+            Button("Empty permanently", role: .destructive) { emptyTrash() }
+        } message: {
+            Text("Only the items from this clean are removed, and the space comes back straight away. They can no longer be put back.")
+        }
         .padding(.top, 22).padding(.horizontal, 40).padding(.bottom, 26)
         // Centred top to bottom, as in the reference (.done justify-content: center).
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .frame(minWidth: 720, minHeight: 560)
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
+    }
+
+    private func emptyTrash() {
+        guard let store, !emptying else { return }
+        emptying = true
+        Task {
+            let result = await store.deleteFromTrash(trashIDs)
+            emptiedBytes += result.bytes
+            await StorageControl.shared.refreshCapacity(force: true)
+            emptying = false
+        }
     }
 
     /// Used space as a 6 pt bar; on "Now" the space just freed glows ice beside it.
