@@ -42,6 +42,35 @@ struct OverviewWorkspace: View {
         let maxGap: TimeInterval = preview ? 2 * 86_400 : period == 30 ? 36 * 3_600 : 8 * 3_600
         return CapacityPlot(readings: points, maximumInterval: maxGap)
     }
+    /// When free space would reach 5 GB if it keeps falling at the rate seen
+    /// on the chart. Nothing is shown when it is rising or the date is far off.
+    private struct FillForecast { let days: Int; let date: Date; let floorGB: Double }
+    private var fillForecast: FillForecast? {
+        let floor: Int64 = 5_000_000_000
+        guard let last = points.last else { return nil }
+        if preview { return CommandLine.arguments.contains("--preview-empty-overview") ? nil : FillForecast(days: 12, date: last.date.addingTimeInterval(12 * 86_400), floorGB: 5) }
+        guard points.count >= 4, let first = points.first else { return nil }
+        let xs = points.map { $0.date.timeIntervalSince(first.date) / 86_400 }
+        let ys = points.map { Double($0.available) }
+        let n = Double(points.count)
+        let sx = xs.reduce(0, +), sy = ys.reduce(0, +)
+        let sxy = zip(xs, ys).reduce(0) { $0 + $1.0 * $1.1 }, sxx = xs.reduce(0) { $0 + $1 * $1 }
+        let denominator = n * sxx - sx * sx
+        guard abs(denominator) > .ulpOfOne else { return nil }
+        let perDay = -(n * sxy - sx * sy) / denominator
+        guard perDay > 0 else { return nil }
+        let days = max(0, Double(last.available - floor) / perDay)
+        guard days <= 60 else { return nil }
+        return FillForecast(days: Int(days.rounded()), date: last.date.addingTimeInterval(days * 86_400), floorGB: Double(floor) / 1e9)
+    }
+    private var forecastText: String? {
+        guard let forecast = fillForecast else { return nil }
+        switch forecast.days {
+        case 0: return "Your disk is almost full"
+        case 1: return "At this rate, full by tomorrow"
+        default: return "At this rate, full in about \(forecast.days) days"
+        }
+    }
     private var historyDelta: Int64? {
         guard points.count >= 2, let first = points.first, let last = points.last else { return nil }
         return last.available - first.available
@@ -59,7 +88,6 @@ struct OverviewWorkspace: View {
         guard comparisonUnavailable == nil else { return nil }
         return changes.filter { $0.delta > 0 }.max { $0.delta < $1.delta }
     }
-    private var externalDrive: StorageDrive? { preview ? (CommandLine.arguments.contains("--preview-empty-overview") ? nil : Self.sampleDrive) : storage.drives.first(where: \.external) }
     private var displayedCapacity: CapacityReading? { preview ? Self.sampleHistory.last : control.current }
     private var shownReserve: Int64? {
         if preview { return PreviewStorageScenario.reserveBytes }
@@ -73,8 +101,12 @@ struct OverviewWorkspace: View {
         return lowSpace ? "Your Mac is running low on space" : "This Mac"
     }
     /// Height the chart can take so Home fits the window without scrolling.
-    /// Everything else on the page is about 580 pt tall at the default size.
+    /// Everything else on the page is about 625 pt tall at the default size.
     @State private var chartHeight: CGFloat = 150
+    @State private var agentStates: [String: AgentConnections.State] = [:]
+    @State private var connecting: String?
+    @State private var agentMessage: String?
+    private let agentTools = AgentTool.all()
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
@@ -87,10 +119,11 @@ struct OverviewWorkspace: View {
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-            chartHeight = min(240, max(110, height - 580))
+            chartHeight = min(240, max(110, height - 625))
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
+        .onAppear(perform: refreshAgents)
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
         .onChange(of: store.isScanning) { _, running in if !running && !preview { Task { await control.refreshCapacity() } } }
@@ -236,57 +269,148 @@ struct OverviewWorkspace: View {
         }
     }
 
-    /// The next useful thing, never a warning: what grew, the last result, the drive.
+    /// The next useful thing, never a warning: what grew, the last result, your AI tools.
     private var nextTiles: some View {
         HStack(alignment: .top, spacing: 14) {
             growthTile
             lastCleanTile
-            driveTile
+            agentsTile
         }
         .fixedSize(horizontal: false, vertical: true)
     }
-    private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
+    private func card<Content: View>(_ eyebrow: String, _ link: String?, _ action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(eyebrow).eyebrow()
-            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
-            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+            Text(eyebrow).eyebrow().padding(.bottom, 2)
+            content()
             Spacer(minLength: 2)
-            Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+            if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 2) }
         }
         .padding(13).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
         .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
     }
-    private var growthTile: some View {
-        let grew = control.locationChanges.filter { $0.delta > 0 }.max { $0.delta < $1.delta }
-        if preview { return tile("Recently", "Xcode build output grew by 4.2 GB", "DerivedData and build intermediates.", "See what changed") { onOpen(.changes) } }
-        if let grew {
-            return tile("Recently", "\(grew.after.root.title) grew by \(Fmt.size(grew.delta))", grew.interval, "See what changed") { onOpen(.changes) }
+    private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
+        card(eyebrow, link, action) {
+            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
+            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
         }
-        return tile("Recently", "No growth measured yet", "Cairn compares folder sizes between scans.", "Open Changes") { onOpen(.changes) }
+    }
+    private func logoRow<Trailing: View>(_ logo: String?, _ fallback: String, _ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack(spacing: 9) {
+            BrandLogo(name: logo, fallback: fallback, size: 22)
+            Text(title).font(.system(size: 12.5)).lineLimit(1)
+            Spacer(minLength: 6)
+            trailing()
+        }.frame(height: 26)
+    }
+
+    /// The folders that grew most since the previous measurement.
+    private struct Growth: Identifiable { let id: String; let title: String; let delta: Int64; let logo: String?; let icon: String }
+    private var growth: [Growth] {
+        if preview {
+            return [Growth(id: "docker", title: "Docker build cache", delta: 6_100_000_000, logo: "docker", icon: "shippingbox"),
+                    Growth(id: "xcode-build", title: "Xcode build output", delta: 4_200_000_000, logo: "xcode", icon: "hammer"),
+                    Growth(id: "npm-cache", title: "npm package cache", delta: 1_300_000_000, logo: "npm", icon: "shippingbox")]
+        }
+        return control.locationChanges.filter { $0.delta > 0 }.sorted { $0.delta > $1.delta }.prefix(3).map {
+            Growth(id: $0.id, title: $0.after.root.title, delta: $0.delta, logo: BrandLogo.forRoot($0.id), icon: $0.after.root.icon)
+        }
+    }
+    private var growthTile: some View {
+        let rows = growth
+        return card("Grew recently", "See what changed", { onOpen(.changes) }) {
+            if rows.isEmpty {
+                Text("No growth measured yet").font(.system(size: 13.5, weight: .semibold))
+                Text("Cairn compares folder sizes between scans.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+            } else {
+                ForEach(rows) { row in
+                    logoRow(row.logo, row.icon, row.title) {
+                        Text("+\(Fmt.size(row.delta))").font(.system(size: 12.5, weight: .medium)).monospacedDigit().foregroundStyle(Brand.room)
+                    }
+                }
+            }
+        }
     }
     private var lastCleanTile: some View {
-        if preview { return tile("Last clean", "3 October · 23.4 GB freed", "Verified on this Mac.", "See receipt") { onOpen(.activity) } }
+        if preview { return tile("Last clean", "3 October · 23.4 GB freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) } }
         if let run = store.cleanupRuns.first(where: { $0.finished != nil && $0.summary.accounting.completedCount > 0 }) {
             let gains = run.summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
             let freed = max(run.summary.accounting.freedBytes, gains)
             let title = "\(run.started.formatted(.dateTime.day().month(.wide))) · " + (freed > 0 ? "\(Fmt.size(freed)) freed" : "\(run.summary.accounting.completedCount) items cleaned")
-            let detail = gains > 0 ? "Verified on this Mac." : run.summary.recoverableCount > 0 ? "\(run.summary.recoverableCount) can be put back." : "Recorded in Activity."
+            let detail = gains > 0 ? "Checked on this Mac." : run.summary.recoverableCount > 0 ? "\(run.summary.recoverableCount) can be put back." : "Recorded in Activity."
             return tile("Last clean", title, detail, "See receipt") { onOpen(.activity) }
         }
         return tile("Last clean", "No cleans yet", "Every clean leaves a receipt in Activity.", "Open Activity") { onOpen(.activity) }
     }
-    private var driveTile: some View {
-        if let drive = externalDrive {
-            return tile("External storage", drive.name, "\(Fmt.size(drive.available)) available\(drive.encrypted ? " · Encrypted" : "")", "Storage options") { onOpen(.storage) }
+
+    /// AI coding tools on this Mac, connected ones first, so the agent link
+    /// is visible from Home rather than only in Settings.
+    private func agentState(_ tool: AgentTool) -> AgentConnections.State {
+        if preview { return ["claude-code", "cursor"].contains(tool.id) ? .connected(current: true) : tool.id == "codex" ? .available : .notInstalled }
+        return agentStates[tool.id] ?? .notInstalled
+    }
+    private var shownAgents: [AgentTool] {
+        let present = agentTools.filter {
+            switch agentState($0) { case .connected, .available: return true; default: return false }
         }
-        return tile("External storage", "No drive connected", "Connect a drive to see storage options.", "Storage options") { onOpen(.storage) }
+        let connected = present.filter { if case .connected = agentState($0) { return true } else { return false } }
+        return Array((connected + present.filter { !connected.contains($0) }).prefix(3))
+    }
+    private var agentsTile: some View {
+        let tools = shownAgents
+        return card("Your AI coding tools", tools.isEmpty ? "AI tools settings" : nil, { onOpen(.settings) }) {
+            if tools.isEmpty {
+                Text("No coding tools found").font(.system(size: 13.5, weight: .semibold))
+                Text("Claude Code, Codex, Cursor and others can ask Cairn what is using space.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+            } else {
+                ForEach(tools) { tool in
+                    logoRow(BrandLogo.forAgent(tool.id), "chevron.left.forwardslash.chevron.right", tool.title) {
+                        if case .connected = agentState(tool) {
+                            HStack(spacing: 5) {
+                                Circle().fill(Brand.safeCyan).frame(width: 6, height: 6)
+                                Text("Connected").font(.system(size: 11.5)).foregroundStyle(Brand.safeCyan)
+                            }
+                        } else {
+                            Button(connecting == tool.id ? "Connecting" : "Connect") { connect(tool) }
+                                .buttonStyle(ControlPanelButtonStyle(primary: true)).controlSize(.small)
+                                .disabled(preview || connecting != nil)
+                        }
+                    }
+                }
+                Text(agentMessage ?? "Try asking: \u{201C}What\u{2019}s taking up space on my Mac?\u{201D}")
+                    .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).lineLimit(2).padding(.top, 2)
+            }
+        }
+    }
+    private func refreshAgents() {
+        guard !preview else { return }
+        var next: [String: AgentConnections.State] = [:]
+        for tool in agentTools { next[tool.id] = AgentConnections.state(tool) }
+        agentStates = next
+    }
+    private func connect(_ tool: AgentTool) {
+        guard !preview else { return }
+        connecting = tool.id
+        Task.detached {
+            let result: String
+            do { try AgentConnections.connect(tool); result = "\(tool.title) is connected. Restart it to pick up the change." }
+            catch let failure as AgentConnections.Failure { result = failure.message }
+            catch { result = "\(tool.title) was not changed: \(error.localizedDescription)" }
+            await MainActor.run {
+                agentMessage = result
+                connecting = nil
+                refreshAgents()
+            }
+        }
     }
     /// Free space over time, with a ring on the day of each clean.
     private var graphPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
                 Text("Free space · last \(period) days").eyebrow()
+                if let text = forecastText {
+                    Text(text).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.leading, 8)
+                }
                 Spacer()
                 if !cleanMarks.isEmpty {
                     HStack(spacing: 6) {
@@ -342,7 +466,9 @@ struct OverviewWorkspace: View {
                 let observedLow = Double(points.map(\.available).min() ?? 0) / 1e9
                 let observedHigh = Double(points.map(\.available).max() ?? 0) / 1e9
                 let chosenReserve = Double(shownReserve ?? 0) / 1e9
-                let chartLow = preview ? 0 : max(0, min(observedLow, shownReserve == nil ? observedLow : chosenReserve) - 3)
+                let projected = fillForecast.flatMap { $0.days <= 45 ? $0 : nil }
+                let lowest = min(observedLow, shownReserve == nil ? observedLow : chosenReserve, projected?.floorGB ?? observedLow)
+                let chartLow = preview ? 0 : max(0, lowest - 3)
                 let chartHigh = preview ? 120 : max(observedHigh, shownReserve == nil ? observedHigh : chosenReserve) + 3
                 Chart {
                     ForEach(plot.points) { point in
@@ -353,6 +479,19 @@ struct OverviewWorkspace: View {
                             .foregroundStyle(Brand.room).lineStyle(StrokeStyle(lineWidth: 1.7, lineJoin: .round))
                             .shadow(color: Brand.room.opacity(0.6), radius: 4)
                         if sample.date == last.date { PointMark(x: .value("Date", sample.date), y: .value("GB", Double(sample.available) / 1e9)).foregroundStyle(Brand.room).symbolSize(40) }
+                    }
+                    if let projected {
+                        // Its own segment number so it never joins the observed line.
+                        LineMark(x: .value("Date", last.date), y: .value("GB", Double(last.available) / 1e9), series: .value("Observation segment", -1))
+                            .foregroundStyle(Brand.room.opacity(0.55)).lineStyle(StrokeStyle(lineWidth: 1.3, dash: [3, 5]))
+                        LineMark(x: .value("Date", projected.date), y: .value("GB", projected.floorGB), series: .value("Observation segment", -1))
+                            .foregroundStyle(Brand.room.opacity(0.55)).lineStyle(StrokeStyle(lineWidth: 1.3, dash: [3, 5]))
+                        PointMark(x: .value("Date", projected.date), y: .value("GB", projected.floorGB))
+                            .symbol { Circle().strokeBorder(Brand.amber, lineWidth: 1.4).frame(width: 7, height: 7) }
+                            .annotation(position: .topLeading, spacing: 2) {
+                                Text("Full by \(projected.date.formatted(.dateTime.day().month(.abbreviated)))")
+                                    .font(.system(size: 10.5)).foregroundStyle(Brand.amber)
+                            }
                     }
                     ForEach(cleanMarks) { mark in
                         PointMark(x: .value("Date", mark.date), y: .value("GB", mark.available))
@@ -393,7 +532,6 @@ struct OverviewWorkspace: View {
     private func readingLabel(_ sample: CapacityReading) -> some View {
         Text("\(sample.date.formatted(.dateTime.day().month(.abbreviated).hour().minute())) · \(Fmt.size(sample.available))").monospacedDigit()
     }
-    private static let sampleDrive = StorageDrive(url: URL(fileURLWithPath: "/Volumes/Studio SSD"), name: "Studio SSD", uuid: "SAMPLE-DRIVE", capacity: 1_000_000_000_000, available: 186_000_000_000, external: true, writable: true, encrypted: true, format: "apfs")
     private func route(_ category: CandidateReading.Category) -> NavSection {
         if category.id == "browser-caches" { return .browsers }
         if ["large-old", "installers"].contains(category.id) { return .largeFiles }
