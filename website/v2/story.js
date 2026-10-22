@@ -5,6 +5,33 @@
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
+  // ---- the stack: chapters hold still and dissolve into one another ----
+  var track = document.querySelector('.stage-track');
+  var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
+  var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
+  var stageAt = 0;            // 0 = opening, 1 = number, 2 = disk, 3 = ask
+  var arrive = [];            // callbacks per chapter, run the first time it settles
+  if (staged) document.body.classList.add('staged');
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function stage() {
+    if (!staged) return;
+    var len = track.offsetHeight - innerHeight;
+    stageAt = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * (layers.length - 1);
+    layers.forEach(function (el, i) {
+      var d = stageAt - i;
+      var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
+      var out = i === layers.length - 1 ? 0 : clamp((d - 0.2) / 0.4); // and out from 0.2 to 0.6
+      var o = Math.min(inn, 1 - out);
+      el.style.opacity = o.toFixed(3);
+      el.style.filter = 'blur(' + ((1 - inn) * 14 + out * 8).toFixed(1) + 'px)';
+      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * lerp(1, 0.94, out)).toFixed(4) + ') translateY(' + (-out * 28).toFixed(1) + 'px)';
+      el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
+      el.style.visibility = o < 0.01 ? 'hidden' : 'visible';
+      if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
+    });
+  }
+  if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
+
   // ---- shimmer sky: thin vertical light streaks, one WebGL fragment shader ----
   var canvas = document.getElementById('sky');
   var gl = canvas && canvas.getContext('webgl', { alpha: true, premultipliedAlpha: false });
@@ -57,12 +84,12 @@
     var t0 = performance.now(), narrow = function () { return innerWidth < 760; };
     var frame = function (now) {
       // 0 at the top of the page, 1 when the number chapter fills the screen
-      var p = ease(clamp(scrollY / Math.max(1, number.offsetTop)));
-      var out = clamp((scrollY - number.offsetTop) / (innerHeight * 0.55));
-      var n = narrow(), cy = (n ? 0.83 : 0.74) - (n ? 0.33 : 0.24) * p - 0.1 * out;
-      var sx = (n ? 0.42 : 0.26) - (n ? 0.24 : 0.14) * p, sy = (n ? 0.12 : 0.2) - 0.06 * p;
+      var p = staged ? ease(clamp(stageAt)) : ease(clamp(scrollY / Math.max(1, number.offsetTop)));
+      var out = staged ? clamp((stageAt - 1.15) / 0.4) : clamp((scrollY - number.offsetTop) / (innerHeight * 0.55));
+      var n = narrow(), cy = (n ? 0.4 : 0.42) + (n ? 0.1 : 0.08) * p - 0.1 * out;
+      var sx = (n ? 0.5 : 0.36) - (n ? 0.3 : 0.24) * p, sy = (n ? 0.24 : 0.3) - (n ? 0.1 : 0.16) * p;
       gl.uniform2f(U.res, canvas.width, canvas.height); gl.uniform1f(U.t, (now - t0) / 1000);
-      gl.uniform2f(U.centre, 0.5, cy); gl.uniform2f(U.size, sx, sy); gl.uniform1f(U.fade, (1 - out) * (0.9 + 0.3 * p));
+      gl.uniform2f(U.centre, 0.5, cy); gl.uniform2f(U.size, sx, sy); gl.uniform1f(U.fade, (1 - out) * (0.75 + 0.45 * p));
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
       if (out < 1) gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (!reduced) requestAnimationFrame(frame);
@@ -75,19 +102,29 @@
   function once(el, threshold, fn) {
     if (!el) return;
     if (reduced) { fn(); return; }
+    var k = layers.indexOf(el);
+    if (staged && k >= 0) { (arrive[k] = arrive[k] || []).push(fn); setTimeout(stage); return; }
     new IntersectionObserver(function (es, io) { if (es[0].isIntersecting) { io.disconnect(); fn(); } }, { threshold: threshold }).observe(el);
   }
   document.querySelectorAll('.chapter').forEach(function (c) { once(c, 0.25, function () { c.classList.add('in'); }); });
 
   var count = document.getElementById('count');
   once(number, 0.5, function () {
-    if (reduced) { count.textContent = '38.6'; return; }
+    if (reduced) { count.textContent = '38.6'; number.classList.add('done'); return; }
     var s = performance.now();
-    (function step(now) { var t = clamp((now - s) / 1800); count.textContent = (38.6 * ease(t)).toFixed(1); if (t < 1) requestAnimationFrame(step); })(s);
+    (function step(now) { var t = clamp((now - s) / 1800); count.textContent = (38.6 * ease(t)).toFixed(1); if (t < 1) requestAnimationFrame(step); else number.classList.add('done'); })(s);
   });
 
   var disk = document.getElementById('disk');
   once(disk, 0.4, function () { setTimeout(function () { disk.classList.add('lit'); }, reduced ? 0 : 1100); });
+
+  // chat tabs: the same answer in whichever tool you use
+  document.querySelectorAll('.chat-tabs button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.chat-tabs button').forEach(function (o) { o.setAttribute('aria-pressed', String(o === b)); });
+      var bar = document.querySelector('.chat-bar .who'); if (bar) { bar.querySelector('img').src = b.dataset.icon; bar.querySelector('span').textContent = b.textContent + ' · ~/Developer'; }
+    });
+  });
 
   var ask = document.getElementById('ask'), typed = document.getElementById('typed');
   once(ask, 0.4, function () {
