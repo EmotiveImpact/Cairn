@@ -38,8 +38,8 @@
   // the chapter with the hallway of data behind it (the number), and its words
   var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
-  var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 1;   // read by the tunnel on every frame
-  var LOW = innerWidth < 760 ? 0.29 : 0.21;             // how far below the middle the hallway's far end sits, as a share of the height
+  var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 0;   // read by the tunnel on every frame
+  var LOW = 0.035;           // drops the hallway's far end to the very middle of the screen (a share of its height)
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
   if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
@@ -76,8 +76,10 @@
     tunnelOn = p > -1 && p < 0.95;
     tunnelZoom = zoomAt(p);
     tunnelPush = p > 0 ? p * 10 : -p * 6;
-    tunnelDoor = 1 - clamp((p - 0.44) / 0.04);   // once the box has taken over, the hallway stops drawing its own
+    // the light at the far end shows only as the words lift away, and hands over to the box once that takes over
+    tunnelDoor = p > 0 ? clamp(p / 0.25) * (1 - clamp((p - 0.44) / 0.04)) : 0;
     // the words lift up and away first
+    if (dive) dive.style.setProperty('--veil', p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : 1);   // the shade behind the words goes with them
     if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * innerHeight).toFixed(1) + 'px)' : ''; }
     if (!morph) return;
     if (p <= 0.38 || p >= 1) { morph.style.opacity = '0'; return; }
@@ -90,8 +92,9 @@
     morph.style.width = lerp(sz, bar.width, e).toFixed(1) + 'px';
     morph.style.height = lerp(sz, bar.height, e).toFixed(1) + 'px';
     morph.style.borderRadius = lerp(4, 18, e).toFixed(1) + 'px';
-    morph.style.background = 'rgba(234,245,255,' + lerp(1, 0.03, ease(t)).toFixed(3) + ')';
-    morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0, ease(t)).toFixed(3) + ')';
+    var cool = clamp((t - 0.35) / 0.65);   // stays a bright light while it stretches, then cools into the bar
+    morph.style.background = 'rgba(234,245,255,' + lerp(1, 0.03, cool).toFixed(3) + ')';
+    morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0, cool).toFixed(3) + ')';
     morph.style.opacity = (clamp((p - 0.38) / 0.07) * (1 - clamp((p - 0.92) / 0.08))).toFixed(3);
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
