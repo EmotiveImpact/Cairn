@@ -238,7 +238,7 @@ struct WorkspaceCompletion: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("\(summary.interrupted ? "Stopped" : "Done") · \(finished.formatted(.dateTime.day().month(.wide))), \(finished.formatted(date: .omitted, time: .shortened))")
+            Text("\(summary.interrupted ? "Stopped" : date == nil ? "Done" : "Receipt") · \(finished.formatted(.dateTime.day().month(.wide))), \(finished.formatted(date: .omitted, time: .shortened))")
                 .nightEyebrow()
             HStack(alignment: .firstTextBaseline, spacing: 12) {
                 if freed > 0 {
@@ -297,7 +297,8 @@ struct WorkspaceCompletion: View {
                 if inTrash > 0 { line("Still in Trash", "\(Fmt.size(inTrash)) · can be put back") }
                 else if movedToTrash > 0 && stillInTrash != nil { line("Moved to Trash", "\(Fmt.size(movedToTrash)) · since emptied") }
                 if summary.failed > 0 {
-                    line("Skipped", summary.failed == 1 ? summary.errors.first ?? "1 item" : "\(summary.failed) items", tint: Brand.amber)
+                    line("Skipped", [summary.failed == 1 ? nil : "\(summary.failed) items", summary.errors.first ?? (summary.failed == 1 ? "1 item" : nil)]
+                        .compactMap { $0 }.joined(separator: " · "), tint: Brand.amber)
                 }
                 if summary.accounting.missingRecoveryCount > 0 {
                     line("No Put Back recorded", "\(summary.accounting.missingRecoveryCount) · still in Finder's Trash", tint: Brand.amber)
