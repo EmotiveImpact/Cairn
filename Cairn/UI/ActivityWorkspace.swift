@@ -135,6 +135,13 @@ struct RecoveryWorkspace: View {
         })
     }
 
+    /// What this receipt's items still hold in the Trash right now.
+    private var stillInTrashBytes: Int64 {
+        (receipt?.rows ?? []).reduce(0) { total, row in
+            guard let id = row.recoveryID, availableTrash.contains(id), !purged.contains(id) else { return total }
+            return total + (row.bytes ?? 0)
+        }
+    }
     private var emptyTrashAction: (() -> Void)? {
         guard !preview, !deletableIDs.isEmpty else { return nil }
         return { confirmPurge = true }
@@ -150,7 +157,8 @@ struct RecoveryWorkspace: View {
                                     onRecovery: { focused = nil; showingAllActivity = true },
                                     onClose: { openReceipt = false },
                                     date: opened.date, recoveryTitle: "Moved items",
-                                    onEmptyTrash: emptyTrashAction)
+                                    onEmptyTrash: emptyTrashAction,
+                                    stillInTrash: preview ? nil : stillInTrashBytes)
                     .disabled(purging)
                     .confirmationDialog("Empty \(deletableIDs.count) \(deletableIDs.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
                         Button("Empty permanently", role: .destructive) { purgeFromTrash(deletableIDs) }

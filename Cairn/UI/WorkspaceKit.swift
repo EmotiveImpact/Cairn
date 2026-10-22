@@ -212,12 +212,16 @@ struct WorkspaceCompletion: View {
     var recoveryTitle = "View receipt"
     /// Offered only from Activity, when this clean's items are still in the Trash.
     var onEmptyTrash: (() -> Void)? = nil
+    /// Bytes from this clean still in the Trash now, when known (a receipt opened
+    /// later). Nil means "just cleaned", so everything moved is still there.
+    var stillInTrash: Int64? = nil
     @State private var shownAt = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var finished: Date { date ?? shownAt }
 
     private var freed: Int64 { summary.freedBytes }
-    private var inTrash: Int64 { summary.restorable.isEmpty ? 0 : max(0, summary.bytes - summary.accounting.freedBytes) }
+    private var movedToTrash: Int64 { max(0, summary.accounting.trashBytes - summary.accounting.freedBytes) }
+    private var inTrash: Int64 { min(movedToTrash, stillInTrash ?? (summary.restorable.isEmpty ? 0 : movedToTrash)) }
     private var confirmed: Bool { summary.capacityChanges.contains { ($0.delta ?? 0) > 0 } }
 
     /// The first volume Cairn measured before and after, usually Macintosh HD.
@@ -243,7 +247,15 @@ struct WorkspaceCompletion: View {
                         .foregroundStyle(Brand.textPrimary)
                     Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 } else {
-                    Text(summary.interrupted ? "Stopped" : "Cleaned").font(.system(size: 72, weight: .light)).tracking(-2.9)
+                    if movedToTrash > 0 {
+                        // Nothing measured free: say plainly where the bytes went.
+                        CountingBytes(bytes: movedToTrash, duration: 0.8, still: reduceMotion)
+                            .font(.system(size: 72, weight: .light)).tracking(-2.9)
+                            .foregroundStyle(Brand.textPrimary)
+                        Text("moved to the Trash").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                    } else {
+                        Text(summary.interrupted ? "Stopped" : "Cleaned").font(.system(size: 72, weight: .light)).tracking(-2.9)
+                    }
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.5)
@@ -253,6 +265,10 @@ struct WorkspaceCompletion: View {
                     Text("Checked on \(measured.name)")
                 }
                 .font(.system(size: 13)).foregroundStyle(Brand.room)
+            } else if freed == 0 && movedToTrash > 0 {
+                Text(inTrash > 0 ? "The space comes back when the Trash is emptied."
+                                 : "Free space did not rise after this clean.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             } else if summary.interrupted {
                 Text("Stopped before the end").font(.system(size: 13)).foregroundStyle(Brand.amber)
             }
@@ -279,6 +295,7 @@ struct WorkspaceCompletion: View {
                     line("Cleaned by their own tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
                 }
                 if inTrash > 0 { line("Still in Trash", "\(Fmt.size(inTrash)) · can be put back") }
+                else if movedToTrash > 0 && stillInTrash != nil { line("Moved to Trash", "\(Fmt.size(movedToTrash)) · since emptied") }
                 if summary.failed > 0 {
                     line("Skipped", summary.failed == 1 ? summary.errors.first ?? "1 item" : "\(summary.failed) items", tint: Brand.amber)
                 }
@@ -301,7 +318,7 @@ struct WorkspaceCompletion: View {
         }
         .frame(maxWidth: 600, alignment: .leading)
         .padding(.top, 22).padding(.horizontal, 40).padding(.bottom, 26)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(minWidth: 720, minHeight: 560)
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
