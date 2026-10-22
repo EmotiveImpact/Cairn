@@ -34,7 +34,7 @@ struct StorageWorkspace: View {
             VStack(alignment: .leading, spacing: 18) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 7) {
-                        Text("Where your work lives").font(.system(size: 30, weight: .light))
+                        Text("Where your work lives").font(.system(size: 38, weight: .light))
                         Text("See your drives and choose the right next step for your files.").font(.system(size: 13)).foregroundStyle(Brand.textMuted)
                     }
                     Spacer()

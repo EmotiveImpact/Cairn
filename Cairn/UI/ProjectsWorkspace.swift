@@ -119,9 +119,7 @@ struct ProjectsWorkspace: View {
                 LazyVStack(spacing: 0) {
                     ForEach(visible) { project in row(project) }
                 }
-                .background(Brand.wash(0.02))
-                .clipShape(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
                 .padding(.horizontal, 18).padding(.vertical, 8)
             }
         }
@@ -144,7 +142,7 @@ struct ProjectsWorkspace: View {
                 inspectorVisible = true
             } label: {
                 HStack(spacing: 12) {
-                    IconTile(systemImage: "folder.fill", tint: Color(hex: 0x2FB59A), size: 30)
+                    BrandLogo(name: nil, fallback: "folder", size: 22)
                     VStack(alignment: .leading, spacing: 4) {
                         Text(project.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
                         Text(displayPath(project.url)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)

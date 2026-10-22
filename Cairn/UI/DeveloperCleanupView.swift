@@ -131,8 +131,7 @@ struct DeveloperCleanupView: View {
                                 }
                                 protectedRow
                             }
-                            .clipShape(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                            .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
                             .padding(.horizontal, 22).padding(.vertical, 12)
                         }
                     }
@@ -164,7 +163,7 @@ struct DeveloperCleanupView: View {
         VStack(spacing: 0) {
             HStack(spacing: 6) {
                 VStack(alignment: .leading, spacing: 7) {
-                    Text(section.title).font(.system(size: 30, weight: .light)).foregroundStyle(Brand.textPrimary)
+                    Text(section.title).font(.system(size: 38, weight: .light)).foregroundStyle(Brand.textPrimary)
                     Text(headerSubtitle).font(.system(size: 12.5, weight: .regular))
                         .foregroundStyle(Brand.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -353,7 +352,7 @@ struct DeveloperCleanupView: View {
                 expandedBuckets.formSymmetricDifference([group.id])
             } label: {
                 HStack(spacing: 9) {
-                    ToolIcon.forCategory(group.id, size: 38)
+                    BrandLogo.forCategory(group.id, size: 24)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.bucket.info.title)
                             .font(.system(size: 15, weight: .medium))
@@ -545,7 +544,7 @@ struct DeveloperCleanupView: View {
     private func bucketInspector(_ bucket: ScanStore.Bucket) -> some View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(spacing: 12) {
-                ToolIcon.forCategory(bucket.id, size: 40)
+                BrandLogo.forCategory(bucket.id, size: 26)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(bucket.info.title).font(.system(size: 15, weight: .semibold))
                     Text("\(bucket.items.count) measured items").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
@@ -678,7 +677,6 @@ struct DeveloperCleanupView: View {
         return Text(text).lineLimit(1)
             .font(.system(size: 11.5)).foregroundStyle(color == Brand.textMuted ? Brand.textSecondary : color)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(color == Brand.textMuted ? 0 : 0.07)))
             .overlay(Capsule().strokeBorder(color.opacity(color == Brand.textMuted ? 0.25 : 0.32), lineWidth: 0.75))
     }
 

@@ -52,7 +52,7 @@ struct ReviewSheet: View {
                     LazyVStack(alignment: .leading, spacing: 0) {
                         ForEach(groups, id: \.title) { group in
                             HStack(spacing: 11) {
-                                ToolIcon.forCategory(group.id, size: 28)
+                                BrandLogo.forCategory(group.id, size: 22)
                                 Text(group.title).font(.system(size: 14, weight: .medium))
                                 Spacer()
                                 Text(Fmt.size(group.bytes))
@@ -140,7 +140,6 @@ struct ReviewSheet: View {
         return Text(text).font(.system(size: 11.5)).lineLimit(1)
             .foregroundStyle(color)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(Capsule().fill(color.opacity(quiet ? 0 : 0.07)))
             .overlay(Capsule().strokeBorder(color.opacity(quiet ? 0.25 : 0.32), lineWidth: 0.75))
     }
 

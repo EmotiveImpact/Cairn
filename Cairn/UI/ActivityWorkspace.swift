@@ -323,7 +323,7 @@ struct RecoveryWorkspace: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Activity").font(.system(size: 30, weight: .light))
+                    Text("Activity").font(.system(size: 38, weight: .light))
                     Text("Reviewed actions and the recovery paths Cairn recorded.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 }
@@ -371,12 +371,11 @@ struct RecoveryWorkspace: View {
                                     ReceiptPill(text: "Can put back", tint: Brand.textSecondary)
                                 }
                                 Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
-                            }.padding(.vertical, 12).padding(.horizontal, 16).contentShape(Rectangle())
+                            }.padding(.vertical, 12).contentShape(Rectangle())
                         }.buttonStyle(.plain).overlay(alignment: .top) { if run.id != store.cleanupRuns.first?.id { sectionRule } }
                     }
                 }
-                .background(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).fill(Brand.wash(0.02)))
-                .overlay(RoundedRectangle(cornerRadius: Brand.rHero, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+                .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
                 .padding(.bottom, 24)
             }
             HStack {
@@ -657,7 +656,6 @@ private struct ReceiptPill: View {
         Text(text).font(.system(size: 11.5))
             .foregroundStyle(tint)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(Capsule().fill(tint.opacity(quiet ? 0 : 0.07)))
             .overlay(Capsule().strokeBorder(tint.opacity(quiet ? 0.25 : 0.32), lineWidth: 0.75))
     }
 }

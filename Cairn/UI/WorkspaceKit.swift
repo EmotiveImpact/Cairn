@@ -16,7 +16,7 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
             HStack(spacing: 0) {
                 VStack(spacing: 0) {
                     VStack(alignment: .leading, spacing: 5) {
-                        Text(title).font(.system(size: 30, weight: .light))
+                        Text(title).font(.system(size: 38, weight: .light))
                         if !subtitle.isEmpty { Text(subtitle).font(.system(size: 13)).foregroundStyle(Brand.textSecondary) }
                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 30)
                         .padding(.trailing, headerTrailingInset).padding(.top, 27).padding(.bottom, 21)

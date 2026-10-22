@@ -53,4 +53,32 @@ struct BrandLogo: View {
         default: return nil
         }
     }
+
+    /// Colourless mark for a scan category: the company logo where there is
+    /// one, otherwise a thin outline symbol.
+    static func forCategory(_ id: String, size: CGFloat = 22) -> BrandLogo {
+        let logo: String? = ["xcode": "xcode", "docker": "docker", "npm": "npm"][id]
+        let symbol: String
+        switch id {
+        case "ide-caches": symbol = "chevron.left.forwardslash.chevron.right"
+        case "android": symbol = "candybarphone"
+        case "dev-projects": symbol = "folder"
+        case "runtimes": symbol = "cube"
+        case "git-bloat": symbol = "arrow.triangle.branch"
+        case "ai-models": symbol = "brain.head.profile"
+        case "creative": symbol = "film"
+        case "app-caches": symbol = "macwindow"
+        case "browser-caches": symbol = "globe"
+        case "comm-caches": symbol = "bubble.left.and.bubble.right"
+        case "logs": symbol = "doc.text"
+        case "installers": symbol = "arrow.down.app"
+        case "trash": symbol = "trash"
+        case "orphaned": symbol = "folder.badge.questionmark"
+        case "large-old": symbol = "doc"
+        case "tm-snapshots": symbol = "clock.arrow.circlepath"
+        case "simulators": symbol = "iphone"
+        default: symbol = "shippingbox"
+        }
+        return BrandLogo(name: logo, fallback: symbol, size: size)
+    }
 }
