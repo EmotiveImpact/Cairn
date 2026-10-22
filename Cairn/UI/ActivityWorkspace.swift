@@ -24,7 +24,6 @@ struct RecoveryWorkspace: View {
     @State private var confirmRestore = false
     @State private var restorePlan: ScanStore.RemovalLogEntry?
     @State private var currentCapacity: CapacityReading?
-    @State private var checkingSpace = false
     @State private var purged: Set<UUID> = []
     @State private var purgedBytes: Int64 = 0
     @State private var purging = false
@@ -33,6 +32,19 @@ struct RecoveryWorkspace: View {
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let inset: CGFloat = 40
 
+    /// The reference result screen's clean, for the design preview.
+    private static var sampleSummary: ScanStore.CleanSummary {
+        var result = ScanStore.CleanSummary(failed: 1, errors: ["Xcode build files · Xcode was open"])
+        for bytes in [8_200_000_000, 5_100_000_000, 3_400_000_000, 1_900_000_000, 1_000_000_000] as [Int64] {
+            result.accounting.record(.init(bytesAffected: bytes, usedTool: false))
+        }
+        result.accounting.record(.init(bytesAffected: 1_600_000_000, usedTool: true))
+        result.accounting.record(.init(bytesAffected: 800_000_000, usedTool: true))
+        result.capacityChanges = [.init(id: "sample",
+                                        before: .init(volumeID: "sample", name: "Macintosh HD", available: 9_900_000_000),
+                                        after: .init(volumeID: "sample", name: "Macintosh HD", available: 31_900_000_000))]
+        return result
+    }
     private static let sampleEntries: [ScanStore.RemovalLogEntry] = {
         [ScanStore.RemovalLogEntry(name: "Old-installer.dmg", originalPath: "~/Downloads/Old-installer.dmg", trashPath: "~/.Trash/Old-installer.dmg", bytes: 940_000_000, date: Date(), category: "installers"),
          ScanStore.RemovalLogEntry(name: "Assets-export.zip", originalPath: "~/Downloads/Assets-export.zip", trashPath: "~/.Trash/Assets-export.zip", bytes: 2_160_000_000, date: Date(), category: "large-old")]
@@ -105,27 +117,57 @@ struct RecoveryWorkspace: View {
         return "No cleans yet"
     }
     private var showsOverview: Bool {
-        inspected == nil && !showingAllActivity && !(openReceipt && receipt != nil)
+        inspected == nil && !showingAllActivity && !(openReceipt && openedRun != nil)
+    }
+    /// The clean whose receipt is open, with when it ran.
+    private var openedRun: (summary: ScanStore.CleanSummary, date: Date?)? {
+        if preview { return (Self.sampleSummary, Date().addingTimeInterval(-86_400)) }
+        let id = selectedRunID ?? store.lastCleanRunID
+        let run = store.cleanupRuns.first { $0.id == id }
+        let live = selectedRunID == nil || selectedRunID == store.lastCleanRunID ? store.lastCleanSummary : nil
+        guard let summary = live ?? run?.summary else { return nil }
+        return (summary, run?.finished ?? run?.started)
+    }
+    /// This receipt's items that are still in the Trash, by their recovery record.
+    private var deletableIDs: Set<UUID> {
+        Set((receipt?.rows ?? []).compactMap { row in
+            row.recoveryID.flatMap { availableTrash.contains($0) && !purged.contains($0) ? $0 : nil }
+        })
+    }
+
+    private var emptyTrashAction: (() -> Void)? {
+        guard !preview, !deletableIDs.isEmpty else { return nil }
+        return { confirmPurge = true }
     }
 
     var body: some View {
         Group {
             if showsOverview {
                 overview
+            } else if inspected == nil && !showingAllActivity, let opened = openedRun {
+                // A receipt is the same Done screen shown after the clean.
+                WorkspaceCompletion(summary: opened.summary,
+                                    onRecovery: { focused = nil; showingAllActivity = true },
+                                    onClose: { openReceipt = false },
+                                    date: opened.date, recoveryTitle: "Moved items",
+                                    onEmptyTrash: emptyTrashAction)
+                    .disabled(purging)
+                    .confirmationDialog("Empty \(deletableIDs.count) \(deletableIDs.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
+                        Button("Empty permanently", role: .destructive) { purgeFromTrash(deletableIDs) }
+                    } message: {
+                        Text("The space is released straight away. Put Back will no longer be possible for these items.")
+                    }
             } else {
                 VStack(spacing: 0) {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 0) {
-                            if let entry = inspected { itemDetail(entry) }
-                            else if !showingAllActivity, let receipt { receiptDetail(receipt) }
-                            else { activityList }
+                            if let entry = inspected { itemDetail(entry) } else { activityList }
                         }
                         .padding(.horizontal, inset).padding(.top, 22).padding(.bottom, 28)
                         .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
                     }
                     .frame(maxHeight: .infinity)
                     if let entry = inspected { itemActionBar(entry) }
-                    else if !showingAllActivity && receipt != nil { receiptActionBar }
                 }
             }
         }
@@ -231,7 +273,6 @@ struct RecoveryWorkspace: View {
     /// The row's grid from the reference: name and date | amount 130 | pill 110 | link 100.
     private func runRow(_ line: RunLine) -> some View {
         Button {
-            guard !preview else { return }
             selectedRunID = line.id; focused = nil; showingAllActivity = false; openReceipt = true
         } label: {
             HStack(spacing: 14) {
@@ -273,123 +314,6 @@ struct RecoveryWorkspace: View {
         case 1: return names[0]
         case 2, 3: return names.dropLast().joined(separator: ", ") + " and " + names.last!
         default: return names.prefix(2).joined(separator: ", ") + " and \(names.count - 2) more"
-        }
-    }
-
-    /// One clean's receipt, laid out like the reference result screen: the freed
-    /// number, whether it was checked on the Mac, a few plain lines, then the items.
-    private func receiptDetail(_ receipt: ActivityReceipt) -> some View {
-        let freed = receipt.freedBytes + purgedBytes
-        let inTrash = max(0, receipt.inTrashBytes - purgedBytes)
-        let checked = receipt.capacityChanges.first { ($0.delta ?? 0) > 0 }
-        let deletable = receipt.rows.filter { row in
-            row.recoveryID.map { availableTrash.contains($0) && !purged.contains($0) } ?? false
-        }
-        return VStack(alignment: .leading, spacing: 0) {
-            backToActivity
-            Text(receipt.date.map { "Receipt · \($0.formatted(.dateTime.day().month(.wide))), \($0.formatted(date: .omitted, time: .shortened))" } ?? "Receipt · this session")
-                .nightEyebrow().padding(.top, 20)
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                if freed > 0 {
-                    Text(Fmt.size(freed)).font(.system(size: 72, weight: .light)).tracking(-2.9).monospacedDigit()
-                    Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
-                } else {
-                    Text(receipt.title).font(.system(size: 40, weight: .light)).tracking(-0.8)
-                }
-            }
-            .lineLimit(1).minimumScaleFactor(0.6).padding(.top, 14)
-            Group {
-                if let checked {
-                    HStack(spacing: 8) {
-                        Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)
-                        Text("Checked on \(checked.name)")
-                    }.foregroundStyle(Brand.room)
-                } else if receipt.interrupted || receipt.skippedCount > 0 {
-                    Text(receipt.interrupted ? "Stopped before the end" : "\(receipt.skippedCount) skipped")
-                        .foregroundStyle(Brand.amber)
-                } else if receipt.inProgress {
-                    Text("Still running").foregroundStyle(Brand.textMuted)
-                }
-            }
-            .font(.system(size: 13)).padding(.top, 14)
-
-            VStack(spacing: 0) {
-                receiptLine("Items cleaned", "\(receipt.movedCount + receipt.toolCount)")
-                if receipt.toolCount > 0 {
-                    receiptLine("Cleaned by their own tools", "\(receipt.toolCount) \(receipt.toolCount == 1 ? "command" : "commands")")
-                }
-                if inTrash > 0 { receiptLine("Still in Trash", "\(Fmt.size(inTrash)) · can be put back") }
-                if receipt.skippedCount > 0 {
-                    receiptLine("Skipped", "\(receipt.skippedCount) \(receipt.skippedCount == 1 ? "item" : "items")", tint: Brand.amber)
-                }
-                if let capacity {
-                    receiptLine("Free space now", Fmt.size(capacity.available))
-                }
-                if receipt.missingRecoveryCount > 0 {
-                    receiptLine("No Put Back recorded", "\(receipt.missingRecoveryCount) \(receipt.missingRecoveryCount == 1 ? "item" : "items") · still in Finder's Trash", tint: Brand.amber)
-                }
-            }
-            .frame(maxWidth: 600).padding(.top, 18)
-
-            if !deletable.isEmpty && !preview {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("\(Fmt.size(deletable.reduce(0) { $0 + ($1.bytes ?? 0) })) is still in the Trash")
-                            .font(.system(size: 13, weight: .medium))
-                        Text("Emptying it gives you the space now. After that it cannot be put back.")
-                            .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                    }
-                    Spacer()
-                    Button(purging ? "Emptying…" : "Empty from Trash") { confirmPurge = true }
-                        .buttonStyle(ControlPanelButtonStyle(size: .small))
-                        .disabled(purging || store.isCleaning)
-                }
-                .nightRow().frame(maxWidth: 600).padding(.top, 18)
-                .confirmationDialog("Empty \(deletable.count) \(deletable.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
-                    Button("Empty permanently", role: .destructive) {
-                        purgeFromTrash(Set(deletable.compactMap(\.recoveryID)))
-                    }
-                } message: {
-                    Text("The space is released straight away. Put Back will no longer be possible for these items.")
-                }
-            }
-
-            Text("Items").nightEyebrow().padding(.top, 30).padding(.bottom, 8)
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(receipt.rows) { row in
-                    HStack(spacing: 14) {
-                        NightName(title: row.name, subtitle: row.bytes.map(Fmt.size) ?? "")
-                        NightPill(text: row.recoveryID.map { purged.contains($0) } == true ? "Emptied" : "In Trash")
-                            .frame(width: 110, alignment: .leading)
-                        Group {
-                            if let recoveryID = row.recoveryID, let path = row.trashPath, availableTrash.contains(recoveryID), !preview {
-                                Button("Show in Trash") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
-                                    .buttonStyle(.plain).foregroundStyle(Brand.deepBlue)
-                            } else {
-                                Text(preview ? "Sample" : "Not in Trash").foregroundStyle(Brand.textMuted)
-                            }
-                        }
-                        .font(.system(size: 12)).frame(width: 110, alignment: .trailing)
-                    }
-                    .nightRow()
-                }
-                ForEach(Array(receipt.issues.prefix(8).enumerated()), id: \.offset) { _, issue in
-                    HStack(spacing: 14) {
-                        Text(issue).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-                        NightPill(text: "Skipped", tone: .warn).frame(width: 110, alignment: .leading)
-                        Spacer().frame(width: 110)
-                    }
-                    .nightRow()
-                }
-            }
-            if receipt.hiddenRowCount > 0 || receipt.issues.count > 8 {
-                Button("\(receipt.hiddenRowCount + max(0, receipt.issues.count - 8)) more · See all moved items") { showingAllActivity = true }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 12)
-            }
-            if hasSafetyNotices { safetyNotices.padding(.top, 16) }
-            if preview { sampleFootnote }
         }
     }
 
@@ -471,19 +395,6 @@ struct RecoveryWorkspace: View {
             if hasSafetyNotices { safetyNotices.padding(.top, 16) }
             if preview { sampleFootnote }
         }
-    }
-
-    /// The page footer from the reference: no bar, just the actions on the right.
-    private var receiptActionBar: some View {
-        HStack(spacing: 10) {
-            Spacer()
-            if checkingSpace { ProgressView().controlSize(.small) }
-            Button(checkingSpace ? "Checking…" : "Check space again") { checkSpace() }
-                .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview || checkingSpace)
-            Button("Done") { openReceipt = false }
-                .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-        }
-        .padding(.horizontal, inset).padding(.top, 6).padding(.bottom, 26)
     }
 
     private func itemActionBar(_ entry: ScanStore.RemovalLogEntry) -> some View {
@@ -581,16 +492,6 @@ struct RecoveryWorkspace: View {
         if entry.actionKind == "tool" { return "Tool action" }
         if entry.actionKind == "delete" || purged.contains(entry.id) { return "Deleted" }
         return "Unavailable"
-    }
-    private func checkSpace() {
-        guard !preview, !checkingSpace else { return }
-        checkingSpace = true
-        Task {
-            await StorageControl.shared.refreshCapacity(force: true)
-            currentCapacity = StorageControl.shared.current
-            await refresh()
-            checkingSpace = false
-        }
     }
     private func refresh() async {
         guard !preview else { availableTrash = Set(Self.sampleEntries.map(\.id)); return }

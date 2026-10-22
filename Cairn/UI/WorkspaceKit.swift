@@ -200,122 +200,142 @@ enum PreviewLibrary {
     }
 }
 
-/// Completion belongs to the same quiet workspace; no celebratory full-page
-/// takeover, and bytes moved to Trash are never labelled as free disk space.
+/// The "Done" screen from the reference (night-screens-v2.html, s5): the freed
+/// number, whether macOS confirmed it, used space before and now, a few plain
+/// lines, then Done. Bytes moved to Trash are never labelled as free space.
 struct WorkspaceCompletion: View {
     let summary: ScanStore.CleanSummary
     let onRecovery: () -> Void
     let onClose: () -> Void
-    @State private var appeared = false
+    /// When the clean happened; a receipt opened later from Activity passes its own.
+    var date: Date? = nil
+    var recoveryTitle = "View receipt"
+    /// Offered only from Activity, when this clean's items are still in the Trash.
+    var onEmptyTrash: (() -> Void)? = nil
+    @State private var shownAt = Date()
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    private var finished: Date { date ?? shownAt }
 
-    /// The measured gain on the internal volume when macOS reports one,
-    /// otherwise the size of what was deleted or cleaned.
-    private var measuredGain: Int64? {
-        let gains = summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }
-        return gains.isEmpty ? nil : gains.reduce(0, +)
-    }
-    private var freed: Int64 { max(summary.accounting.freedBytes, measuredGain ?? 0) }
+    private var freed: Int64 { summary.freedBytes }
     private var inTrash: Int64 { summary.restorable.isEmpty ? 0 : max(0, summary.bytes - summary.accounting.freedBytes) }
-    private var clean: Bool { !summary.interrupted && summary.failed == 0 && summary.errors.isEmpty }
+    private var confirmed: Bool { summary.capacityChanges.contains { ($0.delta ?? 0) > 0 } }
 
     /// The first volume Cairn measured before and after, usually Macintosh HD.
-    private var measured: (name: String, before: Int64, after: Int64, total: Int64?)? {
+    private var measured: (name: String, before: Int64, after: Int64, total: Int64)? {
         for change in summary.capacityChanges {
             if let before = change.before, let after = change.after, change.delta != nil {
                 let total = (try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey]))?.volumeTotalCapacity.map(Int64.init)
+                guard let total, total > 0 else { return nil }
                 return (change.name, before.available, after.available, total)
             }
         }
         return nil
     }
+
     var body: some View {
-        CairnDialog(title: summary.interrupted ? "Cleanup stopped" : "Done", subtitle: "", wide: true, height: 560) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        if freed > 0 {
-                            Text(Fmt.size(appeared ? freed : 0))
-                                .font(.system(size: 64, weight: .light)).tracking(-2.2).monospacedDigit()
-                                .contentTransition(.numericText())
-                            Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textSecondary)
-                        } else {
-                            Text("Cleaned").font(.system(size: 52, weight: .light)).tracking(-1.6)
-                        }
-                    }
-                    if let measured, measuredGain != nil {
-                        HStack(spacing: 8) {
-                            Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)
-                            Text("Checked on \(measured.name)")
-                        }
-                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.room).padding(.top, 12)
-                    } else if !clean {
-                        Label(summary.interrupted ? "Stopped before the end" : "\(summary.failed) skipped",
-                              systemImage: "exclamationmark.circle")
-                            .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.amber).padding(.top, 12)
-                    }
-                    if let measured {
-                        VStack(spacing: 10) {
-                            bar("Before", measured.before, measured.total, Brand.inUse)
-                            bar("Now", measured.after, measured.total, Brand.room)
-                        }.padding(.top, 22)
-                    }
-                    VStack(spacing: 0) {
-                        row("Items cleaned", "\(summary.trashed)")
-                        if summary.toolCount > 0 {
-                            row("Cleaned by their tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
-                        }
-                        if inTrash > 0 {
-                            row("Still in Trash", "\(Fmt.size(inTrash)) · can be put back")
-                        }
-                        if summary.failed > 0 {
-                            row("Skipped", "\(summary.failed) \(summary.failed == 1 ? "item" : "items")", tint: Brand.amber)
-                        }
-                    }.padding(.top, 20)
-                    if summary.accounting.missingRecoveryCount > 0 {
-                        Text("Put Back could not be recorded for \(summary.accounting.missingRecoveryCount) Trash \(summary.accounting.missingRecoveryCount == 1 ? "item" : "items"). They are still in Finder's Trash.")
-                            .font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.top, 12)
-                    }
-                    ForEach(Array(summary.errors.prefix(4).enumerated()), id: \.offset) { _, error in
-                        Text(error).font(.system(size: 12)).foregroundStyle(Brand.textMuted).textSelection(.enabled).padding(.top, 8)
-                    }
+        VStack(alignment: .leading, spacing: 14) {
+            Text("\(summary.interrupted ? "Stopped" : "Done") · \(finished.formatted(.dateTime.day().month(.wide))), \(finished.formatted(date: .omitted, time: .shortened))")
+                .nightEyebrow()
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if freed > 0 {
+                    CountingBytes(bytes: freed, duration: 0.8, still: reduceMotion)
+                        .font(.system(size: 72, weight: .light)).tracking(-2.9)
+                        .foregroundStyle(Brand.textPrimary)
+                    Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                } else {
+                    Text(summary.interrupted ? "Stopped" : "Cleaned").font(.system(size: 72, weight: .light)).tracking(-2.9)
                 }
-                .frame(maxWidth: 560, alignment: .leading)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 8)
             }
-        } actions: {
-            Button(inTrash > 0 ? "Delete from Trash…" : "View receipt", action: onRecovery).buttonStyle(ControlPanelButtonStyle())
-            Button("Done", action: onClose).buttonStyle(ControlPanelButtonStyle(primary: true)).keyboardShortcut(.defaultAction)
-        }
-        .onAppear {
-            if reduceMotion { appeared = true }
-            else { withAnimation(.easeOut(duration: 0.9).delay(0.15)) { appeared = true } }
-        }
-    }
-    private func bar(_ label: String, _ available: Int64, _ total: Int64?, _ tint: Color) -> some View {
-        HStack(spacing: 12) {
-            Text(label).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).frame(width: 52, alignment: .leading)
-            GeometryReader { geo in
-                let share = total.map { Double(available) / Double(max(1, $0)) } ?? 0
-                ZStack(alignment: .trailing) {
-                    Capsule().fill(Brand.track)
-                    Capsule().fill(tint).frame(width: max(6, geo.size.width * CGFloat(min(1, share))))
-                        .shadow(color: tint == Brand.room ? Brand.room.opacity(0.5) : .clear, radius: 6)
+            .lineLimit(1).minimumScaleFactor(0.5)
+            if let measured, confirmed {
+                HStack(spacing: 8) {
+                    Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)
+                    Text("Checked on \(measured.name)")
                 }
-            }.frame(height: 6)
-            Text("\(Fmt.size(available)) free").font(.system(size: 12, weight: .semibold)).monospacedDigit()
-                .frame(width: 96, alignment: .trailing)
+                .font(.system(size: 13)).foregroundStyle(Brand.room)
+            } else if summary.interrupted {
+                Text("Stopped before the end").font(.system(size: 13)).foregroundStyle(Brand.amber)
+            }
+            if let measured {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
+                    GridRow {
+                        Text("Before")
+                        usedBar(used: measured.total - measured.before, freed: 0, total: measured.total)
+                        Text("\(Fmt.size(measured.before)) free").fontWeight(.medium).foregroundStyle(Brand.textPrimary)
+                            .frame(width: 110, alignment: .trailing)
+                    }
+                    GridRow {
+                        Text("Now")
+                        usedBar(used: measured.total - measured.after, freed: max(0, measured.after - measured.before), total: measured.total)
+                        Text("\(Fmt.size(measured.after)) free").fontWeight(.medium).foregroundStyle(Brand.textPrimary)
+                            .frame(width: 110, alignment: .trailing)
+                    }
+                }
+                .font(.system(size: 12.5)).foregroundStyle(Brand.textMuted).monospacedDigit()
+            }
+            VStack(spacing: 0) {
+                line("Items cleaned", "\(summary.trashed)")
+                if summary.toolCount > 0 {
+                    line("Cleaned by their own tools", "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
+                }
+                if inTrash > 0 { line("Still in Trash", "\(Fmt.size(inTrash)) · can be put back") }
+                if summary.failed > 0 {
+                    line("Skipped", summary.failed == 1 ? summary.errors.first ?? "1 item" : "\(summary.failed) items", tint: Brand.amber)
+                }
+                if summary.accounting.missingRecoveryCount > 0 {
+                    line("No Put Back recorded", "\(summary.accounting.missingRecoveryCount) · still in Finder's Trash", tint: Brand.amber)
+                }
+            }
+            HStack(spacing: 10) {
+                Button("Done", action: onClose)
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .keyboardShortcut(.defaultAction)
+                Button(recoveryTitle, action: onRecovery)
+                    .buttonStyle(ControlPanelButtonStyle(size: .large))
+                if let onEmptyTrash, inTrash > 0 {
+                    Button("Empty from Trash…", action: onEmptyTrash)
+                        .buttonStyle(ControlPanelButtonStyle(size: .large))
+                }
+            }
+            .padding(.top, 4)
         }
+        .frame(maxWidth: 600, alignment: .leading)
+        .padding(.top, 22).padding(.horizontal, 40).padding(.bottom, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(minWidth: 720, minHeight: 560)
+        .background(Brand.background)
+        .foregroundStyle(Brand.textPrimary)
     }
-    private func row(_ title: String, _ detail: String, tint: Color = Brand.textPrimary) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
-            Spacer()
-            Text(detail).font(.system(size: 12.5, weight: .medium)).foregroundStyle(tint).multilineTextAlignment(.trailing)
+
+    /// Used space as a 6 pt bar; on "Now" the space just freed glows ice beside it.
+    private func usedBar(used: Int64, freed: Int64, total: Int64) -> some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let usedShare = CGFloat(min(1, max(0, Double(used) / Double(total))))
+            let freedShare = CGFloat(min(1, Double(freed) / Double(total)))
+            ZStack(alignment: .leading) {
+                Capsule().fill(Brand.wash(0.07))
+                Capsule().fill(Brand.wash(0.28)).frame(width: width * usedShare)
+                if freed > 0 {
+                    Capsule().fill(Brand.room).shadow(color: Brand.room.opacity(0.55), radius: 7)
+                        .frame(width: max(6, width * freedShare))
+                        .offset(x: width * usedShare)
+                }
+            }
         }
-        .padding(.vertical, 8)
-        .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+        .frame(height: 6)
+        .accessibilityHidden(true)
+    }
+
+    private func line(_ title: String, _ value: String, tint: Color = Brand.textPrimary) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).foregroundStyle(Brand.textSecondary).fixedSize()
+            Spacer(minLength: 16)
+            Text(value).fontWeight(.medium).foregroundStyle(tint).lineLimit(1).truncationMode(.tail)
+        }
+        .font(.system(size: 12.5))
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1) }
     }
 }
 
