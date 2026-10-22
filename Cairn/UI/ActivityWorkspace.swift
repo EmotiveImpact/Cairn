@@ -11,6 +11,7 @@ struct RecoveryWorkspace: View {
     var onOpen: (NavSection) -> Void = { _ in }
 
     @State private var showingAllActivity = false
+    @State private var openReceipt = false
     @State private var selectedRunID: UUID?
     @State private var focused: UUID?
     @State private var availableTrash: Set<UUID> = []
@@ -24,14 +25,13 @@ struct RecoveryWorkspace: View {
     @State private var restorePlan: ScanStore.RemovalLogEntry?
     @State private var currentCapacity: CapacityReading?
     @State private var checkingSpace = false
-    @State private var reclaimBaseline: CapacityReading?
     @State private var purged: Set<UUID> = []
     @State private var purgedBytes: Int64 = 0
     @State private var purging = false
     @State private var confirmPurge = false
 
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private let inset: CGFloat = 34
+    private let inset: CGFloat = 40
 
     private static let sampleEntries: [ScanStore.RemovalLogEntry] = {
         [ScanStore.RemovalLogEntry(name: "Old-installer.dmg", originalPath: "~/Downloads/Old-installer.dmg", trashPath: "~/.Trash/Old-installer.dmg", bytes: 940_000_000, date: Date(), category: "installers"),
@@ -97,25 +97,40 @@ struct RecoveryWorkspace: View {
         return currentCapacity ?? StorageControl.shared.current
     }
 
+    /// Freed in the last 30 days, the same window as the chart.
+    private var freedThisMonth: Int64 {
+        let start = Date().addingTimeInterval(-30 * 86_400)
+        return freeSpaceCleans.filter { $0.date >= start }.reduce(0) { $0 + $1.freed }
+    }
+    private var overviewTitle: String {
+        if freedThisMonth > 0 { return "\(Fmt.size(freedThisMonth)) freed this past month" }
+        if preview || !store.cleanupRuns.isEmpty { return "Nothing freed this past month" }
+        return "No cleans yet"
+    }
+    private var showsOverview: Bool {
+        inspected == nil && !showingAllActivity && !(openReceipt && receipt != nil)
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if inspected == nil {
-                        FreeSpaceCard(readings: freeSpaceReadings, cleans: freeSpaceCleans,
-                                      onChanges: { onOpen(.changes) })
-                            .padding(.bottom, 26)
+        Group {
+            if showsOverview {
+                overview
+            } else {
+                VStack(spacing: 0) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 0) {
+                            if let entry = inspected { itemDetail(entry) }
+                            else if !showingAllActivity, let receipt { receiptDetail(receipt) }
+                            else { activityList }
+                        }
+                        .padding(.horizontal, inset).padding(.top, 22).padding(.bottom, 28)
+                        .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
                     }
-                    if let entry = inspected { itemDetail(entry) }
-                    else if !showingAllActivity, let receipt { receiptDetail(receipt) }
-                    else { activityList }
+                    .frame(maxHeight: .infinity)
+                    if let entry = inspected { itemActionBar(entry) }
+                    else if !showingAllActivity && receipt != nil { receiptActionBar }
                 }
-                .padding(.horizontal, inset).padding(.top, 26).padding(.bottom, 28)
-                .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
             }
-            .frame(maxHeight: .infinity)
-            if let entry = inspected { itemActionBar(entry) }
-            else if !showingAllActivity && receipt != nil { receiptActionBar }
         }
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
@@ -124,7 +139,6 @@ struct RecoveryWorkspace: View {
             if !preview {
                 await StorageControl.shared.refreshCapacity(force: true)
                 currentCapacity = StorageControl.shared.current
-                reclaimBaseline = currentCapacity
             }
         }
         .sheet(isPresented: $confirmRestore) {
@@ -154,260 +168,277 @@ struct RecoveryWorkspace: View {
         }
     }
 
-    private func receiptDetail(_ receipt: ActivityReceipt) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            backToActivity
-            HStack(alignment: .top, spacing: 15) {
-                Image(systemName: receipt.interrupted ? "pause.circle.fill" : receipt.skippedCount > 0 ? "exclamationmark.circle.fill" : "checkmark.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(receipt.interrupted || receipt.skippedCount > 0 ? Brand.amber : Brand.safeCyan)
-                    .frame(width: 44, alignment: .leading).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(receipt.title).font(.system(size: 30, weight: .light))
-                    Text(receipt.date.map { "\($0.formatted(date: .abbreviated, time: .shortened)) · Clean receipt" } ?? "Clean receipt · this session")
-                        .font(.system(size: 13)).foregroundStyle(Brand.textMuted)
+    /// The Activity screen from the reference: how much was freed, the free space
+    /// line, and one row per clean with its checked amount and a way into its receipt.
+    private var overview: some View {
+        NightPage(eyebrow: "Activity", title: overviewTitle,
+                  subtitle: "Every clean leaves a receipt. Space is checked on your Mac before and after.") {
+            Button("What changed") { onOpen(.changes) }
+                .buttonStyle(ControlPanelButtonStyle(size: .small))
+        } content: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    FreeSpaceCard(readings: freeSpaceReadings, cleans: freeSpaceCleans)
+                    if hasSafetyNotices { safetyNotices }
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(runLines) { line in runRow(line) }
+                        if runLines.isEmpty {
+                            NightEmpty(title: "No receipts yet",
+                                       message: "When you clean, the receipt appears here with the space checked before and after.")
+                        }
+                    }
+                    if !preview && !allEntries.isEmpty {
+                        Button("Moved items and Put Back") { focused = nil; showingAllActivity = true }
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                    }
                 }
-            }.padding(.top, 33)
-
-            HStack(alignment: .top, spacing: 30) {
-                metric(title: "Space freed", value: Fmt.size(receipt.freedBytes + purgedBytes),
-                       detail: "Deleted, emptied or cleaned by tools", accent: Brand.safeCyan)
-                Rectangle().fill(Brand.separator).frame(width: 1, height: 91)
-                metric(title: "Still in Trash", value: Fmt.size(max(0, receipt.inTrashBytes - purgedBytes)),
-                       detail: "Put Back is available until you delete it")
-                Rectangle().fill(Brand.separator).frame(width: 1, height: 91)
-                metric(title: capacity.map { Date().timeIntervalSince($0.date) < 120 ? "Available now" : "Latest available reading" } ?? "Available space",
-                       value: capacity.map { Fmt.size($0.available) } ?? "Unavailable",
-                       detail: capacityDetail(receipt))
-            }.padding(.leading, 44).padding(.top, 34).padding(.bottom, 23)
-
-            let deletable = receipt.rows.filter { row in
-                row.recoveryID.map { availableTrash.contains($0) && !purged.contains($0) } ?? false
             }
+            .scrollIndicators(.automatic)
+        }
+    }
+
+    private struct RunLine: Identifiable {
+        let id: UUID
+        let title: String
+        let date: Date
+        let amount: String
+        let pill: String
+        let tone: NightPill.Tone
+    }
+
+    private var runLines: [RunLine] {
+        if preview {
+            let day: TimeInterval = 86_400
+            return [RunLine(id: UUID(), title: "Xcode, Docker and npm", date: Date().addingTimeInterval(-11 * day), amount: "Freed 14.0 GB", pill: "Checked", tone: .ok),
+                    RunLine(id: UUID(), title: "Developer caches and simulators", date: Date().addingTimeInterval(-21 * day), amount: "Freed 17.1 GB", pill: "Checked", tone: .ok)]
+        }
+        return store.cleanupRuns.map { run in
+            let freed = Self.freed(run.summary)
+            let inTrash = max(0, run.summary.accounting.trashBytes - run.summary.accounting.freedBytes)
+            let amount = freed > 0 ? "Freed \(Fmt.size(freed))"
+                : inTrash > 0 ? "\(Fmt.size(inTrash)) in Trash"
+                : "\(run.summary.accounting.completedCount) \(run.summary.accounting.completedCount == 1 ? "item" : "items")"
+            let verified = run.summary.capacityChanges.contains { ($0.delta ?? 0) > 0 }
+            let pill: (String, NightPill.Tone)
+            if store.isRunActive(run.id) { pill = ("In progress", .neutral) }
+            else if run.summary.interrupted { pill = ("Stopped", .warn) }
+            else if verified { pill = ("Checked", .ok) }
+            else if run.summary.failed > 0 { pill = ("\(run.summary.failed) skipped", .warn) }
+            else if run.summary.recoverableCount > 0 { pill = ("Can put back", .neutral) }
+            else { pill = ("Recorded", .neutral) }
+            return RunLine(id: run.id, title: runTitle(run), date: run.started,
+                           amount: amount, pill: pill.0, tone: pill.1)
+        }
+    }
+
+    /// The row's grid from the reference: name and date | amount 130 | pill 110 | link 100.
+    private func runRow(_ line: RunLine) -> some View {
+        Button {
+            guard !preview else { return }
+            selectedRunID = line.id; focused = nil; showingAllActivity = false; openReceipt = true
+        } label: {
+            HStack(spacing: 14) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(line.title).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                        .lineLimit(1).truncationMode(.tail)
+                    Text("\(line.date.formatted(.dateTime.day().month(.wide))), \(line.date.formatted(date: .omitted, time: .shortened))")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(line.amount).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                    .foregroundStyle(Brand.textPrimary).lineLimit(1)
+                    .frame(width: 130, alignment: .trailing)
+                NightPill(text: line.pill, tone: line.tone)
+                    .frame(width: 110, alignment: .leading)
+                Text("See receipt").font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                    .frame(width: 100, alignment: .trailing)
+            }
+            .nightRow()
+        }
+        .buttonStyle(.plain)
+    }
+
+    private static let categoryTitles: [String: String] = Dictionary(
+        ScannerRegistry.all().map { ($0.info.id, $0.info.title) }, uniquingKeysWith: { first, _ in first })
+
+    /// "Xcode, Docker and npm": what the clean touched, largest first, from the
+    /// recorded items. Falls back to the run's own name for tool-only cleans.
+    private func runTitle(_ run: CleanupRun) -> String {
+        let trashPaths = Set(run.summary.restorable.map(\.trash.path))
+        var bytes: [String: Int64] = [:]
+        for entry in store.removalLog where entry.trashPath.map({ trashPaths.contains($0) }) == true {
+            bytes[entry.category, default: 0] += entry.bytes
+        }
+        let names = bytes.sorted { $0.value > $1.value }
+            .map { Self.categoryTitles[$0.key] ?? $0.key.replacingOccurrences(of: "-", with: " ").capitalized }
+        switch names.count {
+        case 0: return run.kind ?? "Clean"
+        case 1: return names[0]
+        case 2, 3: return names.dropLast().joined(separator: ", ") + " and " + names.last!
+        default: return names.prefix(2).joined(separator: ", ") + " and \(names.count - 2) more"
+        }
+    }
+
+    /// One clean's receipt, laid out like the reference result screen: the freed
+    /// number, whether it was checked on the Mac, a few plain lines, then the items.
+    private func receiptDetail(_ receipt: ActivityReceipt) -> some View {
+        let freed = receipt.freedBytes + purgedBytes
+        let inTrash = max(0, receipt.inTrashBytes - purgedBytes)
+        let checked = receipt.capacityChanges.first { ($0.delta ?? 0) > 0 }
+        let deletable = receipt.rows.filter { row in
+            row.recoveryID.map { availableTrash.contains($0) && !purged.contains($0) } ?? false
+        }
+        return VStack(alignment: .leading, spacing: 0) {
+            backToActivity
+            Text(receipt.date.map { "Receipt · \($0.formatted(.dateTime.day().month(.wide))), \($0.formatted(date: .omitted, time: .shortened))" } ?? "Receipt · this session")
+                .nightEyebrow().padding(.top, 20)
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if freed > 0 {
+                    Text(Fmt.size(freed)).font(.system(size: 72, weight: .light)).tracking(-2.9).monospacedDigit()
+                    Text("freed").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                } else {
+                    Text(receipt.title).font(.system(size: 40, weight: .light)).tracking(-0.8)
+                }
+            }
+            .lineLimit(1).minimumScaleFactor(0.6).padding(.top, 14)
+            Group {
+                if let checked {
+                    HStack(spacing: 8) {
+                        Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)
+                        Text("Checked on \(checked.name)")
+                    }.foregroundStyle(Brand.room)
+                } else if receipt.interrupted || receipt.skippedCount > 0 {
+                    Text(receipt.interrupted ? "Stopped before the end" : "\(receipt.skippedCount) skipped")
+                        .foregroundStyle(Brand.amber)
+                } else if receipt.inProgress {
+                    Text("Still running").foregroundStyle(Brand.textMuted)
+                }
+            }
+            .font(.system(size: 13)).padding(.top, 14)
+
+            VStack(spacing: 0) {
+                receiptLine("Items cleaned", "\(receipt.movedCount + receipt.toolCount)")
+                if receipt.toolCount > 0 {
+                    receiptLine("Cleaned by their own tools", "\(receipt.toolCount) \(receipt.toolCount == 1 ? "command" : "commands")")
+                }
+                if inTrash > 0 { receiptLine("Still in Trash", "\(Fmt.size(inTrash)) · can be put back") }
+                if receipt.skippedCount > 0 {
+                    receiptLine("Skipped", "\(receipt.skippedCount) \(receipt.skippedCount == 1 ? "item" : "items")", tint: Brand.amber)
+                }
+                if let capacity {
+                    receiptLine("Free space now", Fmt.size(capacity.available))
+                }
+                if receipt.missingRecoveryCount > 0 {
+                    receiptLine("No Put Back recorded", "\(receipt.missingRecoveryCount) \(receipt.missingRecoveryCount == 1 ? "item" : "items") · still in Finder's Trash", tint: Brand.amber)
+                }
+            }
+            .frame(maxWidth: 600).padding(.top, 18)
+
             if !deletable.isEmpty && !preview {
                 HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("\(Fmt.size(deletable.reduce(0) { $0 + ($1.bytes ?? 0) })) is still sitting in the Trash")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("Delete it now to get the space back. This cannot be put back.")
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(Fmt.size(deletable.reduce(0) { $0 + ($1.bytes ?? 0) })) is still in the Trash")
+                            .font(.system(size: 13, weight: .medium))
+                        Text("Emptying it gives you the space now. After that it cannot be put back.")
                             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }
                     Spacer()
-                    Button(purging ? "Deleting…" : "Delete from Trash") { confirmPurge = true }
-                        .buttonStyle(ControlPanelButtonStyle(primary: true))
+                    Button(purging ? "Emptying…" : "Empty from Trash") { confirmPurge = true }
+                        .buttonStyle(ControlPanelButtonStyle(size: .small))
                         .disabled(purging || store.isCleaning)
                 }
-                .padding(16)
-                .background(RoundedRectangle(cornerRadius: Brand.rCard).fill(Brand.blue.opacity(0.10)))
-                .padding(.leading, 44).padding(.bottom, 24)
-                .confirmationDialog("Delete \(deletable.count) \(deletable.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
-                    Button("Delete permanently", role: .destructive) {
-                        let ids = Set(deletable.compactMap(\.recoveryID))
-                        purgeFromTrash(ids)
+                .nightRow().frame(maxWidth: 600).padding(.top, 18)
+                .confirmationDialog("Empty \(deletable.count) \(deletable.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
+                    Button("Empty permanently", role: .destructive) {
+                        purgeFromTrash(Set(deletable.compactMap(\.recoveryID)))
                     }
                 } message: {
                     Text("The space is released straight away. Put Back will no longer be possible for these items.")
                 }
             }
-            if let change = SpaceGoal.observedChange(from: reclaimBaseline, to: capacity) {
-                Text(change == 0 ? "No measured change since opening this activity." : "\(Fmt.size(abs(change))) \(change > 0 ? "more" : "less") available since opening this activity. Other Mac activity may contribute.")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.bottom, 20)
-            }
-            sectionRule
-            HStack {
-                Text("Item").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Result").frame(width: 138, alignment: .leading)
-                Text("Recovery").frame(width: 150, alignment: .leading)
-            }.font(.system(size: 11, weight: .medium)).foregroundStyle(Brand.textMuted)
-                .padding(.horizontal, 6).padding(.vertical, 12)
-            sectionRule
 
-            LazyVStack(spacing: 0) {
+            Text("Items").nightEyebrow().padding(.top, 30).padding(.bottom, 8)
+            LazyVStack(alignment: .leading, spacing: 0) {
                 ForEach(receipt.rows) { row in
-                    HStack(spacing: 12) {
-                        Image(systemName: "doc.fill").font(.system(size: 22)).foregroundStyle(Brand.textSecondary).frame(width: 33)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(row.name).font(.system(size: 13, weight: .medium)).lineLimit(1).truncationMode(.middle)
-                            Text(row.bytes.map(Fmt.size) ?? "Size unavailable")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        }.frame(maxWidth: .infinity, alignment: .leading)
-                        Text(row.recoveryID.map { purged.contains($0) } == true ? "Deleted" : "Moved to Trash")
-                            .font(.system(size: 12)).frame(width: 138, alignment: .leading)
-                        if preview {
-                            Button("Show in Trash") {}.buttonStyle(ControlPanelButtonStyle())
-                                .disabled(true).frame(width: 150, alignment: .leading)
-                        } else if let recoveryID = row.recoveryID, let path = row.trashPath,
-                           availableTrash.contains(recoveryID) {
-                            Button("Show in Trash") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
-                                .buttonStyle(ControlPanelButtonStyle()).disabled(preview)
-                                .frame(width: 150, alignment: .leading)
-                        } else {
-                            Text(preview ? "Sample only" : "Check recovery")
-                                .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                                .frame(width: 150, alignment: .leading)
+                    HStack(spacing: 14) {
+                        NightName(title: row.name, subtitle: row.bytes.map(Fmt.size) ?? "")
+                        NightPill(text: row.recoveryID.map { purged.contains($0) } == true ? "Emptied" : "In Trash")
+                            .frame(width: 110, alignment: .leading)
+                        Group {
+                            if let recoveryID = row.recoveryID, let path = row.trashPath, availableTrash.contains(recoveryID), !preview {
+                                Button("Show in Trash") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
+                                    .buttonStyle(.plain).foregroundStyle(Brand.deepBlue)
+                            } else {
+                                Text(preview ? "Sample" : "Not in Trash").foregroundStyle(Brand.textMuted)
+                            }
                         }
-                    }.padding(.horizontal, 6).frame(minHeight: 68)
-                        .overlay(alignment: .bottom) { sectionRule }
+                        .font(.system(size: 12)).frame(width: 110, alignment: .trailing)
+                    }
+                    .nightRow()
                 }
                 ForEach(Array(receipt.issues.prefix(8).enumerated()), id: \.offset) { _, issue in
-                    HStack(spacing: 12) {
-                        Image(systemName: "exclamationmark.circle")
-                            .font(.system(size: 21)).foregroundStyle(Brand.amber).frame(width: 33)
+                    HStack(spacing: 14) {
                         Text(issue).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
                             .frame(maxWidth: .infinity, alignment: .leading).textSelection(.enabled)
-                        Text("Needs review").font(.system(size: 12)).foregroundStyle(Brand.amber)
-                            .frame(width: 138, alignment: .leading)
-                        Text("—").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                            .frame(width: 150, alignment: .leading)
-                    }.padding(.horizontal, 6).padding(.vertical, 15)
-                        .overlay(alignment: .bottom) { sectionRule }
+                        NightPill(text: "Skipped", tone: .warn).frame(width: 110, alignment: .leading)
+                        Spacer().frame(width: 110)
+                    }
+                    .nightRow()
                 }
             }
-            if receipt.hiddenRowCount > 0 {
-                Button("\(receipt.hiddenRowCount) more recorded items · View all activity") { showingAllActivity = true }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 13)
+            if receipt.hiddenRowCount > 0 || receipt.issues.count > 8 {
+                Button("\(receipt.hiddenRowCount + max(0, receipt.issues.count - 8)) more · See all moved items") { showingAllActivity = true }
+                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 12)
             }
-            if receipt.skippedCount > 0 || !receipt.issues.isEmpty {
-                VStack(alignment: .leading, spacing: 9) {
-                    Label(receipt.skippedCount > 0 ? "\(receipt.skippedCount) skipped · review what happened" : "Review the action notes", systemImage: "exclamationmark.circle")
-                        .font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.amber)
-                    Text(receipt.skippedCount > 0 ? "Cairn did not retry skipped actions. Check the original location and scan again before reviewing another cleanup." : "These messages describe the latest Clean action. The record does not imply that more space was freed.")
-                        .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-                    if receipt.issues.count > 8 { Text("\(receipt.issues.count - 8) more messages are retained in this session.").font(.system(size: 11)).foregroundStyle(Brand.textMuted) }
-                }.padding(.top, 22).padding(.bottom, 20)
-            }
-            if receipt.toolCount > 0 {
-                Text("\(receipt.toolCount) tool actions affected an estimated \(Fmt.size(receipt.toolBytes)) of scanned input. This does not measure what those tools removed.")
-                    .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                    .fixedSize(horizontal: false, vertical: true).padding(.top, 16)
-            }
-            safetyNotices.padding(.top, 16)
-            sectionRule.padding(.top, 20)
-            HStack(alignment: .top, spacing: 15) {
-                Image(systemName: "doc.text").font(.system(size: 22)).foregroundStyle(Brand.textSecondary).frame(width: 44)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("Recovery recorded").font(.system(size: 13, weight: .medium))
-                    Text("\(receipt.recoveryCount) \(receipt.recoveryCount == 1 ? "path" : "paths") recorded. Put Back works only while the exact Trash entry remains available.")
-                        .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                    if receipt.missingRecoveryCount > 0 {
-                        Text("\(receipt.missingRecoveryCount) moved \(receipt.missingRecoveryCount == 1 ? "item has" : "items have") no recorded recovery path. Check Finder Trash manually.")
-                            .font(.system(size: 11)).foregroundStyle(Brand.amber)
-                    }
-                }
-                Spacer(minLength: 8)
-                Button("View recovery details") { showingAllActivity = true }
-                    .buttonStyle(ControlPanelButtonStyle())
-            }.padding(.vertical, 20)
-            if !receipt.capacityChanges.isEmpty {
-                sectionRule
-                VStack(alignment: .leading, spacing: 9) {
-                    Text("Available-space readings at cleanup")
-                        .font(.system(size: 12, weight: .medium))
-                    ForEach(receipt.capacityChanges) { change in
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(change.name).frame(maxWidth: .infinity, alignment: .leading)
-                            Text(change.changeText).monospacedDigit()
-                        }.font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-                    }
-                    Text("Other Mac activity and purgeable data can affect these readings.")
-                        .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
-                }.padding(.vertical, 18)
-            }
+            if hasSafetyNotices { safetyNotices.padding(.top, 16) }
             if preview { sampleFootnote }
         }
     }
 
+    private func receiptLine(_ label: String, _ value: String, tint: Color = Brand.textPrimary) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(label).foregroundStyle(Brand.textSecondary).fixedSize()
+            Spacer(minLength: 16)
+            Text(value).fontWeight(.medium).foregroundStyle(tint).monospacedDigit()
+                .lineLimit(1).truncationMode(.middle)
+        }
+        .font(.system(size: 12.5))
+        .padding(.vertical, 9)
+        .overlay(alignment: .bottom) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1) }
+    }
+
     private var activityList: some View {
         VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Activity").font(.system(size: 38, weight: .light))
-                    Text("Reviewed actions and the recovery paths Cairn recorded.")
-                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                }
-                Spacer()
-                if receipt != nil {
-                    Button("Clean receipt") { focused = nil; showingAllActivity = false }
-                        .buttonStyle(ControlPanelButtonStyle())
-                }
-            }.padding(.bottom, 24)
-            safetyNotices
+            backToActivity
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Moved items").font(.system(size: 40, weight: .light)).tracking(-0.8)
+                Text("Everything Cairn has moved, and Put Back while it is still in the Trash.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textMuted)
+            }.padding(.top, 20).padding(.bottom, 24)
+            if hasSafetyNotices { safetyNotices.padding(.bottom, 16) }
             if !restoreMessage.isEmpty {
                 CairnStateView(kind: restoreSucceeded ? .completed : .attention,
                                title: restoreSucceeded ? "Item restored" : "Restore could not finish",
                                message: restoreMessage, compact: true).padding(.bottom, 12)
             }
-            if !preview, !store.cleanupRuns.isEmpty {
-                Text("Cleanup receipts").font(.system(size: 14, weight: .medium))
-                    .frame(maxWidth: .infinity, alignment: .leading).padding(.bottom, 8)
-                LazyVStack(spacing: 0) {
-                    ForEach(store.cleanupRuns) { run in
-                        Button {
-                            selectedRunID = run.id; focused = nil; showingAllActivity = false
-                        } label: {
-                            let freed = Self.freed(run.summary)
-                            let verified = run.summary.capacityChanges.contains { ($0.delta ?? 0) > 0 }
-                            HStack(spacing: 14) {
-                                VStack(spacing: 0) {
-                                    Text(run.started.formatted(.dateTime.day())).font(.system(size: 20, weight: .light))
-                                    Text(run.started.formatted(.dateTime.month(.abbreviated))).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                                }.frame(width: 40)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(freed > 0 ? "Freed \(Fmt.size(freed))" : "\(run.kind ?? "Cleanup"): \(run.summary.accounting.completedCount) items")
-                                        .font(.system(size: 14, weight: .medium))
-                                    Text("\(run.kind ?? "Cleanup") · \(run.started.formatted(date: .omitted, time: .shortened))\(run.summary.failed > 0 ? " · \(run.summary.failed) skipped" : "")")
-                                        .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
-                                }
-                                Spacer()
-                                if store.isRunActive(run.id) {
-                                    ReceiptPill(text: "In progress", tint: Brand.blue)
-                                } else if run.summary.interrupted {
-                                    ReceiptPill(text: "Interrupted", tint: Brand.amber)
-                                } else if verified {
-                                    ReceiptPill(text: "Checked", tint: Brand.room)
-                                } else if run.summary.recoverableCount > 0 {
-                                    ReceiptPill(text: "Can put back", tint: Brand.textSecondary)
-                                }
-                                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
-                            }.padding(.vertical, 12).contentShape(Rectangle())
-                        }.buttonStyle(.plain).overlay(alignment: .top) { if run.id != store.cleanupRuns.first?.id { sectionRule } }
-                    }
-                }
-                .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
-                .padding(.bottom, 24)
-            }
-            HStack {
-                Text("Recorded actions").font(.system(size: 14, weight: .medium))
-                Spacer()
-                Text("\(entries.count) shown").font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-            }.padding(.bottom, 12)
             if entries.isEmpty {
-                WorkspaceEmpty(title: search.isEmpty ? "No recorded actions" : "No matching actions",
-                    message: search.isEmpty ? "Reviewed cleanups will appear here with their original path and recovery status." : "Try another search to find a recorded action.",
-                    icon: "clock.arrow.circlepath")
+                NightEmpty(title: search.isEmpty ? "Nothing moved yet" : "No matching items",
+                           message: search.isEmpty ? "Items you clean appear here with where they came from and whether they can be put back." : "Try another search.")
             } else {
-                LazyVStack(spacing: 0) {
+                LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(entries) { entry in
                         Button { focused = entry.id; restoreMessage = "" } label: {
-                            HStack(spacing: 13) {
-                                Image(systemName: entry.restoredAt != nil ? "arrow.uturn.backward.circle" : "doc")
-                                    .font(.system(size: 20)).foregroundStyle(Brand.textSecondary).frame(width: 30)
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(entry.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary)
-                                    Text(entry.originalPath).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                                        .lineLimit(1).truncationMode(.middle)
-                                }.frame(maxWidth: .infinity, alignment: .leading)
-                                Text(Fmt.size(entry.bytes)).font(.system(size: 12)).monospacedDigit()
-                                    .foregroundStyle(Brand.textSecondary).frame(width: 93, alignment: .trailing)
-                                Text(status(for: entry)).font(.system(size: 11))
-                                    .foregroundStyle(availableTrash.contains(entry.id) ? Brand.deepBlue : Brand.textMuted)
-                                    .frame(width: 104, alignment: .trailing)
-                                Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
-                            }.padding(.horizontal, 5).frame(minHeight: 68).contentShape(Rectangle())
+                            HStack(spacing: 14) {
+                                NightName(title: entry.name, subtitle: entry.originalPath)
+                                Text(Fmt.size(entry.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                                    .frame(width: 90, alignment: .trailing)
+                                NightPill(text: status(for: entry),
+                                          tone: entry.restoredAt != nil || availableTrash.contains(entry.id) ? .ok : .neutral)
+                                    .frame(width: 110, alignment: .leading)
+                            }
+                            .nightRow()
                         }.buttonStyle(.plain)
-                            .overlay(alignment: .bottom) { sectionRule }
                     }
                 }
             }
@@ -421,65 +452,64 @@ struct RecoveryWorkspace: View {
     private func itemDetail(_ entry: ScanStore.RemovalLogEntry) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             backToActivity
-            HStack(alignment: .top, spacing: 15) {
-                Image(systemName: entry.restoredAt != nil ? "checkmark.circle.fill" : availableTrash.contains(entry.id) ? "clock.arrow.circlepath" : "exclamationmark.circle.fill")
-                    .font(.system(size: 30))
-                    .foregroundStyle(entry.restoredAt != nil ? Brand.safeCyan : availableTrash.contains(entry.id) ? Brand.deepBlue : Brand.amber)
-                    .frame(width: 44, alignment: .leading).padding(.top, 2)
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(entry.name).font(.system(size: 30, weight: .light))
-                    Text("\(entry.date.formatted(date: .abbreviated, time: .shortened)) · Recorded action")
-                        .font(.system(size: 13)).foregroundStyle(Brand.textMuted)
-                }
-            }.padding(.top, 33)
-            HStack(alignment: .top, spacing: 30) {
-                metric(title: "Recorded file size", value: Fmt.size(entry.bytes), detail: "Estimate · not space freed")
-                Rectangle().fill(Brand.separator).frame(width: 1, height: 91)
-                metric(title: "Recovery", value: status(for: entry),
-                       detail: entry.restoredAt != nil ? "Already put back" : availableTrash.contains(entry.id) ? "Exact Trash item found" : "Original item cannot be restored here")
-            }.padding(.leading, 44).padding(.top, 34).padding(.bottom, 28)
-            sectionRule
-            detailLine("Original location", entry.originalPath)
-            detailLine("Recorded Trash location", entry.trashPath ?? "No Trash path was recorded for this action.")
-            detailLine("What this means", "This individual history record has no verified available-space change. Moving a file to Trash does not immediately free internal capacity.")
+            Text("Moved item · \(entry.date.formatted(.dateTime.day().month(.wide))), \(entry.date.formatted(date: .omitted, time: .shortened))")
+                .nightEyebrow().padding(.top, 20)
+            Text(entry.name).font(.system(size: 40, weight: .light)).tracking(-0.8)
+                .lineLimit(1).truncationMode(.middle).minimumScaleFactor(0.6).padding(.top, 14)
+            NightPill(text: status(for: entry),
+                      tone: entry.restoredAt != nil || availableTrash.contains(entry.id) ? .ok : .neutral)
+                .padding(.top, 12)
+            VStack(spacing: 0) {
+                receiptLine("Size when moved", Fmt.size(entry.bytes))
+                receiptLine("Where it was", entry.originalPath)
+                receiptLine("Where it is now", entry.restoredAt != nil ? "Back where it was"
+                            : availableTrash.contains(entry.id) ? (entry.trashPath ?? "In the Trash") : "No longer in the Trash")
+            }
+            .textSelection(.enabled).frame(maxWidth: 720).padding(.top, 18)
             if !restoreMessage.isEmpty {
                 CairnStateView(kind: restoreSucceeded ? .completed : .attention,
                                title: restoreSucceeded ? "Item restored" : "Restore could not finish",
                                message: restoreMessage, compact: true).padding(.top, 16)
             }
-            safetyNotices.padding(.top, 16)
+            if hasSafetyNotices { safetyNotices.padding(.top, 16) }
             if preview { sampleFootnote }
         }
     }
 
+    /// The page footer from the reference: no bar, just the actions on the right.
     private var receiptActionBar: some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             Spacer()
             if checkingSpace { ProgressView().controlSize(.small) }
-            Button(checkingSpace ? "Checking…" : "Check available space") { checkSpace() }
-                .buttonStyle(ControlPanelButtonStyle(primary: true)).disabled(preview || checkingSpace)
-            Button("Done") { showingAllActivity = true }.buttonStyle(ControlPanelButtonStyle())
+            Button(checkingSpace ? "Checking…" : "Check space again") { checkSpace() }
+                .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview || checkingSpace)
+            Button("Done") { openReceipt = false }
+                .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
         }
-        .padding(.horizontal, inset).frame(height: 72)
-        .background(Brand.deepPanel.opacity(0.35))
-        .overlay(alignment: .top) { sectionRule }
+        .padding(.horizontal, inset).padding(.top, 6).padding(.bottom, 26)
     }
 
     private func itemActionBar(_ entry: ScanStore.RemovalLogEntry) -> some View {
-        HStack(spacing: 9) {
+        HStack(spacing: 10) {
             Spacer()
             if let path = entry.trashPath, availableTrash.contains(entry.id) {
                 Button("Show in Trash") { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)]) }
-                    .buttonStyle(ControlPanelButtonStyle()).disabled(preview)
+                    .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview)
                 Button("Put Back…") { restorePlan = entry; confirmRestore = true }
-                    .buttonStyle(ControlPanelButtonStyle(primary: true))
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                     .disabled(preview || store.isRestoring || store.isCleaning || store.isScanning)
+            } else {
+                Button("Done") { focused = nil }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
             }
-            Button("Done") { focused = nil; showingAllActivity = true }.buttonStyle(ControlPanelButtonStyle())
         }
-        .padding(.horizontal, inset).frame(height: 72)
-        .background(Brand.deepPanel.opacity(0.35))
-        .overlay(alignment: .top) { sectionRule }
+        .padding(.horizontal, inset).padding(.top, 6).padding(.bottom, 26)
+    }
+
+    private var hasSafetyNotices: Bool {
+        (!preview && (store.receiptError ?? store.removalLogError ?? journalError) != nil)
+            || !needsManualReview.isEmpty || !reviewMessage.isEmpty
+            || actionJournal.contains { $0.state == .reviewed }
     }
 
     private var safetyNotices: some View {
@@ -525,11 +555,12 @@ struct RecoveryWorkspace: View {
     }
 
     private var backToActivity: some View {
-        Button { focused = nil; showingAllActivity = true } label: {
-            Label("All activity", systemImage: "chevron.left")
+        Button {
+            if focused != nil { focused = nil } else { showingAllActivity = false; openReceipt = false }
+        } label: {
+            Label(focused != nil ? "Moved items" : "Activity", systemImage: "chevron.left")
         }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
     }
-    private var sectionRule: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
     private var sampleFootnote: some View {
         Text("Design preview · Sample data · Actions disabled")
             .font(.system(size: 10)).foregroundStyle(Brand.textMuted).padding(.top, 26)
@@ -547,37 +578,12 @@ struct RecoveryWorkspace: View {
             purging = false
         }
     }
-    private func metric(title: String, value: String, detail: String, accent: Color = Brand.textPrimary) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-            Text(value).font(.system(size: 43, weight: .regular)).monospacedDigit().minimumScaleFactor(0.68).lineLimit(1)
-                .foregroundStyle(accent)
-            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                .fixedSize(horizontal: false, vertical: true)
-        }.frame(maxWidth: .infinity, alignment: .leading)
-    }
-    private func detailLine(_ title: String, _ value: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title).font(.system(size: 11, weight: .medium)).foregroundStyle(Brand.textMuted)
-            Text(value).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                .textSelection(.enabled).fixedSize(horizontal: false, vertical: true)
-        }.padding(.vertical, 17).frame(maxWidth: .infinity, alignment: .leading)
-            .overlay(alignment: .bottom) { sectionRule }
-    }
     private func status(for entry: ScanStore.RemovalLogEntry) -> String {
         if entry.restoredAt != nil { return "Restored" }
         if availableTrash.contains(entry.id) { return "In Trash" }
         if entry.actionKind == "tool" { return "Tool action" }
         if entry.actionKind == "delete" || purged.contains(entry.id) { return "Deleted" }
         return "Unavailable"
-    }
-    private func capacityDetail(_ receipt: ActivityReceipt) -> String {
-        if preview { return "No measured increase yet" }
-        guard let capacity else { return "Check available space to obtain a current reading" }
-        let checked = "Checked \(capacity.date.formatted(date: .omitted, time: .shortened))"
-        guard let change = receipt.capacityChanges.first(where: { $0.after?.volumeID == capacity.volumeID }),
-              let delta = change.delta else { return checked + " · No comparable cleanup reading" }
-        return checked + " · At cleanup: " + (delta == 0 ? "no measured change" : change.changeText.lowercased())
     }
     private func checkSpace() {
         guard !preview, !checkingSpace else { return }
@@ -647,21 +653,8 @@ private struct ActivityReceipt {
     }
 }
 
-
-private struct ReceiptPill: View {
-    let text: String
-    let tint: Color
-    var body: some View {
-        let quiet = tint == Brand.textSecondary
-        Text(text).font(.system(size: 11.5))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 9).padding(.vertical, 3)
-            .overlay(Capsule().strokeBorder(tint.opacity(quiet ? 0.25 : 0.32), lineWidth: 0.75))
-    }
-}
-
-/// Free space over the last month, with a dot for each clean that released space.
-/// Replaces the separate Changes chart as the first thing Activity shows.
+/// Free space over the last month, drawn as in the reference: a thin ice line
+/// with a soft glow, a hollow dot for each clean and a solid dot for today.
 struct FreeSpaceCard: View {
     struct Clean: Identifiable {
         let date: Date
@@ -670,65 +663,99 @@ struct FreeSpaceCard: View {
     }
     let readings: [CapacityReading]
     let cleans: [Clean]
-    var onChanges: () -> Void
 
-    private var freedThisMonth: Int64 { cleans.reduce(0) { $0 + $1.freed } }
+    private func gb(_ bytes: Int64) -> Double { Double(bytes) / 1e9 }
     private func available(near date: Date) -> Double {
-        let reading = readings.first { $0.date >= date } ?? readings.last
-        return Double(reading?.available ?? 0) / 1e9
+        gb((readings.first { $0.date >= date } ?? readings.last)?.available ?? 0)
     }
+    /// The plotted range hugs the line so a few GB of change is visible.
+    private var range: ClosedRange<Double> {
+        let values = readings.map { gb($0.available) }
+        let lo = values.min() ?? 0, hi = values.max() ?? 1
+        let span = max(hi - lo, max(hi * 0.1, 1))
+        return max(0, lo - span * 0.5)...(hi + span * 0.3)
+    }
+    private var xTicks: [Date] {
+        guard let first = readings.first?.date, let last = readings.last?.date, last > first else { return [] }
+        let step = last.timeIntervalSince(first) / 3
+        return (0...3).map { first.addingTimeInterval(Double($0) * step) }
+    }
+    private let axisInk = Brand.textMuted.opacity(0.72)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Free space, last 30 days").eyebrow()
-                    HStack(alignment: .firstTextBaseline, spacing: 8) {
-                        Text(readings.last.map { "\(Fmt.size($0.available)) free" } ?? "No readings yet")
-                            .font(.system(size: 30, weight: .light)).monospacedDigit()
-                        if freedThisMonth > 0 {
-                            Text("· \(Fmt.size(freedThisMonth)) freed this month")
-                                .font(.system(size: 12.5)).foregroundStyle(Brand.textMuted)
-                        }
-                    }
-                }
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Free space · last 30 days").nightEyebrow()
                 Spacer()
-                Button("What changed", action: onChanges)
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                HStack(spacing: 6) {
+                    Circle().strokeBorder(Brand.room, lineWidth: 1.5).frame(width: 8, height: 8)
+                    Text("Clean")
+                }
+                .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
             }
             if readings.count >= 2 {
-                let high = (readings.map { Double($0.available) / 1e9 }.max() ?? 1) * 1.15
+                let range = range
                 Chart {
                     ForEach(readings) { reading in
-                        AreaMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
-                            .foregroundStyle(LinearGradient(colors: [Brand.room.opacity(0.16), Brand.room.opacity(0)], startPoint: .top, endPoint: .bottom))
-                        LineMark(x: .value("Date", reading.date), y: .value("GB", Double(reading.available) / 1e9))
-                            .foregroundStyle(Brand.room).lineStyle(StrokeStyle(lineWidth: 1.7, lineJoin: .round))
-                            .shadow(color: Brand.room.opacity(0.6), radius: 4)
+                        AreaMark(x: .value("Date", reading.date),
+                                 yStart: .value("Low", range.lowerBound),
+                                 yEnd: .value("GB", gb(reading.available)))
+                            .foregroundStyle(LinearGradient(colors: [Brand.room.opacity(0.18), Brand.room.opacity(0)],
+                                                            startPoint: .top, endPoint: .bottom))
+                        LineMark(x: .value("Date", reading.date), y: .value("GB", gb(reading.available)))
+                            .foregroundStyle(Brand.room)
+                            .lineStyle(StrokeStyle(lineWidth: 1.6, lineJoin: .round))
+                            .shadow(color: Brand.room.opacity(0.55), radius: 4)
                     }
                     ForEach(cleans.filter { clean in readings.first.map { clean.date >= $0.date } ?? false }) { clean in
                         PointMark(x: .value("Date", clean.date), y: .value("GB", available(near: clean.date)))
-                            .symbol { Circle().fill(Brand.background).overlay(Circle().strokeBorder(Brand.room, lineWidth: 1.6)).frame(width: 9, height: 9) }
-                            .annotation(position: .top, alignment: .center, spacing: 4) {
-                                Text("+\(Fmt.size(clean.freed))").font(.system(size: 10.5, weight: .semibold)).foregroundStyle(Brand.room)
+                            .symbol {
+                                Circle().fill(Brand.background)
+                                    .overlay(Circle().strokeBorder(Brand.room, lineWidth: 1.6))
+                                    .frame(width: 8, height: 8)
+                            }
+                    }
+                    if let last = readings.last {
+                        PointMark(x: .value("Date", last.date), y: .value("GB", gb(last.available)))
+                            .symbol {
+                                ZStack {
+                                    Circle().fill(Brand.room.opacity(0.18)).frame(width: 18, height: 18)
+                                    Circle().fill(Brand.room).frame(width: 9, height: 9)
+                                }
                             }
                     }
                 }
-                .chartYScale(domain: 0...max(1, high))
-                .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
-                    AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(Brand.separator)
-                    AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB") } }
-                } }
-                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 5)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
-                .frame(height: 130)
+                .chartYScale(domain: range)
+                .chartYAxis {
+                    AxisMarks(position: .leading, values: .automatic(desiredCount: 3)) { value in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 1, dash: [3, 4])).foregroundStyle(Brand.wash(0.06))
+                        AxisValueLabel {
+                            if let value = value.as(Double.self) {
+                                Text(Fmt.size(Int64(value * 1e9))).font(.system(size: 10.5)).foregroundStyle(axisInk)
+                            }
+                        }
+                    }
+                }
+                .chartXAxis {
+                    AxisMarks(values: xTicks) { value in
+                        AxisValueLabel {
+                            if let date = value.as(Date.self) {
+                                Text(Calendar.current.isDateInToday(date) ? "Today" : date.formatted(.dateTime.day().month(.abbreviated)))
+                                    .font(.system(size: 10.5)).foregroundStyle(axisInk)
+                            }
+                        }
+                    }
+                }
+                .frame(height: 140)
                 .accessibilityLabel("Free space over the last 30 days, with \(cleans.count) cleans marked")
             } else {
-                Text("A line appears here once Cairn has checked your free space a few times.")
+                Text("The line appears once Cairn has checked your free space a few times.")
                     .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                    .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
             }
         }
-        .padding(18)
-        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
-        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
+        .padding(.top, 14).padding(.horizontal, 16).padding(.bottom, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Brand.wash(0.02)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Brand.wash(0.07), lineWidth: 1))
     }
 }
