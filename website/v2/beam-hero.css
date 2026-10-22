@@ -14,16 +14,19 @@
 
 /* ---------- hero: copy on top, real screenshot below, beam landing on it ---------- */
 .beam-hero { --hit: 50%; }
-.beam-hero .hero-layout { display: block; padding-block: 120px 72px; }
-.beam-hero .hero-copy { max-width: 860px; margin-inline: auto; text-align: center; container-type: normal; position: relative; z-index: 3; }
+.beam-hero .hero-layout { display: block; padding-block: 64px 72px; }
+.beam-hero .hero-copy { max-width: 1040px; margin-inline: auto; text-align: center; container-type: normal; position: relative; z-index: 3; }
 .beam-hero .hero-description { max-width: 540px; margin-inline: auto; }
 .beam-hero .hero-actions { justify-content: center; }
 .beam-hero .product-composition figcaption { justify-content: center; }
-.beam-hero h1 { font-size: clamp(38px, 5.4vw, 64px); line-height: 1.06; text-wrap: balance; }
+.beam-hero h1 { font-size: clamp(34px, 4.3vw, 58px); line-height: 1.06; text-wrap: balance; }
+.beam-hero .hero-copy .section-label { margin-bottom: 14px; }
+.beam-hero .hero-description { margin-top: 18px; }
+.beam-hero .hero-actions { margin-top: 24px; }
 .beam-hero h1 > span { display: inline; white-space: normal; color: var(--muted-head); }
 /* the stone photo stays, faded right down so the beam has a dark stage */
 .beam-hero .hero-atmosphere img { opacity: .14; filter: saturate(.6); -webkit-mask-image: linear-gradient(to bottom, #000 30%, transparent 70%); mask-image: linear-gradient(to bottom, #000 30%, transparent 70%); }
-.beam-hero .product-composition { position: relative; width: 100%; margin-top: 150px; }
+.beam-hero .product-composition { position: relative; width: 100%; margin-top: 84px; }
 /* the beam falls behind the words: a soft dark pool keeps the headline clean */
 .beam-hero .hero-copy::before { content: ""; position: absolute; inset: -40px -60px -70px; z-index: -1; pointer-events: none;
   background: radial-gradient(closest-side, rgba(9,11,13,.97) 62%, rgba(9,11,13,.75) 80%, transparent); }
@@ -32,7 +35,7 @@
 .beam-hero .product-composition::after { display: none; }
 .beam-hero .product-composition figcaption { position: static; }
 @media (min-width: 1051px) {
-  .beam-hero .hero-layout { padding-block: 120px 72px; }
+  .beam-hero .hero-layout { padding-block: 64px 72px; }
   .beam-hero .product-screen { width: 100%; max-width: 100%; }
 }
 
@@ -52,8 +55,8 @@
 @media (max-width: 760px) {
   .beam-hero .fx { height: 170px; }
   .beam-hero .fx .core { height: 100%; }
-  .beam-hero .hero-layout { padding-block: 64px 48px; }
-  .beam-hero .product-composition { margin-top: 150px; }
+  .beam-hero .hero-layout { padding-block: 40px 48px; }
+  .beam-hero .product-composition { margin-top: 110px; }
   .beam-hero .flare::after { left: calc(var(--hit) - 160px); width: 320px; }
 }
 
