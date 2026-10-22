@@ -215,3 +215,5 @@ body { background: #090b0d; }
 .look-photo[data-photo="tunnel"] .open-photo, .look-photo[data-photo="tunnel"] .open-ring { display: none; }
 .look-photo[data-photo="tunnel"] .open-tunnel { display: block; position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
 .look-photo[data-photo="tunnel"]::after { background: linear-gradient(to right, rgba(5,8,13,.8), rgba(5,8,13,.35) 40%, transparent 60%), linear-gradient(to top, rgba(5,8,13,.7), transparent 35%); }
+.story-page .header-action { display: inline-flex; align-items: center; gap: 8px; }
+.story-page .header-action .apple { flex: 0 0 auto; margin-top: -2px; }
