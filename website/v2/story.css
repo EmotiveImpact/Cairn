@@ -358,3 +358,29 @@ body:not(.staged) .disk-next { display: none; }
   .staged .stage > .story-app .app-steps button:not([aria-selected="true"]) { display: none; }
   .staged .stage > .story-app .product-composition { width: min(100%, calc(100svh - 380px)); }
 }
+
+/* the app: the words and its three steps on the left, the window large on the right */
+@media (min-width: 900px) {
+  .story-app.beam-hero .hero-layout { display: grid; grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); grid-template-areas: "copy panel" "steps panel" ". sample"; column-gap: clamp(40px, 5vw, 80px); align-content: center; }
+  .story-app.beam-hero .product-composition { display: contents; }
+  .story-app.beam-hero .hero-copy { grid-area: copy; align-self: end; max-width: none; margin: 0; text-align: left; }
+  .story-app.beam-hero .hero-copy h2 { font-size: clamp(30px, 2.6vw, 36px); }
+  .story-app.beam-hero .hero-copy h2 span { display: block; }
+  .story-app.beam-hero .night-window { grid-area: panel; align-self: center; justify-self: end; width: 100%; max-width: calc((100svh - 190px) * 1.556); }
+  .story-app .product-composition .app-steps { grid-area: steps; align-self: start; display: block; margin-top: 36px; }
+  .story-app .app-sample { grid-area: sample; margin-top: 10px; text-align: right; }
+  .story-app .app-photo::after { background: linear-gradient(to right, rgba(9,11,13,.7), rgba(9,11,13,.25) 38%, transparent 55%), linear-gradient(to bottom, var(--night) 0%, rgba(9,11,13,.5) 14%, rgba(9,11,13,.12) 40%, rgba(9,11,13,.18) 62%, rgba(9,11,13,.7) 86%, var(--night) 100%); }
+  .staged .stage > .story-app .hero-copy h2 { font-size: clamp(30px, 2.6vw, 36px); }
+}
+/* the steps read as one list: a quiet line down the side, lit beside the screen that is showing */
+.story-app .app-steps button { position: relative; }
+@media (min-width: 900px) {
+  .story-app .app-steps button { display: block; width: 100%; padding: 14px 0 14px 22px; border: 0; border-left: 1px solid rgba(220,235,247,.14); }
+  .story-app .app-steps button::before { content: ""; position: absolute; left: -1px; top: 0; bottom: 0; width: 2px; border-radius: 2px; background: #cfe6ff; box-shadow: 0 0 12px rgba(140,196,255,.7); opacity: 0; transition: opacity .4s ease; }
+  .story-app .app-steps [aria-selected="true"]::before { opacity: 1; }
+  .story-app .app-steps b { font-size: 19px; letter-spacing: -.01em; color: #6f7c88; }
+  .story-app .app-steps span { font-size: 14.5px; color: #56636e; }
+  .story-app .app-steps button:hover b { color: #dbe4ec; }
+  .story-app .app-steps [aria-selected="true"] b { color: #fff; }
+  .story-app .app-steps [aria-selected="true"] span { color: #b3bfc9; }
+}
