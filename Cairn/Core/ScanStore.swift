@@ -176,6 +176,9 @@ final class ScanStore {
     struct BucketSnapshot: Codable {
         let id: String; let title: String; let systemImage: String
         let group: CategoryGroup; let bytes: Int64; let count: Int
+        /// Safe, rebuildable and actionable: the same rule as Home's number.
+        /// Optional so snapshots saved before it existed still decode.
+        var readyBytes: Int64? = nil
     }
     struct Snapshot: Codable { let date: Date; let buckets: [BucketSnapshot] }
     private(set) var lastSnapshot: Snapshot?
@@ -209,12 +212,16 @@ final class ScanStore {
     struct DisplayBucket: Identifiable {
         let id: String; let title: String; let systemImage: String
         let group: CategoryGroup; let bytes: Int64; let count: Int
+        /// Safe, rebuildable and actionable: the same rule as Home's number.
+        /// Optional so snapshots saved before it existed still decode.
+        var readyBytes: Int64? = nil
     }
     var hasLiveResults: Bool { hasScanned && !buckets.isEmpty }
     var displayBuckets: [DisplayBucket] {
         if hasLiveResults {
             return buckets.map { DisplayBucket(id: $0.id, title: $0.info.title, systemImage: $0.info.systemImage,
-                                               group: $0.info.group, bytes: $0.totalSize, count: $0.items.count) }
+                                               group: $0.info.group, bytes: $0.totalSize, count: $0.items.count,
+                           readyBytes: $0.items.filter(CLI.isReady).reduce(Int64(0)) { $0 + $1.allocatedSize }) }
         }
         return (lastSnapshot?.buckets ?? []).map {
             DisplayBucket(id: $0.id, title: $0.title, systemImage: $0.systemImage,
@@ -243,7 +250,7 @@ final class ScanStore {
         supportDirectory.appendingPathComponent("removal-log.json").appendingPathExtension("runs")
     }
 
-    private static var snapshotURL: URL {
+    nonisolated private static var snapshotURL: URL {
         supportDirectory.appendingPathComponent("last-scan.json")
     }
 
@@ -260,10 +267,17 @@ final class ScanStore {
         ReclaimStats.shared.reclaimableBytes = snap.buckets.reduce(Int64(0)) { $0 + $1.bytes }
     }
 
+    /// The app's last completed scan, read without scanning. For the CLI and MCP.
+    nonisolated static func savedSnapshot() -> Snapshot? {
+        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
+        return try? JSONDecoder().decode(Snapshot.self, from: data)
+    }
+
     private func saveSnapshot() {
         let snaps = buckets.map {
             BucketSnapshot(id: $0.id, title: $0.info.title, systemImage: $0.info.systemImage,
-                           group: $0.info.group, bytes: $0.totalSize, count: $0.items.count)
+                           group: $0.info.group, bytes: $0.totalSize, count: $0.items.count,
+                           readyBytes: $0.items.filter(CLI.isReady).reduce(Int64(0)) { $0 + $1.allocatedSize })
         }
         let snap = Snapshot(date: Date(), buckets: snaps)
         lastSnapshot = snap

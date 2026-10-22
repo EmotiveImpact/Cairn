@@ -16,7 +16,8 @@ enum MCPServer {
     Use storage_status for available space, list_projects for repositories and their rebuildable \
     build output, and find_reclaimable for caches by category. Cairn never deletes from here: \
     to free space, call open_cairn and tell the user what to review. Scans read file sizes only. \
-    A whole-machine scan can take several minutes the first time; results are kept for ten minutes, \
+    find_reclaimable with no category answers at once from Cairn's last scan when it is under a day old; \
+    a fresh whole-machine scan can take several minutes, and results are kept for ten minutes, \
     so pass a category when you can.
     """
 
@@ -99,6 +100,7 @@ enum MCPServer {
                 "type": "object",
                 "properties": obj([
                     "category": obj(["type": "string", "description": "One scanner id, for example xcode, docker, dev-caches or browser-caches."]),
+                    "fresh": obj(["type": "boolean", "description": "Rescan now instead of using Cairn's last scan from today. A full rescan can take several minutes."]),
                     "limit": obj(["type": "integer", "minimum": 1, "maximum": 200, "description": "Maximum items to return (default 25)."]),
                 ]),
             ]),
@@ -158,6 +160,10 @@ enum MCPServer {
             if let category, !ScannerRegistry.all().contains(where: { $0.info.id == category }) {
                 return .failure(ToolError(message: "Unknown category '\(category)'. Call list_categories for valid ids."))
             }
+            if category == nil, arguments["fresh"] as? Bool != true, cache.isEmpty,
+               let snapshot = ScanStore.savedSnapshot(), Date().timeIntervalSince(snapshot.date) < 86_400 {
+                return .success(summarise(snapshot))
+            }
             let measured = measure(category)
             let items = measured.items.sorted { $0.allocatedSize > $1.allocatedSize }
             func bytes(_ list: [ScanItem]) -> Int64 { list.reduce(Int64(0)) { $0 + $1.allocatedSize } }
@@ -204,6 +210,29 @@ enum MCPServer {
     }
 
     // MARK: - Measuring
+
+    /// Totals from the app's last scan, returned instantly. Item lists need a
+    /// category or `fresh`, which scan now.
+    private static func summarise(_ snapshot: ScanStore.Snapshot) -> [String: Any] {
+        let buckets = snapshot.buckets.filter { $0.bytes > 0 }.sorted { $0.bytes > $1.bytes }
+        let total = buckets.reduce(Int64(0)) { $0 + $1.bytes }
+        let known = buckets.allSatisfy { $0.readyBytes != nil }
+        let ready = buckets.reduce(Int64(0)) { $0 + ($1.readyBytes ?? 0) }
+        var result: [String: Any] = [
+            "source": "Cairn's last scan",
+            "measuredSecondsAgo": Int(Date().timeIntervalSince(snapshot.date)),
+            "totalBytes": total,
+            "itemCount": buckets.reduce(0) { $0 + $1.count },
+            "categories": buckets.map { bucket -> [String: Any] in
+                var entry: [String: Any] = ["category": bucket.id, "title": bucket.title, "bytes": bucket.bytes, "items": bucket.count]
+                if let ready = bucket.readyBytes { entry["readyBytes"] = ready }
+                return entry
+            },
+            "note": "Totals from Cairn's last scan, without rescanning. Call again with a category for its items, or with fresh: true to rescan everything. readyBytes is what Cairn can free once the user reviews it; never present the rest as free space.",
+        ]
+        if known { result["readyBytes"] = ready; result["ready"] = Fmt.size(ready); result["needsUserBytes"] = total - ready }
+        return result
+    }
 
     /// Scans are slow (a full project sweep can take minutes), so results are
     /// kept per scanner for ten minutes within one agent session. A later call
