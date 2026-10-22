@@ -10,55 +10,45 @@ struct PreferencesWorkspace: View {
     @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "AI tools", "License", "About & CLI"]
+    private var tabLine: String {
+        switch tab {
+        case "General": return "How Cairn looks and starts."
+        case "Cleaning": return "What happens when you clean."
+        case "Scanning": return "What Cairn looks at when it scans."
+        case "Monitoring": return "Watching your free space while Cairn runs. Nothing is ever removed."
+        case "Protection": return "What Cairn never touches, whatever you choose."
+        case "Excluded locations": return "Folders Cairn will never clean."
+        case "AI tools": return "Let your AI coding tools ask Cairn about space."
+        case "License": return "Your Cairn licence."
+        default: return "Version and the command line."
+        }
+    }
     var body: some View {
-        CairnWorkspace(title: "Settings", subtitle: preview ? "Preview · changes disabled" : "How Cairn observes and protects your Mac", inspectorVisible: false) {
-            VStack(spacing: 0) {
+        CairnWorkspace(eyebrow: preview ? "Settings · preview, changes off" : "Settings", title: tab, subtitle: tabLine) {
+            VStack(alignment: .leading, spacing: 14) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 22) {
+                    HStack(spacing: 18) {
                         ForEach(tabs, id: \.self) { item in
-                            Button { tab = item } label: {
-                                VStack(spacing: 10) {
-                                    Text(item)
-                                        .font(.system(size: 12, weight: tab == item ? .semibold : .regular))
-                                        .foregroundStyle(tab == item ? Brand.textPrimary : Brand.textMuted)
-                                        .fixedSize()
-                                    Rectangle()
-                                        .fill(tab == item ? Brand.room : .clear)
-                                        .frame(height: 1.5)
-                                }
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityAddTraits(tab == item ? .isSelected : [])
+                            Button(item) { tab = item }
+                                .buttonStyle(.plain).font(.system(size: 12)).fixedSize()
+                                .foregroundStyle(tab == item ? Brand.textPrimary : Brand.textMuted)
+                                .accessibilityAddTraits(tab == item ? .isSelected : [])
                         }
                     }
-                    .padding(.horizontal, 26)
                 }
-                .frame(height: 39)
-                .animation(.easeOut(duration: 0.18), value: tab)
-                .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
-                .padding(.bottom, 12)
                 ScrollView {
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(tab.uppercased())
-                            .font(.system(size: 10, weight: .semibold))
-                            .tracking(0.8)
-                            .foregroundStyle(Brand.textMuted)
-                            .padding(.top, 10)
-                            .padding(.bottom, 7)
-                        preferences
-                    }.padding(.horizontal, 26)
+                    VStack(alignment: .leading, spacing: 0) { preferences }
+                        .frame(maxWidth: 720, alignment: .leading)
                 }.disabled(preview)
             }
         } detail: {
-            WorkspaceHeading(title: tab, subtitle: "Cairn settings", icon: "gearshape")
-            WorkspaceDetail(title: "Review, then free", text: "Every cleanup is reviewed first. Protected paths cannot be made removable by switching off a setting.")
-            WorkspaceDetail(title: "External storage", text: "Storage shows drive identity and supported path guidance. Cairn does not redirect macOS swap or synchronize active database folders.")
-            WorkspaceDetail(title: "Recovery", text: "Items sent to Trash can be put back from Activity until you delete them. Deleted items cannot be put back.")
+            EmptyView()
         } actions: {
-            Text(message.isEmpty ? "Settings take effect immediately" : message).foregroundStyle(Brand.textMuted).lineLimit(2)
+            Text(message.isEmpty ? "Changes take effect straight away" : message)
+                .font(.system(size: 13)).foregroundStyle(Brand.textMuted).lineLimit(2)
             Spacer()
-            Button("macOS privacy settings") { FullDiskAccess.openSettings() }.buttonStyle(ControlPanelButtonStyle()).disabled(preview)
+            Button("macOS privacy settings") { FullDiskAccess.openSettings() }
+                .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview)
         }
     }
     @ViewBuilder private var preferences: some View {
@@ -69,8 +59,7 @@ struct PreferencesWorkspace: View {
                 CairnSegmentedControl(label: "Appearance", selection: $appearance,
                                       options: CairnAppearance.allCases.map { ($0.title, $0.rawValue) })
                     .frame(width: 330)
-            }.padding(.vertical, 18)
-            Rectangle().fill(Brand.separator).frame(height: 0.5)
+            }.nightRow()
             option("Sidebar focus outline", "Show an outline around the sidebar control reached with the keyboard.", $settings.showSidebarFocus)
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
             option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)
@@ -83,8 +72,7 @@ struct PreferencesWorkspace: View {
                     .frame(width: 360)
                 Text(settings.removalMode.detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
-            }.padding(.vertical, 18)
-            Rectangle().fill(Brand.separator).frame(height: 0.5)
+            }.nightRow()
             fixed("Tool cleans", "Docker, pnpm, Go, Homebrew, conda, simctl, git gc and Time Machine snapshots are cleaned with each tool's own command, so nothing is deleted behind the tool's back.")
             fixed("Always protected", "System files, credentials, Mail, Messages, Photos, iCloud, source repositories and AI conversation history are never removed, whichever mode you choose.")
         case "Scanning":
@@ -119,7 +107,7 @@ struct PreferencesWorkspace: View {
                     Spacer()
                     Stepper("\(settings.growthSuggestionGB) GB", value: $settings.growthSuggestionGB, in: 1...20)
                         .frame(width: 145)
-                }.padding(.vertical, 16)
+                }.nightRow()
                 ForEach(ObservedRoot.catalogue().filter { GrowthSuggestions.selectableIDs.contains($0.id) }) { root in
                     option(root.title, root.id == "downloads" ? "Personal files: suggestion opens an inspection only." : "Suggest an inspection when this location grows by the chosen amount.",
                            Binding(get: { settings.growthSuggestionIDs.contains(root.id) }, set: { selected in
@@ -152,7 +140,7 @@ struct PreferencesWorkspace: View {
                             }.fixedSize()
                         }
                     }
-                    .padding(.vertical, 16)
+                    .nightRow()
                 }
                 fixed("Current state", preview ? "Sample reserve only · monitoring is not running in this preview." : StorageControl.shared.monitoringStatus)
                 fixed("Notifications", preview ? "Disabled in sample preview." : StorageControl.shared.notificationStatus)
@@ -160,12 +148,12 @@ struct PreferencesWorkspace: View {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("Reserve target").font(.system(size: 13, weight: .medium))
-                    Text("An alert threshold, not storage held aside by macOS.").font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                    Text("An alert threshold, not storage held aside by macOS.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 }
                 Spacer()
                 Stepper("\(preview ? Int(PreviewStorageScenario.reserveBytes / 1_000_000_000) : settings.reserveGB) GB", value: $settings.reserveGB, in: 5...500, step: 5)
                     .frame(width: 150)
-            }.padding(.vertical, 18)
+            }.nightRow()
             fixed("How it works", "Capacity is checked roughly every five minutes while monitoring runs. Optional folder monitoring waits at least a minute after writes and fifteen minutes between attempts, yields to your scans, and pauses under resource pressure. Quitting Cairn stops monitoring. Closing the window can leave the menu-bar app running.")
             if let checked = StorageControl.shared.lastChecked {
                 fixed("Last checked", checked.formatted(date: .abbreviated, time: .shortened))
@@ -178,15 +166,21 @@ struct PreferencesWorkspace: View {
             fixed("Nothing runs without review", "Every deletion, Trash emptying and tool clean is shown to you first.")
             fixed("Unknown application data", "An absent application or old folder date never proves its data is disposable.")
         case "Excluded locations":
-            Text("Excluded paths and their children are blocked by cleanup.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.vertical, 18)
-            ForEach(settings.excludedPaths, id: \.self) { path in
-                HStack { Text(path).font(.system(size: 11)).textSelection(.enabled); Spacer(); Button("Remove") { settings.remove(path) }.buttonStyle(.borderless) }.padding(.vertical, 14)
+            if settings.excludedPaths.isEmpty {
+                NightEmpty(title: "No folders excluded", message: "Add a folder and Cairn will never clean anything inside it.")
             }
-            Button("Add location…") { let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; panel.begin { response in if response == .OK, let url = panel.url { settings.add(url) } } }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 18)
+            ForEach(settings.excludedPaths, id: \.self) { path in
+                HStack {
+                    Text(path).font(.system(size: 12.5)).lineLimit(1).truncationMode(.middle).textSelection(.enabled)
+                    Spacer()
+                    Button("Remove") { settings.remove(path) }.buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                }.nightRow()
+            }
+            Button("Add a folder…") { let panel = NSOpenPanel(); panel.canChooseDirectories = true; panel.canChooseFiles = true; panel.allowsMultipleSelection = false; panel.begin { response in if response == .OK, let url = panel.url { settings.add(url) } } }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 14)
         case "AI tools":
             AgentConnectionsPanel()
         case "License":
-            ProStatusCard(license: license).padding(.vertical, 20)
+            ProStatusCard(license: license).padding(.vertical, 14)
         default:
             fixed("Cairn", "Native macOS storage and maintenance workspace · local development build")
             fixed("Command-line access", "Status, scan and categories are read-only. Clean previews eligible items but cannot remove them from the CLI. Installation is optional.")
@@ -196,24 +190,30 @@ struct PreferencesWorkspace: View {
                 let command = "sudo mkdir -p /usr/local/bin && sudo ln -s \(CLIInstallPolicy.quoteForShell(binary.path)) /usr/local/bin/cairn"
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(command, forType: .string)
                 message = "Command copied. Review it in Terminal; no installation has run."
-            }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 18)
+            }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 14)
         }
     }
+    /// A setting as a reference row: name and grey line on the left, switch on the right.
     private func option(_ title: String, _ detail: String, _ value: Binding<Bool>) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 20) {
-                VStack(alignment: .leading, spacing: 5) { Text(title).font(.system(size: 13, weight: .medium)); Text(detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true) }.frame(maxWidth: .infinity, alignment: .leading)
-                Toggle(title, isOn: value).labelsHidden().toggleStyle(.switch).controlSize(.small)
-            }.padding(.vertical, 18)
-            Rectangle().fill(Brand.separator).frame(height: 0.5)
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Toggle(title, isOn: value).labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
+        .nightRow()
     }
     private func fixed(_ title: String, _ detail: String) -> some View {
-        VStack(alignment: .leading, spacing: 7) {
-            HStack { Text(title).font(.system(size: 13, weight: .medium)); Spacer(); if tab == "Protection" { Image(systemName: "lock.fill").foregroundStyle(Brand.textMuted) } }
-            Text(detail).font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
-        }.padding(.vertical, 18)
-            .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Spacer()
+                if tab == "Protection" { Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Brand.textMuted) }
+            }
+            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+        }
+        .nightRow()
     }
 }
 

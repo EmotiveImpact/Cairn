@@ -17,16 +17,10 @@ struct LargeFilesWorkspace: View {
         case archives = "Archives", diskImages = "Disk images", backups = "Project backups"
         var id: String { rawValue }
     }
-    private enum FileSort: String, CaseIterable, Identifiable {
-        case size = "Size", name = "Name", modified = "Last modified"
-        var id: String { rawValue }
-    }
 
     @State private var filter: FileFilter = .all
-    @State private var sort: FileSort = .size
     @State private var inspectedID: UUID?
     @State private var quickLookURL: URL?
-    @State private var protectedExpanded = false
     @State private var opened = false
     @State private var sampleItems = LargeFilesWorkspace.makeSamples()
     private let preview = CommandLine.arguments.contains("--preview-ui")
@@ -41,13 +35,7 @@ struct LargeFilesWorkspace: View {
             let matchesSearch = search.isEmpty || item.url.lastPathComponent.localizedCaseInsensitiveContains(search)
                 || item.resolvedURL.path.localizedCaseInsensitiveContains(search)
             return matchesSearch && matchesFilter(item)
-        }.sorted { first, second in
-            switch sort {
-            case .size: return first.allocatedSize > second.allocatedSize
-            case .name: return first.url.lastPathComponent.localizedStandardCompare(second.url.lastPathComponent) == .orderedAscending
-            case .modified: return first.latestModified > second.latestModified
-            }
-        }
+        }.sorted { $0.allocatedSize > $1.allocatedSize }
     }
 
     var body: some View {
@@ -58,149 +46,112 @@ struct LargeFilesWorkspace: View {
         let selected = source.filter { $0.selected && $0.isActionable && $0.severity != .risky }
         let selectedElsewhere = preview ? 0 : max(0, store.selectedCount - selected.count)
         let inspected = visible.first { $0.id == inspectedID } ?? visible.first
-        return GeometryReader { geometry in
-            let showInspector = inspectorVisible && geometry.size.width >= 760
-            let inspectorWidth = min(400, max(300, geometry.size.width * 0.34))
-            VStack(spacing: 0) {
-                header
+        let largest = visible.map(\.allocatedSize).max() ?? 1
+        let selectedBytes = selected.reduce(Int64(0)) { $0 + $1.allocatedSize }
+        return CairnWorkspace(
+            eyebrow: store.isScanning && !preview ? "Files · scanning" : "Files · \(visible.count) large \(visible.count == 1 ? "file" : "files")",
+            title: "\(Fmt.size(visible.reduce(0) { $0 + $1.allocatedSize })) in large files",
+            subtitle: "Look inside before you decide. These may be your only copies, so nothing is chosen for you.",
+            inspectorVisible: inspectorVisible, onCloseInspector: { inspectorVisible = false }) {
+            Button(store.isScanning ? "Stop scan" : "Rescan", action: onRescan)
+                .buttonStyle(ControlPanelButtonStyle(size: .small))
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(preview || store.isCleaning)
+        } content: {
+            VStack(alignment: .leading, spacing: 12) {
                 filters
-                Rectangle().fill(Brand.separator).frame(height: 0.5)
-                HStack(spacing: 0) {
-                    fileTable(items: visible, focusedID: inspected?.id)
-                        .frame(minWidth: 450, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    if showInspector {
-                        Rectangle().fill(Brand.separator).frame(width: 0.5)
-                        detailPanel(item: inspected, compact: inspectorWidth < 340, width: inspectorWidth)
-                            .frame(width: inspectorWidth).frame(maxHeight: .infinity)
-                            .background(Brand.background)
+                if store.phase == .cancelled && !preview && !visible.isEmpty {
+                    NightEmpty(title: "Scan stopped", message: "These results may be incomplete. Rescan before choosing.")
+                }
+                if visible.isEmpty {
+                    NightEmpty(title: emptyTitle, message: emptyMessage, busy: store.isScanning && !preview)
+                    Spacer(minLength: 0)
+                } else {
+                    NightList {
+                        ForEach(visible) { item in
+                            fileRow(item, focused: inspectorVisible && inspected?.id == item.id, largest: largest)
+                        }
                     }
                 }
-                footer(selected: selected, selectedElsewhere: selectedElsewhere)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Brand.background)
+        } detail: {
+            if let inspected { detailContent(inspected) }
+            else { NightEmpty(title: "Choose a file", message: "Its preview and where it lives appear here.") }
+        } actions: {
+            NightTotal(strong: Fmt.size(selectedBytes),
+                       rest: selectedElsewhere > 0 ? "selected · \(selectedElsewhere) more chosen on other screens" : "selected")
+            Spacer()
+            if !selected.isEmpty {
+                Button("Select none") { for item in selected { store.toggle(item.id) } }
+                    .buttonStyle(ControlPanelButtonStyle(size: .large))
+            }
+            Button("Review and move to Trash", action: onReview)
+                .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                .disabled(preview || selected.isEmpty || store.isScanning || store.isCleaning)
         }
-        .foregroundStyle(Brand.textPrimary)
         .quickLookPreview($quickLookURL)
         .onAppear {
             if !opened { inspectorVisible = true; opened = true }
         }
     }
 
-    private var header: some View {
-        HStack(alignment: .top, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Large files").font(.system(size: 38, weight: .light))
-                Text("Look inside before you decide.")
-                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-            }
-            Spacer(minLength: 12)
-            Button(action: onRescan) {
-                Label(store.isScanning ? "Stop scan" : "Rescan", systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
-            }
-            .buttonStyle(ControlPanelButtonStyle())
-            .keyboardShortcut("r", modifiers: .command)
-            .disabled(preview || store.isCleaning)
-            Button { inspectorVisible.toggle() } label: { Image(systemName: "sidebar.right") }
-                .buttonStyle(ControlPanelButtonStyle())
-                .help(inspectorVisible ? "Hide file details" : "Show file details")
-                .accessibilityLabel(inspectorVisible ? "Hide file details" : "Show file details")
-        }
-        .padding(.horizontal, 28).padding(.top, 27).padding(.bottom, 21)
-    }
-
+    /// Quiet text filters, as on Apps. Sort stays by size, largest first.
     private var filters: some View {
-        HStack(spacing: 11) {
-            Text("File type").foregroundStyle(Brand.textSecondary)
-            Picker("File type", selection: $filter) {
-                ForEach(FileFilter.allCases) { option in Text(option.rawValue).tag(option) }
-            }.labelsHidden().cairnFilterSurface().frame(width: 162)
-            Spacer(minLength: 12)
-            Text("Sort").foregroundStyle(Brand.textSecondary)
-            Picker("Sort", selection: $sort) {
-                ForEach(FileSort.allCases) { option in Text(option.rawValue).tag(option) }
-            }.labelsHidden().cairnFilterSurface().frame(width: 146)
-        }
-        .font(.system(size: 12))
-        .padding(.horizontal, 28).padding(.bottom, 15)
-    }
-
-    private func fileTable(items: [ScanItem], focusedID: UUID?) -> some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 10) {
-                Image(systemName: "checkmark.square")
-                    .font(.system(size: 13)).frame(width: 28)
-                    .accessibilityHidden(true)
-                Text("Name").frame(maxWidth: .infinity, alignment: .leading)
-                Text("Size").frame(width: 71, alignment: .trailing)
-                Text("Last modified").frame(width: 91, alignment: .trailing)
-            }
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(Brand.textSecondary)
-            .padding(.horizontal, 21).frame(height: 40)
-            .background(Brand.background)
-            if store.isScanning && !preview {
-                CairnStateView(kind: .scanning, title: "Reading files", message: store.progressText.isEmpty ? "Results appear as they are measured." : store.progressText, compact: true)
-            } else if store.phase == .cancelled && !preview {
-                CairnStateView(kind: .interrupted, title: "Scan stopped", message: "These results may be incomplete. Rescan before cleanup.", compact: true)
-            }
-            if items.isEmpty {
-                WorkspaceEmpty(title: emptyTitle, message: emptyMessage, icon: "doc.text.magnifyingglass")
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(items) { item in fileRow(item, focused: inspectorVisible && focusedID == item.id) }
-                        protectedRow
-                    }.padding(.horizontal, 10).padding(.top, 6)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 18) {
+                ForEach(FileFilter.allCases) { option in
+                    Button(option == .all ? "All" : option.rawValue) { filter = option }
+                        .buttonStyle(.plain).font(.system(size: 12)).fixedSize()
+                        .foregroundStyle(filter == option ? Brand.textPrimary : Brand.textMuted)
                 }
             }
         }
     }
 
-    private func fileRow(_ item: ScanItem, focused: Bool) -> some View {
+    /// Check | thumbnail, name and folder | share | size | pill, as in the reference rows.
+    private func fileRow(_ item: ScanItem, focused: Bool, largest: Int64) -> some View {
         let canSelect = item.isActionable && item.severity != .risky && !preview
-        return HStack(spacing: 10) {
-            Button {
+        return HStack(spacing: 14) {
+            NightCheck(on: item.selected, enabled: canSelect) {
                 store.toggle(item.id)
                 inspectedID = item.id
-            } label: {
-                Image(systemName: item.selected ? "checkmark.square.fill" : canSelect ? "square" : "minus.square")
-                    .font(.system(size: 15)).foregroundStyle(item.selected ? Brand.room : Brand.textMuted)
-                    .frame(width: 28)
             }
-            .buttonStyle(.plain).disabled(!canSelect)
             .accessibilityLabel(canSelect ? (item.selected ? "Deselect \(item.url.lastPathComponent)" : "Select \(item.url.lastPathComponent) for review") : "\(item.url.lastPathComponent) is advice only")
             Button {
                 inspectedID = item.id
                 inspectorVisible = true
             } label: {
-                HStack(spacing: 11) {
-                    if preview, item.url.lastPathComponent == "Coast-film.mov",
-                       let sample = LargeFileSampleArt.image {
-                        Image(nsImage: sample).resizable().scaledToFill()
-                            .frame(width: 36, height: 36)
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    } else if preview { FileIcon(url: item.url, size: 36) }
-                    else { ThumbnailView(url: item.resolvedURL, size: 36) }
-                    Text(item.url.lastPathComponent)
-                        .font(.system(size: 12.5, weight: focused ? .medium : .regular))
-                        .lineLimit(1).truncationMode(.middle)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    Text(Fmt.size(item.allocatedSize)).frame(width: 71, alignment: .trailing)
-                    Text(item.latestModified > .distantPast ? item.latestModified.formatted(.dateTime.day().month(.abbreviated).year()) : "—")
-                        .frame(width: 91, alignment: .trailing)
+                HStack(spacing: 14) {
+                    HStack(spacing: 10) {
+                        Group {
+                            if preview, item.url.lastPathComponent == "Coast-film.mov", let sample = LargeFileSampleArt.image {
+                                Image(nsImage: sample).resizable().scaledToFill()
+                            } else if preview { FileIcon(url: item.url, size: 22) }
+                            else { ThumbnailView(url: item.resolvedURL, size: 22) }
+                        }
+                        .frame(width: 22, height: 22)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.url.lastPathComponent).font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Brand.textPrimary).lineLimit(1).truncationMode(.middle)
+                            Text(folderLine(item)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    NightMeter(share: Double(item.allocatedSize) / Double(max(1, largest)))
+                    Text(Fmt.size(item.allocatedSize)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                        .frame(width: 90, alignment: .trailing)
+                    NightPill(text: item.selected ? "Selected" : item.isActionable ? "Needs you" : "Advice only",
+                              tone: item.selected ? .ok : .neutral)
+                        .frame(width: 120, alignment: .leading)
                 }
-                .font(.system(size: 11.5)).monospacedDigit()
-                .foregroundStyle(Brand.textSecondary)
-                .frame(height: 67).contentShape(Rectangle())
-            }.buttonStyle(.plain)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(.horizontal, 11)
-        .background(focused ? Brand.wash(0.045) : Color.clear,
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .overlay(alignment: .bottom) {
-            if !focused { Rectangle().fill(Brand.separator).frame(height: 0.5).padding(.leading, 48) }
-        }
+        .nightRow()
+        .background(focused ? Brand.wash(0.035) : Color.clear)
         .contextMenu {
             Button("Quick Look") { quickLook(item) }
                 .disabled(preview || !FileManager.default.fileExists(atPath: item.resolvedURL.path))
@@ -210,103 +161,45 @@ struct LargeFilesWorkspace: View {
         }
     }
 
-    private var protectedRow: some View {
-        DisclosureGroup(isExpanded: $protectedExpanded) {
-            Text("Sessions, source code, Git metadata, credentials and recovery data are excluded. Cairn checks paths again before any reviewed action.")
-                .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.leading, 29).padding(.bottom, 13)
-        } label: {
-            Label("Protected locations", systemImage: "lock.shield")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Brand.textSecondary)
-        }
-        .padding(.horizontal, 18).padding(.vertical, 17)
+    /// "~/Downloads · 3 Oct 2025": the folder and when it last changed.
+    private func folderLine(_ item: ScanItem) -> String {
+        let folder = shortPath(item.resolvedURL.deletingLastPathComponent().path)
+        guard item.latestModified > .distantPast else { return folder }
+        return folder + " · " + item.latestModified.formatted(.dateTime.day().month(.abbreviated).year())
     }
 
-    @ViewBuilder private func detailPanel(item: ScanItem?, compact: Bool, width: CGFloat) -> some View {
-        if let item {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    LargeFilePreviewArtwork(url: item.resolvedURL, preview: preview)
-                        .frame(height: (width - 42) * 9 / 16)
-                        .id(item.id)
-                        .transition(.opacity)
-                        .contentShape(Rectangle())
-                        .onTapGesture { quickLook(item) }
-                        .help("Click or press Space to look closer")
-                        .padding(.bottom, 17)
-                    Text(item.url.lastPathComponent)
-                        .font(.system(size: 18, weight: .medium))
-                        .lineLimit(2).textSelection(.enabled)
-                    Text("\(fileKind(item)) · \(Fmt.size(item.allocatedSize)) estimated file size")
-                        .font(.system(size: 11.5)).foregroundStyle(Brand.textSecondary)
-                        .padding(.top, 5)
-                    if compact { safetyNote(compact: true).padding(.top, 15) }
-                    divider.padding(.vertical, compact ? 13 : 17)
-                    detailRow("Location", shortPath(item.resolvedURL.path))
-                    if item.latestModified > .distantPast {
-                        detailRow("Last modified", item.latestModified.formatted(date: .abbreviated, time: .omitted))
-                    }
-                    divider.padding(.vertical, compact ? 13 : 17)
-                    HStack(spacing: 8) {
-                        Button { quickLook(item) } label: { Label("Quick Look", systemImage: "eye") }
-                            .buttonStyle(ControlPanelButtonStyle())
-                            .keyboardShortcut(.space, modifiers: [])
-                        Button { reveal(item) } label: { Label(compact ? "Finder" : "Show in Finder", systemImage: "folder") }
-                            .buttonStyle(ControlPanelButtonStyle())
-                            .help("Show in Finder")
-                            .accessibilityLabel("Show in Finder")
-                    }
-                    .disabled(preview || !FileManager.default.fileExists(atPath: item.resolvedURL.path))
-                    .padding(.bottom, 8)
-                    Text("Press Space to preview the selected file.")
-                        .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    if !compact {
-                        divider.padding(.vertical, 17)
-                        safetyNote(compact: false)
-                    }
-                    if !item.note.isEmpty {
-                        Text(item.note).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                            .padding(.top, 12)
-                    }
-                    if !item.isActionable {
-                        Text("Advice only · no cleanup action is available for this item.")
-                            .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                            .padding(.top, 11)
-                    }
-                }
-                .padding(21).frame(maxWidth: .infinity, alignment: .leading)
-            }
-        } else {
-            WorkspaceEmpty(title: "Choose a file", message: "Its preview, location and review requirement will appear here.")
+    /// The preview first, then the plain facts. Click the picture or press Space to look closer.
+    @ViewBuilder private func detailContent(_ item: ScanItem) -> some View {
+        LargeFilePreviewArtwork(url: item.resolvedURL, preview: preview)
+            .frame(height: 256 * 9 / 16)
+            .id(item.id)
+            .contentShape(Rectangle())
+            .onTapGesture { quickLook(item) }
+            .help("Click or press Space to look closer")
+        VStack(alignment: .leading, spacing: 2) {
+            Text(item.url.lastPathComponent).font(.system(size: 15, weight: .medium))
+                .lineLimit(2).textSelection(.enabled)
+            Text("\(fileKind(item)) · \(Fmt.size(item.allocatedSize))")
+                .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
         }
-    }
-
-    private func footer(selected: [ScanItem], selectedElsewhere: Int) -> some View {
-        let selectedBytes = selected.reduce(Int64(0)) { $0 + $1.allocatedSize }
-        return HStack(spacing: 13) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("\(selected.count) item\(selected.count == 1 ? "" : "s") selected")
-                    .font(.system(size: 14, weight: .medium))
-                Text(selectedElsewhere > 0
-                    ? "\(Fmt.size(selectedBytes)) here · \(selectedElsewhere) also selected in other screens"
-                    : "Moving to Trash does not immediately free space.")
-                    .font(.system(size: 10.5)).foregroundStyle(selectedElsewhere > 0 ? Brand.amber : Brand.textMuted)
+        VStack(spacing: 0) {
+            detailRow("Where", shortPath(item.resolvedURL.deletingLastPathComponent().path))
+            if item.latestModified > .distantPast {
+                detailRow("Last changed", item.latestModified.formatted(date: .abbreviated, time: .omitted))
             }
-            Spacer(minLength: 6)
-            if !selected.isEmpty {
-                Button("Clear selection") { for item in selected { store.toggle(item.id) } }
-                    .buttonStyle(ControlPanelButtonStyle())
-            }
-            Button("Review cleanup…", action: onReview)
-                .buttonStyle(ControlPanelButtonStyle(primary: true))
-                .disabled(preview || selected.isEmpty || store.isScanning || store.isCleaning)
         }
-        .padding(.horizontal, 22).frame(height: 72)
-        .background(Brand.background)
-        .overlay(alignment: .top) { divider }
+        HStack(spacing: 8) {
+            Button("Quick Look") { quickLook(item) }
+                .buttonStyle(ControlPanelButtonStyle())
+                .keyboardShortcut(.space, modifiers: [])
+            Button("Show in Finder") { reveal(item) }
+                .buttonStyle(ControlPanelButtonStyle())
+        }
+        .disabled(preview || !FileManager.default.fileExists(atPath: item.resolvedURL.path))
+        Text(item.isActionable ? "This may be your only copy. Check you still need it, or have a backup, before choosing it."
+                               : "Advice only. Cairn will not move this file.")
+            .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var emptyTitle: String {
@@ -320,28 +213,14 @@ struct LargeFilesWorkspace: View {
         if store.phase == .cancelled && !preview { return "Results may be incomplete. Rescan before choosing a file." }
         return "Try another file type or search. Inaccessible locations may be missing from this scan."
     }
-    private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
-
     private func detailRow(_ title: String, _ value: String) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Text(title).foregroundStyle(Brand.textSecondary).frame(width: 88, alignment: .leading)
-            Text(value).foregroundStyle(Brand.textSecondary).frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(title).foregroundStyle(Brand.textSecondary).frame(width: 84, alignment: .leading)
+            Text(value).fontWeight(.medium).frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(2).truncationMode(.middle).textSelection(.enabled)
-        }.font(.system(size: 11.5)).padding(.vertical, 4)
-    }
-    private func safetyNote(compact: Bool) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: "exclamationmark.circle")
-                .foregroundStyle(Brand.amber).font(.system(size: 17))
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Personal file · Review required")
-                    .font(.system(size: 12.5, weight: .medium))
-                Text(compact ? "This may be your only copy. Check your backup before selecting it."
-                             : "This may be your only copy. Check whether you still need it and have a separate backup before selecting it.")
-                    .font(.system(size: 11.5)).foregroundStyle(Brand.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
         }
+        .font(.system(size: 12.5)).padding(.vertical, 9)
+        .overlay(alignment: .bottom) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1) }
     }
     private func matchesFilter(_ item: ScanItem) -> Bool {
         if filter == .all { return true }

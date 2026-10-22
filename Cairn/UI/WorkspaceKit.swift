@@ -3,39 +3,74 @@ import AppKit
 
 /// Shared geometry for Cairn's native workspaces. Every route uses the same
 /// toolbar, row rhythm, detail column and bottom action area.
-struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
+/// A page in the reference layout (see NightPage), with a details column that
+/// appears only when a row is clicked. Nothing slides: the column is simply there.
+struct CairnWorkspace<Trailing: View, Content: View, Detail: View, Actions: View>: View {
+    var eyebrow: String
     var title: String
-    var subtitle: String = ""
-    var inspectorVisible: Bool = true
-    var headerTrailingInset: CGFloat = 0
-    @ViewBuilder var content: () -> Content
-    @ViewBuilder var detail: () -> Detail
-    @ViewBuilder var actions: () -> Actions
+    var subtitle: String
+    var inspectorVisible: Bool
+    var onCloseInspector: (() -> Void)?
+    var trailing: () -> Trailing
+    var content: () -> Content
+    var detail: () -> Detail
+    var actions: () -> Actions
+
+    init(eyebrow: String = "", title: String, subtitle: String = "", inspectorVisible: Bool = false,
+         onCloseInspector: (() -> Void)? = nil,
+         @ViewBuilder trailing: @escaping () -> Trailing,
+         @ViewBuilder content: @escaping () -> Content,
+         @ViewBuilder detail: @escaping () -> Detail,
+         @ViewBuilder actions: @escaping () -> Actions) {
+        self.eyebrow = eyebrow; self.title = title; self.subtitle = subtitle
+        self.inspectorVisible = inspectorVisible; self.onCloseInspector = onCloseInspector
+        self.trailing = trailing; self.content = content; self.detail = detail; self.actions = actions
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                VStack(spacing: 0) {
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text(title).font(.system(size: 38, weight: .light))
-                        if !subtitle.isEmpty { Text(subtitle).font(.system(size: 13)).foregroundStyle(Brand.textSecondary) }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 30)
-                        .padding(.trailing, headerTrailingInset).padding(.top, 27).padding(.bottom, 21)
-                    content().frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                }.frame(minWidth: 490, maxWidth: .infinity)
-                if inspectorVisible {
+        HStack(spacing: 0) {
+            NightPage(eyebrow: eyebrow.isEmpty ? title : eyebrow, title: title, subtitle: subtitle,
+                      trailing: trailing, content: content, footer: actions)
+            if inspectorVisible {
+                VStack(alignment: .leading, spacing: 0) {
+                    HStack {
+                        Text("Details").nightEyebrow()
+                        Spacer()
+                        if let onCloseInspector {
+                            Button(action: onCloseInspector) {
+                                Image(systemName: "xmark").font(.system(size: 10, weight: .semibold))
+                                    .frame(width: 22, height: 22).contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain).foregroundStyle(Brand.textMuted)
+                            .help("Hide details").accessibilityLabel("Hide details")
+                        }
+                    }
+                    .frame(height: 28).padding(.top, 22).padding(.horizontal, 22)
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 19) { detail() }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(22)
-                    }.frame(width: 300)
-                    .overlay(alignment: .leading) { Rectangle().fill(Brand.separator).frame(width: 0.5) }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                        VStack(alignment: .leading, spacing: 18) { detail() }
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 22).padding(.top, 14).padding(.bottom, 26)
+                    }
                 }
-            }.animation(.easeOut(duration: 0.22), value: inspectorVisible)
-            HStack(spacing: 12) { actions() }.font(.system(size: 12))
-                .padding(.horizontal, 26).frame(height: 72)
-                .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
-        }.frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Brand.background).foregroundStyle(Brand.textPrimary)
+                .frame(width: 300)
+                .frame(maxHeight: .infinity, alignment: .top)
+                .overlay(alignment: .leading) { Rectangle().fill(Brand.wash(0.06)).frame(width: 1) }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Brand.background).foregroundStyle(Brand.textPrimary)
+    }
+}
+
+extension CairnWorkspace where Trailing == EmptyView {
+    init(eyebrow: String = "", title: String, subtitle: String = "", inspectorVisible: Bool = false,
+         onCloseInspector: (() -> Void)? = nil,
+         @ViewBuilder content: @escaping () -> Content,
+         @ViewBuilder detail: @escaping () -> Detail,
+         @ViewBuilder actions: @escaping () -> Actions) {
+        self.init(eyebrow: eyebrow, title: title, subtitle: subtitle, inspectorVisible: inspectorVisible,
+                  onCloseInspector: onCloseInspector, trailing: { EmptyView() },
+                  content: content, detail: detail, actions: actions)
     }
 }
 
@@ -68,30 +103,41 @@ struct WorkspaceDetail: View {
         }
     }
 }
+/// One row in the reference style: thin symbol, name and grey line, size, pill.
 struct WorkspaceRow: View {
     var title: String
     var subtitle: String = ""
     var icon: String
     var value: String = ""
     var status: String = ""
+    var tone: NightPill.Tone = .neutral
     var focused = false
     var action: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @State private var hovered = false
     var body: some View {
         Button(action: action) {
             HStack(spacing: 14) {
-                Image(systemName: icon).font(.system(size: 22, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 32)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
-                    if !subtitle.isEmpty { Text(subtitle).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(1).truncationMode(.middle) }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                if !value.isEmpty { Text(value).font(.system(size: 12)).monospacedDigit().foregroundStyle(Brand.textSecondary) }
-                if !status.isEmpty { Text(status).font(.system(size: 11)).foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing) }
-            }.padding(.horizontal, 18).frame(height: 68).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(focused ? Brand.wash(0.045) : hovered ? Brand.wash(0.025) : Color.clear)
-            .onHover { hovered = $0 }
-            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovered)
+                HStack(spacing: 10) {
+                    Image(systemName: icon).font(.system(size: 15, weight: .light)).foregroundStyle(Brand.textSecondary)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
+                        if !subtitle.isEmpty {
+                            Text(subtitle).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                                .lineLimit(1).truncationMode(.middle)
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                if !value.isEmpty {
+                    Text(value).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                        .frame(width: 90, alignment: .trailing)
+                }
+                if !status.isEmpty { NightPill(text: status, tone: tone).frame(width: 120, alignment: .leading) }
+            }
+            .nightRow()
+            .background(focused ? Brand.wash(0.035) : Color.clear)
+        }
+        .buttonStyle(.plain)
     }
 }
 struct WorkspaceColumns: View {
@@ -103,12 +149,13 @@ struct WorkspaceColumns: View {
             .padding(.horizontal, 20).frame(height: 36).background(Brand.background)
     }
 }
+/// Plain words for an empty page, aligned with the rows. No icon box.
 struct WorkspaceEmpty: View {
     var title: String
     var message: String
     var icon = "magnifyingglass"
     var body: some View {
-        CairnStateView(kind: .empty, title: title, message: message)
+        NightEmpty(title: title, message: message)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
@@ -288,7 +335,7 @@ struct CapacityReceiptView: View {
             if changes.isEmpty { Text("Capacity change is unavailable.") }
             Text("Trash still occupies disk space. Other Mac activity may affect these readings. Activity checks whether each recorded recovery is still available.")
         }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-            .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 18).padding(.bottom, 12)
+            .frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 8)
             .accessibilityElement(children: .combine)
     }
 }
