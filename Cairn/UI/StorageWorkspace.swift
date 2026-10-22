@@ -124,8 +124,8 @@ struct StorageWorkspace: View {
             driveLabel(item.name, subtitle: "\(item.external ? "External" : "Internal") · \(item.encrypted ? "Encrypted" : "Encryption unconfirmed")", icon: icon)
             if item.capacity > 0 {
                 GeometryReader { geometry in
-                    Capsule().fill(Brand.surfaceSubtle)
-                    Capsule().fill(used > 0.95 ? Brand.amber : Brand.blue).frame(width: geometry.size.width * used)
+                    Capsule().fill(Brand.track)
+                    Capsule().fill(used > 0.95 ? Brand.amber : Brand.inUse).frame(width: geometry.size.width * used)
                 }.frame(height: 5).accessibilityLabel("\(Int(used * 100)) percent used")
                 HStack {
                     Text("\(Fmt.size(available)) available")
@@ -247,7 +247,7 @@ struct StorageWorkspace: View {
     }
     private func copyStep(_ title: String, active: Bool = false) -> some View {
         HStack(spacing: 7) {
-            Image(systemName: active ? "circle.fill" : "circle").font(.system(size: 11)).foregroundStyle(active ? Brand.blue : Brand.textMuted)
+            Image(systemName: active ? "circle.fill" : "circle").font(.system(size: 11)).foregroundStyle(active ? Brand.room : Brand.textMuted)
             Text(title).font(.system(size: 11.5)).foregroundStyle(active ? Brand.textPrimary : Brand.textMuted).fixedSize()
         }
     }

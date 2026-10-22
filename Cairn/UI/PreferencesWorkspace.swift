@@ -23,8 +23,8 @@ struct PreferencesWorkspace: View {
                                         .foregroundStyle(tab == item ? Brand.textPrimary : Brand.textMuted)
                                         .fixedSize()
                                     Rectangle()
-                                        .fill(tab == item ? Brand.blue : .clear)
-                                        .frame(height: 2)
+                                        .fill(tab == item ? Brand.room : .clear)
+                                        .frame(height: 1.5)
                                 }
                                 .contentShape(Rectangle())
                             }
@@ -35,6 +35,7 @@ struct PreferencesWorkspace: View {
                     .padding(.horizontal, 26)
                 }
                 .frame(height: 39)
+                .animation(.easeOut(duration: 0.18), value: tab)
                 .overlay(alignment: .bottom) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
                 .padding(.bottom, 12)
                 ScrollView {

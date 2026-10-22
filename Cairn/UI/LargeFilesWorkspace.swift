@@ -165,7 +165,7 @@ struct LargeFilesWorkspace: View {
                 inspectedID = item.id
             } label: {
                 Image(systemName: item.selected ? "checkmark.square.fill" : canSelect ? "square" : "minus.square")
-                    .font(.system(size: 15)).foregroundStyle(item.selected ? Brand.blue : Brand.textMuted)
+                    .font(.system(size: 15)).foregroundStyle(item.selected ? Brand.room : Brand.textMuted)
                     .frame(width: 28)
             }
             .buttonStyle(.plain).disabled(!canSelect)
@@ -230,9 +230,14 @@ struct LargeFilesWorkspace: View {
                 VStack(alignment: .leading, spacing: 0) {
                     LargeFilePreviewArtwork(url: item.resolvedURL, preview: preview)
                         .frame(height: (width - 42) * 9 / 16)
+                        .id(item.id)
+                        .transition(.opacity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { quickLook(item) }
+                        .help("Click or press Space to look closer")
                         .padding(.bottom, 17)
                     Text(item.url.lastPathComponent)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: 18, weight: .medium))
                         .lineLimit(2).textSelection(.enabled)
                     Text("\(fileKind(item)) · \(Fmt.size(item.allocatedSize)) estimated file size")
                         .font(.system(size: 11.5)).foregroundStyle(Brand.textSecondary)
@@ -415,8 +420,8 @@ private struct LargeFilePreviewArtwork: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Brand.surfaceElevated)
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Brand.deepPanel)
                 if preview, url.lastPathComponent == "Coast-film.mov",
                    let sample = LargeFileSampleArt.image {
                     Image(nsImage: sample).resizable().scaledToFit()
@@ -432,6 +437,7 @@ private struct LargeFilePreviewArtwork: View {
                     Image(nsImage: image).resizable().scaledToFit()
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .clipped()
+                        .transition(.opacity)
                 } else {
                     VStack(spacing: 10) {
                         FileIcon(url: url, size: 64)
@@ -440,7 +446,10 @@ private struct LargeFilePreviewArtwork: View {
                 }
             }
             .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Brand.separator, lineWidth: 0.5))
+            .animation(.easeOut(duration: 0.25), value: image != nil)
         }
         .task(id: url.path) {
             image = nil
@@ -448,7 +457,7 @@ private struct LargeFilePreviewArtwork: View {
             requestedPath = path
             guard !preview, FileManager.default.fileExists(atPath: url.path) else { return }
             ThumbnailCache.shared.generate(url: url, side: 340, scale: 2) { generated in
-                if requestedPath == path { image = generated }
+                if requestedPath == path { withAnimation(.easeOut(duration: 0.25)) { image = generated } }
             }
         }
     }

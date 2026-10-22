@@ -26,9 +26,11 @@ struct CairnWorkspace<Content: View, Detail: View, Actions: View>: View {
                     ScrollView {
                         VStack(alignment: .leading, spacing: 19) { detail() }
                             .frame(maxWidth: .infinity, alignment: .leading).padding(22)
-                    }.frame(width: 300).background(Brand.deepPanel)
+                    }.frame(width: 300)
+                    .overlay(alignment: .leading) { Rectangle().fill(Brand.separator).frame(width: 0.5) }
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-            }
+            }.animation(.easeOut(duration: 0.22), value: inspectorVisible)
             HStack(spacing: 12) { actions() }.font(.system(size: 12))
                 .padding(.horizontal, 26).frame(height: 72)
                 .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 0.5) }
@@ -51,7 +53,7 @@ struct WorkspaceHeading: View {
                     Text(title).font(.system(size: 16, weight: .medium))
                 }
             }
-            if !value.isEmpty { Text(value).font(.system(size: 29, weight: .regular)).monospacedDigit() }
+            if !value.isEmpty { Text(value).font(.system(size: 30, weight: .light)).tracking(-0.8).monospacedDigit() }
         }.padding(.top, 14)
     }
 }

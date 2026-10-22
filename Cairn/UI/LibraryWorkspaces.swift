@@ -67,7 +67,7 @@ struct AppsWorkspace: View {
                     HStack(spacing: 0) {
                         Button { toggle(app) } label: {
                             Image(systemName: !app.isRemovable ? "lock" : app.selected ? "checkmark.square.fill" : "square")
-                                .font(.system(size: 14)).foregroundStyle(app.selected ? Brand.blue : Brand.textMuted)
+                                .font(.system(size: 14)).foregroundStyle(app.selected ? Brand.room : Brand.textMuted)
                         }.buttonStyle(.plain).disabled(!app.isRemovable || busy || viewMode == "Related data")
                             .frame(width: 38).accessibilityLabel(app.isRemovable ? "Select \(app.name) bundle" : "\(app.name) is protected")
                         Button { focused = app.id; inspectorVisible = true } label: {
@@ -216,7 +216,7 @@ struct DuplicatesWorkspace: View {
                             HStack(spacing: 10) {
                                 Button { store.toggle(file.id) } label: {
                                     Image(systemName: file.isKeeper ? "lock.shield" : file.selected ? "checkmark.square.fill" : "square")
-                                        .foregroundStyle(file.selected ? Brand.blue : Brand.textMuted)
+                                        .foregroundStyle(file.selected ? Brand.room : Brand.textMuted)
                                 }.buttonStyle(.plain).disabled(file.isKeeper || preview || store.isRemoving)
                                     .accessibilityLabel(file.isKeeper ? "Keeper: \(file.url.path)" : "Select extra copy \(file.url.path)")
                                 FileIcon(url: file.url, size: 27)
@@ -228,8 +228,8 @@ struct DuplicatesWorkspace: View {
                                         .font(.system(size: 10)).foregroundStyle(Brand.textMuted)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
                                 if file.isKeeper {
-                                    Text("KEEP").font(.system(size: 9, weight: .semibold))
-                                        .foregroundStyle(Brand.blue)
+                                    Text("KEEP").font(.system(size: 9, weight: .semibold)).tracking(0.6)
+                                        .foregroundStyle(Brand.room)
                                 } else {
                                     Button("Keep this") { store.setKeeper(file.id, in: group.id) }
                                         .font(.system(size: 10)).disabled(preview || store.isRemoving)
@@ -238,7 +238,6 @@ struct DuplicatesWorkspace: View {
                                     Image(systemName: "folder").font(.system(size: 11))
                                 }.buttonStyle(.plain).help("Show in Finder").disabled(preview)
                             }.padding(.leading, 34).padding(.trailing, 18).frame(height: 63)
-                                .background(Brand.deepPanel.opacity(0.35))
                                 .overlay(Rectangle().fill(Brand.separator).frame(height: 0.5), alignment: .bottom)
                         } }
                     }
@@ -332,7 +331,7 @@ struct HealthWorkspace: View {
                 .tracking(0.7).foregroundStyle(Brand.textMuted)
             if let available {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(Fmt.size(available)).font(.system(size: 32, weight: .regular))
+                    Text(Fmt.size(available)).font(.system(size: 44, weight: .light)).tracking(-1.4)
                         .monospacedDigit().foregroundStyle(Brand.textPrimary)
                     Text("available").font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
                 }.padding(.top, 6)
