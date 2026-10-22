@@ -51,7 +51,9 @@
   var LOW = 0.035;           // drops the hallway's far end to the very middle of the screen (a share of its height)
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
-  if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
+  // the stage is as tall as the window the page is shown in (100svh can come up short on a phone and leave a dark band below)
+  function fit() { document.documentElement.style.setProperty('--stage-h', innerHeight + 'px'); }
+  if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; fit(); }
   function lerp(a, b, t) { return a + (b - a) * t; }
   function stage() {
     if (!staged) return;
@@ -134,7 +136,7 @@
     appUp = on; app.classList.toggle('panel-up', on);
     morphApp.classList.add('melt'); setTimeout(function () { morphApp.classList.remove('melt'); }, 900);
   }
-  if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
+  if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', function () { fit(); stage(); }); stage(); }
 
   // one flick, one stop: inside the stack, a wheel, swipe or key press moves exactly one stop,
   // glides there, and then holds until the gesture has finished
@@ -261,8 +263,10 @@
     '  vec2 uv = (su - dc) / zm + dc;',
     '  vec3 rd = normalize(vec3(uv, 1.25));',
     '  float W = 1.15, F = -0.55, C = 0.95;',
-    '  float tx = (sign(rd.x) * W) / rd.x;',
-    '  float ty = rd.y < 0.0 ? F / rd.y : C / rd.y;',
+    // (never divide by an exact zero: some phones draw that as a dark line straight down the middle)
+    '  float sx = rd.x < 0.0 ? -1.0 : 1.0, ax = max(abs(rd.x), 1e-4);',
+    '  float tx = W / ax;',
+    '  float ty = rd.y < 0.0 ? F / min(rd.y, -1e-4) : C / max(rd.y, 1e-4);',
     '  float d = min(tx, ty); vec3 p = rd * d; float z = p.z + z0;',
     '  vec3 col = vec3(0.0);',
     '  if (tx < ty) { col = wall(vec2(z, p.y + (rd.x > 0.0 ? 7.0 : 0.0)), d);',
@@ -275,7 +279,7 @@
     '    col = vec3(0.02, 0.04, 0.08) + vec3(0.08, 0.16, 0.3) * seam * 0.6;',
     '    col += vec3(0.2, 0.45, 0.9) * exp(-abs(abs(p.x) - W) * 6.0) * 0.5;',
     '    col += vec3(0.3, 0.6, 1.0) * exp(-abs(p.x) * 2.5) * exp(-d * 0.05) * 0.18;',
-    '    vec3 rr = vec3(rd.x, -rd.y, rd.z); float t2 = (sign(rd.x) * W - p.x) / rd.x; vec3 q2 = p + rr * t2;',
+    '    vec3 rr = vec3(rd.x, -rd.y, rd.z); float t2 = (sx * W - p.x) / (sx * ax); vec3 q2 = p + rr * t2;',
     '    col += wall(vec2(q2.z + z0, q2.y + (rd.x > 0.0 ? 7.0 : 0.0)), d + t2) * 0.4 * step(q2.y, C) * exp(-t2 * 0.6);',
     '    col += vec3(0.25, 0.55, 1.0) * exp(-abs(abs(p.x) - W) * 30.0) * 1.0;',
     '  }',

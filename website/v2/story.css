@@ -154,7 +154,7 @@ body { background: #090b0d; }
 
 /* ---------- the stack: chapters hold still and dissolve into one another ---------- */
 .staged .stage-track { height: calc(100svh + 4 * 115svh); }
-.staged .stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
+.staged .stage { position: sticky; top: 0; height: var(--stage-h, 100svh); overflow: hidden; }
 .staged .stage > .chapter { position: absolute; inset: 0; min-height: 0; padding-top: 88px; will-change: opacity, transform, filter; }
 .staged .stage > .chapter .reveal { opacity: 1; transform: none; filter: none; }
 /* section 3 keeps its words back until the white light has landed as the bar */
