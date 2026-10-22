@@ -220,6 +220,8 @@ body { background: #090b0d; }
 .cleaned .seg.junk { flex-grow: 0; padding-inline: 0; margin-left: -3px; opacity: 0; filter: blur(6px);
   transition: opacity .45s ease calc(var(--k) * 110ms), filter .45s ease calc(var(--k) * 110ms), flex-grow 1s cubic-bezier(.65,0,.35,1) .55s, padding 1s cubic-bezier(.65,0,.35,1) .55s, margin 1s cubic-bezier(.65,0,.35,1) .55s; }
 .seg.free { transition: flex-grow 1s cubic-bezier(.65,0,.35,1) .55s, background .8s ease .9s, border-color .8s ease .9s, box-shadow .8s ease .9s, opacity .8s ease, filter .8s ease; }
+/* free space lines up last, in turn with the rest */
+.build:not(.cleaned) .seg.free { transition-delay: .55s, .9s, .9s, .9s, calc(300ms + var(--i) * 80ms), calc(300ms + var(--i) * 80ms); }
 .cleaned .seg.free { flex-grow: 112; border: 1px solid rgba(207,230,255,.45); background: linear-gradient(180deg, rgba(207,230,255,.1), rgba(207,230,255,.03)); box-shadow: 0 0 40px -10px rgba(140,196,255,.5); }
 .cleaned .seg.free span { color: #cfe6ff; } .cleaned .seg.free b { color: #fff; }
 .disk-next, .disk-done { margin: 22px 0 0; text-align: center; font-size: 15px; color: #8b98a4; transition: opacity .6s ease, filter .6s ease; }
@@ -284,6 +286,7 @@ body:not(.staged) .disk-next { display: none; }
 @media (max-width: 760px) { .story-number .parts b { white-space: nowrap; } .story-number .parts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 16px; margin-top: 22px; text-align: left; } .story-number .parts li { font-size: 12.5px; } }
 /* the light at the end of the tunnel, carried on into the next chapter as the disk bar */
 .morph { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; opacity: 0; border: 1px solid rgba(220,235,247,.1); border-radius: 4px; background: #eaf5ff; box-shadow: 0 0 60px 14px rgba(110,180,255,.55); }
+.morph.melt { transition: opacity .7s ease; }
 
 /* inside the app: three steps under the panel switch the screen it shows */
 .story-app .product-screen img { transition: opacity .25s ease; }

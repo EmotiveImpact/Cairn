@@ -39,6 +39,7 @@
   var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
   var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 0;   // read by the tunnel on every frame
+  var diskUp = false;         // the disk bar's sections have lined up
   var LOW = 0.035;           // drops the hallway's far end to the very middle of the screen (a share of its height)
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
@@ -70,7 +71,7 @@
   }
   // p is 0 with the tunnel settled and 1 once the disk has arrived (below 0, the tunnel is still on its way in).
   // We rush in, slow to a glide, then fly on into the light at the far end; the light carries on
-  // as a box that stretches out into the disk bar.
+  // as a box that stretches out into the disk bar, and only once it has settled there do the bar's sections line up.
   function zoomAt(p) { return 1 + 14 * Math.pow(clamp(p), 2.2); }
   function flyIn(p) {
     tunnelOn = p > -1 && p < 0.95;
@@ -82,20 +83,22 @@
     if (dive) dive.style.setProperty('--veil', p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : 1);   // the shade behind the words goes with them
     if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * innerHeight).toFixed(1) + 'px)' : ''; }
     if (!morph) return;
-    if (p <= 0.38 || p >= 1) { morph.style.opacity = '0'; return; }
+    if (p > 0.99 && !diskUp) buildDisk();
+    // once the sections are up, the box only shows again on the way back
+    var o = clamp((p - 0.38) / 0.07) * (diskUp ? 1 - clamp((p - 0.85) / 0.15) : 1);
+    if (o === 0) { morph.style.opacity = '0'; return; }
     // where the tunnel draws its light (centred, a little above the middle), and where the disk bar is now
     var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * (0.465 + LOW);
     var bar = disk.querySelector('.disk-bar').getBoundingClientRect();
-    var t = clamp((p - 0.45) / 0.47), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    var t = clamp((p - 0.45) / 0.4), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     morph.style.left = lerp(cx - sz / 2, bar.left, e).toFixed(1) + 'px';
     morph.style.top = lerp(cy - sz / 2, bar.top, e).toFixed(1) + 'px';
     morph.style.width = lerp(sz, bar.width, e).toFixed(1) + 'px';
     morph.style.height = lerp(sz, bar.height, e).toFixed(1) + 'px';
     morph.style.borderRadius = lerp(4, 18, e).toFixed(1) + 'px';
-    var cool = clamp((t - 0.35) / 0.65);   // stays a bright light while it stretches, then cools into the bar
-    morph.style.background = 'rgba(234,245,255,' + lerp(1, 0.03, cool).toFixed(3) + ')';
-    morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0, cool).toFixed(3) + ')';
-    morph.style.opacity = (clamp((p - 0.38) / 0.07) * (1 - clamp((p - 0.92) / 0.08))).toFixed(3);
+    morph.style.background = 'rgba(234,245,255,' + lerp(1, 0.9, e).toFixed(3) + ')';   // a white light all the way into place
+    morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0.4, e).toFixed(3) + ')';
+    morph.style.opacity = o.toFixed(3);
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
 
@@ -335,13 +338,18 @@
     if (on === cleaned) return;
     cleaned = on; disk.classList.toggle('cleaned', on); countFree(on ? 72.4 : 33.8);
   }
-  once(disk, 0.4, function () {
+  // on the stage the white box settles into the bar's place first, then fades as the sections line up inside it
+  function buildDisk() {
+    if (diskUp) return;
+    diskUp = true;
+    if (staged && morph) { morph.classList.add('melt'); setTimeout(function () { morph.classList.remove('melt'); }, 900); }
     disk.classList.add('build');
     setTimeout(function () {
       disk.classList.add('lit'); built = true;
       if (staged) stage(); else setTimeout(function () { setCleaned(true); }, reduced ? 0 : 2600);
     }, reduced ? 0 : 1900);
-  });
+  }
+  if (!staged) once(disk, 0.4, buildDisk);
 
   // chat tabs: the same answer in whichever tool you use
   document.querySelectorAll('.chat-tabs button').forEach(function (b) {
