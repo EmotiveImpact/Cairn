@@ -23,7 +23,7 @@
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
-  var stageAt = 0;            // stops: 0 opening, 1 number, 2 disk, 3 disk cleaned, 4 ask
+  var stageAt = 0;            // stops: 0 opening, 1 number, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
   layers.forEach(function (el, i) { var s = +(el.dataset.stops || 1); starts[i] = N; ends[i] = N + s - 1; N += s; });
