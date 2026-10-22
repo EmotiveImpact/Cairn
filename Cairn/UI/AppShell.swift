@@ -140,9 +140,9 @@ struct AppShell: View {
                     if showResultFilter && supportsResultFilter { resultFilter }
                     ZStack {
                         content.id(section)
-                            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 6)), removal: .opacity))
+                            .transition(.opacity)
                     }
-                        .animation(shellReduceMotion ? nil : .easeOut(duration: 0.22), value: section)
+                        .animation(shellReduceMotion ? nil : .easeOut(duration: 0.18), value: section)
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
                         .overlay(alignment: .topTrailing) { inPanelTools }
