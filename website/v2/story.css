@@ -374,6 +374,7 @@ body:not(.staged) .disk-next { display: none; }
 
 /* 6. the rest of your Mac: the apps around your code, as a calm list with their grey logos */
 .story-more .shell { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
+.more-stones { display: none; }
 .story-more .more-lead { margin: 20px 0 0; max-width: 360px; font-size: 17px; line-height: 1.6; color: #b3bfc9; }
 .more-list { margin: 0; padding: 0; list-style: none; }
 .more-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 32px; padding: 22px 0; border-top: 1px solid rgba(220,235,247,.1); }
@@ -385,16 +386,14 @@ body:not(.staged) .disk-next { display: none; }
 .more-list + .more-also { margin-top: -40px; }
 @media (min-width: 900px) {
   .story-more .shell { grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); grid-template-areas: "intro list" "intro also"; column-gap: clamp(40px, 6vw, 110px); row-gap: 0; align-items: center; }
-  .story-more .more-intro { grid-area: intro; align-self: start; padding-top: 18px; }
+  .story-more .more-intro { grid-area: intro; align-self: stretch; display: flex; flex-direction: column; position: relative; isolation: isolate; padding-top: 18px; }
   .story-more .more-list { grid-area: list; }
   .story-more .more-also { grid-area: also; margin-top: 0; }
   .story-more h2 { font-size: clamp(30px, 2.6vw, 36px); }
   .story-more h2 span { display: block; }
-  .story-more[data-stones="slate"] { --stones: url(assets/more-stones-slate.webp); }
-  .story-more[data-stones="pale"] { --stones: url(assets/more-stones-pale.webp); }
-  .story-more[data-stones="glass"] { --stones: url(assets/more-stones.webp); }
-  /* a stack of stones fills the quiet space under the words */
-  .story-more::before { content: ""; position: absolute; z-index: -1; inset: auto auto 3svh calc(max(32px, (100% - 1260px) / 2) + 200px - min(26svh, 260px)); width: min(52svh, 520px); height: min(52svh, 520px); background: var(--stones, url(assets/more-stones-blue.webp)) center / cover no-repeat; -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent); mask-image: radial-gradient(closest-side, #000 55%, transparent); opacity: .9; pointer-events: none; }
+  /* a stack of stones fills the quiet space under the words, left edge on the words' edge and its base on the last line of text */
+  .more-stones { display: block; position: relative; flex: 1 1 auto; min-height: 120px; margin: 36px 0 7px; pointer-events: none; }
+  .more-stones::before { content: ""; position: absolute; z-index: -1; left: 0; bottom: 0; height: min(162%, 520px); aspect-ratio: 1; transform: translate(-22%, 17.8%); background: url(assets/more-stones-blue.webp) center / cover no-repeat; -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent); mask-image: radial-gradient(closest-side, #000 55%, transparent); opacity: .9; }
 }
 /* on the stage the rows come in one after another once the words have settled, each time you arrive */
 .staged .stage > .story-more .more-list li, .staged .stage > .story-more .more-also { transition: opacity .8s ease, filter .8s ease; transition-delay: calc(250ms + var(--i, 4) * 140ms); }
@@ -416,5 +415,3 @@ body:not(.staged) .disk-next { display: none; }
   .story-more .shell { row-gap: 20px; }
   .staged .stage > .story-more .more-also { display: none; }
 }
-/* review only: the stones switch shows where the stones do */
-@media (max-width: 899px) { .stone-switch { display: none; } }
