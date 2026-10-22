@@ -319,7 +319,8 @@ struct WorkspaceCompletion: View {
         }
         .frame(maxWidth: 600, alignment: .leading)
         .padding(.top, 22).padding(.horizontal, 40).padding(.bottom, 26)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        // Centred top to bottom, as in the reference (.done justify-content: center).
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .frame(minWidth: 720, minHeight: 560)
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
