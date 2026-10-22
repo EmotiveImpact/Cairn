@@ -446,10 +446,32 @@ struct OverviewWorkspace: View {
             return CleanMark(date: date, available: Double(reading.available) / 1e9)
         }
     }
+    /// A connected external drive, shown beside the headline only while it is plugged in.
+    private var externalDrive: StorageDrive? {
+        if preview { return CommandLine.arguments.contains("--preview-empty-overview") ? nil : Self.sampleDrive }
+        return storage.drives.first(where: \.external)
+    }
+    private static let sampleDrive = StorageDrive(url: URL(fileURLWithPath: "/Volumes/Studio SSD"), name: "Studio SSD", uuid: "SAMPLE-DRIVE", capacity: 1_000_000_000_000, available: 186_000_000_000, external: true, writable: true, encrypted: true, format: "apfs")
+    private func drivePill(_ drive: StorageDrive) -> some View {
+        Button { onOpen(.storage) } label: {
+            HStack(spacing: 7) {
+                Image(systemName: "externaldrive").font(.system(size: 11, weight: .light))
+                Text("\(drive.name) · \(Fmt.size(drive.available)) free").monospacedDigit().lineLimit(1)
+                Text("Storage options").foregroundStyle(Brand.deepBlue)
+            }
+            .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+            .padding(.horizontal, 10).frame(height: 24)
+            .overlay(Capsule().strokeBorder(Brand.separator, lineWidth: 1))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .help("Move large folders to \(drive.name)")
+    }
     private var header: some View {
         HStack(alignment: .center) {
             Text(storageHeadline).font(.system(size: 13, weight: .medium))
                 .foregroundStyle(lowSpace ? Brand.amber : Brand.textSecondary)
+            if let drive = externalDrive { drivePill(drive).padding(.leading, 12) }
             Spacer()
             HStack(spacing: 8) {
                 Button { scan() } label: {
