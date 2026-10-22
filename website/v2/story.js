@@ -272,6 +272,18 @@
     if (!staged) new IntersectionObserver(function (es) { tunnelOn = es[0].isIntersecting; }).observe(dive);
   }
 
+  // the app: each step under the panel shows its screen
+  var shot = document.querySelector('.story-app .product-screen'), shotImg = shot && shot.querySelector('img');
+  document.querySelectorAll('.app-steps button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.querySelectorAll('.app-steps button').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+      var src = 'assets/app-night-' + b.dataset.shot + '.png';
+      shot.href = src; shot.dataset.preview = b.dataset.key;
+      shotImg.style.opacity = '0';
+      setTimeout(function () { shotImg.onload = function () { shotImg.style.opacity = '1'; }; shotImg.src = src; shotImg.alt = b.dataset.alt; }, 250);
+    });
+  });
+
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {
     if (!el) return;
