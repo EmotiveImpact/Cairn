@@ -27,10 +27,13 @@
   // ---- the stack: chapters hold still and dissolve into one another ----
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
-  var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
-  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask
+  // phones held upright get the stack too; only short, wide windows (a phone on its side) scroll as a plain page
+  var staged = !!track && !reduced && innerHeight >= 520 && (innerWidth >= 760 || innerHeight > innerWidth);
+  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask (6 its chat, on a phone)
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
+  var ask = document.getElementById('ask'), askSplit = staged && innerWidth < 760 && !!ask;   // on a phone, its words first, then the chat
+  if (askSplit) ask.dataset.stops = 2;
   layers.forEach(function (el, i) { var s = +(el.dataset.stops || 1); starts[i] = N; ends[i] = N + s - 1; N += s; });
   N = Math.max(1, N - 1);
   var disk = document.getElementById('disk');
@@ -66,6 +69,7 @@
       if (here[i] && !at[i] && Math.abs(d) < 0.06) { at[i] = true; here[i].forEach(function (p) { p[0](); }); }
       if (here[i] && at[i] && Math.abs(d) > 0.7) { at[i] = false; here[i].forEach(function (p) { p[1](); }); }
       if (el === disk && ends[i] > starts[i] && built) setCleaned(stageAt >= starts[i] + 0.5);
+      if (el === ask && askSplit) chatUp(stageAt >= starts[i] + 0.5);
     });
     if (dive) flyIn(stageAt - starts[layers.indexOf(dive)]);
   }
@@ -83,9 +87,10 @@
     if (dive) dive.style.setProperty('--veil', p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : 1);   // the shade behind the words goes with them
     if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * innerHeight).toFixed(1) + 'px)' : ''; }
     if (!morph) return;
+    // it plays each way: landed, the sections line up; heading back, they go and the box carries the light back in
     if (p > 0.99 && !diskUp) buildDisk();
-    // once the sections are up, the box only shows again on the way back
-    var o = clamp((p - 0.38) / 0.07) * (diskUp ? 1 - clamp((p - 0.85) / 0.15) : 1);
+    else if (p < 0.98 && diskUp) unbuildDisk();
+    var o = clamp((p - 0.38) / 0.07) * (diskUp ? 0 : 1);
     if (o === 0) { morph.style.opacity = '0'; return; }
     // where the tunnel draws its light (centred, a little above the middle), and where the disk bar is now
     var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * (0.465 + LOW);
@@ -166,6 +171,8 @@
     window.addEventListener('touchmove', function (e) { if (ty !== null && (moving || inside())) { var k = stopNow(), d = ty - e.touches[0].clientY; if ((d > 0 && k < N) || (d < 0 && k > 0)) e.preventDefault(); } }, { passive: false });
     window.addEventListener('touchend', function (e) {
       if (ty === null || moving) return; var d = ty - e.changedTouches[0].clientY, k = stopNow(); ty = null;
+      // past either end the page scrolls on by itself
+      if ((d > 0 && k >= N) || (d < 0 && k <= 0)) return;
       if (Math.abs(d) > 40) go(k + (d > 0 ? 1 : -1));
     }, { passive: true });
     window.addEventListener('keydown', function (e) {
@@ -339,15 +346,24 @@
     cleaned = on; disk.classList.toggle('cleaned', on); countFree(on ? 72.4 : 33.8);
   }
   // on the stage the white box settles into the bar's place first, then fades as the sections line up inside it
+  var diskRun = 0;
+  function melt() { if (staged && morph) { morph.classList.add('melt'); setTimeout(function () { morph.classList.remove('melt'); }, 900); } }
   function buildDisk() {
     if (diskUp) return;
-    diskUp = true;
-    if (staged && morph) { morph.classList.add('melt'); setTimeout(function () { morph.classList.remove('melt'); }, 900); }
+    diskUp = true; melt();
     disk.classList.add('build');
+    var mine = ++diskRun;
     setTimeout(function () {
+      if (mine !== diskRun) return;
       disk.classList.add('lit'); built = true;
       if (staged) stage(); else setTimeout(function () { setCleaned(true); }, reduced ? 0 : 2600);
     }, reduced ? 0 : 1900);
+  }
+  function unbuildDisk() {
+    if (!diskUp) return;
+    diskUp = false; built = false; diskRun++; melt();
+    setCleaned(false);
+    disk.classList.remove('build', 'lit');
   }
   // without the stage, the bar lines up once it has come well up the screen, not as it peeks in at the bottom
   if (!staged) {
@@ -367,12 +383,19 @@
     });
   });
 
-  var ask = document.getElementById('ask'), typed = document.getElementById('typed');
-  once(ask, 0.4, function () {
+  var typed = document.getElementById('typed'), chatOn = false;
+  function chatUp(on) {
+    if (on === chatOn) return;
+    chatOn = on; ask.classList.toggle('chat-up', on);
+    if (on) setTimeout(typeChat);
+  }
+  if (!askSplit) once(ask, 0.4, typeChat);
+  function typeChat() {
+    if (typeChat.done) return; typeChat.done = true;
     var q = 'What’s taking up space on my Mac?', steps = ask.querySelectorAll('.step');
     function reveal() { steps.forEach(function (s, i) { setTimeout(function () { s.classList.add('on'); }, reduced ? 0 : 500 + i * 380); }); }
     if (reduced) { typed.textContent = q; reveal(); return; }
     var i = 0;
     (function type() { typed.textContent = q.slice(0, ++i); if (i < q.length) setTimeout(type, 38); else setTimeout(reveal, 250); })();
-  });
+  }
 })();

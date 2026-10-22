@@ -157,6 +157,32 @@ body { background: #090b0d; }
 .staged .stage { position: sticky; top: 0; height: 100svh; overflow: hidden; }
 .staged .stage > .chapter { position: absolute; inset: 0; min-height: 0; padding-top: 88px; will-change: opacity, transform, filter; }
 .staged .stage > .chapter .reveal { opacity: 1; transform: none; filter: none; }
+/* section 3 keeps its words back until the white light has landed as the bar */
+.staged .stage > .story-disk .centre { transition: opacity .8s ease, filter .8s ease; }
+.staged .stage > .story-disk:not(.build) .centre { opacity: 0; filter: blur(8px); }
+/* on a phone, section 4 takes two stops: its words, then the chat in the same place */
+@media (max-width: 759px) {
+  .staged .stage > .story-ask .shell > * { grid-area: 1 / 1; transition: opacity .6s ease, filter .6s ease, transform .6s ease; }
+  .staged .stage > .story-ask.chat-up .shell > div:first-child { opacity: 0; filter: blur(8px); transform: translateY(-24px); pointer-events: none; }
+  .staged .stage > .story-ask:not(.chat-up) .chat-wrap { opacity: 0; filter: blur(8px); transform: translateY(24px); pointer-events: none; }
+  .staged .stage > .story-ask .chat-body { min-height: 0; }
+  .staged .stage > .chapter { padding-bottom: 64px; }
+}
+/* shorter phones: the chat closes up a little so it fits under the menu */
+@media (max-width: 759px) and (max-height: 740px) {
+  .staged .stage > .chapter { padding-top: 72px; }
+  .staged .stage > .chapter h2 { font-size: 30px; }
+  .staged .stage > .story-disk .head { margin-top: 32px; }
+  .staged .stage > .story-disk { padding-bottom: 110px; }   /* room for the line that appears once it is cleaned */
+  .staged .stage > .story-ask .chat-bar { padding: 10px 14px; }
+  .staged .stage > .story-ask .chat-body { padding: 14px; font-size: 14px; }
+  .staged .stage > .story-ask .tool { margin: 12px 0 8px; }
+  .staged .stage > .story-ask .rows { margin: 10px 0 12px; }
+  .staged .stage > .story-ask .rows > div { padding: 7px 0; }
+  .staged .stage > .story-ask .got { font-size: 30px; }
+  .staged .stage > .story-ask .ask-btns { margin-top: 10px; }
+  .staged .stage > .story-ask .chat-tabs { margin-bottom: 10px; }
+}
 /* outside the stack, things dissolve in rather than slide */
 .reveal { transform: none; filter: blur(10px); transition: opacity .9s ease, filter .9s ease; }
 .in .reveal, .reveal.in { filter: none; }
