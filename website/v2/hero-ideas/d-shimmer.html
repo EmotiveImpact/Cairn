@@ -1,0 +1,19 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+#shimmer{position:absolute;left:0;top:0;width:100%;height:100%;--cx:.5;--cy:.75;--sx:.26;--sy:.2;pointer-events:none}
+.hero{position:relative;z-index:1;max-width:1260px;margin:0 auto;padding:70px 32px 0;text-align:center}
+h1{font-size:56px;max-width:1060px;margin:18px auto 0;text-shadow:0 2px 30px rgba(0,0,0,.6)}
+p.lead{margin:24px auto 0;font-size:19px;color:#c4d0da;max-width:560px;line-height:1.55}
+.actions{display:flex;gap:14px;justify-content:center;margin-top:32px}
+.foot{position:absolute;left:0;right:0;top:calc(100vh - 150px);display:flex;justify-content:center}
+</style></head><body>
+<canvas id="shimmer"></canvas>
+<header style="position:relative;z-index:2"><div class="brand"><img src="../../assets/cairn-stones-transparent.png" alt="">Cairn</div><nav><span>Why Cairn</span><span>How it works</span><span>Features</span><span>Docs</span><a class="btn primary">Get early access</a></nav></header>
+<div class="hero">
+<p class="label" style="color:var(--glow)">A Mac cleaner for developers</p>
+<h1>Cairn finds the junk in your coding projects, <span style="color:#9fb0bf">and works with your AI coding tools.</span></h1>
+<p class="lead">Get back the space your build files and caches took. Your code and AI conversations are never touched.</p>
+<div class="actions"><a class="btn primary">Get early access</a><a class="btn">See how it works</a></div>
+<div class="foot"><div class="logos"><span><img src="../assets/tool-icons/claude.svg">Claude Code</span><span><img src="../assets/tool-icons/codex.svg">Codex</span><span><img src="../assets/tool-icons/cursor.svg">Cursor</span><span><img src="../assets/tool-icons/xcode.svg">Xcode</span><span><img src="../assets/tool-icons/docker.svg">Docker</span><span><img src="../assets/tool-icons/npm.svg">npm</span></div></div>
+</div>
+<script src="shimmer.js"></script>
+</body></html>

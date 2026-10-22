@@ -1,0 +1,46 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.hero{max-width:1260px;margin:0 auto;padding:96px 32px 0;display:grid;grid-template-columns:1fr 600px;gap:64px;align-items:center}
+h1{font-size:60px}
+p.lead{margin-top:24px;font-size:19px;line-height:1.55;color:#aab6c0;max-width:500px}
+.actions{display:flex;gap:14px;margin-top:32px}
+.foot{margin-top:70px;display:flex;flex-direction:column;gap:16px}
+.chat{position:relative;border:1px solid rgba(160,205,255,.25);border-radius:16px;background:linear-gradient(180deg,#10161d,#0b0f13);box-shadow:0 -30px 90px -40px rgba(47,127,224,.6),0 40px 100px rgba(0,0,0,.5);overflow:hidden}
+.bar{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);font-size:13px;color:var(--muted)}
+.bar i{width:11px;height:11px;border-radius:50%;background:#ff5f57}.bar i+i{background:#febc2e}.bar i+i+i{background:#28c840}
+.bar img{width:16px;filter:brightness(0) invert(.75);margin-left:8px}
+.body{padding:26px 26px 22px;font-size:15px;line-height:1.55}
+.me{align-self:end;margin-left:auto;max-width:360px;padding:12px 16px;border-radius:14px 14px 4px 14px;background:rgba(255,255,255,.07);color:#fff}
+.tool{display:flex;gap:8px;align-items:center;margin:20px 0 10px;font-size:12.5px;color:var(--glow);font-family:ui-monospace,Menlo,monospace}
+.ans{color:#c9d4dd}
+.rows{margin:14px 0 16px;border-top:1px solid var(--line)}
+.rows div{display:flex;justify-content:space-between;padding:11px 0;border-bottom:1px solid var(--line)}
+.rows b{font-weight:500;color:#fff}
+.rows small{display:block;color:var(--muted);font-size:12.5px}
+.big{font-size:40px;font-weight:300;letter-spacing:-.03em;color:#fff}
+.big span{font-size:16px;color:var(--muted);margin-left:8px;letter-spacing:0}
+.ask{display:flex;gap:10px;margin-top:16px}
+.ask span{padding:9px 16px;border-radius:9px;font-size:14px;border:1px solid rgba(220,235,247,.15)}
+.ask span.p{background:var(--ice);color:#0e1a26;border-color:var(--ice);font-weight:500}
+</style></head><body><header><div class="brand"><img src="../../assets/cairn-stones-transparent.png" alt="">Cairn</div><nav><span>Why Cairn</span><span>How it works</span><span>Features</span><span>Docs</span><a class="btn primary">Get early access</a></nav></header>
+<div class="hero"><div>
+<p class="label" style="color:var(--glow)">A Mac cleaner for developers</p>
+<h1 style="margin-top:16px">Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
+<p class="lead">Ask Claude Code, Codex or Cursor what's filling your Mac. Cairn answers, and nothing is removed until you say so.</p>
+<div class="actions"><a class="btn primary">Get early access</a><a class="btn">See how it works</a></div>
+<div class="foot"><p class="label">Works with</p><div class="logos"><span><img src="../assets/tool-icons/claude.svg">Claude Code</span><span><img src="../assets/tool-icons/codex.svg">Codex</span><span><img src="../assets/tool-icons/cursor.svg">Cursor</span><span><img src="../assets/tool-icons/xcode.svg">Xcode</span><span><img src="../assets/tool-icons/docker.svg">Docker</span><span><img src="../assets/tool-icons/npm.svg">npm</span></div></div>
+</div>
+<div class="chat"><div class="bar"><i></i><i></i><i></i><img src="../assets/tool-icons/claude.svg">Claude Code · ~/Developer</div>
+<div class="body">
+<div class="me">What's taking up space on my Mac?</div>
+<div class="tool">● cairn · scan</div>
+<div class="ans">Cairn found build files and caches your tools can rebuild on their own:</div>
+<div class="rows">
+<div><span><b>Xcode build files</b><small>DerivedData · 41 projects</small></span><b>14.2 GB</b></div>
+<div><span><b>Docker build cache</b><small>Unused images and layers</small></span><b>9.8 GB</b></div>
+<div><span><b>node_modules</b><small>6 projects idle for 90 days</small></span><b>9.5 GB</b></div>
+</div>
+<div class="big">38.6 GB<span>you can get back</span></div>
+<div class="ans" style="margin-top:6px;font-size:13.5px;color:var(--muted)">Your code and conversations are never included.</div>
+<div class="ask"><span class="p">Review in Cairn</span><span>Not now</span></div>
+</div></div>
+</div></body></html>
