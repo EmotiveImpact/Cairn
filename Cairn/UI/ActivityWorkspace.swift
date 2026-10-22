@@ -88,10 +88,7 @@ struct RecoveryWorkspace: View {
             return freed > 0 ? FreeSpaceCard.Clean(date: run.finished ?? run.started, freed: freed) : nil
         }
     }
-    static func freed(_ summary: ScanStore.CleanSummary) -> Int64 {
-        let gains = summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
-        return max(summary.accounting.freedBytes, gains)
-    }
+    static func freed(_ summary: ScanStore.CleanSummary) -> Int64 { summary.freedBytes }
     private var capacity: CapacityReading? {
         if preview { return PreviewStorageScenario.current }
         return currentCapacity ?? StorageControl.shared.current

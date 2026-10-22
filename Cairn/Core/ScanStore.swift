@@ -229,12 +229,18 @@ final class ScanStore {
 
     /// Our Application Support directory. Never force-unwraps `urls(for:)` — that
     /// would trap in a sandboxed/odd environment; falls back to ~/Library.
-    private static var supportDirectory: URL {
+    nonisolated private static var supportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileScan.home.appendingPathComponent("Library/Application Support", isDirectory: true)
         let dir = base.appendingPathComponent("Cairn", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir
+    }
+
+    /// Where cleanup receipts live. Read-only callers (the CLI and agents) use
+    /// this to report what was freed from the same records Activity shows.
+    nonisolated static var receiptsURL: URL {
+        supportDirectory.appendingPathComponent("removal-log.json").appendingPathExtension("runs")
     }
 
     private static var snapshotURL: URL {

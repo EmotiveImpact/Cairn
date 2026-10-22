@@ -60,8 +60,27 @@ enum AgentConnections {
     static let backupSuffix = ".cairn-backup"
 
     /// The executable an agent should launch. Inside an app bundle this is the
-    /// bundle's own binary, so no command-line install is needed.
-    static var command: String { Bundle.main.executableURL?.path ?? "/usr/local/bin/cairn" }
+    /// bundle's own binary, so no command-line install is needed. A test copy
+    /// run from elsewhere points agents at the installed app instead, so the
+    /// connection keeps working after the test copy is deleted.
+    static var command: String {
+        let running = Bundle.main.executableURL?.path
+        if let installed = installedExecutable(), installed != running { return installed }
+        return running ?? "/usr/local/bin/cairn"
+    }
+
+    /// Cairn in Applications, when it is at least as new as the running copy.
+    static func installedExecutable(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String? {
+        let fm = FileManager.default
+        let mine = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        for folder in [URL(fileURLWithPath: "/Applications"), home.appendingPathComponent("Applications")] {
+            guard let bundle = Bundle(url: folder.appendingPathComponent("Cairn.app")),
+                  let executable = bundle.executableURL?.path, fm.isExecutableFile(atPath: executable) else { continue }
+            let theirs = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+            if theirs.compare(mine, options: .numeric) != .orderedAscending { return executable }
+        }
+        return nil
+    }
 
     /// Terminal command for tools Cairn does not edit, or when it cannot.
     static func manualCommand(_ command: String = command) -> String {

@@ -125,16 +125,19 @@ enum MCPServer {
         case "storage_status":
             let free = Volumes.homeFree()
             let total = DeviceInfo.totalCapacity
+            let freed = CLI.recordedFreed()
             return .success([
                 "availableBytes": free, "available": Fmt.size(free),
                 "totalBytes": total, "total": Fmt.size(total),
                 "trend": StorageHistory.summary(currentFree: free).text,
+                "freedByCairnBytes": freed?.bytes ?? 0, "cleans": freed?.cleans ?? 0,
             ])
 
         case "list_projects":
             let limit = boundedLimit(arguments["limit"])
             let minimumIdle = max(0, arguments["minIdleDays"] as? Int ?? 0)
-            let projects = ProjectIndex.build(from: CLI.collect(category: ProjectIndex.categoryID))
+            let measured = measure(ProjectIndex.categoryID)
+            let projects = ProjectIndex.build(from: measured.items)
                 .filter { minimumIdle == 0 || ($0.idleDays() ?? 0) >= minimumIdle }
                 .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
             return .success([
@@ -142,6 +145,7 @@ enum MCPServer {
                 "rebuildableBytes": projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes },
                 "projects": projects.prefix(limit).map(describeProject),
                 "nextStep": "To free this space, call open_cairn with section projects and ask the user to review the selection.",
+                "measuredSecondsAgo": measured.age,
             ])
 
         case "find_reclaimable":
@@ -150,16 +154,23 @@ enum MCPServer {
             if let category, !ScannerRegistry.all().contains(where: { $0.info.id == category }) {
                 return .failure(ToolError(message: "Unknown category '\(category)'. Call list_categories for valid ids."))
             }
-            let items = CLI.collect(category: category).sorted { $0.allocatedSize > $1.allocatedSize }
+            let measured = measure(category)
+            let items = measured.items.sorted { $0.allocatedSize > $1.allocatedSize }
+            func bytes(_ list: [ScanItem]) -> Int64 { list.reduce(Int64(0)) { $0 + $1.allocatedSize } }
             let byCategory = Dictionary(grouping: items, by: \.categoryID)
-                .map { ["category": $0.key, "bytes": $0.value.reduce(Int64(0)) { $0 + $1.allocatedSize }, "items": $0.value.count] as [String: Any] }
+                .map { ["category": $0.key, "bytes": bytes($0.value), "readyBytes": bytes($0.value.filter(CLI.isReady)),
+                        "items": $0.value.count] as [String: Any] }
                 .sorted { ($0["bytes"] as? Int64 ?? 0) > ($1["bytes"] as? Int64 ?? 0) }
+            let ready = bytes(items.filter(CLI.isReady))
             return .success([
-                "totalBytes": items.reduce(Int64(0)) { $0 + $1.allocatedSize },
+                "readyBytes": ready, "ready": Fmt.size(ready),
+                "needsUserBytes": bytes(items) - ready,
+                "totalBytes": bytes(items),
                 "itemCount": items.count,
                 "categories": byCategory,
                 "items": items.prefix(limit).map(describeItem),
-                "note": "Sizes are measured file sizes, not space already freed. Removal happens in Cairn after the user reviews it.",
+                "measuredSecondsAgo": measured.age,
+                "note": "readyBytes is what Cairn can free once the user reviews it: safe items their tools rebuild. The rest are personal files or advice the user must decide on, so never present them as free space. Sizes are measured file sizes, not space already freed.",
             ])
 
         case "list_categories":
@@ -186,6 +197,31 @@ enum MCPServer {
         default:
             return .failure(ToolError(message: "Unknown tool '\(name)'."))
         }
+    }
+
+    // MARK: - Measuring
+
+    /// Scans are slow (a full project sweep can take minutes), so results are
+    /// kept per scanner for ten minutes within one agent session. A later call
+    /// rescans only the scanners whose results have gone stale.
+    private static var cache: [String: (date: Date, items: [ScanItem])] = [:]
+    private static let cacheLifetime: TimeInterval = 600
+
+    private static func measure(_ category: String?) -> (items: [ScanItem], age: Int) {
+        let ids = category.map { [$0] } ?? ScannerRegistry.all().map(\.info.id)
+        var items: [ScanItem] = []
+        var oldest = Date()
+        for id in ids {
+            if let hit = cache[id], Date().timeIntervalSince(hit.date) < cacheLifetime {
+                items += hit.items
+                oldest = min(oldest, hit.date)
+                continue
+            }
+            let fresh = CLI.collect(category: id)
+            cache[id] = (Date(), fresh)
+            items += fresh
+        }
+        return (items, Int(Date().timeIntervalSince(oldest)))
     }
 
     // MARK: - Encoding
