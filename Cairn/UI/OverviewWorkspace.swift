@@ -172,7 +172,7 @@ struct OverviewWorkspace: View {
             // Same big number as the result, counting up while the scan runs.
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    CountingSize(bytes: store.grandTotal, duration: 0.3, still: reduceMotion)
+                    CountingBytes(bytes: store.grandTotal, duration: 0.3, still: reduceMotion)
                         .font(.system(size: 58, weight: .light)).tracking(-2.3)
                     Text("found so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 }
@@ -189,7 +189,7 @@ struct OverviewWorkspace: View {
             HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        CountingSize(bytes: recommendedBytes, duration: 0.8, still: reduceMotion)
+                        CountingBytes(bytes: recommendedBytes, duration: 0.8, still: reduceMotion)
                             .font(.system(size: 58, weight: .light)).tracking(-2.3)
                         Text("you can get back").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                     }
@@ -618,13 +618,13 @@ struct OverviewWorkspace: View {
 
 /// A size that counts smoothly to its new value: fixed-width digits in one unit,
 /// so nothing slides or jitters. Counts up from zero the first time it appears.
-struct CountingSize: View {
+struct CountingBytes: View {
     let bytes: Int64
     var duration: Double = 0.8
     var still = false
     @State private var shown: Double = 0
     var body: some View {
-        CountingSizeText(value: shown, unitOf: bytes)
+        CountingBytesText(value: shown, unitOf: bytes)
             .monospacedDigit()
             .onAppear { move(to: bytes) }
             .onChange(of: bytes) { _, new in move(to: new) }
@@ -634,7 +634,7 @@ struct CountingSize: View {
         withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: duration)) { shown = Double(target) }
     }
 }
-private struct CountingSizeText: View, Animatable {
+private struct CountingBytesText: View, Animatable {
     var value: Double
     let unitOf: Int64
     var animatableData: Double { get { value } set { value = newValue } }
