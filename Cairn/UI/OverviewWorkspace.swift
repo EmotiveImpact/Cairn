@@ -304,11 +304,11 @@ struct OverviewWorkspace: View {
     }
     private func logoRow<Trailing: View>(_ logo: String?, _ fallback: String, _ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 9) {
-            BrandLogo(name: logo, fallback: fallback, size: 22)
-            Text(title).font(.system(size: 12.5)).lineLimit(1)
+            BrandLogo(name: logo, fallback: fallback, size: 24)
+            Text(title).font(.system(size: 13)).lineLimit(1)
             Spacer(minLength: 6)
             trailing()
-        }.frame(height: 26)
+        }.frame(height: 30)
     }
 
     /// The folders that grew most since the previous measurement.
@@ -332,7 +332,7 @@ struct OverviewWorkspace: View {
             } else {
                 ForEach(rows) { row in
                     logoRow(row.logo, row.icon, row.title) {
-                        Text("+\(Fmt.size(row.delta))").font(.system(size: 12.5, weight: .medium)).monospacedDigit().foregroundStyle(Brand.room)
+                        Text("+\(Fmt.size(row.delta))").font(.system(size: 13, weight: .medium)).monospacedDigit().foregroundStyle(Brand.room)
                     }
                 }
             }
@@ -375,7 +375,7 @@ struct OverviewWorkspace: View {
                         if case .connected = agentState(tool) {
                             HStack(spacing: 5) {
                                 Circle().fill(Brand.safeCyan).frame(width: 6, height: 6)
-                                Text("Connected").font(.system(size: 11.5)).foregroundStyle(Brand.safeCyan)
+                                Text("Connected").font(.system(size: 12)).foregroundStyle(Brand.safeCyan)
                             }
                         } else {
                             Button(connecting == tool.id ? "Connecting…" : "Connect") { connect(tool) }
