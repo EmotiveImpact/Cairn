@@ -143,8 +143,7 @@ struct AppShell: View {
                     content.id(section)
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
-                        .overlay(alignment: .topTrailing) { inPanelTools }
-                    statusBar.fixedSize(horizontal: false, vertical: true)
+                    runningStatus
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
@@ -192,7 +191,7 @@ struct AppShell: View {
             developerSearch = ""
             searchFocused = false
             showResultFilter = false
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(next)
+            showDeveloperInspector = false
         }
         .onChange(of: appStore.isUninstalling) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
         .onChange(of: dupStore.isRemoving) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
@@ -209,7 +208,6 @@ struct AppShell: View {
         .onReceive(NotificationCenter.default.publisher(for: ScanGate.changed)) { _ in operation = ScanGate.shared.snapshot }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
         .onAppear {
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(section)
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }
             CairnMenuBar.shared.scanStatus = { menuScanStatus }
             handleMenuRequest()
@@ -344,28 +342,6 @@ struct AppShell: View {
         }
     }
 
-    /// Page tools belong to the rounded workspace, alongside each page's own
-    /// heading. The title bar is reserved for the native window controls.
-    @ViewBuilder private var inPanelTools: some View {
-        if ![NavSection.dashboard, .changes, .makeRoom, .largeFiles, .storage, .settings, .activity].contains(section) {
-            HStack(spacing: 8) {
-                Button(action: rescanCurrentSection) {
-                    Label(currentScanning ? "Stop scan" : "Rescan", systemImage: currentScanning ? "stop.circle" : "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(previewMode || store.isCleaning || appStore.isUninstalling || dupStore.isRemoving || healthStore.isFixing)
-                Button { showDeveloperInspector.toggle() } label: {
-                    Image(systemName: "sidebar.right")
-                }
-                .help(showDeveloperInspector ? "Hide details" : "Show details")
-                .accessibilityLabel(showDeveloperInspector ? "Hide details" : "Show details")
-            }
-            .buttonStyle(ControlPanelButtonStyle())
-            .padding(.top, 23)
-            .padding(.trailing, showDeveloperInspector ? 326 : 26)
-        }
-    }
-
     private var supportsResultFilter: Bool {
         ![NavSection.dashboard, .makeRoom, .storage, .settings].contains(section)
     }
@@ -408,6 +384,13 @@ struct AppShell: View {
         case .apps: if appStore.isScanning { appStore.cancel() } else { appStore.rescan() }
         case .bugs: if healthStore.isScanning { healthStore.cancel() } else { healthStore.rescan() }
         default: if store.isScanning { store.cancel() } else { store.rescan() }
+        }
+    }
+
+    /// The status line only earns its place while something is running.
+    @ViewBuilder private var runningStatus: some View {
+        if store.isScanning || store.isCleaning {
+            statusBar.fixedSize(horizontal: false, vertical: true)
         }
     }
 
