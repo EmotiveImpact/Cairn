@@ -371,6 +371,10 @@
     }, { threshold: [0, 0.6] }).observe(el);
   }
 
+  // the rest of your Mac: its rows come in each time it settles, and go once it has gone
+  var more = document.getElementById('features');
+  whenHere(more, function () { more.classList.add('shown'); }, function () { more.classList.remove('shown'); });
+
   // the count runs once the number chapter has settled, and again each time you come back to it
   var count = document.getElementById('count'), run = 0;
   whenHere(number, function () {

@@ -385,3 +385,43 @@ body:not(.staged) .disk-next { display: none; }
   .story-app .app-steps [aria-selected="true"] b { color: #fff; }
   .story-app .app-steps [aria-selected="true"] span { color: #b3bfc9; }
 }
+
+/* 6. the rest of your Mac: the apps around your code, as a calm list with their grey logos */
+.story-more .shell { display: grid; grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
+.story-more .more-lead { margin: 20px 0 0; max-width: 360px; font-size: 17px; line-height: 1.6; color: #b3bfc9; }
+.more-list { margin: 0; padding: 0; list-style: none; }
+.more-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px 32px; padding: 22px 0; border-top: 1px solid rgba(220,235,247,.1); }
+.more-list h3 { margin: 0; font-size: 19px; font-weight: 500; letter-spacing: -.01em; color: #f4f8fb; }
+.more-list p { margin: 6px 0 0; font-size: 14.5px; line-height: 1.55; color: #8f9caa; }
+.more-list .logos { display: flex; align-items: center; gap: 18px; }
+.more-list .logos img { display: block; width: 22px; height: 22px; opacity: .8; }
+.more-also { margin: 0; padding-top: 20px; border-top: 1px solid rgba(220,235,247,.1); font-size: 14.5px; line-height: 1.6; color: #6f7c88; }
+.more-list + .more-also { margin-top: -40px; }
+@media (min-width: 900px) {
+  .story-more .shell { grid-template-columns: minmax(280px, 400px) minmax(0, 1fr); grid-template-areas: "intro list" "intro also"; column-gap: clamp(40px, 6vw, 110px); row-gap: 0; align-items: center; }
+  .story-more .more-intro { grid-area: intro; align-self: start; padding-top: 18px; }
+  .story-more .more-list { grid-area: list; }
+  .story-more .more-also { grid-area: also; margin-top: 0; }
+  .story-more h2 { font-size: clamp(30px, 2.6vw, 36px); }
+  .story-more h2 span { display: block; }
+}
+/* on the stage the rows come in one after another once the words have settled, each time you arrive */
+.staged .stage > .story-more .more-list li, .staged .stage > .story-more .more-also { transition: opacity .8s ease, filter .8s ease; transition-delay: calc(250ms + var(--i, 4) * 140ms); }
+.staged .stage > .story-more:not(.shown) .more-list li, .staged .stage > .story-more:not(.shown) .more-also { opacity: 0; filter: blur(8px); transition-delay: 0s; }
+@media (max-width: 759px) {
+  .story-more .more-lead { display: none; }
+  .more-list li { grid-template-columns: minmax(0, 1fr); padding: 14px 0; gap: 0; }
+  .more-list li > div { display: contents; }
+  .more-list h3 { grid-area: 1 / 1; font-size: 17px; }
+  .more-list .logos { grid-area: 1 / 1; justify-self: end; gap: 12px; }
+  .more-list .logos img { width: 18px; height: 18px; }
+  .more-list p { grid-area: 2 / 1; font-size: 13.5px; }
+  .more-also { font-size: 13.5px; }
+  .story-more .shell { row-gap: 28px; }
+  .more-list + .more-also { margin-top: -28px; }
+}
+@media (max-width: 759px) and (max-height: 740px) {
+  .more-list li { padding: 11px 0; }
+  .story-more .shell { row-gap: 20px; }
+  .staged .stage > .story-more .more-also { display: none; }
+}
