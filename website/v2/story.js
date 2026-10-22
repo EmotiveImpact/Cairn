@@ -13,14 +13,6 @@
   }
   if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
   if (/^#(valley|profile|desk|window)$/.test(location.hash)) pick(location.hash.slice(1));
-  // review only: the floating pill menu, or the earlier full-width bar
-  function menu(style) {
-    document.body.classList.toggle('menu-bar', style === 'bar');
-    document.querySelectorAll('.menu-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.menu === style)); });
-    try { localStorage.setItem('cairn-menu', style); } catch (e) {}
-  }
-  document.querySelectorAll('.menu-switch button').forEach(function (b) { b.addEventListener('click', function () { menu(b.dataset.menu); }); });
-  try { if (localStorage.getItem('cairn-menu') === 'bar') menu('bar'); } catch (e) {}
   // review only: the hallway as it first looked, or darker in the middle behind the words
   var numberEl = document.getElementById('number');
   function hall(look) {

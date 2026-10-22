@@ -274,20 +274,6 @@ body:not(.staged) .disk-next { display: none; }
 .story-app.beam-hero .hero-copy::before { display: none; }
 .story-app.beam-hero .product-composition { margin-top: 64px; }
 
-/* review only: switch between the floating pill menu and the earlier full-width bar */
-.menu-switch { position: fixed; z-index: 30; right: 24px; bottom: 72px; display: flex; align-items: center; gap: 4px; padding: 4px 4px 4px 12px; border: 1px solid rgba(220,235,247,.14); border-radius: 999px; background: rgba(9,11,13,.6); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); font-size: 12px; color: #6f7d89; }
-.menu-switch span { margin-right: 4px; }
-.menu-switch button { padding: 6px 12px; border: 0; border-radius: 999px; background: none; color: #8f9caa; font: inherit; cursor: pointer; }
-.menu-switch button[aria-pressed="true"] { background: rgba(244,248,251,.12); color: #f4f8fb; }
-.menu-bar .site-header { top: 0; background: rgba(9,11,13,.55); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); border-bottom: 1px solid rgba(220,235,247,.06); pointer-events: auto; }
-.menu-bar .header-inner { width: min(100% - 64px, 1260px); max-width: none; min-height: var(--header-height); padding: 0; gap: 24px; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
-.menu-bar .main-nav { margin-left: auto; }
-.menu-bar .header-status { display: inline; }
-.menu-bar .site-header .brand { font-size: 20px; }
-.menu-bar .site-header .brand-mark img { width: 32px; height: 32px; }
-.menu-bar .header-action { min-height: 40px; border-radius: 10px; }
-@media (max-width: 900px) { .menu-switch { right: auto; left: 50%; transform: translateX(-50%); bottom: 16px; } .menu-bar .header-inner { width: calc(100% - 32px); } .menu-bar .header-status { display: none; } }
-
 /* the app: a dark lake with a small stack of stones; the words sit in the sky and the panel
    rises over the water, so the stones show between them (switchable while we choose) */
 .story-app { isolation: isolate; }
