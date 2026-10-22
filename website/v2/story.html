@@ -36,11 +36,17 @@
 
     <main id="main">
       <div class="stage-track"><div class="stage">
-      <section class="chapter story-open" id="open" aria-labelledby="open-title">
+      <section class="chapter story-open look-photo" id="open" aria-labelledby="open-title">
         <canvas class="open-scene" id="scene" aria-hidden="true"></canvas>
+        <img class="open-photo" src="assets/hero/cairn-hero-profile.jpg" alt="" aria-hidden="true" />
+        <span class="open-ring" aria-hidden="true"></span>
+        <div class="photo-switch" role="group" aria-label="Try another picture"><button type="button" data-photo="profile" aria-pressed="true">Profile</button><button type="button" data-photo="desk" aria-pressed="false">Desk</button><button type="button" data-photo="window" aria-pressed="false">Window</button><button type="button" data-photo="swirl" aria-pressed="false">Swirl</button></div>
         <div class="shell open-inner">
           <div class="open-main">
-            <h1 id="open-title" class="reveal">Cairn <span>Finds the junk in your coding projects.</span></h1>
+            <div class="open-words">
+              <h1 id="open-title" class="reveal"><b>Cairn</b> <span>finds the junk in your coding projects.</span></h1>
+              <p class="open-lead reveal">And works with your AI coding tools. Build files and caches go. Your code and AI conversations are never touched.</p>
+            </div>
             <a class="open-cta reveal" href="#close">Get early access</a>
           </div>
           <div class="open-foot reveal">
@@ -49,7 +55,7 @@
               <div><dt>3 AI tools</dt><dd>Claude Code, Codex and Cursor</dd></div>
               <div><dt>0 files</dt><dd>of your code ever touched</dd></div>
             </dl>
-            <div>
+            <div class="open-more">
               <p>Build files, caches and old installs pile up quietly while you work. Cairn shows you what each one is and clears only what your tools can make again.</p>
               <p>Ask for it from Claude Code, Codex or Cursor. Your code and AI conversations are never touched.</p>
             </div>

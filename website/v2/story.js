@@ -3,6 +3,18 @@
 (function () {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.body.classList.add('story-page');
+  // review only: try each hero picture, or the earlier animated swirl
+  var o = document.getElementById('open'), ph = o && o.querySelector('.open-photo');
+  function pick(name) {
+    if (!o) return;
+    o.classList.toggle('look-photo', name !== 'swirl');
+    if (name !== 'swirl') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
+    o.dataset.photo = name;
+    o.querySelectorAll('.photo-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.photo === name)); });
+    if (name === 'swirl' && window.startScene) window.startScene();
+  }
+  if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
+  if (/^#(desk|window|swirl)$/.test(location.hash)) pick(location.hash.slice(1));
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -101,6 +113,8 @@
 
 
   // ---- opening scene: a dusk sky with a slow swirl of light over dark hills ----
+  window.startScene = function () {
+  if (window.startScene.done) return; window.startScene.done = true;
   var scene = document.getElementById('scene');
   var sg = scene && scene.getContext('webgl', { premultipliedAlpha: false, antialias: false });
   if (sg) {
@@ -169,6 +183,8 @@
     };
     requestAnimationFrame(sframe);
   }
+  };
+  if (o && !o.classList.contains('look-photo')) window.startScene();
 
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {
