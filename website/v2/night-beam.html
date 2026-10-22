@@ -16,8 +16,8 @@
     <script src="assets/cairn-interactions.js?v=20260930-1" defer></script>
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
-    <link rel="stylesheet" href="beam-hero.css?v=5" />
-    <script src="beam-hero.js?v=5" defer></script>
+    <link rel="stylesheet" href="beam-hero.css?v=6" />
+    <script src="beam-hero.js?v=6" defer></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Skip to content</a>
@@ -34,9 +34,11 @@
     </header>
 
     <main id="main">
-      <section class="hero beam-hero" data-option="3" aria-labelledby="hero-title">
+      <section class="hero beam-hero" data-option="beam" aria-labelledby="hero-title">
         <div class="hero-atmosphere" aria-hidden="true"><img src="assets/stone-seam.png" width="1536" height="1024" alt="" fetchpriority="high" /></div>
+        <div class="wave-fx" aria-hidden="true"><canvas id="wave"></canvas></div>
         <div class="shell hero-layout">
+          <div class="hero-first">
           <div class="hero-copy">
             <p class="section-label">A Mac cleaner for developers</p>
             <h1 id="hero-title">Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
@@ -46,6 +48,18 @@
               <a class="text-link" href="#changes">See how it works</a>
             </div>
             <p class="hero-availability">Native to macOS. In development.</p>
+          </div>
+          <div class="wave-tools" aria-label="Works with your AI coding tools">
+            <p>Works with your AI coding tools</p>
+            <ul>
+              <li><img src="assets/tool-icons/claude.svg" width="20" height="20" alt="" />Claude Code</li>
+              <li><img src="assets/tool-icons/codex.svg" width="20" height="20" alt="" />Codex</li>
+              <li><img src="assets/tool-icons/cursor.svg" width="20" height="20" alt="" />Cursor</li>
+              <li><img src="assets/tool-icons/xcode.svg" width="20" height="20" alt="" />Xcode</li>
+              <li><img src="assets/tool-icons/docker.svg" width="20" height="20" alt="" />Docker</li>
+              <li><img src="assets/tool-icons/npm.svg" width="20" height="20" alt="" />npm</li>
+            </ul>
+          </div>
           </div>
           <figure class="product-composition" id="product">
             <div class="fx" id="fx" aria-hidden="true"><canvas id="rays"></canvas><div class="core"></div><canvas id="spark"></canvas></div>
@@ -157,6 +171,8 @@
       </div>
       <div class="shell footer-bottom"><span>Native app previews use sample data.</span><span>Cairn / 2026</span></div>
     </footer>
+
+    <div class="hero-switch" role="group" aria-label="Choose a hero to review"><span>Hero</span><button type="button" data-hero="beam" aria-pressed="true">Beam</button><button type="button" data-hero="wave" aria-pressed="false">Wave</button></div>
 
     <dialog class="app-preview" aria-labelledby="preview-title" aria-describedby="preview-note">
       <div class="preview-heading"><div><span>Inside Cairn</span><h2 id="preview-title">Overview</h2></div><button class="preview-close" type="button" autofocus>Close</button></div>

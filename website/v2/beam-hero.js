@@ -338,3 +338,118 @@ void main() {
   new MutationObserver(function (list) { list.forEach(function (m) { if (m.target.nodeType === 1) { fix(m.target); sweep(m.target); } }); })
     .observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src', 'href'] });
 })();
+
+// Hero option switcher: Beam or Wave (#wave in the address picks Wave).
+(function () {
+  var hero = document.querySelector('.beam-hero');
+  var buttons = document.querySelectorAll('.hero-switch button');
+  if (!hero) return;
+  function pick(name) {
+    hero.setAttribute('data-option', name);
+    buttons.forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.hero === name)); });
+    if (history.replaceState) history.replaceState(null, '', name === 'wave' ? '#wave' : location.pathname + location.search);
+    window.dispatchEvent(new Event('resize'));
+    document.dispatchEvent(new CustomEvent('cairn:hero', { detail: name }));
+  }
+  buttons.forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.hero); }); });
+  pick(location.hash === '#wave' ? 'wave' : 'beam');
+})();
+
+// Wave: a field of light particles rolling across the bottom of the first screen,
+// with a bright crest line and a few soft out-of-focus lights drifting above it.
+(function () {
+  var canvas = document.getElementById('wave');
+  var hero = document.querySelector('.beam-hero');
+  if (!canvas || !hero) return;
+  var ctx = canvas.getContext('2d');
+  var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var W = 1, H = 1, dpr = 1, running = false, t0 = performance.now();
+  var COLS = 150, ROWS = 34;
+  var bokeh = [];
+  for (var i = 0; i < 26; i++) bokeh.push({ x: Math.random(), y: 0.25 + Math.random() * 0.6, r: 6 + Math.random() * 26, a: 0.06 + Math.random() * 0.18, s: 0.004 + Math.random() * 0.012, p: Math.random() * 6.28, violet: Math.random() < 0.35 });
+
+  function resize() {
+    var r = canvas.getBoundingClientRect(); W = Math.max(1, r.width); H = Math.max(1, r.height);
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    COLS = W < 700 ? 80 : 150;
+  }
+  // height of the surface at (u across, v depth), both 0..1
+  function surface(u, v, t) {
+    return Math.sin(u * 6.4 + t * 0.5 + v * 2.2) * 0.6
+         + Math.sin(u * 3.1 - t * 0.32 + v * 4.0) * 0.9
+         + Math.sin(u * 11.0 + t * 0.8 - v * 3.0) * 0.18;
+  }
+  function project(u, v, t) {
+    var depth = 1 + v * 2.6;                     // near row v=0, far row v=1
+    var x = W / 2 + (u - 0.5) * W * 1.5 / depth;
+    var base = H * 0.9 - v * H * 0.15;
+    var y = base - surface(u, v, t) * H * 0.1 / Math.pow(depth, 0.8);
+    return [x, y, depth];
+  }
+  function draw(now) {
+    var t = (now - t0) / 1000;
+    ctx.clearRect(0, 0, W, H);
+    // soft glow under the wave
+    var g = ctx.createRadialGradient(W * 0.5, H * 0.92, 0, W * 0.5, H * 0.92, Math.max(W, H) * 0.7);
+    g.addColorStop(0, 'rgba(70,140,230,.32)'); g.addColorStop(0.45, 'rgba(40,90,190,.12)'); g.addColorStop(1, 'rgba(9,11,13,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+    // particles, far rows first
+    for (var row = ROWS - 1; row >= 0; row--) {
+      var v = row / (ROWS - 1);
+      for (var c = 0; c < COLS; c++) {
+        var u = c / (COLS - 1) + Math.sin(row * 12.9898 + c * 78.233) * 0.002;
+        var p = project(u, v, t);
+        var crest = (surface(u, v, t) + 1.4) / 2.8;      // 0 low .. 1 high
+        var a = (0.18 + crest * 0.7) * (1 - v * 0.65);
+        var size = (1.7 / p[2]) * (0.7 + crest * 0.6);
+        ctx.fillStyle = 'rgba(' + Math.round(120 + crest * 110) + ',' + Math.round(180 + crest * 60) + ',255,' + a.toFixed(3) + ')';
+        ctx.fillRect(p[0], p[1], size, size);
+      }
+    }
+    // luminous body below the front edge
+    ctx.beginPath();
+    for (var k = 0; k <= 120; k++) { var q = project(k / 120, 0, t); if (k === 0) ctx.moveTo(q[0], q[1]); else ctx.lineTo(q[0], q[1]); }
+    ctx.lineTo(W, H); ctx.lineTo(0, H); ctx.closePath();
+    var body = ctx.createLinearGradient(0, H * 0.6, 0, H);
+    body.addColorStop(0, 'rgba(110,175,250,.5)'); body.addColorStop(0.4, 'rgba(45,100,205,.3)'); body.addColorStop(1, 'rgba(9,11,13,.95)');
+    ctx.fillStyle = body; ctx.fill();
+    // sparkle grain inside the body
+    for (var gr = 0; gr < (W < 700 ? 500 : 1400); gr++) {
+      var gu = (Math.sin(gr * 91.7) * 43758.5453) % 1; gu = gu < 0 ? gu + 1 : gu;
+      var gv = (Math.sin(gr * 17.3) * 12731.743) % 1; gv = gv < 0 ? -gv : gv;
+      var top = project(gu, 0, t)[1], gy = top + gv * gv * (H - top);
+      var tw = 0.35 + 0.65 * Math.abs(Math.sin(t * 1.3 + gr));
+      ctx.fillStyle = 'rgba(190,225,255,' + (0.5 * tw * (1 - gv)).toFixed(3) + ')';
+      ctx.fillRect(gu * W, gy, 1.3, 1.3);
+    }
+    // bright crest line
+    ctx.save(); ctx.shadowColor = 'rgba(160,210,255,.9)'; ctx.shadowBlur = 18; ctx.strokeStyle = 'rgba(200,232,255,.85)'; ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    for (var m = 0; m <= 120; m++) { var e = project(m / 120, 0, t); if (m === 0) ctx.moveTo(e[0], e[1]); else ctx.lineTo(e[0], e[1]); }
+    ctx.stroke(); ctx.restore();
+    // drifting out-of-focus lights
+    bokeh.forEach(function (b) {
+      var x = ((b.x + t * b.s) % 1.1) * W, y = b.y * H + Math.sin(t * 0.6 + b.p) * 10;
+      var rg = ctx.createRadialGradient(x, y, 0, x, y, b.r);
+      var col = b.violet ? '190,170,255' : '160,205,255';
+      rg.addColorStop(0, 'rgba(' + col + ',' + b.a + ')'); rg.addColorStop(0.6, 'rgba(' + col + ',' + (b.a * 0.4) + ')'); rg.addColorStop(1, 'rgba(' + col + ',0)');
+      ctx.fillStyle = rg; ctx.beginPath(); ctx.arc(x, y, b.r, 0, 6.283); ctx.fill();
+    });
+    // fade the top so the words sit on darkness
+    var fade = ctx.createLinearGradient(0, 0, 0, H * 0.55);
+    fade.addColorStop(0, 'rgba(9,11,13,1)'); fade.addColorStop(1, 'rgba(9,11,13,0)');
+    ctx.globalCompositeOperation = 'destination-out'; ctx.fillStyle = fade; ctx.fillRect(0, 0, W, H * 0.55); ctx.globalCompositeOperation = 'source-over';
+  }
+  function loop(now) { if (!running) return; draw(now); requestAnimationFrame(loop); }
+  function update() {
+    var on = hero.getAttribute('data-option') === 'wave';
+    if (on) { resize(); if (reduced) { draw(t0 + 4000); } else if (!running) { running = true; requestAnimationFrame(loop); } }
+    else running = false;
+  }
+  window.addEventListener('resize', function () { if (hero.getAttribute('data-option') === 'wave') resize(); });
+  document.addEventListener('cairn:hero', update);
+  update();
+})();

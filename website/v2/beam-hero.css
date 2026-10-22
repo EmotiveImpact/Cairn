@@ -135,3 +135,35 @@
   .step-panel:not([hidden]) { animation: none; }
   .step-shot, .feature-grid article { transition: none; }
 }
+
+/* ---------- hero option: Wave (big centred words over a glowing particle wave) ---------- */
+.wave-fx, .wave-tools { display: none; }
+.beam-hero[data-option="wave"] .fx, .beam-hero[data-option="wave"] .flare, .beam-hero[data-option="wave"] .hero-copy::before { display: none; }
+.beam-hero[data-option="wave"] .hero-atmosphere img { opacity: .06; }
+.beam-hero[data-option="wave"] .hero-layout { padding-top: 0; }
+.beam-hero[data-option="wave"] .hero-first { position: relative; z-index: 3; display: flex; flex-direction: column; justify-content: space-between; min-height: calc(100svh - 76px); padding: 12vh 0 34px; }
+.beam-hero[data-option="wave"] h1 { font-size: clamp(40px, 5.6vw, 80px); font-weight: 600; line-height: 1.02; letter-spacing: -.04em; }
+.beam-hero[data-option="wave"] h1 > span { color: #a9bccb; }
+.beam-hero[data-option="wave"] .hero-description { color: #c4d0da; }
+.beam-hero[data-option="wave"] .hero-actions .text-link { padding: 12px 22px; border: 1px solid rgba(220,235,247,.35); border-radius: 999px; }
+.beam-hero[data-option="wave"] .hero-actions .button { border-radius: 999px; }
+.beam-hero[data-option="wave"] .wave-fx { display: block; position: absolute; left: 0; right: 0; top: 0; height: calc(100svh - 76px); z-index: 1; pointer-events: none; }
+.wave-fx canvas { display: block; width: 100%; height: 100%; }
+.beam-hero[data-option="wave"] .wave-tools { display: block; text-align: center; }
+.wave-tools p { margin: 0 0 16px; font-size: 12px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: #dfe9f2; }
+.wave-tools ul { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px 34px; margin: 0; padding: 0; list-style: none; }
+.wave-tools li { display: flex; align-items: center; gap: 9px; font-size: 15px; font-weight: 500; color: #d3dde6; }
+.wave-tools img { width: 20px; height: 20px; filter: brightness(0) invert(.86); }
+.beam-hero[data-option="wave"] .product-composition { margin-top: 72px; }
+.beam-hero[data-option="wave"] .stack-strip { display: none; }
+@media (max-width: 760px) {
+  .beam-hero[data-option="wave"] .hero-first { padding-top: 9vh; min-height: calc(100svh - 64px); }
+  .wave-tools ul { gap: 12px 22px; }
+  .wave-tools li { font-size: 14px; }
+}
+
+/* review switcher (remove once a hero is chosen) */
+.hero-switch { position: fixed; right: 18px; bottom: 18px; z-index: 50; display: flex; align-items: center; gap: 4px; padding: 5px; border: 1px solid rgba(220,235,247,.18); border-radius: 999px; background: rgba(12,16,20,.86); backdrop-filter: blur(10px); font-size: 13px; }
+.hero-switch span { padding: 0 10px 0 12px; color: #8b98a4; }
+.hero-switch button { padding: 7px 16px; border: 0; border-radius: 999px; background: none; color: #c9d4dd; font: inherit; cursor: pointer; }
+.hero-switch button[aria-pressed="true"] { background: #cfe6ff; color: #0e1a26; }
