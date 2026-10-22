@@ -248,8 +248,13 @@ body { background: #090b0d; }
 .seg.free { transition: flex-grow 1s cubic-bezier(.65,0,.35,1) .55s, background .8s ease .9s, border-color .8s ease .9s, box-shadow .8s ease .9s, opacity .8s ease, filter .8s ease; }
 /* free space lines up last, in turn with the rest */
 .build:not(.cleaned) .seg.free { transition-delay: .55s, .9s, .9s, .9s, calc(300ms + var(--i) * 80ms), calc(300ms + var(--i) * 80ms); }
-.cleaned .seg.free { flex-grow: 112; border: 1px solid rgba(207,230,255,.45); background: linear-gradient(180deg, rgba(207,230,255,.1), rgba(207,230,255,.03)); box-shadow: 0 0 40px -10px rgba(140,196,255,.5); }
-.cleaned .seg.free span { color: #cfe6ff; } .cleaned .seg.free b { color: #fff; }
+.cleaned .seg.free { flex-grow: 112; border: 1px solid #e3f1ff; box-shadow: 0 0 46px -6px rgba(140,196,255,.85), 0 0 16px rgba(160,210,255,.4); }
+/* once it is cleaned, the free space lights up, as it does in the app */
+.seg.free::before { content: ""; position: absolute; inset: 0; opacity: 0; background: linear-gradient(180deg, #e8f3ff, #bcdcff); transition: opacity .8s ease; }
+.cleaned .seg.free::before { opacity: 1; transition-delay: .9s; }
+.seg.free span, .seg.free b { position: relative; transition: color .8s ease; }
+.cleaned .legend .f i { background: #cfe6ff; border: 1px solid #cfe6ff; box-shadow: 0 0 8px #8cc4ff; transition: background .8s ease .9s, box-shadow .8s ease .9s; }
+.cleaned .seg.free span { color: #2c4a68; transition-delay: .9s; } .cleaned .seg.free b { color: #0e1a26; font-weight: 500; transition-delay: .9s; }
 .disk-next, .disk-done { margin: 22px 0 0; text-align: center; font-size: 15px; color: #8b98a4; transition: opacity .6s ease, filter .6s ease; }
 .disk-next { opacity: 0; } .lit .disk-next { opacity: 1; transition-delay: 1.2s; }
 .disk-done { position: absolute; left: 0; right: 0; opacity: 0; filter: blur(6px); }
