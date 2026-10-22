@@ -3,14 +3,13 @@
 (function () {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.body.classList.add('story-page');
-  // review only: the data tunnel (default) or one of the hero photos
+  // review only: the hero photo (someone at work by default)
   var o = document.getElementById('open'), ph = o && o.querySelector('.open-photo');
   function pick(name) {
     if (!o) return;
-    if (name !== 'tunnel') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
+    ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
     o.dataset.photo = name;
     o.querySelectorAll('.photo-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.photo === name)); });
-    if (name === 'tunnel' && window.startTunnel) window.startTunnel();
   }
   if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
   if (/^#(valley|profile|desk|window)$/.test(location.hash)) pick(location.hash.slice(1));
@@ -29,13 +28,16 @@
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
-  var stageAt = 0;            // stops: 0 opening, 1 number, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask
+  var stageAt = 0;            // stops: 0 opening, 1 number, 2 tunnel, 3 disk, 4 disk cleaned, 5 cleaned and held, 6 ask
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
   layers.forEach(function (el, i) { var s = +(el.dataset.stops || 1); starts[i] = N; ends[i] = N + s - 1; N += s; });
   N = Math.max(1, N - 1);
   var disk = document.getElementById('disk');
   var open = document.getElementById('open'), number = document.getElementById('number');
+  var dive = document.getElementById('dive'), diveWords = dive && dive.querySelector('.dive-words');
+  var morph = track && track.querySelector('.morph');
+  var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0;   // read by the tunnel on every frame
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
   if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
@@ -47,13 +49,14 @@
     layers.forEach(function (el, i) {
       var d = stageAt < starts[i] ? stageAt - starts[i] : stageAt > ends[i] ? stageAt - ends[i] : 0;
       var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
-      var out = i === layers.length - 1 ? 0 : clamp((d - 0.2) / 0.4); // and out from 0.2 to 0.6
+      // and out from 0.2 to 0.6; the tunnel stays a little longer, while we fly on into its light
+      var out = i === layers.length - 1 ? 0 : el === dive ? clamp((d - 0.45) / 0.4) : clamp((d - 0.2) / 0.4);
       var o = Math.min(inn, 1 - out);
       el.style.opacity = o.toFixed(3);
-      // the number scrolls up and fades as you move on; the others shrink back and blur
-      var lift = el === number;
-      el.style.filter = 'blur(' + ((1 - inn) * 14 + (lift ? 0 : out * 8)).toFixed(1) + 'px)';
-      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * innerHeight : 28)).toFixed(1) + 'px)';
+      // the number scrolls up and fades as you move on, the tunnel simply fades; the others shrink back and blur
+      var lift = el === number, still = el === dive;
+      el.style.filter = 'blur(' + ((1 - inn) * 14 + (lift || still ? 0 : out * 8)).toFixed(1) + 'px)';
+      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * innerHeight : still ? 0 : 28)).toFixed(1) + 'px)';
       el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
       el.style.visibility = o < 0.01 ? 'hidden' : 'visible';
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
@@ -61,6 +64,31 @@
       if (here[i] && at[i] && Math.abs(d) > 0.7) { at[i] = false; here[i].forEach(function (p) { p[1](); }); }
       if (el === disk && ends[i] > starts[i] && built) setCleaned(stageAt >= starts[i] + 0.5);
     });
+    if (dive) flyIn(stageAt - starts[layers.indexOf(dive)]);
+  }
+  // p is 0 with the tunnel settled and 1 once the disk has arrived (below 0, the tunnel is still on its way in).
+  // We rush in, slow to a glide, then fly on into the light at the far end; the light carries on
+  // as a box that stretches out into the disk bar.
+  function zoomAt(p) { return 1 + 14 * Math.pow(clamp(p), 2.2); }
+  function flyIn(p) {
+    tunnelOn = p > -1 && p < 0.95;
+    tunnelZoom = zoomAt(p);
+    tunnelPush = p > 0 ? p * 10 : -p * 6;
+    if (diveWords) diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : '';
+    if (!morph) return;
+    if (p <= 0.38 || p >= 1) { morph.style.opacity = '0'; return; }
+    // where the tunnel draws its light (centred, a little above the middle), and where the disk bar is now
+    var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * 0.465;
+    var bar = disk.querySelector('.disk-bar').getBoundingClientRect();
+    var t = clamp((p - 0.45) / 0.47), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    morph.style.left = lerp(cx - sz / 2, bar.left, e).toFixed(1) + 'px';
+    morph.style.top = lerp(cy - sz / 2, bar.top, e).toFixed(1) + 'px';
+    morph.style.width = lerp(sz, bar.width, e).toFixed(1) + 'px';
+    morph.style.height = lerp(sz, bar.height, e).toFixed(1) + 'px';
+    morph.style.borderRadius = lerp(4, 18, e).toFixed(1) + 'px';
+    morph.style.background = 'rgba(234,245,255,' + lerp(1, 0.03, ease(t)).toFixed(3) + ')';
+    morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0, ease(t)).toFixed(3) + ')';
+    morph.style.opacity = (clamp((p - 0.38) / 0.07) * (1 - clamp((p - 0.92) / 0.08))).toFixed(3);
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
 
@@ -75,10 +103,14 @@
     var go = function (k) {
       k = Math.max(0, Math.min(N, k));
       var from = scrollY, to = stopY(k), s0 = performance.now(), dur = Math.min(1100, 650 + Math.abs(to - from) / innerHeight * 180);
+      // flying into the light and out as the disk bar is the one step that takes its time
+      var di = layers.indexOf(dive), here0 = stopNow();
+      var long = di >= 0 && Math.min(here0, k) === starts[di] && Math.max(here0, k) === starts[di] + 1;
+      if (long) dur = 2000;
       if (Math.abs(to - from) < 2) return;
       moving = true;
       (function step(now) {
-        var t = clamp((now - s0) / dur), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+        var t = clamp((now - s0) / dur), e = long ? (1 - Math.cos(Math.PI * t)) / 2 : t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         window.scrollTo(0, from + (to - from) * e);
         if (t < 1) requestAnimationFrame(step); else { moving = false; quietUntil = performance.now() + 250; }
       })(s0);
@@ -144,7 +176,7 @@
 
 
 
-  // ---- opening tunnel: flying slowly down a corridor of glowing data ----
+  // ---- the tunnel: flying slowly down a corridor of glowing data ----
   window.startTunnel = function () {
   if (window.startTunnel.done) return; window.startTunnel.done = true;
   var tc = document.getElementById('tunnel');
@@ -152,7 +184,7 @@
   if (!tg) return;
   var tfs = [
     'precision highp float;',
-    'uniform vec2 res; uniform float t; uniform float z0;',
+    'uniform vec2 res; uniform float t; uniform float z0; uniform float zm;',
     'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
     // one wall of data: rows of short lit dashes and specks, drifting past
     'vec3 wall(vec2 q, float dist){',
@@ -175,7 +207,9 @@
     '  return c;',
     '}',
     'void main(){',
-    '  vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;',
+    '  vec2 su = (gl_FragCoord.xy - 0.5 * res) / res.y, dc = vec2(0.0, 0.035);',
+    // zooming in on the light at the far end, which stays where it is and grows
+    '  vec2 uv = (su - dc) / zm + dc;',
     '  vec3 rd = normalize(vec3(uv, 1.25));',
     '  float W = 1.15, F = -0.55, C = 0.95;',
     '  float tx = (sign(rd.x) * W) / rd.x;',
@@ -204,7 +238,7 @@
     '  col += vec3(0.3, 0.62, 1.0) * halo * 0.9 + vec3(0.55, 0.82, 1.0) * door * 1.3 + vec3(0.8, 0.93, 1.0) * door * smoothstep(0.02, 0.0, max(a.x, a.y)) * 0.6;',
     '  col += vec3(0.05, 0.12, 0.25) * exp(-length(uv) * 2.2);',
     '  col = 1.0 - exp(-col * 1.4);',
-    '  col *= 1.0 - 0.45 * pow(length(uv * vec2(0.8, 1.0)), 2.0);',
+    '  col *= 1.0 - 0.45 * pow(length(su * vec2(0.8, 1.0)), 2.0);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n');
@@ -214,7 +248,7 @@
   var tp = tg.createProgram(); tg.attachShader(tp, tv); tg.attachShader(tp, tf); tg.linkProgram(tp); tg.useProgram(tp);
   tg.bindBuffer(tg.ARRAY_BUFFER, tg.createBuffer()); tg.bufferData(tg.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), tg.STATIC_DRAW);
   tg.enableVertexAttribArray(0); tg.vertexAttribPointer(0, 2, tg.FLOAT, false, 0, 0);
-  var tres = tg.getUniformLocation(tp, 'res'), tt = tg.getUniformLocation(tp, 't'), tz = tg.getUniformLocation(tp, 'z0');
+  var tres = tg.getUniformLocation(tp, 'res'), tt = tg.getUniformLocation(tp, 't'), tz = tg.getUniformLocation(tp, 'z0'), tzm = tg.getUniformLocation(tp, 'zm');
   var tresize = function () {
     var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     tc.width = Math.round(tc.clientWidth * dpr); tc.height = Math.round(tc.clientHeight * dpr); tg.viewport(0, 0, tc.width, tc.height);
@@ -223,17 +257,20 @@
   var last = performance.now(), zpos = 0;
   var tframe = function (now) {
     var dt = Math.min(0.05, (now - last) / 1000); last = now;
-    // a slow glide forward that quickens as you scroll towards the number
-    var push = staged ? clamp(stageAt) : clamp(scrollY / innerHeight);
-    zpos += dt * (0.5 + push * 6.0);
-    if ((staged ? stageAt < 1 : scrollY < innerHeight * 1.2) && o && o.dataset.photo === 'tunnel') {
-      tg.uniform2f(tres, tc.width, tc.height); tg.uniform1f(tt, now / 1000); tg.uniform1f(tz, zpos); tg.drawArrays(tg.TRIANGLES, 0, 3);
+    // a slow glide forward, quicker as you arrive and as you fly on into the light
+    zpos += dt * (0.5 + tunnelPush);
+    if (tunnelOn) {
+      tg.uniform2f(tres, tc.width, tc.height); tg.uniform1f(tt, now / 1000); tg.uniform1f(tz, zpos); tg.uniform1f(tzm, tunnelZoom); tg.drawArrays(tg.TRIANGLES, 0, 3);
     }
     if (!reduced) requestAnimationFrame(tframe);
   };
   requestAnimationFrame(tframe);
   };
-  if (o && o.dataset.photo === 'tunnel') window.startTunnel();
+  if (dive) {
+    window.startTunnel();
+    // without the stage (phones, small windows), draw it while its section is in view
+    if (!staged) new IntersectionObserver(function (es) { tunnelOn = es[0].isIntersecting; }).observe(dive);
+  }
 
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {

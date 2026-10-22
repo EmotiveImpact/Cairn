@@ -17,7 +17,7 @@ body { background: #090b0d; }
 .open-main { display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; padding-bottom: 34px; border-bottom: 1px solid rgba(220,235,247,.16); }
 .story-open h1 { margin: 0; font-size: clamp(52px, 6.4vw, 92px); line-height: 1; letter-spacing: -.045em; font-weight: 400; color: #f4f8fb; }
 .story-open h1 b { font-weight: inherit; }
-.open-photo, .open-lead, .open-tunnel { display: none; }
+.open-photo, .open-lead { display: none; }
 .story-open h1 span { display: block; margin-top: 12px; font-size: .42em; line-height: 1.15; letter-spacing: -.03em; font-weight: 300; color: #b9c6d2; }
 .open-cta { flex: 0 0 auto; margin-bottom: 6px; padding: 13px 24px; border: 1px solid rgba(244,248,251,.55); border-radius: 999px; font-size: 15px; color: #f4f8fb; transition: background .3s ease, border-color .3s ease; }
 .open-cta:hover { background: rgba(244,248,251,.1); border-color: #f4f8fb; }
@@ -204,10 +204,6 @@ body { background: #090b0d; }
   .look-photo .open-stats dd { font-size: 11.5px; line-height: 1.4; }
 }
 
-/* the tunnel: a live scene in place of the photo */
-.look-photo[data-photo="tunnel"] .open-photo { display: none; }
-.look-photo[data-photo="tunnel"] .open-tunnel { display: block; position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%; }
-.look-photo[data-photo="tunnel"]::after { background: linear-gradient(to right, rgba(5,8,13,.8), rgba(5,8,13,.35) 40%, transparent 60%), linear-gradient(to top, rgba(5,8,13,.7), transparent 35%); }
 .story-page .header-action { display: inline-flex; align-items: center; gap: 8px; }
 .story-page .header-action .apple { flex: 0 0 auto; margin-top: -2px; }
 
@@ -279,3 +275,12 @@ body:not(.staged) .disk-next { display: none; }
 @media (max-width: 900px) { .look-photo[data-photo="valley"] .open-photo { transform: scale(1.5); transform-origin: 50% 100%; } }
 .look-photo[data-photo="valley"]::after { background: linear-gradient(to top, rgba(7,9,12,.92), rgba(7,9,12,.55) 30%, transparent 55%), linear-gradient(to bottom, rgba(7,9,12,.55), transparent 22%); }
 .look-photo[data-photo="valley"] .open-main { justify-content: flex-end; padding-bottom: 8px; }
+
+/* 2b. the dive: a live tunnel of data, flying on into the light at the far end */
+.story-dive { justify-content: flex-end; padding: 0 0 11vh; overflow: hidden; text-align: center; }
+.story-dive::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; background: linear-gradient(to top, rgba(5,8,13,.85), rgba(5,8,13,.3) 40%, transparent 60%); }
+.dive-tunnel { position: absolute; inset: 0; z-index: -2; display: block; width: 100%; height: 100%; }
+.dive-words h2 { max-width: 820px; margin-inline: auto; font-size: clamp(30px, 3.6vw, 50px); text-shadow: 0 2px 30px rgba(5,8,13,.8); }
+.dive-words h2 span { display: block; }
+/* the light at the end of the tunnel, carried on into the next chapter as the disk bar */
+.morph { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; opacity: 0; border: 1px solid rgba(220,235,247,.1); border-radius: 4px; background: #eaf5ff; box-shadow: 0 0 60px 14px rgba(110,180,255,.55); }
