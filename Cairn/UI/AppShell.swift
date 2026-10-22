@@ -138,11 +138,9 @@ struct AppShell: View {
                     if showFDABanner { fdaBanner }
                     // Shell-owned stores survive navigation.
                     if showResultFilter && supportsResultFilter { resultFilter }
-                    ZStack {
-                        content.id(section)
-                            .transition(.opacity)
-                    }
-                        .animation(shellReduceMotion ? nil : .easeOut(duration: 0.18), value: section)
+                    // Pages switch instantly. An implicit animation here animated every
+                    // frame on the incoming page, so text slid into place on each switch.
+                    content.id(section)
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
                         .overlay(alignment: .topTrailing) { inPanelTools }

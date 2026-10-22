@@ -10,9 +10,7 @@ struct OverviewWorkspace: View {
     var onCleanRecommended: () -> Void = {}
     @State private var period = 30
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Home settles in once: each section fades up a few points in turn, then the graph draws.
-    /// Only opacity and offset change, so nothing else on the page moves.
-    @State private var appeared = false
+    /// Home appears still; only the graph line draws and the number counts.
     @State private var reveal: CGFloat = 0
     @State private var todayPulse = false
     @State private var showHistory = false
@@ -126,11 +124,11 @@ struct OverviewWorkspace: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header.modifier(Rise(on: appeared, order: 0, still: reduceMotion))
-                cleanHero.padding(.top, 14).modifier(Rise(on: appeared, order: 1, still: reduceMotion))
-                graphPanel.padding(.top, 14).modifier(Rise(on: appeared, order: 2, still: reduceMotion))
-                diskCard.padding(.top, 14).modifier(Rise(on: appeared, order: 3, still: reduceMotion))
-                nextTiles.padding(.top, 14).modifier(Rise(on: appeared, order: 4, still: reduceMotion))
+                header
+                cleanHero.padding(.top, 14)
+                graphPanel.padding(.top, 14)
+                diskCard.padding(.top, 14)
+                nextTiles.padding(.top, 14)
             }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 26)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
@@ -142,8 +140,6 @@ struct OverviewWorkspace: View {
         .onAppear {
             refreshAgents()
             drawChart()
-            // Next run loop, after the first layout, so only the entrance animates.
-            DispatchQueue.main.async { appeared = true }
         }
         .onChange(of: period) { _, _ in drawChart() }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await storage.refresh() } } }
@@ -648,14 +644,3 @@ private struct CountingBytesText: View, Animatable {
     }
 }
 
-/// One section of Home settling in: a soft fade and a 6 pt rise, each a moment after the last.
-/// Offset and opacity never change layout, so neighbouring sections stay put.
-private struct Rise: ViewModifier {
-    let on: Bool
-    let order: Int
-    let still: Bool
-    func body(content: Content) -> some View {
-        content.opacity(on || still ? 1 : 0).offset(y: on || still ? 0 : 6)
-            .animation(still ? nil : .timingCurve(0.2, 0.8, 0.2, 1, duration: 0.55).delay(0.07 * Double(order)), value: on)
-    }
-}
