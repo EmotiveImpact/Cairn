@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=14" />
+    <link rel="stylesheet" href="story.css?v=15" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=14" defer></script>
+    <script src="story.js?v=15" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -62,7 +62,8 @@
       </section>
 
       <section class="chapter story-number" id="number" aria-labelledby="number-title">
-        <div class="shell">
+        <canvas class="dive-tunnel" id="tunnel" aria-hidden="true"></canvas>
+        <div class="shell dive-words">
           <p class="label reveal">On a typical developer Mac</p>
           <p class="big-num reveal" aria-label="38.6 gigabytes"><span id="count">0.0</span><small>GB</small></p>
           <h2 id="number-title" class="reveal">That’s what your tools left behind. <span>Build files and caches, made again when needed.</span></h2>
@@ -72,14 +73,6 @@
             <li style="--i:2"><img src="assets/tool-icons/npm.svg" alt="" /><span>node_modules</span><b>9.5 GB</b></li>
             <li style="--i:3"><img src="assets/tool-icons/npm.svg" alt="" /><span>npm cache</span><b>5.1 GB</b></li>
           </ul>
-        </div>
-      </section>
-
-      <section class="chapter story-dive" id="dive" aria-labelledby="dive-title">
-        <canvas class="dive-tunnel" id="tunnel" aria-hidden="true"></canvas>
-        <div class="shell dive-words">
-          <p class="label reveal">How Cairn looks</p>
-          <h2 id="dive-title" class="reveal">It goes through every project on your Mac. <span>Then brings it all back as one clear picture.</span></h2>
         </div>
       </section>
 

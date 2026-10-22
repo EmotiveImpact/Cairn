@@ -28,16 +28,18 @@
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
-  var stageAt = 0;            // stops: 0 opening, 1 number, 2 tunnel, 3 disk, 4 disk cleaned, 5 cleaned and held, 6 ask
+  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
   layers.forEach(function (el, i) { var s = +(el.dataset.stops || 1); starts[i] = N; ends[i] = N + s - 1; N += s; });
   N = Math.max(1, N - 1);
   var disk = document.getElementById('disk');
   var open = document.getElementById('open'), number = document.getElementById('number');
-  var dive = document.getElementById('dive'), diveWords = dive && dive.querySelector('.dive-words');
+  // the chapter with the hallway of data behind it (the number), and its words
+  var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
-  var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0;   // read by the tunnel on every frame
+  var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 1;   // read by the tunnel on every frame
+  var LOW = innerWidth < 760 ? 0.29 : 0.21;             // how far below the middle the hallway's far end sits, as a share of the height
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
   if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; }
@@ -53,8 +55,8 @@
       var out = i === layers.length - 1 ? 0 : el === dive ? clamp((d - 0.45) / 0.4) : clamp((d - 0.2) / 0.4);
       var o = Math.min(inn, 1 - out);
       el.style.opacity = o.toFixed(3);
-      // the number scrolls up and fades as you move on, the tunnel simply fades; the others shrink back and blur
-      var lift = el === number, still = el === dive;
+      // the hallway simply fades (its words lift away, below); the others shrink back and blur
+      var lift = el === number && el !== dive, still = el === dive;
       el.style.filter = 'blur(' + ((1 - inn) * 14 + (lift || still ? 0 : out * 8)).toFixed(1) + 'px)';
       el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * innerHeight : still ? 0 : 28)).toFixed(1) + 'px)';
       el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
@@ -74,11 +76,13 @@
     tunnelOn = p > -1 && p < 0.95;
     tunnelZoom = zoomAt(p);
     tunnelPush = p > 0 ? p * 10 : -p * 6;
-    if (diveWords) diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : '';
+    tunnelDoor = 1 - clamp((p - 0.44) / 0.04);   // once the box has taken over, the hallway stops drawing its own
+    // the words lift up and away first
+    if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * innerHeight).toFixed(1) + 'px)' : ''; }
     if (!morph) return;
     if (p <= 0.38 || p >= 1) { morph.style.opacity = '0'; return; }
     // where the tunnel draws its light (centred, a little above the middle), and where the disk bar is now
-    var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * 0.465;
+    var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * (0.465 + LOW);
     var bar = disk.querySelector('.disk-bar').getBoundingClientRect();
     var t = clamp((p - 0.45) / 0.47), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
     morph.style.left = lerp(cx - sz / 2, bar.left, e).toFixed(1) + 'px';
@@ -184,7 +188,7 @@
   if (!tg) return;
   var tfs = [
     'precision highp float;',
-    'uniform vec2 res; uniform float t; uniform float z0; uniform float zm;',
+    'uniform vec2 res; uniform float t; uniform float z0; uniform float zm; uniform float low; uniform float dr;',
     'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
     // one wall of data: rows of short lit dashes and specks, drifting past
     'vec3 wall(vec2 q, float dist){',
@@ -207,7 +211,7 @@
     '  return c;',
     '}',
     'void main(){',
-    '  vec2 su = (gl_FragCoord.xy - 0.5 * res) / res.y, dc = vec2(0.0, 0.035);',
+    '  vec2 su = (gl_FragCoord.xy - 0.5 * res) / res.y + vec2(0.0, low), dc = vec2(0.0, 0.035);',
     // zooming in on the light at the far end, which stays where it is and grows
     '  vec2 uv = (su - dc) / zm + dc;',
     '  vec3 rd = normalize(vec3(uv, 1.25));',
@@ -235,10 +239,10 @@
     '  vec2 a = abs(uv - vec2(0.0, 0.035));',
     '  float door = smoothstep(0.022, 0.018, max(a.x, a.y));',
     '  float halo = exp(-length(uv - vec2(0.0, 0.035)) * 7.0);',
-    '  col += vec3(0.3, 0.62, 1.0) * halo * 0.9 + vec3(0.55, 0.82, 1.0) * door * 1.3 + vec3(0.8, 0.93, 1.0) * door * smoothstep(0.02, 0.0, max(a.x, a.y)) * 0.6;',
+    '  col += vec3(0.3, 0.62, 1.0) * halo * 0.9 + vec3(0.55, 0.82, 1.0) * door * dr * 1.3 + vec3(0.8, 0.93, 1.0) * door * dr * smoothstep(0.02, 0.0, max(a.x, a.y)) * 0.6;',
     '  col += vec3(0.05, 0.12, 0.25) * exp(-length(uv) * 2.2);',
     '  col = 1.0 - exp(-col * 1.4);',
-    '  col *= 1.0 - 0.45 * pow(length(su * vec2(0.8, 1.0)), 2.0);',
+    '  col *= 1.0 - 0.45 * pow(length((su - vec2(0.0, low)) * vec2(0.8, 1.0)), 2.0);',
     '  gl_FragColor = vec4(col, 1.0);',
     '}'
   ].join('\n');
@@ -248,7 +252,7 @@
   var tp = tg.createProgram(); tg.attachShader(tp, tv); tg.attachShader(tp, tf); tg.linkProgram(tp); tg.useProgram(tp);
   tg.bindBuffer(tg.ARRAY_BUFFER, tg.createBuffer()); tg.bufferData(tg.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), tg.STATIC_DRAW);
   tg.enableVertexAttribArray(0); tg.vertexAttribPointer(0, 2, tg.FLOAT, false, 0, 0);
-  var tres = tg.getUniformLocation(tp, 'res'), tt = tg.getUniformLocation(tp, 't'), tz = tg.getUniformLocation(tp, 'z0'), tzm = tg.getUniformLocation(tp, 'zm');
+  var tres = tg.getUniformLocation(tp, 'res'), tt = tg.getUniformLocation(tp, 't'), tz = tg.getUniformLocation(tp, 'z0'), tzm = tg.getUniformLocation(tp, 'zm'), tlow = tg.getUniformLocation(tp, 'low'), tdr = tg.getUniformLocation(tp, 'dr');
   var tresize = function () {
     var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     tc.width = Math.round(tc.clientWidth * dpr); tc.height = Math.round(tc.clientHeight * dpr); tg.viewport(0, 0, tc.width, tc.height);
@@ -260,7 +264,7 @@
     // a slow glide forward, quicker as you arrive and as you fly on into the light
     zpos += dt * (0.5 + tunnelPush);
     if (tunnelOn) {
-      tg.uniform2f(tres, tc.width, tc.height); tg.uniform1f(tt, now / 1000); tg.uniform1f(tz, zpos); tg.uniform1f(tzm, tunnelZoom); tg.drawArrays(tg.TRIANGLES, 0, 3);
+      tg.uniform2f(tres, tc.width, tc.height); tg.uniform1f(tt, now / 1000); tg.uniform1f(tz, zpos); tg.uniform1f(tzm, tunnelZoom); tg.uniform1f(tlow, LOW); tg.uniform1f(tdr, tunnelDoor); tg.drawArrays(tg.TRIANGLES, 0, 3);
     }
     if (!reduced) requestAnimationFrame(tframe);
   };
