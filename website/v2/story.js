@@ -366,6 +366,13 @@
   // the rest of your Mac: its rows come in each time it settles, and go once it has gone
   var more = document.getElementById('features');
   whenHere(more, function () { more.classList.add('shown'); }, function () { more.classList.remove('shown'); });
+  // review only: try the other stacks of stones under its words
+  if (more) more.querySelectorAll('.stone-switch button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      more.dataset.stones = b.dataset.stones;
+      more.querySelectorAll('.stone-switch button').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+    });
+  });
 
   // the count runs once the number chapter has settled, and again each time you come back to it
   var count = document.getElementById('count'), run = 0;
