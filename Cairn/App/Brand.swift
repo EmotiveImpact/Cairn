@@ -98,7 +98,7 @@ enum Elevation {
 struct EyebrowModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
-            .font(.system(size: 10, weight: .heavy)).tracking(1.4)
+            .font(.system(size: 10.5, weight: .regular)).tracking(1.4)
             .foregroundStyle(Brand.textMuted).textCase(.uppercase)
     }
 }

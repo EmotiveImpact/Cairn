@@ -3,9 +3,11 @@ import SwiftUI
 /// Approved component treatment, shared by workspaces, sheets and legacy CTAs.
 /// Feedback changes the surface only; labels never shrink or move.
 struct ControlPanelButtonStyle: ButtonStyle {
+    enum Size { case small, regular, large }
     var primary = false
+    var size: Size = .regular
     func makeBody(configuration: Configuration) -> some View {
-        CairnControlSurface(label: configuration.label, primary: primary, pressed: configuration.isPressed)
+        CairnControlSurface(label: configuration.label, primary: primary, pressed: configuration.isPressed, size: size)
     }
 }
 
@@ -15,25 +17,26 @@ struct CairnControlSurface<Label: View>: View {
     var pressed = false
     var available = true
     var prominent = false
+    var size: ControlPanelButtonStyle.Size = .regular
     @Environment(\.isEnabled) private var isEnabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorSchemeContrast) private var contrast
     @State private var hovered = false
     private var enabled: Bool { isEnabled && available }
     var body: some View {
-        label.font(.system(size: 12, weight: primary ? .semibold : .medium))
-            .padding(.horizontal, 13).frame(minHeight: 32)
+        label.font(.system(size: size == .large ? 13 : 12, weight: primary ? .semibold : .medium))
+            .padding(.horizontal, size == .large ? 16 : 12).frame(minHeight: size == .large ? 34 : size == .small ? 28 : 32)
             .frame(maxWidth: prominent ? .infinity : nil)
             .foregroundStyle(primary && enabled ? Brand.onRoom : Brand.textPrimary)
             .background {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(primary && enabled ? AnyShapeStyle(Brand.room) : AnyShapeStyle(Brand.wash(hovered && enabled ? 0.10 : 0.065)))
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .fill(primary && enabled ? AnyShapeStyle(Brand.room) : AnyShapeStyle(Brand.wash(hovered && enabled ? 0.05 : 0)))
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
                     .fill(Brand.wash(enabled && (pressed || (primary && hovered)) ? 0.06 : 0))
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Brand.wash(contrast == .increased ? 0.45 : primary && enabled ? 0.14 : 0.06), lineWidth: 0.5)
+                RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    .strokeBorder(Brand.wash(contrast == .increased ? 0.45 : primary && enabled ? 0 : 0.10), lineWidth: 1)
             }
             .opacity(enabled ? 1 : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: 7))

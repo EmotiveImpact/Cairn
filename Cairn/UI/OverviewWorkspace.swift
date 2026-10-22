@@ -122,10 +122,10 @@ struct OverviewWorkspace: View {
             VStack(alignment: .leading, spacing: 0) {
                 header
                 cleanHero.padding(.top, 14)
-                graphPanel.padding(.top, 16)
-                diskCard.padding(.top, 16)
-                nextTiles.padding(.top, 22)
-            }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 20)
+                graphPanel.padding(.top, 14)
+                diskCard.padding(.top, 14)
+                nextTiles.padding(.top, 14)
+            }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 26)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
@@ -161,10 +161,10 @@ struct OverviewWorkspace: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     Text(Fmt.size(store.grandTotal))
-                        .font(.system(size: 62, weight: .light)).tracking(-2.5).monospacedDigit()
+                        .font(.system(size: 58, weight: .light)).tracking(-2.3).monospacedDigit()
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.3), value: store.grandTotal)
-                    Text("found so far").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
+                    Text("found so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -180,25 +180,24 @@ struct OverviewWorkspace: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         Text(Fmt.size(recommendedBytes))
-                            .font(.system(size: 62, weight: .light)).tracking(-2.5).monospacedDigit()
+                            .font(.system(size: 58, weight: .light)).tracking(-2.3).monospacedDigit()
                             .contentTransition(.numericText())
-                        Text("you can get back").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
+                        Text("you can get back").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                     }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
-                        .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
-                        .padding(.top, 6)
+                        .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                        .padding(.top, 8)
                     HStack(spacing: 10) {
                         Button { onCleanRecommended() } label: {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
                         }
-                        .buttonStyle(ControlPanelButtonStyle(primary: true))
-                        .controlSize(.large)
+                        .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                         .disabled(preview || store.isCleaning)
                         .help("Check the list once, then free the space")
                         Button("See everything") { onOpen(.smartScan) }
-                            .buttonStyle(ControlPanelButtonStyle())
-                    }.padding(.top, 16)
+                            .buttonStyle(ControlPanelButtonStyle(size: .large))
+                    }.padding(.top, 14)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
@@ -206,32 +205,32 @@ struct OverviewWorkspace: View {
             // Same big, open type as the result. No box: just say what is missing and offer the scan.
             VStack(alignment: .leading, spacing: 0) {
                 Text(store.phase == .cancelled ? "Finish the scan" : "Find what you can get back")
-                    .font(.system(size: 44, weight: .light)).tracking(-1.4)
+                    .font(.system(size: 44, weight: .light)).tracking(-1.8)
                 Text(store.phase == .cancelled
                      ? "The last scan was stopped early, so Cairn can't give you a number yet. A full scan takes a minute or two."
                      : "A scan takes a minute or two. Nothing is removed until you review it.")
-                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
-                    .padding(.top, 6)
+                    .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                    .padding(.top, 8)
                 HStack(spacing: 10) {
                     Button { scan() } label: { Text("Scan this Mac").frame(minWidth: 140) }
-                        .buttonStyle(ControlPanelButtonStyle(primary: true)).controlSize(.large)
+                        .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                         .disabled(preview || store.isCleaning)
-                    Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle())
-                }.padding(.top, 16)
+                    Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle(size: .large))
+                }.padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("All tidy").font(.system(size: 62, weight: .light)).tracking(-2.5)
-                    Text("nothing to get back right now").font(.system(size: 19)).foregroundStyle(Brand.textSecondary)
+                    Text("All tidy").font(.system(size: 58, weight: .light)).tracking(-2.3)
+                    Text("nothing to get back right now").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 }
                 Text("Your caches and build files are already small. Cairn will show a number here when they grow.")
-                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 520, alignment: .leading)
-                    .padding(.top, 6)
-                Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle()).padding(.top, 16)
+                    .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                    .padding(.top, 8)
+                Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle(size: .large)).padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -243,18 +242,19 @@ struct OverviewWorkspace: View {
             let total = Double(capacity.total)
             let used = max(0, capacity.total - capacity.available)
             let ready = min(store.isScanning ? 0 : recommendedBytes, used)
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 9) {
                 HStack(alignment: .firstTextBaseline) {
-                    Text("\(Fmt.size(capacity.available)) free of \(Fmt.size(capacity.total))")
-                        .font(.system(size: 14, weight: .semibold)).monospacedDigit()
+                    (Text(Fmt.size(capacity.available)).fontWeight(.medium).foregroundStyle(Brand.textPrimary)
+                     + Text(" free of \(Fmt.size(capacity.total))").foregroundStyle(Brand.textMuted))
+                        .font(.system(size: 12.5)).monospacedDigit()
                     Spacer()
                     if ready > 0 {
                         (Text("After freeing: ").foregroundStyle(Brand.textMuted)
-                         + Text("\(Fmt.size(capacity.available + ready)) free").foregroundStyle(Brand.room).fontWeight(.semibold))
-                            .font(.system(size: 13)).monospacedDigit()
+                         + Text("\(Fmt.size(capacity.available + ready)) free").foregroundStyle(Brand.room).fontWeight(.medium))
+                            .font(.system(size: 12.5)).monospacedDigit()
                     } else if let reserve = shownReserve {
                         Text(capacity.available >= reserve ? "Above your \(Fmt.size(reserve)) reserve" : "\(Fmt.size(reserve - capacity.available)) below your reserve")
-                            .font(.system(size: 12)).foregroundStyle(capacity.available >= reserve ? Brand.textMuted : Brand.amber)
+                            .font(.system(size: 12.5)).foregroundStyle(capacity.available >= reserve ? Brand.textMuted : Brand.amber)
                     }
                 }
                 GeometryReader { geo in
@@ -303,26 +303,26 @@ struct OverviewWorkspace: View {
     }
     private func card<Content: View>(_ eyebrow: String, _ link: String?, _ action: @escaping () -> Void, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(eyebrow).eyebrow().padding(.bottom, 2)
+            Text(eyebrow).eyebrow()
             content()
-            if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 2) }
+            if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 4) }
         }
-        .padding(.top, 14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .padding(.top, 12).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
     }
     private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
         card(eyebrow, link, action) {
-            Text(title).font(.system(size: 13.5, weight: .semibold)).lineLimit(1)
-            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+            Text(title).font(.system(size: 13.5, weight: .medium)).lineLimit(1)
+            Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
         }
     }
     private func logoRow<Trailing: View>(_ logo: String?, _ fallback: String, _ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
-        HStack(spacing: 9) {
-            BrandLogo(name: logo, fallback: fallback, size: 20)
-            Text(title).font(.system(size: 13)).lineLimit(1)
+        HStack(spacing: 10) {
+            BrandLogo(name: logo, fallback: fallback, size: 24)
+            Text(title).font(.system(size: 13)).foregroundStyle(Brand.textPrimary.opacity(0.94)).lineLimit(1)
             Spacer(minLength: 6)
             trailing()
-        }.frame(height: 28)
+        }.padding(.vertical, 4)
     }
 
     /// The folders that grew most since the previous measurement.
@@ -341,8 +341,8 @@ struct OverviewWorkspace: View {
         let rows = growth
         return card("Grew recently", "See what changed", { onOpen(.changes) }) {
             if rows.isEmpty {
-                Text("No growth measured yet").font(.system(size: 13.5, weight: .semibold))
-                Text("Cairn compares folder sizes between scans.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+                Text("No growth measured yet").font(.system(size: 13.5, weight: .medium))
+                Text("Cairn compares folder sizes between scans.").font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
             } else {
                 ForEach(rows) { row in
                     logoRow(row.logo, row.icon, row.title) {
@@ -381,8 +381,8 @@ struct OverviewWorkspace: View {
         let tools = shownAgents
         return card("Your AI coding tools", tools.isEmpty ? "AI tools settings" : nil, { onOpen(.settings) }) {
             if tools.isEmpty {
-                Text("No coding tools found").font(.system(size: 13.5, weight: .semibold))
-                Text("Claude Code, Codex, Cursor and others can ask Cairn what is using space.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary).lineLimit(2)
+                Text("No coding tools found").font(.system(size: 13.5, weight: .medium))
+                Text("Claude Code, Codex, Cursor and others can ask Cairn what is using space.").font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
             } else {
                 ForEach(tools) { tool in
                     logoRow(BrandLogo.forAgent(tool.id), "chevron.left.forwardslash.chevron.right", tool.title) {
@@ -399,7 +399,7 @@ struct OverviewWorkspace: View {
                     }
                 }
                 Text(agentMessage ?? "Try asking: \u{201C}What\u{2019}s taking up space on my Mac?\u{201D}")
-                    .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted).lineLimit(2).padding(.top, 2)
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2).padding(.top, 4)
             }
         }
     }
@@ -428,7 +428,7 @@ struct OverviewWorkspace: View {
     private var graphPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
-                Text("Free space · last \(period) days").eyebrow()
+                Text("Free space · last \(period) days").eyebrow().font(.system(size: 11)).tracking(1.5)
                 if let text = forecastText {
                     Text(text).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.leading, 8)
                 }
@@ -444,9 +444,9 @@ struct OverviewWorkspace: View {
             }
             historySection
         }
-        .padding(.horizontal, 18).padding(.vertical, 13)
-        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
-        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
+        .padding(.horizontal, 16).padding(.top, 14).padding(.bottom, 10)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Brand.wash(0.02)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
     }
     /// Cleans that released space inside the chart's period.
     private struct CleanMark: Identifiable { let date: Date; let available: Double; var id: Date { date } }
@@ -483,21 +483,21 @@ struct OverviewWorkspace: View {
     }
     private var header: some View {
         HStack(alignment: .center) {
-            Text("This Mac").font(.system(size: 17)).foregroundStyle(Brand.textSecondary)
-            if let drive = externalDrive { drivePill(drive).padding(.leading, 12) }
+            Text("This Mac").font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textSecondary)
+            if let drive = externalDrive { drivePill(drive).padding(.leading, 14) }
             Spacer()
             HStack(spacing: 8) {
                 Button { scan() } label: {
                     Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
-                }.buttonStyle(ControlPanelButtonStyle())
+                }.buttonStyle(ControlPanelButtonStyle(size: .small))
                     .keyboardShortcut("r", modifiers: .command)
                     .disabled(preview || store.isCleaning)
                     .help(preview ? "Scanning is disabled in this sample preview." : "Scan this Mac (⌘R)")
                 Button("Make room") { onOpen(.makeRoom) }
-                    .buttonStyle(ControlPanelButtonStyle())
+                    .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .help("Choose an available-space target and review your options")
                 Button("History") { showHistory = true }
-                    .buttonStyle(ControlPanelButtonStyle())
+                    .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .help("Available space over the last week or month")
             }
         }
@@ -557,9 +557,9 @@ struct OverviewWorkspace: View {
                 .chartYScale(domain: chartLow...chartHigh)
                 .chartYAxis { AxisMarks(position: .leading, values: .automatic(desiredCount: 4)) { value in
                     AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [3, 3])).foregroundStyle(Brand.separator)
-                    AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB") } }
+                    AxisValueLabel { if let gb = value.as(Double.self) { Text("\(Int(gb)) GB").font(.system(size: 10.5)).foregroundStyle(Brand.textMuted.opacity(0.75)) } }
                 } }
-                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)) } }
+                .chartXAxis { AxisMarks(values: .automatic(desiredCount: 4)) { _ in AxisValueLabel(format: .dateTime.day().month(.abbreviated)).font(.system(size: 10.5)).foregroundStyle(Brand.textMuted.opacity(0.75)) } }
                 .frame(height: chartHeight)
                 .accessibilityLabel("Available space from \(Fmt.size(first.available)) to \(Fmt.size(last.available))")
                 CapacityChartReadout(text: selectedDetail)
