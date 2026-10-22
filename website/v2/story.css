@@ -404,6 +404,8 @@ body:not(.staged) .disk-next { display: none; }
   .story-more .more-also { grid-area: also; margin-top: 0; }
   .story-more h2 { font-size: clamp(30px, 2.6vw, 36px); }
   .story-more h2 span { display: block; }
+  /* a stack of stones fills the quiet space under the words */
+  .story-more::before { content: ""; position: absolute; z-index: -1; inset: auto auto 3svh calc(max(32px, (100% - 1260px) / 2) + 200px - min(26svh, 260px)); width: min(52svh, 520px); height: min(52svh, 520px); background: url(assets/more-stones.webp) center / cover no-repeat; -webkit-mask-image: radial-gradient(closest-side, #000 55%, transparent); mask-image: radial-gradient(closest-side, #000 55%, transparent); opacity: .9; pointer-events: none; }
 }
 /* on the stage the rows come in one after another once the words have settled, each time you arrive */
 .staged .stage > .story-more .more-list li, .staged .stage > .story-more .more-also { transition: opacity .8s ease, filter .8s ease; transition-delay: calc(250ms + var(--i, 4) * 140ms); }
