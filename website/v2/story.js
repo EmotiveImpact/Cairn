@@ -29,7 +29,7 @@
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   // phones held upright get the stack too; only short, wide windows (a phone on its side) scroll as a plain page
   var staged = !!track && !reduced && innerHeight >= 520 && (innerWidth >= 760 || innerHeight > innerWidth);
-  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask (6 its chat, on a phone)
+  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask (and its chat, on a phone), then the app's Home, Projects and Activity
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
   var ask = document.getElementById('ask'), askSplit = staged && innerWidth < 760 && !!ask;   // on a phone, its words first, then the chat
@@ -41,6 +41,9 @@
   // the chapter with the hallway of data behind it (the number), and its words
   var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
+  // the app, whose window the chat's "Review in Cairn" button grows into
+  var app = document.getElementById('app'), morphApp = track && track.querySelector('.morph-app');
+  var appWin = app && app.querySelector('.night-window'), askBtn = ask && ask.querySelector('.ask-btns .p');
   var tunnelOn = false, tunnelZoom = 1, tunnelPush = 0, tunnelDoor = 0;   // read by the tunnel on every frame
   var diskUp = false;         // the disk bar's sections have lined up
   var LOW = 0.035;           // drops the hallway's far end to the very middle of the screen (a share of its height)
@@ -70,8 +73,10 @@
       if (here[i] && at[i] && Math.abs(d) > 0.7) { at[i] = false; here[i].forEach(function (p) { p[1](); }); }
       if (el === disk && ends[i] > starts[i] && built) setCleaned(stageAt >= starts[i] + 0.5);
       if (el === ask && askSplit) chatUp(stageAt >= starts[i] + 0.5);
+      if (el === app && ends[i] > starts[i]) showShot(Math.round(Math.min(Math.max(stageAt - starts[i], 0), ends[i] - starts[i])));
     });
     if (dive) flyIn(stageAt - starts[layers.indexOf(dive)]);
+    if (app && ask) toApp(stageAt - ends[layers.indexOf(ask)]);
   }
   // p is 0 with the tunnel settled and 1 once the disk has arrived (below 0, the tunnel is still on its way in).
   // We rush in, slow to a glide, then fly on into the light at the far end; the light carries on
@@ -105,6 +110,28 @@
     morph.style.boxShadow = '0 0 60px 14px rgba(110,180,255,' + lerp(0.55, 0.4, e).toFixed(3) + ')';
     morph.style.opacity = o.toFixed(3);
   }
+  // q is 0 on the chat and 1 once the app has arrived. The chat's "Review in Cairn" button lights up and carries on
+  // as a box that grows into the app's window; only once it has landed do the words, the window and its steps show.
+  var appUp = false;
+  function toApp(q) {
+    if (!morphApp || !askBtn || !appWin) return;
+    if (q > 0.99 && !appUp) setApp(true);
+    else if (q < 0.98 && appUp) setApp(false);
+    var o = appUp || q <= 0 ? 0 : clamp(q / 0.1);
+    if (o === 0) { morphApp.style.opacity = '0'; return; }
+    var a = askBtn.getBoundingClientRect(), w = appWin.getBoundingClientRect();
+    var t = clamp((q - 0.12) / 0.7), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    morphApp.style.left = lerp(a.left, w.left, e).toFixed(1) + 'px';
+    morphApp.style.top = lerp(a.top, w.top, e).toFixed(1) + 'px';
+    morphApp.style.width = lerp(a.width, w.width, e).toFixed(1) + 'px';
+    morphApp.style.height = lerp(a.height, w.height, e).toFixed(1) + 'px';
+    morphApp.style.borderRadius = lerp(9, 14, e).toFixed(1) + 'px';
+    morphApp.style.opacity = o.toFixed(3);
+  }
+  function setApp(on) {
+    appUp = on; app.classList.toggle('panel-up', on);
+    morphApp.classList.add('melt'); setTimeout(function () { morphApp.classList.remove('melt'); }, 900);
+  }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
 
   // one flick, one stop: inside the stack, a wheel, swipe or key press moves exactly one stop,
@@ -121,7 +148,10 @@
       // flying into the light and out as the disk bar is the one step that takes its time
       var di = layers.indexOf(dive), here0 = stopNow();
       var long = di >= 0 && Math.min(here0, k) === starts[di] && Math.max(here0, k) === starts[di] + 1;
+      // and so is the chat's button growing into the app
+      var ai = layers.indexOf(app), intoApp = ai > 0 && Math.min(here0, k) === ends[ai - 1] && Math.max(here0, k) === starts[ai];
       if (long) dur = 2000;
+      if (intoApp) { long = true; dur = 1800; }
       if (Math.abs(to - from) < 2) return;
       moving = true;
       (function step(now) {
@@ -289,17 +319,24 @@
     if (!staged) new IntersectionObserver(function (es) { tunnelOn = es[0].isIntersecting; }).observe(dive);
   }
 
-  // the app: each step under the panel shows its screen
+  // the app: each step under the panel shows its screen; on the stage each one is a stop of its own
   var shot = document.querySelector('.story-app .product-screen'), shotImg = shot && shot.querySelector('img');
-  document.querySelectorAll('.app-steps button').forEach(function (b) {
-    b.addEventListener('click', function () {
-      document.querySelectorAll('.app-steps button').forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
-      var src = 'assets/app-night-' + b.dataset.shot + '.png';
-      shot.href = src; shot.dataset.preview = b.dataset.key;
-      shotImg.style.opacity = '0';
-      setTimeout(function () { shotImg.onload = function () { shotImg.style.opacity = '1'; }; shotImg.src = src; shotImg.alt = b.dataset.alt; }, 250);
-    });
+  var stepBtns = [].slice.call(document.querySelectorAll('.app-steps button')), shotAt = 0;
+  function showShot(n) {
+    var b = stepBtns && stepBtns[n];   // (the stage can ask before the steps are wired up)
+    if (!b || n === shotAt) return;
+    shotAt = n;
+    stepBtns.forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
+    var src = 'assets/app-night-' + b.dataset.shot + '.png';
+    shot.href = src; shot.dataset.preview = b.dataset.key;
+    shotImg.style.opacity = '0';
+    setTimeout(function () { if (shotAt !== n) return; shotImg.onload = function () { shotImg.style.opacity = '1'; }; shotImg.src = src; shotImg.alt = b.dataset.alt; }, 250);
+  }
+  stepBtns.forEach(function (b, n) {
+    b.addEventListener('click', function () { if (staged && go) go(starts[layers.indexOf(app)] + n); else showShot(n); });
   });
+  // fetch the other screens ahead, so each step changes at once
+  stepBtns.forEach(function (b) { new Image().src = 'assets/app-night-' + b.dataset.shot + '.png'; });
 
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {

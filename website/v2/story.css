@@ -336,3 +336,25 @@ body:not(.staged) .disk-next { display: none; }
 .story-page .feature-grid article, .story-page .feature-grid article:hover { padding: 24px 0 0; border: 0; border-top: 1px solid rgba(220,235,247,.1); border-radius: 0; background: none; box-shadow: none; }
 .story-page .feature-grid h3 { flex-direction: row; align-items: center; gap: 12px; font-size: 19px; }
 .story-page .feature-grid .feature-icon { width: 18px; height: 18px; padding: 0; border: 0; background: none; color: #8f9caa; }
+
+/* ---------- the app as the story's last chapter: the chat's button grows into its window ---------- */
+.morph-app { background: #cfe6ff; border: 0; box-shadow: 0 0 44px 8px rgba(140,196,255,.5); }
+.staged .stage > .story-app { padding: 88px 0 28px; overflow: hidden; }
+.staged .stage > .story-app .app-photo { inset: 0; height: 100%; }
+.staged .stage > .story-app .app-photo::after { background: linear-gradient(to bottom, var(--night) 0%, rgba(9,11,13,.5) 14%, rgba(9,11,13,.12) 40%, rgba(9,11,13,.18) 62%, rgba(9,11,13,.78) 82%, var(--night) 100%); }   /* the steps read clearly over the stones */
+.staged .stage > .story-app .hero-layout { padding-block: 0; }
+.staged .stage > .story-app .product-composition { width: min(100%, calc((100svh - 440px) * 1.556)); margin: 3vh auto 0; }
+.staged .stage > .story-app .night-window { transform: none; }
+.staged .stage > .story-app .app-steps { margin-top: 22px; }
+.story-app .product-composition .app-steps { display: grid; }
+.staged .stage > .story-app .hero-copy h2 { font-size: clamp(30px, 3.4vw, 46px); }
+.staged .stage > .story-app .app-sample { margin-top: 10px; }
+/* nothing of it shows until the box has landed as its window */
+.staged .stage > .story-app .hero-copy, .staged .stage > .story-app .night-window, .staged .stage > .story-app .app-steps, .staged .stage > .story-app .app-sample { transition: opacity .8s ease, filter .8s ease; }
+.staged .stage > .story-app:not(.panel-up) .hero-copy, .staged .stage > .story-app:not(.panel-up) .night-window, .staged .stage > .story-app:not(.panel-up) .app-steps, .staged .stage > .story-app:not(.panel-up) .app-sample { opacity: 0; filter: blur(8px); }
+.staged .stage > .story-app.panel-up .app-steps { transition-delay: .3s; }
+/* on a phone the swipes step through the screens, so only the one showing keeps its caption */
+@media (max-width: 759px) {
+  .staged .stage > .story-app .app-steps button:not([aria-selected="true"]) { display: none; }
+  .staged .stage > .story-app .product-composition { width: min(100%, calc(100svh - 380px)); }
+}
