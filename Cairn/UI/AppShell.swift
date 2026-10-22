@@ -51,6 +51,18 @@ enum NavSection: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The mockup's own line icon for the top-level sidebar rows.
+    var glyph: SidebarIcon.Glyph? {
+        switch self {
+        case .dashboard: return .home
+        case .projects: return .projects
+        case .apps: return .apps
+        case .activity: return .activity
+        case .settings: return .settings
+        default: return nil
+        }
+    }
+
     /// Sections that open an existing sheet rather than routing content.
     var opensSheet: Bool { false }
 
@@ -552,8 +564,8 @@ struct NavSidebar: View {
                 VStack(spacing: 4) {
                     NavRow(item: .dashboard, section: $section)
                     NavRow(item: .projects, section: $section)
-                    SidebarDisclosure(title: "Clean", icon: "plus", items: cleanItems, section: $section)
-                    SidebarDisclosure(title: "Files", icon: "doc", items: fileItems, section: $section)
+                    SidebarDisclosure(title: "Clean", glyph: .clean, items: cleanItems, section: $section)
+                    SidebarDisclosure(title: "Files", glyph: .files, items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)
                     NavRow(item: .activity, section: $section, also: [.changes])
                         .help("Free space over time, cleanup receipts and recovery")
@@ -573,7 +585,7 @@ struct NavSidebar: View {
 /// opening reserves space first; closing releases it only after the fade ends.
 private struct SidebarDisclosure: View {
     let title: String
-    let icon: String
+    let glyph: SidebarIcon.Glyph
     let items: [NavSection]
     @Binding var section: NavSection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -589,7 +601,7 @@ private struct SidebarDisclosure: View {
                 manuallyExpanded = expanded
             } label: {
                 HStack(spacing: 11) {
-                    Image(systemName: icon).font(.system(size: 15, weight: .light))
+                    SidebarIcon(glyph: glyph)
                         .frame(width: 21).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
                     Text(title).font(.system(size: 14, weight: .regular)).foregroundStyle(Brand.textSecondary)
                     Spacer(minLength: 0)
@@ -668,10 +680,12 @@ private struct NavRow: View {
         } label: {
             HStack(spacing: 11) {
                 if !child {
-                    Image(systemName: item.icon)
-                        .font(.system(size: 15, weight: .light))
-                        .foregroundStyle(selected ? Brand.room : Brand.textSecondary)
-                        .frame(width: 21)
+                    Group {
+                        if let glyph = item.glyph { SidebarIcon(glyph: glyph) }
+                        else { Image(systemName: item.icon).font(.system(size: 15, weight: .light)) }
+                    }
+                    .foregroundStyle(selected ? Brand.room : Brand.textSecondary)
+                    .frame(width: 21)
                 }
                 Text(label ?? item.title).lineLimit(1)
                     .font(.system(size: child ? 13 : 14, weight: .regular))
