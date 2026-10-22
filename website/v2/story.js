@@ -349,7 +349,15 @@
       if (staged) stage(); else setTimeout(function () { setCleaned(true); }, reduced ? 0 : 2600);
     }, reduced ? 0 : 1900);
   }
-  if (!staged) once(disk, 0.4, buildDisk);
+  // without the stage, the bar lines up once it has come well up the screen, not as it peeks in at the bottom
+  if (!staged) {
+    if (reduced) buildDisk();
+    else {
+      var diskBar = disk.querySelector('.disk-bar');
+      var whenUp = function () { if (diskBar.getBoundingClientRect().bottom < innerHeight * 0.7) { removeEventListener('scroll', whenUp); buildDisk(); } };
+      addEventListener('scroll', whenUp, { passive: true }); whenUp();
+    }
+  }
 
   // chat tabs: the same answer in whichever tool you use
   document.querySelectorAll('.chat-tabs button').forEach(function (b) {
