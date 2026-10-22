@@ -3,19 +3,25 @@
 (function () {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.body.classList.add('story-page');
-  // review only: the data tunnel (default), each hero photo, or the earlier swirl
+  // review only: the data tunnel (default) or one of the hero photos
   var o = document.getElementById('open'), ph = o && o.querySelector('.open-photo');
   function pick(name) {
     if (!o) return;
-    o.classList.toggle('look-photo', name !== 'swirl');
-    if (name !== 'swirl' && name !== 'tunnel') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
+    if (name !== 'tunnel') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
     o.dataset.photo = name;
     o.querySelectorAll('.photo-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.photo === name)); });
-    if (name === 'swirl' && window.startScene) window.startScene();
     if (name === 'tunnel' && window.startTunnel) window.startTunnel();
   }
   if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
-  if (/^#(profile|desk|window|swirl)$/.test(location.hash)) pick(location.hash.slice(1));
+  if (/^#(profile|desk|window)$/.test(location.hash)) pick(location.hash.slice(1));
+  // review only: the floating pill menu, or the earlier full-width bar
+  function menu(style) {
+    document.body.classList.toggle('menu-bar', style === 'bar');
+    document.querySelectorAll('.menu-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.menu === style)); });
+    try { localStorage.setItem('cairn-menu', style); } catch (e) {}
+  }
+  document.querySelectorAll('.menu-switch button').forEach(function (b) { b.addEventListener('click', function () { menu(b.dataset.menu); }); });
+  try { if (localStorage.getItem('cairn-menu') === 'bar') menu('bar'); } catch (e) {}
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -80,79 +86,6 @@
 
 
 
-  // ---- opening scene: a dusk sky with a slow swirl of light over dark hills ----
-  window.startScene = function () {
-  if (window.startScene.done) return; window.startScene.done = true;
-  var scene = document.getElementById('scene');
-  var sg = scene && scene.getContext('webgl', { premultipliedAlpha: false, antialias: false });
-  if (sg) {
-    var sfs = [
-      'precision highp float;',
-      'uniform vec2 res; uniform float t;',
-      'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
-      'float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
-      '  return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }',
-      'float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * n(p); p *= 2.03; a *= 0.5; } return v; }',
-      'void main(){',
-      '  vec2 uv = gl_FragCoord.xy / res; float ar = res.x / res.y;',
-      '  float hz = 0.5;',
-      // sky: deep blue above, soft lavender haze at the horizon
-      '  vec3 col = mix(vec3(0.30, 0.34, 0.47), vec3(0.06, 0.08, 0.13), smoothstep(hz, 1.05, uv.y));',
-      '  col += vec3(0.10, 0.10, 0.16) * fbm(vec2(uv.x * 2.0 + t * 0.006, uv.y * 5.0)) * smoothstep(1.0, hz, uv.y);',
-      // the swirl: rings of light in perspective, turning faster near the middle
-      '  vec2 c = vec2(0.56, 0.66); vec2 q = uv - c; q.x *= ar; q.y /= 0.21;',
-      '  float r = length(q), a = atan(q.y, q.x);',
-      '  float a2 = a + t * 0.06 / (r + 0.25) + r * 2.2;',
-      '  float ring = pow(0.5 + 0.5 * sin(r * 150.0 + fbm(vec2(cos(a2), sin(a2)) * 1.6 + r * 4.0) * 8.0), 34.0);',
-      '  float arcs = smoothstep(0.38, 0.8, fbm(vec2(cos(a2), sin(a2)) * 3.2 + vec2(r * 14.0, -r * 9.0)));',
-      '  float env = smoothstep(0.08, 0.3, r) * exp(-pow(max(r - 0.35, 0.0) * 2.4, 2.0)) * smoothstep(1.2, 0.5, r);',
-      '  float glow = exp(-r * r * 6.0) * 0.35;',
-      '  float sw = (ring * arcs * 1.9 + arcs * 0.12 + glow) * env + glow * 0.4;',
-      '  sw *= smoothstep(hz - 0.02, hz + 0.06, uv.y);',
-      '  col += vec3(0.80, 0.88, 1.0) * sw;',
-      // a calm, misty plain under the horizon
-      '  float plain = smoothstep(hz + 0.005, hz - 0.005, uv.y);',
-      '  vec3 pc = mix(vec3(0.22, 0.25, 0.36), vec3(0.12, 0.14, 0.21), smoothstep(hz, hz - 0.2, uv.y));',
-      '  pc += 0.05 * fbm(vec2(uv.x * 8.0 - t * 0.01, uv.y * 40.0));',
-      '  col = mix(col, pc, plain);',
-      '  col += vec3(0.20, 0.22, 0.32) * exp(-pow((uv.y - hz) * 22.0, 2.0)) * 0.6;',
-      // dark rolling hills in front
-      '  float hill = 0.30 + 0.07 * fbm(vec2(uv.x * 2.2 + 3.0, 1.0)) - 0.14 * pow(abs(uv.x - 0.6), 1.6) + 0.012 * n(vec2(uv.x * 60.0, 2.0));',
-      '  float hm = smoothstep(hill + 0.004, hill - 0.004, uv.y);',
-      '  float tex = fbm(vec2(uv.x * 70.0, uv.y * 110.0));',
-      '  vec3 hc = mix(vec3(0.05, 0.06, 0.09), vec3(0.34, 0.33, 0.47), smoothstep(hill - 0.3, hill, uv.y) * (0.35 + 0.65 * tex) + tex * 0.15);',
-      '  col = mix(col, hc, hm);',
-      '  float hill2 = 0.40 + 0.03 * fbm(vec2(uv.x * 4.0 + 9.0, 3.0)) + 0.05 * smoothstep(0.75, 1.0, uv.x);',
-      '  float hm2 = smoothstep(hill2 + 0.003, hill2 - 0.003, uv.y) * (1.0 - hm);',
-      '  col = mix(col, vec3(0.13, 0.15, 0.22) + 0.04 * tex, hm2 * 0.85);',
-      '  col *= 1.0 - 0.35 * pow(length((uv - 0.5) * vec2(1.0, 1.2)), 2.0);',
-      '  col += (h(gl_FragCoord.xy + fract(t)) - 0.5) * 0.025;',
-      '  gl_FragColor = vec4(col, 1.0);',
-      '}'
-    ].join('\n');
-    var sv = sg.createShader(sg.VERTEX_SHADER); sg.shaderSource(sv, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }'); sg.compileShader(sv);
-    var sf = sg.createShader(sg.FRAGMENT_SHADER); sg.shaderSource(sf, sfs); sg.compileShader(sf);
-    var sp = sg.createProgram(); sg.attachShader(sp, sv); sg.attachShader(sp, sf); sg.linkProgram(sp); sg.useProgram(sp);
-    sg.bindBuffer(sg.ARRAY_BUFFER, sg.createBuffer()); sg.bufferData(sg.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), sg.STATIC_DRAW);
-    sg.enableVertexAttribArray(0); sg.vertexAttribPointer(0, 2, sg.FLOAT, false, 0, 0);
-    var sres = sg.getUniformLocation(sp, 'res'), st = sg.getUniformLocation(sp, 't');
-    var sresize = function () {
-      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
-      scene.width = Math.round(scene.clientWidth * dpr); scene.height = Math.round(scene.clientHeight * dpr); sg.viewport(0, 0, scene.width, scene.height);
-    };
-    window.addEventListener('resize', sresize); sresize();
-    var s0 = performance.now() - 40000;
-    var sframe = function (now) {
-      // only draw while the opening can be seen
-      if (staged ? stageAt < 1 : scrollY < innerHeight * 1.2) {
-        sg.uniform2f(sres, scene.width, scene.height); sg.uniform1f(st, (now - s0) / 1000); sg.drawArrays(sg.TRIANGLES, 0, 3);
-      }
-      if (!reduced) requestAnimationFrame(sframe);
-    };
-    requestAnimationFrame(sframe);
-  }
-  };
-  if (o && !o.classList.contains('look-photo')) window.startScene();
 
   // ---- opening tunnel: flying slowly down a corridor of glowing data ----
   window.startTunnel = function () {
