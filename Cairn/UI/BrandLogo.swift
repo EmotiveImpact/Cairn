@@ -2,7 +2,7 @@ import SwiftUI
 import AppKit
 
 /// A company's own logo (Claude, Codex, Cursor, Xcode, Docker, npm), drawn
-/// colourless in the text tone on a quiet tile. Falls back to an SF Symbol
+/// colourless in the text tone, with no tile behind it. Falls back to an SF Symbol
 /// when the logo is not bundled, for example under `swift run`.
 struct BrandLogo: View {
     let name: String?
@@ -10,19 +10,17 @@ struct BrandLogo: View {
     var size: CGFloat = 24
 
     var body: some View {
-        RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Brand.wash(0.06))
-            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(Brand.wash(0.08), lineWidth: 1))
-            .overlay {
-                if let image = name.flatMap { Self.image($0) } {
-                    Image(nsImage: image).renderingMode(.template).resizable().interpolation(.high)
-                        .frame(width: size * 0.58, height: size * 0.58)
-                } else {
-                    Image(systemName: fallback).font(.system(size: size * 0.5, weight: .light))
-                }
+        Group {
+            if let image = name.flatMap({ Self.image($0) }) {
+                Image(nsImage: image).renderingMode(.template).resizable().interpolation(.high)
+                    .frame(width: size * 0.72, height: size * 0.72)
+            } else {
+                Image(systemName: fallback).font(.system(size: size * 0.62, weight: .light))
             }
-            .foregroundStyle(Brand.textSecondary)
-            .frame(width: size, height: size)
-            .accessibilityHidden(true)
+        }
+        .foregroundStyle(Brand.textSecondary)
+        .frame(width: size, height: size)
+        .accessibilityHidden(true)
     }
 
     @MainActor private static var cache: [String: NSImage] = [:]

@@ -101,7 +101,7 @@ struct OverviewWorkspace: View {
         return lowSpace ? "Your Mac is running low on space" : "This Mac"
     }
     /// Height the chart can take so Home fits the window without scrolling.
-    /// Everything else on the page is about 625 pt tall at the default size.
+    /// Everything else on the page is about 600 pt tall at the default size.
     @State private var chartHeight: CGFloat = 150
     @State private var agentStates: [String: AgentConnections.State] = [:]
     @State private var connecting: String?
@@ -111,15 +111,15 @@ struct OverviewWorkspace: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                cleanHero.padding(.top, 16)
-                graphPanel.padding(.top, 20)
-                diskCard.padding(.top, 18)
-                nextTiles.padding(.top, 18)
-            }.padding(.horizontal, 36).padding(.top, 18).padding(.bottom, 20)
+                cleanHero.padding(.top, 14)
+                graphPanel.padding(.top, 16)
+                diskCard.padding(.top, 16)
+                nextTiles.padding(.top, 22)
+            }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 20)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
-            chartHeight = min(240, max(110, height - 625))
+            chartHeight = min(240, max(110, height - 600))
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
@@ -278,7 +278,7 @@ struct OverviewWorkspace: View {
 
     /// The next useful thing, never a warning: what grew, the last result, your AI tools.
     private var nextTiles: some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: 32) {
             growthTile
             lastCleanTile
             agentsTile
@@ -292,9 +292,8 @@ struct OverviewWorkspace: View {
             Spacer(minLength: 2)
             if let link { Button(link, action: action).buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 2) }
         }
-        .padding(13).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(RoundedRectangle(cornerRadius: Brand.rHero).fill(Brand.wash(0.02)))
-        .overlay(RoundedRectangle(cornerRadius: Brand.rHero).strokeBorder(Brand.separator, lineWidth: 1))
+        .padding(.top, 14).frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .overlay(alignment: .top) { Rectangle().fill(Brand.separator).frame(height: 1) }
     }
     private func tile(_ eyebrow: String, _ title: String, _ detail: String, _ link: String, _ action: @escaping () -> Void) -> some View {
         card(eyebrow, link, action) {
@@ -304,11 +303,11 @@ struct OverviewWorkspace: View {
     }
     private func logoRow<Trailing: View>(_ logo: String?, _ fallback: String, _ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 9) {
-            BrandLogo(name: logo, fallback: fallback, size: 24)
+            BrandLogo(name: logo, fallback: fallback, size: 20)
             Text(title).font(.system(size: 13)).lineLimit(1)
             Spacer(minLength: 6)
             trailing()
-        }.frame(height: 30)
+        }.frame(height: 28)
     }
 
     /// The folders that grew most since the previous measurement.
