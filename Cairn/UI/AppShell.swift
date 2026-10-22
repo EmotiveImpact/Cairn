@@ -140,7 +140,7 @@ struct AppShell: View {
                     if showResultFilter && supportsResultFilter { resultFilter }
                     // Pages switch instantly. An implicit animation here animated every
                     // frame on the incoming page, so text slid into place on each switch.
-                    content.id(section)
+                    mainContent
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
                     runningStatus
@@ -164,9 +164,6 @@ struct AppShell: View {
                             if goalReviewPending { goalReceiptRunID = store.lastCleanRunID }
                             goalReviewPending = false
                         })
-        }
-        .sheet(item: $celebration) { result in
-            WorkspaceCompletion(summary: result.summary, onRecovery: { celebration = nil; section = .activity }, onClose: { celebration = nil })
         }
         .sheet(isPresented: $showStatePreview) { DialogStatePreview() }
         .task { if previewMode && CommandLine.arguments.contains("--preview-states") { showStatePreview = true } }
@@ -192,6 +189,7 @@ struct AppShell: View {
             searchFocused = false
             showResultFilter = false
             showDeveloperInspector = false
+            celebration = nil
         }
         .onChange(of: appStore.isUninstalling) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
         .onChange(of: dupStore.isRemoving) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
@@ -384,6 +382,17 @@ struct AppShell: View {
         case .apps: if appStore.isScanning { appStore.cancel() } else { appStore.rescan() }
         case .bugs: if healthStore.isScanning { healthStore.cancel() } else { healthStore.rescan() }
         default: if store.isScanning { store.cancel() } else { store.rescan() }
+        }
+    }
+
+    /// The Done screen takes the page beside the sidebar until the next navigation.
+    @ViewBuilder private var mainContent: some View {
+        if let result = celebration {
+            WorkspaceCompletion(summary: result.summary,
+                                onRecovery: { celebration = nil; section = .activity },
+                                onClose: { celebration = nil })
+        } else {
+            content.id(section)
         }
     }
 
