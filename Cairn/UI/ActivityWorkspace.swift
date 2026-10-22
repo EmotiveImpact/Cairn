@@ -142,6 +142,149 @@ struct RecoveryWorkspace: View {
             return total + (row.bytes ?? 0)
         }
     }
+    /// What one receipt moved, grouped by folder name ("node_modules", "dist").
+    private struct ReceiptGroup: Identifiable {
+        let name: String
+        let count: Int
+        let bytes: Int64
+        let inTrash: Bool
+        var id: String { name }
+    }
+    private var receiptGroups: [ReceiptGroup] {
+        Dictionary(grouping: receipt?.rows ?? [], by: \.name).map { name, rows in
+            ReceiptGroup(name: name, count: rows.count, bytes: rows.reduce(0) { $0 + ($1.bytes ?? 0) },
+                         inTrash: rows.contains { row in
+                             row.recoveryID.map { availableTrash.contains($0) && !purged.contains($0) } ?? false
+                         })
+        }
+        .sorted { $0.bytes > $1.bytes }
+    }
+
+    /// A past receipt opened from Activity: a page like the others, top aligned,
+    /// with the number, three plain figures and what the clean actually moved.
+    private func receiptPage(_ summary: ScanStore.CleanSummary, date: Date?) -> some View {
+        let freed = summary.freedBytes
+        let moved = max(0, summary.accounting.trashBytes - summary.accounting.freedBytes)
+        let inTrashNow = preview ? moved : stillInTrashBytes
+        let change = summary.capacityChanges.first { $0.before != nil && $0.after != nil }
+        let groups = receiptGroups
+        let shown = Array(groups.prefix(6))
+        let hidden = groups.dropFirst(6).reduce(0) { $0 + $1.count } + (receipt?.hiddenRowCount ?? 0)
+        let line: String = {
+            if freed > 0, let change, (change.delta ?? 0) > 0 { return "Checked on \(change.name) before and after." }
+            if moved > 0 && inTrashNow > 0 { return "Moved to the Trash. Empty it to get the space back, or put items back." }
+            if moved > 0 { return "Moved to the Trash, and the Trash has since been emptied." }
+            return "Cleaned with each tool's own command."
+        }()
+        return VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 0) {
+                Button { openReceipt = false } label: {
+                    HStack(spacing: 6) { Image(systemName: "chevron.left").font(.system(size: 9, weight: .semibold)); Text("Activity") }
+                }
+                .buttonStyle(.plain)
+                Text(" · Receipt" + (date.map { " · \($0.formatted(.dateTime.day().month(.wide))), \($0.formatted(date: .omitted, time: .shortened))" } ?? ""))
+            }
+            .nightEyebrow()
+            .frame(height: 28)
+
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    CountingBytes(bytes: freed > 0 ? freed : max(moved, summary.bytes), duration: 0.8, still: true)
+                        .font(.system(size: 60, weight: .light)).tracking(-2.4)
+                    Text(freed > 0 ? "freed" : "cleaned").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                }
+                .lineLimit(1).minimumScaleFactor(0.5)
+                Text(line).font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
+            }
+
+            HStack(spacing: 0) {
+                figure("Items", "\(summary.trashed) cleaned")
+                figure("Skipped", summary.failed > 0 ? "\(summary.failed)" : "None",
+                       tint: summary.failed > 0 ? Brand.amber : Brand.textPrimary, divider: true)
+                figure("Free space", change.flatMap { c in
+                    guard let before = c.before?.available, let after = c.after?.available else { return nil }
+                    return "\(Fmt.size(before)) → \(Fmt.size(after))"
+                } ?? "Not measured", divider: true)
+            }
+            .overlay(alignment: .top) { Rectangle().fill(Brand.wash(0.07)).frame(height: 1) }
+            .overlay(alignment: .bottom) { Rectangle().fill(Brand.wash(0.07)).frame(height: 1) }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("What was cleaned").nightEyebrow()
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(shown) { group in
+                            HStack(spacing: 14) {
+                                Image(systemName: "folder").font(.system(size: 13)).foregroundStyle(Brand.textMuted).frame(width: 22)
+                                NightName(title: group.name,
+                                          subtitle: "\(group.count) \(group.count == 1 ? "item" : "items")")
+                                Text(Fmt.size(group.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                                    .frame(width: 90, alignment: .trailing)
+                                NightPill(text: group.inTrash ? "In Trash" : "Emptied")
+                                    .frame(width: 110, alignment: .leading)
+                            }
+                            .nightRow()
+                        }
+                        if summary.toolCount > 0 {
+                            HStack(spacing: 14) {
+                                Image(systemName: "terminal").font(.system(size: 13)).foregroundStyle(Brand.textMuted).frame(width: 22)
+                                NightName(title: "Cleaned by their own tools",
+                                          subtitle: "\(summary.toolCount) \(summary.toolCount == 1 ? "command" : "commands")")
+                                Text(Fmt.size(summary.accounting.toolBytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                                    .frame(width: 90, alignment: .trailing)
+                                NightPill(text: "Done", tone: .ok).frame(width: 110, alignment: .leading)
+                            }
+                            .nightRow()
+                        }
+                        if summary.failed > 0 {
+                            HStack(spacing: 14) {
+                                Image(systemName: "exclamationmark.circle").font(.system(size: 13)).foregroundStyle(Brand.amber).frame(width: 22)
+                                NightName(title: "Skipped", subtitle: "\(summary.failed) \(summary.failed == 1 ? "item" : "items")"
+                                          + (summary.errors.first.map { " · \($0)" } ?? ""))
+                                Text("—").foregroundStyle(Brand.textMuted).frame(width: 90, alignment: .trailing)
+                                NightPill(text: "Skipped", tone: .warn).frame(width: 110, alignment: .leading)
+                            }
+                            .nightRow()
+                        }
+                        if hidden > 0 {
+                            Button("See all \((receipt?.rows.count ?? 0) + (receipt?.hiddenRowCount ?? 0)) items") { focused = nil; showingAllActivity = true }
+                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.top, 12)
+                        }
+                    }
+                }
+            }
+            .frame(maxHeight: .infinity, alignment: .top)
+
+            HStack(spacing: 10) {
+                Text("Free space can also change because of other apps and macOS, so Cairn records it rather than claiming it.")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
+                Spacer(minLength: 16)
+                if let emptyTrashAction {
+                    Button("Empty from Trash…", action: emptyTrashAction).buttonStyle(ControlPanelButtonStyle(size: .large))
+                }
+                Button("Moved items") { focused = nil; showingAllActivity = true }
+                    .buttonStyle(ControlPanelButtonStyle(size: .large))
+                Button("Done") { openReceipt = false }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(.top, 22).padding(.horizontal, inset).padding(.bottom, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .foregroundStyle(Brand.textPrimary)
+    }
+
+    private func figure(_ label: String, _ value: String, tint: Color = Brand.textPrimary, divider: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(label).nightEyebrow()
+            Text(value).font(.system(size: 22, weight: .light)).foregroundStyle(tint).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.7)
+        }
+        .padding(.vertical, 14).padding(.leading, divider ? 20 : 0)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .leading) { if divider { Rectangle().fill(Brand.wash(0.07)).frame(width: 1) } }
+    }
+
     private var emptyTrashAction: (() -> Void)? {
         guard !preview, !deletableIDs.isEmpty else { return nil }
         return { confirmPurge = true }
@@ -152,13 +295,7 @@ struct RecoveryWorkspace: View {
             if showsOverview {
                 overview
             } else if inspected == nil && !showingAllActivity, let opened = openedRun {
-                // A receipt is the same Done screen shown after the clean.
-                WorkspaceCompletion(summary: opened.summary,
-                                    onRecovery: { focused = nil; showingAllActivity = true },
-                                    onClose: { openReceipt = false },
-                                    date: opened.date, recoveryTitle: "Moved items",
-                                    onEmptyTrash: emptyTrashAction,
-                                    stillInTrash: preview ? nil : stillInTrashBytes)
+                receiptPage(opened.summary, date: opened.date)
                     .disabled(purging)
                     .confirmationDialog("Empty \(deletableIDs.count) \(deletableIDs.count == 1 ? "item" : "items") from the Trash?", isPresented: $confirmPurge) {
                         Button("Empty permanently", role: .destructive) { purgeFromTrash(deletableIDs) }
