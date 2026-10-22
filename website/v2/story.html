@@ -15,11 +15,11 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=4" />
+    <link rel="stylesheet" href="story.css?v=5" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=3" defer></script>
+    <script src="story.js?v=4" defer></script>
   </head>
-  <body>
+  <body class="story-page">
     <canvas class="story-sky" id="sky" aria-hidden="true"></canvas>
     <a class="skip-link" href="#main">Skip to content</a>
     <header class="site-header" id="top">
@@ -37,13 +37,21 @@
     <main id="main">
       <div class="stage-track"><div class="stage">
       <section class="chapter story-open" id="open" aria-labelledby="open-title">
-        <div class="shell">
-          <p class="label reveal">A Mac cleaner for developers</p>
-          <h1 id="open-title" class="reveal">Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
-          <p class="lead reveal">Get back the space your build files and caches took. Your code and AI conversations are never touched.</p>
-          <div class="actions reveal"><a class="button button-light" href="#close">Get early access</a><a class="button" href="#number">See how it works</a></div>
+        <canvas class="open-scene" id="scene" aria-hidden="true"></canvas>
+        <div class="shell open-inner">
+          <div class="open-main">
+            <h1 id="open-title" class="reveal">Cairn <span>Finds the junk in your coding projects.</span></h1>
+            <a class="open-cta reveal" href="#close">Get early access</a>
+          </div>
+          <div class="open-foot reveal">
+            <p>Works with your AI coding tools.</p>
+            <p>Cairn for Mac · 2026</p>
+            <div>
+              <p>Build files, caches and old installs pile up quietly while you work. Cairn shows you what each one is and clears only what your tools can make again.</p>
+              <p>Ask for it from Claude Code, Codex or Cursor. Your code and AI conversations are never touched.</p>
+            </div>
+          </div>
         </div>
-        <div class="shell story-tools reveal"><p>Works with</p><ul><li><img src="assets/tool-icons/claude.svg" width="19" height="19" alt="" />Claude Code</li><li><img src="assets/tool-icons/codex.svg" width="19" height="19" alt="" />Codex</li><li><img src="assets/tool-icons/cursor.svg" width="19" height="19" alt="" />Cursor</li><li><img src="assets/tool-icons/xcode.svg" width="19" height="19" alt="" />Xcode</li><li><img src="assets/tool-icons/docker.svg" width="19" height="19" alt="" />Docker</li><li><img src="assets/tool-icons/npm.svg" width="19" height="19" alt="" />npm</li></ul><div class="scroll-cue">Scroll to see what Cairn finds</div></div>
       </section>
 
       <section class="chapter story-number" id="number" aria-labelledby="number-title">

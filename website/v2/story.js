@@ -83,19 +83,90 @@
     window.addEventListener('resize', resize); resize();
     var t0 = performance.now(), narrow = function () { return innerWidth < 760; };
     var frame = function (now) {
-      // 0 at the top of the page, 1 when the number chapter fills the screen
+      // 0 at the top of the page, 1 when the number chapter fills the screen; the streaks only show on the number
       var p = staged ? ease(clamp(stageAt)) : ease(clamp(scrollY / Math.max(1, number.offsetTop)));
       var out = staged ? clamp((stageAt - 1.15) / 0.4) : clamp((scrollY - number.offsetTop) / (innerHeight * 0.55));
       var n = narrow(), cy = (n ? 0.4 : 0.42) + (n ? 0.1 : 0.08) * p - 0.1 * out;
       var sx = (n ? 0.5 : 0.36) - (n ? 0.3 : 0.24) * p, sy = (n ? 0.24 : 0.3) - (n ? 0.1 : 0.16) * p;
       gl.uniform2f(U.res, canvas.width, canvas.height); gl.uniform1f(U.t, (now - t0) / 1000);
-      gl.uniform2f(U.centre, 0.5, cy); gl.uniform2f(U.size, sx, sy); gl.uniform1f(U.fade, (1 - out) * (0.75 + 0.45 * p));
+      gl.uniform2f(U.centre, 0.5, cy); gl.uniform2f(U.size, sx, sy); var inn = clamp((p - 0.3) / 0.6); gl.uniform1f(U.fade, (1 - out) * inn * inn * 1.2);
       gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
-      if (out < 1) gl.drawArrays(gl.TRIANGLES, 0, 3);
+      if (out < 1 && inn > 0) gl.drawArrays(gl.TRIANGLES, 0, 3);
       if (!reduced) requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
     if (reduced) window.addEventListener('scroll', function () { requestAnimationFrame(frame); }, { passive: true });
+  }
+
+
+  // ---- opening scene: a dusk sky with a slow swirl of light over dark hills ----
+  var scene = document.getElementById('scene');
+  var sg = scene && scene.getContext('webgl', { premultipliedAlpha: false, antialias: false });
+  if (sg) {
+    var sfs = [
+      'precision highp float;',
+      'uniform vec2 res; uniform float t;',
+      'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+      'float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);',
+      '  return mix(mix(h(i), h(i + vec2(1, 0)), f.x), mix(h(i + vec2(0, 1)), h(i + vec2(1, 1)), f.x), f.y); }',
+      'float fbm(vec2 p){ float v = 0.0, a = 0.5; for (int i = 0; i < 5; i++) { v += a * n(p); p *= 2.03; a *= 0.5; } return v; }',
+      'void main(){',
+      '  vec2 uv = gl_FragCoord.xy / res; float ar = res.x / res.y;',
+      '  float hz = 0.5;',
+      // sky: deep blue above, soft lavender haze at the horizon
+      '  vec3 col = mix(vec3(0.30, 0.34, 0.47), vec3(0.06, 0.08, 0.13), smoothstep(hz, 1.05, uv.y));',
+      '  col += vec3(0.10, 0.10, 0.16) * fbm(vec2(uv.x * 2.0 + t * 0.006, uv.y * 5.0)) * smoothstep(1.0, hz, uv.y);',
+      // the swirl: rings of light in perspective, turning faster near the middle
+      '  vec2 c = vec2(0.56, 0.66); vec2 q = uv - c; q.x *= ar; q.y /= 0.21;',
+      '  float r = length(q), a = atan(q.y, q.x);',
+      '  float a2 = a + t * 0.06 / (r + 0.25) + r * 2.2;',
+      '  float ring = pow(0.5 + 0.5 * sin(r * 150.0 + fbm(vec2(cos(a2), sin(a2)) * 1.6 + r * 4.0) * 8.0), 34.0);',
+      '  float arcs = smoothstep(0.38, 0.8, fbm(vec2(cos(a2), sin(a2)) * 3.2 + vec2(r * 14.0, -r * 9.0)));',
+      '  float env = smoothstep(0.08, 0.3, r) * exp(-pow(max(r - 0.35, 0.0) * 2.4, 2.0)) * smoothstep(1.2, 0.5, r);',
+      '  float glow = exp(-r * r * 6.0) * 0.35;',
+      '  float sw = (ring * arcs * 1.9 + arcs * 0.12 + glow) * env + glow * 0.4;',
+      '  sw *= smoothstep(hz - 0.02, hz + 0.06, uv.y);',
+      '  col += vec3(0.80, 0.88, 1.0) * sw;',
+      // a calm, misty plain under the horizon
+      '  float plain = smoothstep(hz + 0.005, hz - 0.005, uv.y);',
+      '  vec3 pc = mix(vec3(0.22, 0.25, 0.36), vec3(0.12, 0.14, 0.21), smoothstep(hz, hz - 0.2, uv.y));',
+      '  pc += 0.05 * fbm(vec2(uv.x * 8.0 - t * 0.01, uv.y * 40.0));',
+      '  col = mix(col, pc, plain);',
+      '  col += vec3(0.20, 0.22, 0.32) * exp(-pow((uv.y - hz) * 22.0, 2.0)) * 0.6;',
+      // dark rolling hills in front
+      '  float hill = 0.30 + 0.07 * fbm(vec2(uv.x * 2.2 + 3.0, 1.0)) - 0.14 * pow(abs(uv.x - 0.6), 1.6) + 0.012 * n(vec2(uv.x * 60.0, 2.0));',
+      '  float hm = smoothstep(hill + 0.004, hill - 0.004, uv.y);',
+      '  float tex = fbm(vec2(uv.x * 70.0, uv.y * 110.0));',
+      '  vec3 hc = mix(vec3(0.05, 0.06, 0.09), vec3(0.34, 0.33, 0.47), smoothstep(hill - 0.3, hill, uv.y) * (0.35 + 0.65 * tex) + tex * 0.15);',
+      '  col = mix(col, hc, hm);',
+      '  float hill2 = 0.40 + 0.03 * fbm(vec2(uv.x * 4.0 + 9.0, 3.0)) + 0.05 * smoothstep(0.75, 1.0, uv.x);',
+      '  float hm2 = smoothstep(hill2 + 0.003, hill2 - 0.003, uv.y) * (1.0 - hm);',
+      '  col = mix(col, vec3(0.13, 0.15, 0.22) + 0.04 * tex, hm2 * 0.85);',
+      '  col *= 1.0 - 0.35 * pow(length((uv - 0.5) * vec2(1.0, 1.2)), 2.0);',
+      '  col += (h(gl_FragCoord.xy + fract(t)) - 0.5) * 0.025;',
+      '  gl_FragColor = vec4(col, 1.0);',
+      '}'
+    ].join('\n');
+    var sv = sg.createShader(sg.VERTEX_SHADER); sg.shaderSource(sv, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }'); sg.compileShader(sv);
+    var sf = sg.createShader(sg.FRAGMENT_SHADER); sg.shaderSource(sf, sfs); sg.compileShader(sf);
+    var sp = sg.createProgram(); sg.attachShader(sp, sv); sg.attachShader(sp, sf); sg.linkProgram(sp); sg.useProgram(sp);
+    sg.bindBuffer(sg.ARRAY_BUFFER, sg.createBuffer()); sg.bufferData(sg.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), sg.STATIC_DRAW);
+    sg.enableVertexAttribArray(0); sg.vertexAttribPointer(0, 2, sg.FLOAT, false, 0, 0);
+    var sres = sg.getUniformLocation(sp, 'res'), st = sg.getUniformLocation(sp, 't');
+    var sresize = function () {
+      var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      scene.width = Math.round(scene.clientWidth * dpr); scene.height = Math.round(scene.clientHeight * dpr); sg.viewport(0, 0, scene.width, scene.height);
+    };
+    window.addEventListener('resize', sresize); sresize();
+    var s0 = performance.now() - 40000;
+    var sframe = function (now) {
+      // only draw while the opening can be seen
+      if (staged ? stageAt < 1 : scrollY < innerHeight * 1.2) {
+        sg.uniform2f(sres, scene.width, scene.height); sg.uniform1f(st, (now - s0) / 1000); sg.drawArrays(sg.TRIANGLES, 0, 3);
+      }
+      if (!reduced) requestAnimationFrame(sframe);
+    };
+    requestAnimationFrame(sframe);
   }
 
   // ---- chapter arrivals ----
