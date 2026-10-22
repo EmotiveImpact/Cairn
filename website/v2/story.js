@@ -24,6 +24,7 @@
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
   var staged = !!track && !reduced && innerWidth >= 760 && innerHeight >= 600;
   var stageAt = 0;            // 0 = opening, 1 = number, 2 = disk, 3 = ask
+  var open = document.getElementById('open'), number = document.getElementById('number');
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
   if (staged) document.body.classList.add('staged');
@@ -31,15 +32,21 @@
   function stage() {
     if (!staged) return;
     var len = track.offsetHeight - innerHeight;
-    stageAt = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * (layers.length - 1);
+    var raw = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * (layers.length - 1);
+    // each chapter holds still for a stretch of scrolling, then dissolves quickly into the next
+    var seg = Math.min(Math.floor(raw), layers.length - 2), f = raw - seg;
+    var m = clamp((f - 0.3) / 0.4);
+    stageAt = seg + m * m * (3 - 2 * m);
     layers.forEach(function (el, i) {
       var d = stageAt - i;
       var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
       var out = i === layers.length - 1 ? 0 : clamp((d - 0.2) / 0.4); // and out from 0.2 to 0.6
       var o = Math.min(inn, 1 - out);
       el.style.opacity = o.toFixed(3);
-      el.style.filter = 'blur(' + ((1 - inn) * 14 + out * 8).toFixed(1) + 'px)';
-      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * lerp(1, 0.94, out)).toFixed(4) + ') translateY(' + (-out * 28).toFixed(1) + 'px)';
+      // the number scrolls up and fades as you move on; the others shrink back and blur
+      var lift = el === number;
+      el.style.filter = 'blur(' + ((1 - inn) * 14 + (lift ? 0 : out * 8)).toFixed(1) + 'px)';
+      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * innerHeight : 28)).toFixed(1) + 'px)';
       el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
       el.style.visibility = o < 0.01 ? 'hidden' : 'visible';
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
@@ -49,7 +56,21 @@
   }
   if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', stage); stage(); }
 
-  var open = document.getElementById('open'), number = document.getElementById('number');
+  // when scrolling stops between two chapters, glide to the nearer one so every chapter feels like a stop
+  if (staged) {
+    var settleTimer, gliding = false;
+    var settle = function () {
+      if (gliding) { gliding = false; return; }
+      var len = track.offsetHeight - innerHeight, top = track.offsetTop, n = layers.length - 1;
+      if (scrollY < top - 2 || scrollY > top + len + 2) return;
+      var raw = (scrollY - top) / Math.max(1, len) * n, k = Math.round(raw);
+      var y = Math.round(top + len * k / n);
+      if (Math.abs(y - scrollY) > 2) { gliding = true; window.scrollTo({ top: y, behavior: 'smooth' }); }
+    };
+    if ('onscrollend' in window) window.addEventListener('scrollend', settle);
+    else window.addEventListener('scroll', function () { clearTimeout(settleTimer); settleTimer = setTimeout(settle, 160); }, { passive: true });
+  }
+
 
 
 

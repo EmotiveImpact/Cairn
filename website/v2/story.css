@@ -112,8 +112,8 @@ body { background: #090b0d; }
 .story-number h2 span { text-shadow: 0 1px 18px rgba(9,11,13,.9); }
 
 /* the parts that make up the number */
-.parts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 40px auto 0; padding: 0; list-style: none; }
-.parts li { display: flex; align-items: center; gap: 10px; padding: 10px 16px; border: 1px solid rgba(220,235,247,.1); border-radius: 999px; background: rgba(12,16,20,.7); backdrop-filter: blur(8px); font-size: 14px; color: #aab6c0;
+.parts { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px 36px; margin: 40px auto 0; padding: 0; list-style: none; }
+.parts li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; font-size: 14px; color: #aab6c0;
   opacity: 0; filter: blur(8px); transition: opacity .7s ease, filter .7s ease; transition-delay: calc(var(--i) * 120ms); }
 .parts img { width: 16px; height: 16px; filter: brightness(0) invert(.75); }
 .parts b { color: #fff; font-weight: 500; }
