@@ -10,8 +10,7 @@ struct OverviewWorkspace: View {
     var onCleanRecommended: () -> Void = {}
     @State private var period = 30
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// Home settles in once: sections rise in turn, then the graph line draws left to right.
-    @State private var appeared = false
+    /// The graph line draws left to right once when Home opens.
     @State private var reveal: CGFloat = 0
     @State private var todayPulse = false
     @State private var showHistory = false
@@ -125,11 +124,11 @@ struct OverviewWorkspace: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                header.modifier(Rise(on: appeared, order: 0, still: reduceMotion))
-                cleanHero.padding(.top, 14).modifier(Rise(on: appeared, order: 1, still: reduceMotion))
-                graphPanel.padding(.top, 14).modifier(Rise(on: appeared, order: 2, still: reduceMotion))
-                diskCard.padding(.top, 14).modifier(Rise(on: appeared, order: 3, still: reduceMotion))
-                nextTiles.padding(.top, 14).modifier(Rise(on: appeared, order: 4, still: reduceMotion))
+                header
+                cleanHero.padding(.top, 14)
+                graphPanel.padding(.top, 14)
+                diskCard.padding(.top, 14)
+                nextTiles.padding(.top, 14)
             }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 26)
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
@@ -140,7 +139,6 @@ struct OverviewWorkspace: View {
         .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
         .onAppear {
             refreshAgents()
-            appeared = true
             drawChart()
         }
         .onChange(of: period) { _, _ in drawChart() }
@@ -170,10 +168,8 @@ struct OverviewWorkspace: View {
             // Same big number as the result, counting up while the scan runs.
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(Fmt.size(store.grandTotal))
-                        .font(.system(size: 58, weight: .light)).tracking(-2.3).monospacedDigit()
-                        .contentTransition(.numericText())
-                        .animation(.easeOut(duration: 0.3), value: store.grandTotal)
+                    CountingSize(bytes: store.grandTotal, duration: 0.3, still: reduceMotion)
+                        .font(.system(size: 58, weight: .light)).tracking(-2.3)
                     Text("found so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 }
                 HStack(spacing: 8) {
@@ -189,10 +185,8 @@ struct OverviewWorkspace: View {
             HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
-                        Text(Fmt.size(recommendedBytes))
-                            .font(.system(size: 58, weight: .light)).tracking(-2.3).monospacedDigit()
-                            .contentTransition(.numericText(countsDown: true))
-                            .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: recommendedBytes)
+                        CountingSize(bytes: recommendedBytes, duration: 0.8, still: reduceMotion)
+                            .font(.system(size: 58, weight: .light)).tracking(-2.3)
                         Text("you can get back").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                     }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
@@ -618,13 +612,34 @@ struct OverviewWorkspace: View {
     ]
 }
 
-/// One section of Home settling in: a short fade and 8 pt rise, each a little after the last.
-private struct Rise: ViewModifier {
-    let on: Bool
-    let order: Int
-    let still: Bool
-    func body(content: Content) -> some View {
-        content.opacity(on || still ? 1 : 0).offset(y: on || still ? 0 : 8)
-            .animation(still ? nil : .easeOut(duration: 0.45).delay(0.06 * Double(order)), value: on)
+/// A size that counts smoothly to its new value: fixed-width digits in one unit,
+/// so nothing slides or jitters. Counts up from zero the first time it appears.
+struct CountingSize: View {
+    let bytes: Int64
+    var duration: Double = 0.8
+    var still = false
+    @State private var shown: Double = 0
+    var body: some View {
+        CountingSizeText(value: shown, unitOf: bytes)
+            .monospacedDigit()
+            .onAppear { move(to: bytes) }
+            .onChange(of: bytes) { _, new in move(to: new) }
+    }
+    private func move(to target: Int64) {
+        if still { shown = Double(target); return }
+        withAnimation(.timingCurve(0.2, 0.8, 0.2, 1, duration: duration)) { shown = Double(target) }
+    }
+}
+private struct CountingSizeText: View, Animatable {
+    var value: Double
+    let unitOf: Int64
+    var animatableData: Double { get { value } set { value = newValue } }
+    var body: some View { Text(value == Double(unitOf) ? Fmt.size(unitOf) : Self.format(value, unitOf: unitOf)) }
+    /// Uses the target's unit throughout, so the count never jumps from MB to GB mid-way.
+    static func format(_ bytes: Double, unitOf target: Int64) -> String {
+        let units: [(Double, String)] = [(1e12, "TB"), (1e9, "GB"), (1e6, "MB"), (1e3, "KB")]
+        guard let unit = units.first(where: { Double(target) >= $0.0 }) else { return Fmt.size(Int64(bytes)) }
+        let v = max(0, bytes) / unit.0
+        return String(format: v >= 100 ? "%.0f %@" : "%.1f %@", v, unit.1)
     }
 }
