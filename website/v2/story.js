@@ -3,18 +3,19 @@
 (function () {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   document.body.classList.add('story-page');
-  // review only: try each hero picture, or the earlier animated swirl
+  // review only: the data tunnel (default), each hero photo, or the earlier swirl
   var o = document.getElementById('open'), ph = o && o.querySelector('.open-photo');
   function pick(name) {
     if (!o) return;
     o.classList.toggle('look-photo', name !== 'swirl');
-    if (name !== 'swirl') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
+    if (name !== 'swirl' && name !== 'tunnel') ph.src = 'assets/hero/cairn-hero-' + name + '.jpg';
     o.dataset.photo = name;
     o.querySelectorAll('.photo-switch button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.photo === name)); });
     if (name === 'swirl' && window.startScene) window.startScene();
+    if (name === 'tunnel' && window.startTunnel) window.startTunnel();
   }
   if (o) o.querySelectorAll('.photo-switch button').forEach(function (b) { b.addEventListener('click', function () { pick(b.dataset.photo); }); });
-  if (/^#(desk|window|swirl)$/.test(location.hash)) pick(location.hash.slice(1));
+  if (/^#(profile|desk|window|swirl)$/.test(location.hash)) pick(location.hash.slice(1));
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
@@ -185,6 +186,97 @@
   }
   };
   if (o && !o.classList.contains('look-photo')) window.startScene();
+
+  // ---- opening tunnel: flying slowly down a corridor of glowing data ----
+  window.startTunnel = function () {
+  if (window.startTunnel.done) return; window.startTunnel.done = true;
+  var tc = document.getElementById('tunnel');
+  var tg = tc && tc.getContext('webgl', { antialias: false });
+  if (!tg) return;
+  var tfs = [
+    'precision highp float;',
+    'uniform vec2 res; uniform float t; uniform float z0;',
+    'float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }',
+    // one wall of data: rows of short lit dashes and specks, drifting past
+    'vec3 wall(vec2 q, float dist){',
+    '  vec3 c = vec3(0.0);',
+    '  vec2 g = vec2(q.x / 0.16, q.y / 0.045); vec2 id = floor(g), f = fract(g);',
+    '  float r = h(id), r2 = h(id + 17.3);',
+    '  float on = step(0.55, r);',
+    '  float len = 0.25 + 0.65 * r2;',
+    '  float dash = smoothstep(0.0, 0.06, f.x) * smoothstep(len, len - 0.06, f.x) * smoothstep(0.15, 0.35, f.y) * smoothstep(0.85, 0.65, f.y);',
+    '  float flick = 0.55 + 0.45 * sin(t * (0.6 + 2.0 * r2) + r * 40.0);',
+    '  vec3 tint = mix(vec3(0.12, 0.42, 1.0), vec3(0.42, 0.76, 1.0), step(0.78, r2));',
+    '  float soft = smoothstep(-0.2, 0.3, f.x) * smoothstep(len + 0.3, len - 0.1, f.x) * exp(-pow((f.y - 0.5) * 3.0, 2.0));',
+    '  c += tint * (dash + soft * 0.35) * on * flick * (0.7 + 1.8 * step(0.93, r));',
+    '  vec2 g2 = vec2(q.x / 0.05, q.y / 0.02); vec2 id2 = floor(g2), f2 = fract(g2);',
+    '  float s = step(0.88, h(id2 + 5.1)) * smoothstep(0.5, 0.1, length(f2 - 0.5));',
+    '  c += vec3(0.4, 0.7, 1.0) * s * (0.4 + 0.6 * sin(t * 1.7 + h(id2) * 30.0));',
+    '  vec2 pan = abs(fract(vec2(q.x / 1.2, q.y / 0.36)) - 0.5);',
+    '  c += vec3(0.05, 0.1, 0.2) * smoothstep(0.49, 0.5, max(pan.x, pan.y));',
+    '  c = mix(c, vec3(0.1, 0.28, 0.75) * 0.45, smoothstep(3.5, 11.0, dist));',
+    '  return c;',
+    '}',
+    'void main(){',
+    '  vec2 uv = (gl_FragCoord.xy - 0.5 * res) / res.y;',
+    '  vec3 rd = normalize(vec3(uv, 1.25));',
+    '  float W = 1.15, F = -0.55, C = 0.95;',
+    '  float tx = (sign(rd.x) * W) / rd.x;',
+    '  float ty = rd.y < 0.0 ? F / rd.y : C / rd.y;',
+    '  float d = min(tx, ty); vec3 p = rd * d; float z = p.z + z0;',
+    '  vec3 col = vec3(0.0);',
+    '  if (tx < ty) { col = wall(vec2(z, p.y + (rd.x > 0.0 ? 7.0 : 0.0)), d);',
+    '    col += vec3(0.25, 0.55, 1.0) * (exp(-abs(p.y - F) * 30.0) * 1.2 + exp(-abs(p.y - C) * 30.0) * 0.5); }',
+    '  else if (rd.y > 0.0) col = wall(vec2(z, p.x + 3.0), d) * 0.7;',
+    '  else {',
+    // the floor: dark glossy tiles, with the light of the walls and the far end reflected in it
+    '    vec2 tile = abs(fract(vec2(p.x / 0.32, z / 0.32)) - 0.5);',
+    '    float seam = smoothstep(0.47, 0.5, max(tile.x, tile.y));',
+    '    col = vec3(0.02, 0.04, 0.08) + vec3(0.08, 0.16, 0.3) * seam * 0.6;',
+    '    col += vec3(0.2, 0.45, 0.9) * exp(-abs(abs(p.x) - W) * 6.0) * 0.5;',
+    '    col += vec3(0.3, 0.6, 1.0) * exp(-abs(p.x) * 2.5) * exp(-d * 0.05) * 0.18;',
+    '    vec3 rr = vec3(rd.x, -rd.y, rd.z); float t2 = (sign(rd.x) * W - p.x) / rd.x; vec3 q2 = p + rr * t2;',
+    '    col += wall(vec2(q2.z + z0, q2.y + (rd.x > 0.0 ? 7.0 : 0.0)), d + t2) * 0.4 * step(q2.y, C) * exp(-t2 * 0.6);',
+    '    col += vec3(0.25, 0.55, 1.0) * exp(-abs(abs(p.x) - W) * 30.0) * 1.0;',
+    '  }',
+    '  col *= exp(-d * 0.085) * smoothstep(0.15, 1.2, d);',
+    // the bright doorway at the end, and the haze around it
+    '  vec2 a = abs(uv - vec2(0.0, 0.035));',
+    '  float door = smoothstep(0.022, 0.018, max(a.x, a.y));',
+    '  float halo = exp(-length(uv - vec2(0.0, 0.035)) * 7.0);',
+    '  col += vec3(0.3, 0.62, 1.0) * halo * 0.9 + vec3(0.55, 0.82, 1.0) * door * 1.3 + vec3(0.8, 0.93, 1.0) * door * smoothstep(0.02, 0.0, max(a.x, a.y)) * 0.6;',
+    '  col += vec3(0.05, 0.12, 0.25) * exp(-length(uv) * 2.2);',
+    '  col = 1.0 - exp(-col * 1.4);',
+    '  col *= 1.0 - 0.45 * pow(length(uv * vec2(0.8, 1.0)), 2.0);',
+    '  gl_FragColor = vec4(col, 1.0);',
+    '}'
+  ].join('\n');
+  var tv = tg.createShader(tg.VERTEX_SHADER); tg.shaderSource(tv, 'attribute vec2 p; void main(){ gl_Position = vec4(p, 0.0, 1.0); }'); tg.compileShader(tv);
+  var tf = tg.createShader(tg.FRAGMENT_SHADER); tg.shaderSource(tf, tfs); tg.compileShader(tf);
+  if (!tg.getShaderParameter(tf, tg.COMPILE_STATUS)) { console.log(tg.getShaderInfoLog(tf)); return; }
+  var tp = tg.createProgram(); tg.attachShader(tp, tv); tg.attachShader(tp, tf); tg.linkProgram(tp); tg.useProgram(tp);
+  tg.bindBuffer(tg.ARRAY_BUFFER, tg.createBuffer()); tg.bufferData(tg.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), tg.STATIC_DRAW);
+  tg.enableVertexAttribArray(0); tg.vertexAttribPointer(0, 2, tg.FLOAT, false, 0, 0);
+  var tres = tg.getUniformLocation(tp, 'res'), tt = tg.getUniformLocation(tp, 't'), tz = tg.getUniformLocation(tp, 'z0');
+  var tresize = function () {
+    var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+    tc.width = Math.round(tc.clientWidth * dpr); tc.height = Math.round(tc.clientHeight * dpr); tg.viewport(0, 0, tc.width, tc.height);
+  };
+  window.addEventListener('resize', tresize); tresize();
+  var last = performance.now(), zpos = 0;
+  var tframe = function (now) {
+    var dt = Math.min(0.05, (now - last) / 1000); last = now;
+    // a slow glide forward that quickens as you scroll towards the number
+    var push = staged ? clamp(stageAt) : clamp(scrollY / innerHeight);
+    zpos += dt * (0.5 + push * 6.0);
+    if ((staged ? stageAt < 1 : scrollY < innerHeight * 1.2) && o && o.dataset.photo === 'tunnel') {
+      tg.uniform2f(tres, tc.width, tc.height); tg.uniform1f(tt, now / 1000); tg.uniform1f(tz, zpos); tg.drawArrays(tg.TRIANGLES, 0, 3);
+    }
+    if (!reduced) requestAnimationFrame(tframe);
+  };
+  requestAnimationFrame(tframe);
+  };
+  if (o && o.dataset.photo === 'tunnel') window.startTunnel();
 
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {
