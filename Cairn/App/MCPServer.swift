@@ -15,8 +15,9 @@ enum MCPServer {
     Cairn measures disk usage on this Mac and knows which developer output can be rebuilt. \
     Use storage_status for available space, list_projects for repositories and their rebuildable \
     build output, and find_reclaimable for caches by category. Cairn never deletes from here: \
-    to free space, call open_cairn and tell the user what to review. Scans read file sizes only, \
-    and a whole-machine scan can take a minute, so pass a category when you can.
+    to free space, call open_cairn and tell the user what to review. Scans read file sizes only. \
+    A whole-machine scan can take several minutes the first time; results are kept for ten minutes, \
+    so pass a category when you can.
     """
 
     static func run() {
@@ -125,12 +126,15 @@ enum MCPServer {
         case "storage_status":
             let free = Volumes.homeFree()
             let total = DeviceInfo.totalCapacity
-            let freed = CLI.recordedFreed()
+            let cleans = CLI.recordedTotals()
             return .success([
                 "availableBytes": free, "available": Fmt.size(free),
                 "totalBytes": total, "total": Fmt.size(total),
                 "trend": StorageHistory.summary(currentFree: free).text,
-                "freedByCairnBytes": freed?.bytes ?? 0, "cleans": freed?.cleans ?? 0,
+                "freedByCairnBytes": cleans?.freedBytes ?? 0,
+                "movedToTrashByCairnBytes": cleans?.movedToTrashBytes ?? 0,
+                "cleans": cleans?.cleans ?? 0,
+                "cleanHistory": cleans.map(CLI.describe) ?? "No cleans recorded yet",
             ])
 
         case "list_projects":
@@ -210,18 +214,19 @@ enum MCPServer {
     private static func measure(_ category: String?) -> (items: [ScanItem], age: Int) {
         let ids = category.map { [$0] } ?? ScannerRegistry.all().map(\.info.id)
         var items: [ScanItem] = []
-        var oldest = Date()
+        var oldest: Date?
         for id in ids {
+            let entry: (date: Date, items: [ScanItem])
             if let hit = cache[id], Date().timeIntervalSince(hit.date) < cacheLifetime {
-                items += hit.items
-                oldest = min(oldest, hit.date)
-                continue
+                entry = hit
+            } else {
+                entry = (date: Date(), items: CLI.collect(category: id))
+                cache[id] = entry
             }
-            let fresh = CLI.collect(category: id)
-            cache[id] = (Date(), fresh)
-            items += fresh
+            items += entry.items
+            oldest = min(oldest ?? entry.date, entry.date)
         }
-        return (items, Int(Date().timeIntervalSince(oldest)))
+        return (items, oldest.map { Int(Date().timeIntervalSince($0)) } ?? 0)
     }
 
     // MARK: - Encoding

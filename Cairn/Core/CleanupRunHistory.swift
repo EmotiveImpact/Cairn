@@ -20,13 +20,22 @@ extension ScanStore.CleanSummary {
 }
 
 extension CleanupRunHistory {
-    /// Total freed across every receipt, read without changing anything.
-    /// Nil when there are no receipts or they cannot be read.
-    static func recordedFreed(at url: URL = ScanStore.receiptsURL) async -> (bytes: Int64, cleans: Int)? {
+    /// What the receipts show across every clean: space measured free, and bytes
+    /// that only went to the Trash (that space returns once the Trash is emptied).
+    struct Totals: Sendable {
+        var cleans = 0
+        var freedBytes: Int64 = 0
+        var movedToTrashBytes: Int64 = 0
+    }
+    /// Read without changing anything. Nil when there are no receipts or they cannot be read.
+    static func recordedTotals(at url: URL = ScanStore.receiptsURL) async -> Totals? {
         let snapshot = await CleanupRunHistory(url: url).load()
         guard snapshot.error == nil, !snapshot.runs.isEmpty else { return nil }
-        let freed = snapshot.runs.map(\.summary.freedBytes).filter { $0 > 0 }
-        return (freed.reduce(0, +), freed.count)
+        return snapshot.runs.reduce(into: Totals()) { totals, run in
+            totals.cleans += 1
+            totals.freedBytes += run.summary.freedBytes
+            totals.movedToTrashBytes += max(0, run.summary.accounting.trashBytes - run.summary.accounting.freedBytes)
+        }
     }
 }
 

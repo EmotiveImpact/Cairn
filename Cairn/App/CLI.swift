@@ -53,22 +53,23 @@ enum CLI {
     private static func status(json: Bool) {
         let free = Volumes.homeFree()
         let total = DeviceInfo.totalCapacity
-        let freed = recordedFreed()
+        let cleans = recordedTotals()
         let trend = StorageHistory.summary(currentFree: free)
 
         if json {
             printJSON([
                 "freeBytes": free,
                 "totalBytes": total,
-                "freedBytes": freed?.bytes ?? 0,
-                "cleans": freed?.cleans ?? 0,
+                "freedBytes": cleans?.freedBytes ?? 0,
+                "movedToTrashBytes": cleans?.movedToTrashBytes ?? 0,
+                "cleans": cleans?.cleans ?? 0,
                 "trend": trend.text,
             ])
             return
         }
         print("Free space   \(Fmt.size(free)) of \(Fmt.size(total))")
         print("Trend        \(trend.text)")
-        print("Freed        " + (freed.map { "\(Fmt.size($0.bytes)) across \($0.cleans) \($0.cleans == 1 ? "clean" : "cleans"), from Cairn's receipts" } ?? "No cleans recorded yet"))
+        print("Cleans       " + (cleans.map(describe) ?? "No cleans recorded yet"))
     }
 
     private static func scan(json: Bool, category: String?) {
@@ -193,15 +194,28 @@ enum CLI {
     }
 
     /// What the receipts say was freed, read without opening the app's stores.
-    static func recordedFreed() -> (bytes: Int64, cleans: Int)? {
-        let box = FreedBox()
+    static func recordedTotals() -> CleanupRunHistory.Totals? {
+        let box = TotalsBox()
         let semaphore = DispatchSemaphore(value: 0)
-        Task.detached { box.value = await CleanupRunHistory.recordedFreed(); semaphore.signal() }
+        Task.detached { box.value = await CleanupRunHistory.recordedTotals(); semaphore.signal() }
         semaphore.wait()
         return box.value
     }
 
-    private final class FreedBox: @unchecked Sendable { var value: (bytes: Int64, cleans: Int)? }
+    private final class TotalsBox: @unchecked Sendable { var value: CleanupRunHistory.Totals? }
+
+    /// "Freed 22 GB, plus 2.6 GB moved to the Trash, across 3 cleans". Trash bytes
+    /// are never called freed: that space returns only once the Trash is emptied.
+    static func describe(_ totals: CleanupRunHistory.Totals) -> String {
+        let count = "\(totals.cleans) \(totals.cleans == 1 ? "clean" : "cleans")"
+        let trash = "\(Fmt.size(totals.movedToTrashBytes)) moved to the Trash"
+        switch (totals.freedBytes > 0, totals.movedToTrashBytes > 0) {
+        case (true, true): return "Freed \(Fmt.size(totals.freedBytes)), plus \(trash), across \(count)"
+        case (true, false): return "Freed \(Fmt.size(totals.freedBytes)) across \(count)"
+        case (false, true): return "\(trash) across \(count). The space returns when the Trash is emptied"
+        case (false, false): return "\(count) recorded, no change in free space measured"
+        }
+    }
 
     private static func bytes(of items: [ScanItem]) -> Int64 {
         items.reduce(Int64(0)) { $0 + $1.allocatedSize }

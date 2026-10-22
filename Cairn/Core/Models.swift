@@ -216,6 +216,7 @@ enum Fmt {
         let f = ByteCountFormatter()
         f.allowedUnits = [.useKB, .useMB, .useGB, .useTB]
         f.countStyle = .file
+        f.allowsNonnumericFormatting = false // "0 KB", never "Zero KB"
         return f
     }()
     private static let decimalFormatter: NumberFormatter = {
