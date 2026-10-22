@@ -2,6 +2,7 @@
 // arrival (reveals, the count, the disk lighting up, the chat typing itself out).
 (function () {
   var reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  document.body.classList.add('story-page');
   function clamp(v) { return Math.min(1, Math.max(0, v)); }
   function ease(t) { return 1 - Math.pow(1 - t, 3); }
 
