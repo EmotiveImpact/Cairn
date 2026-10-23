@@ -24,42 +24,28 @@ struct SidebarSpaceField: View {
     }
 
     private static let dot = Color(red: 0x5d / 255, green: 0x9b / 255, blue: 0xff / 255)
-    private static let spacing: CGFloat = 5
+    fileprivate static let spacing: CGFloat = 5
     /// Strongest dot at the very bottom, as in the mock (drawn at 2x).
     private var maxOpacity: Double { displayScale < 2 ? 0.55 : 0.42 }
     private var sizeBoost: CGFloat { displayScale < 2 ? 1.3 : 1 }
     /// Still when motion is reduced or the window is in the background, to save battery.
     private var still: Bool { reduceMotion || activeState == .inactive }
 
+    /// The dot layout is worked out once per size and level; each frame only
+    /// recomputes the glow, which keeps the idle cost low.
+    @State private var layout = DotLayout()
+
     var body: some View {
-        // Ten frames a second is plenty for a slow glow and keeps idle CPU low.
-        TimelineView(.animation(minimumInterval: 1.0 / 10, paused: still)) { timeline in
+        // Eight frames a second is plenty for a slow glow.
+        TimelineView(.animation(minimumInterval: 1.0 / 8, paused: still)) { timeline in
             let time = still ? 0 : timeline.date.timeIntervalSinceReferenceDate
-            let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost
+            let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost, reach = Self.reach(for: readyBytes)
             Canvas { context, size in
-                let reach = size.height * Self.reach(for: readyBytes)
-                let cols = Int(size.width / Self.spacing)
-                let rows = Int(reach / Self.spacing)
-                guard rows > 0 else { return }
-                for row in 0...rows {
-                    let y = size.height - 3 - CGFloat(row) * Self.spacing
-                    let fade = 1 - Double(row) / Double(rows)   // 1 at the bottom, 0 at the top
-                    for col in 0..<cols {
-                        // Fewer dots higher up, so the top edge breaks up softly.
-                        guard Self.noise(col, row) < 0.05 + 0.85 * fade else { continue }
-                        let x = 3 + CGFloat(col) * Self.spacing
-                        var opacity = maxOpacity * fade * (0.55 + 0.6 * Self.noise(row, col + 97))
-                        if time != 0 {
-                            // Each dot breathes on its own slow beat, between half and full strength.
-                            let period = 2.8 + 3.2 * Self.noise(col + 13, row + 41)
-                            let phase = 2 * .pi * Self.noise(col + 59, row + 3)
-                            opacity *= 0.75 + 0.25 * sin(time * 2 * .pi / period + phase)
-                        }
-                        guard opacity > 0.015 else { continue }
-                        let r: CGFloat = (Self.noise(col + 31, row + 7) > 0.7 ? 1.25 : 0.85) * sizeBoost
-                        context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
-                                     with: .color(Self.dot.opacity(min(opacity, maxOpacity))))
-                    }
+                for dot in layout.dots(size: size, reach: reach, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
+                    var opacity = dot.opacity
+                    // Each dot breathes on its own slow beat.
+                    if time != 0 { opacity *= 0.75 + 0.25 * sin(time * dot.speed + dot.phase) }
+                    context.fill(Path(ellipseIn: dot.rect), with: .color(Self.dot.opacity(opacity)))
                 }
             }
         }
@@ -67,8 +53,44 @@ struct SidebarSpaceField: View {
         .accessibilityHidden(true)
     }
 
+    struct Dot { let rect: CGRect; let opacity: Double; let speed: Double; let phase: Double }
+
+    final class DotLayout {
+        private var key: [Double] = []
+        private var cached: [Dot] = []
+
+        func dots(size: CGSize, reach: CGFloat, maxOpacity: Double, sizeBoost: CGFloat) -> [Dot] {
+            let newKey: [Double] = [Double(size.width), Double(size.height), Double(reach), maxOpacity, Double(sizeBoost)]
+            if newKey == key { return cached }
+            key = newKey
+            cached = []
+            let cols = Int(size.width / SidebarSpaceField.spacing)
+            let rows = Int(size.height * reach / SidebarSpaceField.spacing)
+            guard rows > 0 else { return cached }
+            for row in 0...rows {
+                let y = size.height - 3 - CGFloat(row) * SidebarSpaceField.spacing
+                let fade = 1 - Double(row) / Double(rows)   // 1 at the bottom, 0 at the top
+                for col in 0..<cols {
+                    // Fewer dots higher up, so the top edge breaks up softly.
+                    guard noise(col, row) < 0.05 + 0.85 * fade else { continue }
+                    let opacity = min(maxOpacity, maxOpacity * fade * (0.55 + 0.6 * noise(row, col + 97)))
+                    guard opacity > 0.015 else { continue }
+                    let x = 3 + CGFloat(col) * SidebarSpaceField.spacing
+                    let r: CGFloat = (noise(col + 31, row + 7) > 0.7 ? 1.25 : 0.85) * sizeBoost
+                    cached.append(Dot(rect: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2),
+                                      opacity: opacity,
+                                      speed: 2 * .pi / (2.8 + 3.2 * noise(col + 13, row + 41)),
+                                      phase: 2 * .pi * noise(col + 59, row + 3)))
+                }
+            }
+            return cached
+        }
+
+        private func noise(_ a: Int, _ b: Int) -> Double { SidebarSpaceField.noise(a, b) }
+    }
+
     /// Fixed pseudo-random value in 0..<1, so the pattern is the same every launch.
-    private static func noise(_ a: Int, _ b: Int) -> Double {
+    fileprivate static func noise(_ a: Int, _ b: Int) -> Double {
         var h = UInt64(truncatingIfNeeded: (a &* 73_856_093) ^ (b &* 19_349_663))
         h ^= h >> 33; h &*= 0xff51afd7ed558ccd; h ^= h >> 33
         return Double(h % 10_000) / 10_000
