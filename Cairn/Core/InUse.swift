@@ -22,9 +22,19 @@ enum InUse {
         return paths
     }
 
+    /// True when the item holds this running copy of Cairn (its app or the
+    /// build folder it runs from) or sits inside it. Never offered, never removed.
+    static func holdsCairn(_ item: ScanItem) -> Bool {
+        let path = item.resolvedURL.standardizedFileURL.path
+        let own = [Bundle.main.bundleURL.standardizedFileURL.path,
+                   Bundle.main.executableURL?.standardizedFileURL.path].compactMap { $0 }
+        return own.contains { $0 == path || $0.hasPrefix(path + "/") || path.hasPrefix($0 + "/") }
+    }
+
     /// Why this item should be left alone now, or nil when it is safe to act on.
     static func reason(_ item: ScanItem, running: [String], now: Date = Date()) -> String? {
         let folder = item.resolvedURL.standardizedFileURL.path + "/"
+        if holdsCairn(item) { return "\(item.resolvedURL.lastPathComponent): Cairn itself runs from here." }
         if running.contains(where: { $0.hasPrefix(folder) }) {
             return "\(item.resolvedURL.lastPathComponent) in \(item.resolvedURL.deletingLastPathComponent().lastPathComponent): a running program uses it."
         }
