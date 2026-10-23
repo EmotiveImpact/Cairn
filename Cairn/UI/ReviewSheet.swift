@@ -35,18 +35,28 @@ struct ReviewSheet: View {
         }
     }
 
-    /// What the sheet offers: space freed now, or bytes that only move to the Trash.
+    /// The same total the button on the page showed, so the number never shrinks
+    /// on the way in. The note underneath says which part is freed now and which
+    /// part waits in the Trash.
     private var title: String {
+        if freedNow > 0 && toTrash > 0 { return "Clean \(Fmt.size(freedNow + toTrash))" }
         if freedNow > 0 { return "Free \(Fmt.size(freedNow))" }
         if toTrash > 0 { return "Move \(Fmt.size(toTrash)) to the Trash" }
         return "Nothing to free"
     }
     /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
-        guard freedNow > 0 else { return nil }
-        let removed = "Caches and build files are removed straight away and can't be put back. They rebuild on their own when needed."
-        guard toTrash > 0 else { return removed }
-        return removed + " Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back."
+        if freedNow > 0 && toTrash > 0 {
+            return "\(Fmt.size(freedNow)) of caches and build files is freed straight away. They rebuild on their own when needed. "
+                + "Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back. Empty the Trash to free that space too."
+        }
+        if freedNow > 0 {
+            return "Caches and build files are removed straight away and can't be put back. They rebuild on their own when needed."
+        }
+        if toTrash > 0 {
+            return "Your own files go to the Trash, where you can put them back. The space comes back when the Trash is emptied."
+        }
+        return nil
     }
 
     /// The review sheet from the reference (night-screens-v2.html, s2): eyebrow,
@@ -171,6 +181,12 @@ struct ReviewSheet: View {
     /// Shown only when they apply, as single quiet lines.
     private var noteLines: [(text: String, tint: Color)] {
         var lines: [(text: String, tint: Color)] = []
+        // The button is never greyed out without a reason on screen.
+        if !cleaning {
+            if store.isScanning { lines.append(("A scan is running. Freeing starts once it finishes.", Brand.amber)) }
+            else if store.isCleaning { lines.append(("Another clean is still running. Try again when it finishes.", Brand.amber)) }
+            else if runnable.isEmpty { lines.append(("Nothing here can be removed by Cairn.", Brand.amber)) }
+        }
         if hasPersonalFilesToDelete {
             lines.append(("Delete now is on in Settings, so your own files here are deleted for good, not sent to the Trash.", Brand.amber))
         }
@@ -210,7 +226,7 @@ struct ReviewSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     if cleaning { ProgressView().controlSize(.small) }
-                    Text(cleaning ? "Freeing…" : freedNow > 0 ? "Free \(Fmt.size(freedNow))" : "Move to Trash")
+                    Text(cleaning ? "Freeing…" : title)
                 }
             }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))

@@ -21,6 +21,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 | 🟡 | **Most of the scan total is "Large & old files"** (33 of 53 GB), which Cairn only shows for review. | The headline number looked far bigger than what one click frees. | Fixed in PR #5: "Ready to free" is shown separately from "Needs you". |
 | 🟡 | **Weekly auto-scan on launch did not run** on a test build. | The menu bar and Home can show old numbers. | Not investigated yet. |
 | 🟡 | **Whole-disk search and sizing large folders is slow** (BUG-014). | Long waits on big disks. | Reduced, not solved. |
+| 🟠 | **"I can't delete after selecting."** Clean › General said "Review and free 1.31 GB", then the review said "Free 188.5 MB". | The clean did run (23 Oct, 08:37): caches deleted, installers moved to the Trash. The review left Trash-bound files out of its number, and a 1.2 MB `.cursor` build folder was listed but always refused. The window then closed because a test session quit the wrong Cairn. | PR #12: one total from button to review, refused items never listed, Large Files reviews only its own picks. |
 | ⚪ | **GitHub's automatic build checks sometimes do not start** on this repository. | Pull requests can show red for reasons outside the change. | Builds are checked on the Mac instead when this happens. |
 
 ### Open issues (not bugs, but blocking a release)

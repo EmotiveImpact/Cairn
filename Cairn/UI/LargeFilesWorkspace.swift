@@ -79,13 +79,17 @@ struct LargeFilesWorkspace: View {
             else { NightEmpty(title: "Choose a file", message: "Its preview and where it lives appear here.") }
         } actions: {
             NightTotal(strong: Fmt.size(selectedBytes),
-                       rest: selectedElsewhere > 0 ? "selected · \(selectedElsewhere) more chosen on other screens" : "selected")
+                       rest: selectedElsewhere > 0 ? "selected · \(selectedElsewhere) picked on other screens are not included" : "selected")
             Spacer()
             if !selected.isEmpty {
                 Button("Select none") { for item in selected { store.toggle(item.id) } }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
             }
-            Button("Review and move to Trash", action: onReview)
+            // Reviews only the files picked here, so the review shows this same number.
+            Button(selected.isEmpty ? "Review and move to Trash" : "Review and move \(Fmt.size(selectedBytes))") {
+                store.beginScopedReview(Set(selected.map(\.id)))
+                onReview()
+            }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                 .disabled(preview || selected.isEmpty || store.isScanning || store.isCleaning)
         }
