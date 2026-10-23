@@ -195,6 +195,8 @@ struct AppShell: View {
 
     var body: some View {
         shellWithSheets
+        // Website screenshots: no focus ring on whichever control has keyboard focus.
+        .focusEffectDisabled(Showcase.active)
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
@@ -310,7 +312,7 @@ struct AppShell: View {
             if Showcase.active {
                 section = .dashboard
                 try? await Task.sleep(nanoseconds: 300_000_000)
-                celebration = CompletionPresentation(summary: RecoveryWorkspace.sampleSummary)
+                celebration = CompletionPresentation(summary: RecoveryWorkspace.showcaseSummary)
                 try? await Task.sleep(nanoseconds: settle)
                 await WindowCapture.save("result", to: folder)
                 celebration = nil

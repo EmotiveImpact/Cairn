@@ -45,6 +45,20 @@ struct RecoveryWorkspace: View {
                                         after: .init(volumeID: "sample", name: "Macintosh HD", available: 31_900_000_000))]
         return result
     }
+    /// The showcase's Done screen: the 38.6 GB from Home and the review sheet,
+    /// freed straight away, with free space rising from 42.6 to 81.2 GB.
+    static var showcaseSummary: ScanStore.CleanSummary {
+        var result = ScanStore.CleanSummary(failed: 0, errors: [])
+        for bytes in [14_200_000_000, 5_200_000_000, 2_500_000_000, 1_800_000_000, 5_100_000_000] as [Int64] {
+            result.accounting.record(.init(bytesAffected: bytes, usedTool: false, deleted: true))
+        }
+        result.accounting.record(.init(bytesAffected: 9_800_000_000, usedTool: true, deleted: true))
+        let before = PreviewStorageScenario.availableBytes
+        result.capacityChanges = [.init(id: "sample",
+                                        before: .init(volumeID: "sample", name: "Macintosh HD", available: before),
+                                        after: .init(volumeID: "sample", name: "Macintosh HD", available: before + 38_600_000_000))]
+        return result
+    }
     private static let sampleEntries: [ScanStore.RemovalLogEntry] = {
         [ScanStore.RemovalLogEntry(name: "Old-installer.dmg", originalPath: "~/Downloads/Old-installer.dmg", trashPath: "~/.Trash/Old-installer.dmg", bytes: 940_000_000, date: Date(), category: "installers"),
          ScanStore.RemovalLogEntry(name: "Assets-export.zip", originalPath: "~/Downloads/Assets-export.zip", trashPath: "~/.Trash/Assets-export.zip", bytes: 2_160_000_000, date: Date(), category: "large-old")]
