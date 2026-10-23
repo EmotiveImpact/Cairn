@@ -182,6 +182,38 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Move fixture failed: \(error)")
         }
+        // iPhone backups: summary files only; old cloud copies compared by name and size.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-phone-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let backup = root.appendingPathComponent("Backup/00008030-001A2B3C4D5E6F70")
+            try fm.createDirectory(at: backup, withIntermediateDirectories: true)
+            let info: [String: Any] = ["Device Name": "Edem's iPhone", "Product Type": "iPhone13,2", "Product Version": "17.4",
+                                       "Last Backup Date": Date(timeIntervalSinceNow: -400 * 86_400)]
+            try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0).write(to: backup.appendingPathComponent("Info.plist"))
+            try PropertyListSerialization.data(fromPropertyList: ["IsEncrypted": true], format: .xml, options: 0).write(to: backup.appendingPathComponent("Manifest.plist"))
+            try fm.createDirectory(at: root.appendingPathComponent("Backup/not-a-backup"), withIntermediateDirectories: true)
+            let listing = PhoneBackups.list(root: root.appendingPathComponent("Backup"))
+            let found = listing.backups.first
+            check(listing.backups.count == 1 && found?.deviceName == "Edem's iPhone" && found?.model == "iPhone 12"
+                  && found?.passwordProtected == true && found?.isOld == true, "iPhone backups show device, model, date and password")
+            check(found?.target.mode == .archive && found?.target.privateFiles == false, "Password-protected backups move as archives without a warning")
+            check(PhoneBackups.friendlyModel("iPad13,1") == "iPad" && PhoneBackups.friendlyModel("x") == "iPhone", "Unknown models read as plain names")
+            let old = root.appendingPathComponent("home/Dropbox (Old)")
+            let live = root.appendingPathComponent("home/Library/CloudStorage/Dropbox")
+            try fm.createDirectory(at: old.appendingPathComponent("Work"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: live.appendingPathComponent("Work"), withIntermediateDirectories: true)
+            try Data(repeating: 1, count: 100).write(to: old.appendingPathComponent("Work/a.txt"))
+            try Data(repeating: 1, count: 100).write(to: live.appendingPathComponent("Work/a.txt"))
+            try Data(repeating: 2, count: 50).write(to: old.appendingPathComponent("Work/only-here.txt"))
+            let spares = CloudSpace.oldSyncFolders(home: root.appendingPathComponent("home"), live: [("Dropbox", "Dropbox", live)])
+            check(spares.count == 1 && spares.first?.onlyHere == 1, "Old sync folders count files that exist only there")
+            check(CloudSpace.providerName("GoogleDrive-me@example.com") == "Google Drive" && CloudSpace.providerName("OneDrive-Personal") == "OneDrive",
+                  "Cloud folders get plain names")
+        } catch {
+            check(false, "Phone and cloud fixture failed: \(error)")
+        }
         // AI tool connections: only the cairn entry changes, and unreadable files are left alone.
         do {
             let fm = FileManager.default

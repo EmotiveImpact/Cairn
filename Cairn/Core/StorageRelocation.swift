@@ -152,13 +152,15 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
     var targets: [RelocationTarget] {
         var seen = Set(RelocationTarget.all.map(\.id))
         var result = RelocationTarget.all
-        for record in records where record.targetID.hasPrefix("own:") && !seen.contains(record.targetID) {
+        // Own files and iPhone backups are found again from their history.
+        for record in records where !seen.contains(record.targetID)
+            && (record.targetID.hasPrefix("own:") || record.targetID.hasPrefix("iphone-backup:")) {
             seen.insert(record.targetID)
-            let relative = String(record.targetID.dropFirst(4))
+            let folder = (record.volumePath ?? "").replacingOccurrences(of: RelocationTarget.driveRoot + "/", with: "")
             result.append(RelocationTarget(id: record.targetID, title: record.title ?? URL(fileURLWithPath: record.source).lastPathComponent,
                                            url: URL(fileURLWithPath: record.source), mode: .archive,
-                                           whileDisconnected: "Plug the drive in to open it.", privateFiles: true,
-                                           driveFolder: RelocationTarget.ownFolder + "/" + relative))
+                                           whileDisconnected: "Plug the drive in to open it.", privateFiles: record.privateFiles ?? true,
+                                           driveFolder: folder))
         }
         return result
     }
