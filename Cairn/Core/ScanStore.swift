@@ -525,6 +525,8 @@ final class ScanStore {
     /// Filter + file one found item into its bucket (the single item chokepoint).
     private func applyItem(_ item: ScanItem) {
         if AppSettings.shared.isExcluded(item.resolvedURL) { return }
+        // Never list Cairn's own app or the build folder this copy runs from.
+        if InUse.holdsCairn(item) { return }
         // Honor the Developer Tools settings here too.
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
