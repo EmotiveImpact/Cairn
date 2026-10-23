@@ -261,6 +261,27 @@ enum WorkspaceCheck {
                   && spare.lastPathComponent.hasPrefix("models (kept "), "Bring back can keep a spare copy on the drive")
             check(Relocation.spareName(for: onDrive) != spare,
                   "A second spare gets its own name")
+            // Make room rows: one choice each, never app data to the cloud.
+            let ollama = RelocationTarget.appTargets.first { $0.id == "ollama-models" }!
+            let derived = RelocationTarget.appTargets.first { $0.id == "xcode-derived-data" }!
+            let derivedFinding = ScanItem(url: derived.url, allocatedSize: 7_000_000_000, categoryID: "developer", severity: .safe)
+            let film = ScanItem(url: home.appendingPathComponent("Movies/old.mov"), allocatedSize: 3_000_000_000, categoryID: "large", severity: .review, isRegenerable: false)
+            try fm.createDirectory(at: home.appendingPathComponent("Movies"), withIntermediateDirectories: true)
+            try Data(repeating: 1, count: 10).write(to: film.url)
+            let roomRows = MakeRoomPlan.rows(scan: [derivedFinding, film], targets: [ollama, derived],
+                                             measured: ["ollama-models": 8_000_000_000, "xcode-derived-data": 7_000_000_000],
+                                             offloaded: [], backups: [], clouds: [], driveReady: true, cloudReady: true, home: home.resolvingSymlinksInPath())
+            func roomRow(_ id: String) -> MakeRoomRow? { roomRows.first { $0.id == id } }
+            check(roomRow("move:ollama-models")?.ways == [.ssd] && roomRow("move:ollama-models")?.suggested == .ssd,
+                  "App data offers only the SSD")
+            check(roomRow("move:xcode-derived-data")?.ways == [.bin, .ssd] && roomRow("move:xcode-derived-data")?.suggested == .bin
+                  && roomRows.count == 3, "A move target found by the scan becomes one row with Bin and SSD")
+            check(roomRows.first { $0.title == "old.mov" }?.ways == [.bin, .ssd, .cloud], "Your own files offer Bin, SSD and Cloud")
+            check(MakeRoomPlan.rows(scan: [], targets: [ollama], measured: ["ollama-models": 8_000_000_000], offloaded: ["ollama-models"],
+                                    backups: [], clouds: [], driveReady: true, cloudReady: false).isEmpty, "Things already on the SSD are not offered again")
+            check(MakeRoomPlan.summary([.ssd: 47_900_000_000, .bin: 16_300_000_000, .cloud: 6_200_000_000], drive: "Studio SSD")?.rest
+                  == "chosen · 47.9 GB to Studio SSD, 16.3 GB to the Bin, 6.2 GB online only" && MakeRoomPlan.summary([:], drive: "x") == nil,
+                  "The Make room total names where everything goes")
             let gone = root.appendingPathComponent("Volumes/Studio SSD/Cairn Offload/models").path
             func moved(_ id: String, _ title: String, _ status: RelocationRecord.Status, _ mode: Relocation.Mode, _ destination: String) -> RelocationRecord {
                 RelocationRecord(targetID: id, source: "/x/\(id)", destination: destination, volumeID: "V", volumeName: "Studio SSD",
