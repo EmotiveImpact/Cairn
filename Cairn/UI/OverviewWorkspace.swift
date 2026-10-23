@@ -180,7 +180,7 @@ struct OverviewWorkspace: View {
             HStack(spacing: 6) {
                 Text("\(Fmt.size(toReviewBytes)) more to look through yourself")
                     .foregroundStyle(Brand.textMuted)
-                Button("See what it is") { onOpen(.smartScan) }
+                Button("See what it is") { onOpen(.lookThrough) }
                     .buttonStyle(.plain).foregroundStyle(Brand.room)
             }
             .font(.system(size: 13)).padding(.top, 6)

@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, lookThrough, largeFiles, duplicates, apps, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -18,6 +18,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .developer: return "Developer Cleanup"
         case .ai: return "AI Models"
         case .creative: return "Creative Pro"
+        case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
@@ -41,6 +42,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .developer: return "chevron.left.forwardslash.chevron.right"
         case .ai: return "brain.head.profile"
         case .creative: return "film"
+        case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
         case .duplicates: return "doc.on.doc"
         case .apps: return "square.grid.2x2"
@@ -507,6 +509,8 @@ struct AppShell: View {
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
+        case .lookThrough:
+            LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } })
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
@@ -546,7 +550,7 @@ struct NavSidebar: View {
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
     private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .bugs]
-    private let fileItems: [NavSection] = [.largeFiles, .duplicates, .storage]
+    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {
