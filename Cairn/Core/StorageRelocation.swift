@@ -37,7 +37,7 @@ struct RelocationTarget: Identifiable, Sendable, Hashable {
     static let docker = RelocationTarget(id: "docker-desktop", title: "Docker's disk", url: DockerMove.currentDataFolder(), mode: .archive,
                                          whileDisconnected: "Docker will not start until the drive is back.", driveFolder: "docker-desktop")
 
-    private static let appTargets: [RelocationTarget] = [
+    static let appTargets: [RelocationTarget] = [
         RelocationTarget(id: "ollama-models", title: "Ollama models", url: home(".ollama/models"), mode: .linkBack,
                          closeFirst: "Ollama", bundleIDs: ["com.electron.ollama"], processNames: ["ollama", "Ollama"],
                          whileDisconnected: "Ollama cannot load or pull models until the drive is back.", driveFolder: "ollama-models"),
@@ -161,6 +161,21 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
                                            url: URL(fileURLWithPath: record.source), mode: .archive,
                                            whileDisconnected: "Plug the drive in to open it.", privateFiles: record.privateFiles ?? true,
                                            driveFolder: folder))
+        }
+        return result
+    }
+
+    /// App data linked to a drive that is not here, newest first. Only
+    /// linked items are counted: an archive is not missed by any app.
+    nonisolated static func away(_ records: [RelocationRecord]) -> [(title: String, drive: String)] {
+        var seen = Set<String>()
+        var result: [(title: String, drive: String)] = []
+        for record in records where seen.insert(record.targetID).inserted {
+            guard record.status == .offloaded, record.resolvedMode != .archive,
+                  !Relocation.exists(URL(fileURLWithPath: record.destination)) else { continue }
+            let title = record.title ?? RelocationTarget.appTargets.first { $0.id == record.targetID }?.title
+                ?? URL(fileURLWithPath: record.source).lastPathComponent
+            result.append((title, record.volumeName))
         }
         return result
     }

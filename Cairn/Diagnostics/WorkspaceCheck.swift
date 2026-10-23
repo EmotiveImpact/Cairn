@@ -211,6 +211,21 @@ enum WorkspaceCheck {
             check(spares.count == 1 && spares.first?.onlyHere == 1, "Old sync folders count files that exist only there")
             check(CloudSpace.providerName("GoogleDrive-me@example.com") == "Google Drive" && CloudSpace.providerName("OneDrive-Personal") == "OneDrive",
                   "Cloud folders get plain names")
+            let gone = root.appendingPathComponent("Volumes/Studio SSD/Cairn Offload/models").path
+            func moved(_ id: String, _ title: String, _ status: RelocationRecord.Status, _ mode: Relocation.Mode, _ destination: String) -> RelocationRecord {
+                RelocationRecord(targetID: id, source: "/x/\(id)", destination: destination, volumeID: "V", volumeName: "Studio SSD",
+                                 status: status, detail: "", mode: mode, title: title)
+            }
+            let away = RelocationStore.away([
+                moved("ollama-models", "Ollama models", .offloaded, .linkBack, gone),
+                moved("ollama-models", "Ollama models", .restored, .linkBack, gone),
+                moved("xcode-derived-data", "Xcode build files", .offloaded, .freshOnDrive, gone),
+                moved("own:a", "Films", .offloaded, .archive, gone),
+                moved("lmstudio-models", "LM Studio models", .offloaded, .linkBack, root.path),
+            ])
+            check(away.map(\.title) == ["Ollama models", "Xcode build files"], "Menu counts only linked moves whose drive is away")
+            check(MenuGuardian.awayTitle(away) == "Studio SSD holds Ollama models and 1 more" && MenuGuardian.awayTitle([]) == nil,
+                  "Menu names the drive to plug in")
         } catch {
             check(false, "Phone and cloud fixture failed: \(error)")
         }
