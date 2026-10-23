@@ -558,7 +558,7 @@ struct NavSidebar: View {
             .padding(.horizontal, 20).padding(.top, 64).padding(.bottom, 17)
             .accessibilityElement(children: .combine)
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     NavRow(item: .dashboard, section: $section)
                     NavRow(item: .projects, section: $section)
                     SidebarDisclosure(title: "Clean", glyph: .clean, items: cleanItems, section: $section)
@@ -567,10 +567,10 @@ struct NavSidebar: View {
                     NavRow(item: .activity, section: $section, also: [.changes])
                         .help("Free space over time, cleanup receipts and recovery")
                 }
-                .padding(.horizontal, 11).padding(.top, 2)
+                .padding(.horizontal, 10).padding(.top, 2)
             }
             NavRow(item: .settings, section: $section)
-                .padding(.horizontal, 11).padding(.bottom, 10)
+                .padding(.horizontal, 10).padding(.bottom, 10)
         }
         .frame(width: 200)
         .background {
@@ -602,20 +602,20 @@ private struct SidebarDisclosure: View {
                 expanded.toggle()
                 manuallyExpanded = expanded
             } label: {
-                HStack(spacing: 11) {
+                HStack(spacing: 10) {
                     SidebarIcon(glyph: glyph)
-                        .frame(width: 21).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
-                    Text(title).font(.system(size: 14, weight: .regular)).foregroundStyle(Brand.textSecondary)
+                        .frame(width: 16).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
+                    Text(title).font(.system(size: 13.5, weight: .regular)).foregroundStyle(Brand.textSecondary)
                     Spacer(minLength: 0)
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
-                }.padding(.horizontal, 11).frame(height: 39).contentShape(Rectangle())
+                }.padding(.horizontal, 10).frame(height: 33).contentShape(Rectangle())
             }
             .buttonStyle(SidebarButtonStyle())
             .focusEffectDisabled(!AppSettings.shared.showSidebarFocus)
             .accessibilityLabel("\(title), \(expanded ? "expanded" : "collapsed")")
 
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 ForEach(items) { item in
                     NavRow(item: item, section: $section, child: true,
                            label: item == .general ? "General" :
@@ -680,28 +680,28 @@ private struct NavRow: View {
             guard section != item else { return }
             SidebarNavigation.update { section = item }
         } label: {
-            HStack(spacing: 11) {
+            HStack(spacing: 10) {
                 if !child {
                     Group {
                         if let glyph = item.glyph { SidebarIcon(glyph: glyph) }
                         else { Image(systemName: item.icon).font(.system(size: 15, weight: .light)) }
                     }
                     .foregroundStyle(selected ? Brand.room : Brand.textSecondary)
-                    .frame(width: 21)
+                    .frame(width: 16)
                 }
                 Text(label ?? item.title).lineLimit(1)
-                    .font(.system(size: child ? 13 : 14, weight: .regular))
+                    .font(.system(size: child ? 13 : 13.5, weight: .regular))
                     .foregroundStyle(selected ? Brand.textPrimary : Brand.textSecondary)
                 Spacer()
             }
-            .padding(.leading, child ? 17 : 11).padding(.trailing, 11)
-            .frame(height: child ? 34 : 44)
+            .padding(.leading, child ? 20 : 10).padding(.trailing, 10)
+            .frame(height: child ? 30 : 33)
             .background {
                 if selected && !child {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Brand.surfaceSubtle)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Brand.surfaceSubtle)
                 }
             }
-            .padding(.leading, child ? 38 : 0)
+            .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarButtonStyle())
