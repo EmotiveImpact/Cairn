@@ -16,29 +16,13 @@ struct CapacityGapOverlay: View {
                        let endX = proxy.position(forX: gap.end),
                        let startY = proxy.position(forY: Double(gap.before.available) / 1e9),
                        let endY = proxy.position(forY: Double(gap.after.available) / 1e9) {
-                        let width = endX - startX
-                        let center = CGPoint(x: bounds.minX + (startX + endX) / 2,
-                                             y: bounds.minY + (startY + endY) / 2)
                         Path { path in
                             path.move(to: CGPoint(x: bounds.minX + startX, y: bounds.minY + startY))
                             path.addLine(to: CGPoint(x: bounds.minX + endX, y: bounds.minY + endY))
                         }
-                        .stroke(Brand.blue, style: StrokeStyle(lineWidth: 1, dash: [4, 5]))
-                        .accessibilityHidden(true)
-
-                        // Tight intervals retain the dashed bridge and hover
-                        // explanation without a label covering measured data.
-                        if width >= 132 {
-                            Text("No saved readings")
-                                .font(.system(size: 11))
-                                .foregroundStyle(Brand.textMuted)
-                                .fixedSize()
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(Brand.background, in: RoundedRectangle(cornerRadius: 4))
-                                .position(center)
-                                .accessibilityLabel(gap.detail)
-                        }
+                        // Faint, unlabelled bridge: the hover readout explains it.
+                        .stroke(Brand.textMuted.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [2, 5]))
+                        .accessibilityLabel(gap.detail)
                     }
                 }
             }

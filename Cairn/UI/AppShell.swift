@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, lookThrough, largeFiles, duplicates, apps, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -18,6 +18,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .developer: return "Developer Cleanup"
         case .ai: return "AI Models"
         case .creative: return "Creative Pro"
+        case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
@@ -33,7 +34,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         switch self {
         case .dashboard: return "house"
         case .changes: return "chart.xyaxis.line"
-        case .projects: return "folder.badge.gearshape"
+        case .projects: return "folder"
         case .makeRoom: return "plus.circle"
         case .smartScan: return "scope"
         case .general: return "sparkles"
@@ -41,13 +42,26 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .developer: return "chevron.left.forwardslash.chevron.right"
         case .ai: return "brain.head.profile"
         case .creative: return "film"
+        case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
         case .duplicates: return "doc.on.doc"
-        case .apps: return "square.stack.3d.up"
+        case .apps: return "square.grid.2x2"
         case .storage: return "externaldrive"
         case .bugs: return "heart.text.square"
-        case .activity: return "clock.arrow.circlepath"
-        case .settings: return "gearshape"
+        case .activity: return "clock"
+        case .settings: return "circle.circle"
+        }
+    }
+
+    /// The mockup's own line icon for the top-level sidebar rows.
+    var glyph: SidebarIcon.Glyph? {
+        switch self {
+        case .dashboard: return .home
+        case .projects: return .projects
+        case .apps: return .apps
+        case .activity: return .activity
+        case .settings: return .settings
+        default: return nil
         }
     }
 
@@ -92,6 +106,7 @@ struct AppShell: View {
         else { return .dashboard }
         return s
     }()
+    @Environment(\.accessibilityReduceMotion) private var shellReduceMotion
     @State private var showReview = false
     @State private var reviewedGoalPlan: ReviewedSpacePlan?
     @State private var goalReviewPending = false
@@ -114,10 +129,12 @@ struct AppShell: View {
             && store.buckets.contains { $0.permissionGap }
     }
 
-    var body: some View {
+    /// Sidebar and page. Kept apart from `body`'s long modifier chain so the
+    /// compiler can type-check each in reasonable time.
+    private var shellLayout: some View {
         GeometryReader { viewport in
             HStack(spacing: 0) {
-                NavSidebar(section: $section)
+                NavSidebar(section: $section, readyBytes: store.recommendedBytes)
                 VStack(spacing: 0) {
                     if let message = store.removalLogError {
                         Text(message).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Brand.deepPanel)
@@ -125,23 +142,29 @@ struct AppShell: View {
                     if showFDABanner { fdaBanner }
                     // Shell-owned stores survive navigation.
                     if showResultFilter && supportsResultFilter { resultFilter }
-                    content
+                    // Pages switch instantly. An implicit animation here animated every
+                    // frame on the incoming page, so text slid into place on each switch.
+                    mainContent
                         .frame(minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
                         .clipped()
-                        .overlay(alignment: .topTrailing) { inPanelTools }
-                    statusBar.fixedSize(horizontal: false, vertical: true)
+                    runningStatus
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
         }
+    }
+
+    /// The layout with its sheets and scan rotation. Split from `body` so
+    /// neither chain is too long for the type checker.
+    private var shellWithSheets: some View {
+        shellLayout
         .ignoresSafeArea(.container, edges: .top)
         .background(Brand.chrome)
         .sheet(isPresented: $showReview, onDismiss: {
             goalReviewPending = false; reviewedGoalPlan = nil
+            store.endScopedReview()
             if let pendingSummary { celebration = CompletionPresentation(summary: pendingSummary); self.pendingSummary = nil }
         }) {
             ReviewSheet(store: store, proEnabled: proEnabled, goalPlan: goalReviewPending ? reviewedGoalPlan : nil,
@@ -150,9 +173,6 @@ struct AppShell: View {
                             if goalReviewPending { goalReceiptRunID = store.lastCleanRunID }
                             goalReviewPending = false
                         })
-        }
-        .sheet(item: $celebration) { result in
-            WorkspaceCompletion(summary: result.summary, onRecovery: { celebration = nil; section = .activity }, onClose: { celebration = nil })
         }
         .sheet(isPresented: $showStatePreview) { DialogStatePreview() }
         .task { if previewMode && CommandLine.arguments.contains("--preview-states") { showStatePreview = true } }
@@ -169,6 +189,10 @@ struct AppShell: View {
                 scanActivityIndex = count > 1 ? (scanActivityIndex + 1) % count : 0
             }
         }
+    }
+
+    var body: some View {
+        shellWithSheets
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
@@ -177,7 +201,8 @@ struct AppShell: View {
             developerSearch = ""
             searchFocused = false
             showResultFilter = false
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(next)
+            showDeveloperInspector = false
+            celebration = nil
         }
         .onChange(of: appStore.isUninstalling) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
         .onChange(of: dupStore.isRemoving) { _, active in if !active && !previewMode { Task { await control.refreshCapacity(force: true) } } }
@@ -193,8 +218,11 @@ struct AppShell: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: ScanGate.changed)) { _ in operation = ScanGate.shared.snapshot }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
+        // The menu bar Cairn builds stone by stone while a scan runs.
+        .onChange(of: store.isScanning && !previewMode ? store.scanProgress : -1) { _, progress in
+            CairnMenuBar.shared.setScanProgress(progress < 0 ? nil : progress)
+        }
         .onAppear {
-            showDeveloperInspector = [.largeFiles, .duplicates, .apps, .projects].contains(section)
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }
             CairnMenuBar.shared.scanStatus = { menuScanStatus }
             handleMenuRequest()
@@ -334,28 +362,6 @@ struct AppShell: View {
         }
     }
 
-    /// Page tools belong to the rounded workspace, alongside each page's own
-    /// heading. The title bar is reserved for the native window controls.
-    @ViewBuilder private var inPanelTools: some View {
-        if ![NavSection.dashboard, .changes, .makeRoom, .largeFiles, .storage, .settings, .activity].contains(section) {
-            HStack(spacing: 8) {
-                Button(action: rescanCurrentSection) {
-                    Label(currentScanning ? "Stop scan" : "Rescan", systemImage: currentScanning ? "stop.circle" : "arrow.clockwise")
-                }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(previewMode || store.isCleaning || appStore.isUninstalling || dupStore.isRemoving || healthStore.isFixing)
-                Button { showDeveloperInspector.toggle() } label: {
-                    Image(systemName: "sidebar.right")
-                }
-                .help(showDeveloperInspector ? "Hide details" : "Show details")
-                .accessibilityLabel(showDeveloperInspector ? "Hide details" : "Show details")
-            }
-            .buttonStyle(ControlPanelButtonStyle())
-            .padding(.top, 23)
-            .padding(.trailing, showDeveloperInspector ? 326 : 26)
-        }
-    }
-
     private var supportsResultFilter: Bool {
         ![NavSection.dashboard, .makeRoom, .storage, .settings].contains(section)
     }
@@ -401,6 +407,25 @@ struct AppShell: View {
         }
     }
 
+    /// The Done screen takes the page beside the sidebar until the next navigation.
+    @ViewBuilder private var mainContent: some View {
+        if let result = celebration {
+            WorkspaceCompletion(summary: result.summary,
+                                onRecovery: { celebration = nil; section = .activity },
+                                onClose: { celebration = nil },
+                                store: store)
+        } else {
+            content.id(section)
+        }
+    }
+
+    /// The status line only earns its place while something is running.
+    @ViewBuilder private var runningStatus: some View {
+        if store.isScanning || store.isCleaning {
+            statusBar.fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
     private var statusBar: some View {
         HStack(spacing: 8) {
             Text("Cairn").fixedSize()
@@ -411,6 +436,8 @@ struct AppShell: View {
             }
             Text(previewMode ? "Visual preview · sample data · disk actions disabled" : operationStatus)
                 .lineLimit(1).truncationMode(.middle)
+                // Home has its own shimmering scan line; one moving line at a time.
+                .shimmer(!previewMode && (store.isScanning || store.isCleaning) && !(section == .dashboard && store.isScanning))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "lock.shield").foregroundStyle(Brand.textMuted)
             Text("Review before removal").fixedSize()
@@ -503,6 +530,8 @@ struct AppShell: View {
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
+        case .lookThrough:
+            LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
@@ -527,9 +556,11 @@ struct AppShell: View {
 }
 
 /// The single dark surface inside Cairn's graphite window surround.
+/// Full-bleed content area, as in the approved Make room mock: no inset card,
+/// with the soft blue glow near the top left.
 struct AppBackground: View {
     var body: some View {
-        Brand.background
+        ZStack { Brand.background; Brand.glow }
     }
 }
 
@@ -537,11 +568,12 @@ struct AppBackground: View {
 
 struct NavSidebar: View {
     @Binding var section: NavSection
+    var readyBytes: Int64 = 0
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
     private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .bugs]
-    private let fileItems: [NavSection] = [.largeFiles, .duplicates, .storage]
+    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -554,22 +586,29 @@ struct NavSidebar: View {
             .padding(.horizontal, 20).padding(.top, 64).padding(.bottom, 17)
             .accessibilityElement(children: .combine)
             ScrollView {
-                VStack(spacing: 4) {
+                VStack(spacing: 2) {
                     NavRow(item: .dashboard, section: $section)
                     NavRow(item: .projects, section: $section)
-                    SidebarDisclosure(title: "Clean", icon: "paintbrush", items: cleanItems, section: $section)
-                    SidebarDisclosure(title: "Files", icon: "doc.on.doc", items: fileItems, section: $section)
+                    SidebarDisclosure(title: "Clean", glyph: .clean, items: cleanItems, section: $section)
+                    SidebarDisclosure(title: "Files", glyph: .files, items: fileItems, section: $section)
                     NavRow(item: .apps, section: $section)
                     NavRow(item: .activity, section: $section, also: [.changes])
                         .help("Free space over time, cleanup receipts and recovery")
                 }
-                .padding(.horizontal, 11).padding(.top, 2)
+                .padding(.horizontal, 10).padding(.top, 2)
             }
             NavRow(item: .settings, section: $section)
-                .padding(.horizontal, 11).padding(.bottom, 10)
+                .padding(.horizontal, 10).padding(.bottom, 10)
         }
         .frame(width: 200)
-        .background(Brand.chrome)
+        .background {
+            ZStack {
+                Brand.chrome
+                SidebarSpaceField(readyBytes: readyBytes)
+            }
+        }
+        // A hairline where the sidebar meets the content, as in the mock.
+        .overlay(alignment: .trailing) { Rectangle().fill(Brand.wash(0.06)).frame(width: 1) }
     }
 
 }
@@ -578,7 +617,7 @@ struct NavSidebar: View {
 /// opening reserves space first; closing releases it only after the fade ends.
 private struct SidebarDisclosure: View {
     let title: String
-    let icon: String
+    let glyph: SidebarIcon.Glyph
     let items: [NavSection]
     @Binding var section: NavSection
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -586,6 +625,7 @@ private struct SidebarDisclosure: View {
     @State private var manuallyExpanded = false
     @State private var occupiesSpace = false
     @State private var visible = false
+    @State private var hovering = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -593,20 +633,25 @@ private struct SidebarDisclosure: View {
                 expanded.toggle()
                 manuallyExpanded = expanded
             } label: {
-                HStack(spacing: 11) {
-                    Image(systemName: icon).font(.system(size: 15))
-                        .frame(width: 21).foregroundStyle(items.contains(section) ? Brand.blue : Brand.textSecondary)
-                    Text(title).font(.system(size: 14, weight: .regular)).foregroundStyle(Brand.textPrimary)
+                HStack(spacing: 10) {
+                    SidebarIcon(glyph: glyph)
+                        .frame(width: 16).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
+                    Text(title).font(.system(size: 13.5, weight: .regular)).foregroundStyle(Brand.textSecondary)
                     Spacer(minLength: 0)
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
-                }.padding(.horizontal, 11).frame(height: 39).contentShape(Rectangle())
+                }.padding(.horizontal, 10).frame(height: 33)
+                .background {
+                    if hovering { RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04)) }
+                }
+                .onHover { hovering = $0 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(SidebarButtonStyle())
             .focusEffectDisabled(!AppSettings.shared.showSidebarFocus)
             .accessibilityLabel("\(title), \(expanded ? "expanded" : "collapsed")")
 
-            VStack(spacing: 4) {
+            VStack(spacing: 2) {
                 ForEach(items) { item in
                     NavRow(item: item, section: $section, child: true,
                            label: item == .general ? "General" :
@@ -664,6 +709,7 @@ private struct NavRow: View {
     var label: String? = nil
     /// Pages reached from this row that should keep it highlighted.
     var also: [NavSection] = []
+    @State private var hovering = false
 
     var body: some View {
         let selected = section == item || also.contains(section)
@@ -671,26 +717,31 @@ private struct NavRow: View {
             guard section != item else { return }
             SidebarNavigation.update { section = item }
         } label: {
-            HStack(spacing: 11) {
+            HStack(spacing: 10) {
                 if !child {
-                    Image(systemName: item.icon)
-                        .font(.system(size: 15, weight: .regular))
-                        .foregroundStyle(selected ? Brand.blue : Brand.textSecondary)
-                        .frame(width: 21)
+                    Group {
+                        if let glyph = item.glyph { SidebarIcon(glyph: glyph) }
+                        else { Image(systemName: item.icon).font(.system(size: 15, weight: .light)) }
+                    }
+                    .foregroundStyle(selected ? Brand.room : Brand.textSecondary)
+                    .frame(width: 16)
                 }
                 Text(label ?? item.title).lineLimit(1)
-                    .font(.system(size: child ? 13 : 14, weight: .regular))
+                    .font(.system(size: child ? 13 : 13.5, weight: .regular))
                     .foregroundStyle(selected ? Brand.textPrimary : Brand.textSecondary)
                 Spacer()
             }
-            .padding(.leading, child ? 17 : 11).padding(.trailing, 11)
-            .frame(height: child ? 34 : 44)
+            .padding(.leading, child ? 20 : 10).padding(.trailing, 10)
+            .frame(height: child ? 30 : 33)
             .background {
                 if selected && !child {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Brand.surfaceSubtle)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Brand.surfaceSubtle)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04))
                 }
             }
-            .padding(.leading, child ? 38 : 0)
+            .onHover { hovering = $0 }
+            .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
         }
         .buttonStyle(SidebarButtonStyle())

@@ -30,6 +30,7 @@ cp "${APP_NAME}/Info.plist" "$APP/Contents/Info.plist"
 [ -f "${APP_NAME}/Resources/hero.png" ] && cp "${APP_NAME}/Resources/hero.png" "$APP/Contents/Resources/"
 [ -f "${APP_NAME}/Resources/SampleCoastFilm.png" ] && cp "${APP_NAME}/Resources/SampleCoastFilm.png" "$APP/Contents/Resources/"
 for m in "${APP_NAME}"/Resources/mac-*.png; do [ -f "$m" ] && cp "$m" "$APP/Contents/Resources/"; done
+for m in "${APP_NAME}"/Resources/tool-*.svg "${APP_NAME}"/Resources/logo-*.svg; do [ -f "$m" ] && cp "$m" "$APP/Contents/Resources/"; done
 
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 codesign --verify --strict --verbose=2 "$APP"

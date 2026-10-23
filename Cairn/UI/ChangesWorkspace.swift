@@ -52,7 +52,7 @@ struct ChangesWorkspace: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Changes").font(.system(size: 28, weight: .semibold))
+                        Text("Changes").font(.system(size: 38, weight: .light))
                         Text("What Cairn observed on this Mac. Measurements are local and dated.")
                             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }

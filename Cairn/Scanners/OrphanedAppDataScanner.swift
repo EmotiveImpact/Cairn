@@ -11,7 +11,9 @@ import Foundation
 /// bundle id it is a prefix of (or vice-versa, on a dotted boundary).
 ///
 /// Name matching cannot prove a folder is disposable: it may contain database
-/// files, conversations, or work sessions. These findings are advice only.
+/// files, conversations, or work sessions. These findings are review only.
+/// Data that belonged to an app the user removed in Cairn is listed straight
+/// away (see `RemovedAppLeftovers`).
 /// Reading another app's data folders to size them needs Full Disk Access.
 struct OrphanedAppDataScanner: CairnScanner {
     let info = CategoryInfo(
@@ -57,6 +59,7 @@ struct OrphanedAppDataScanner: CairnScanner {
     func scan(_ ctx: ScanContext) async {
         ctx.progress("Reading installed apps")
         let installed = installedBundleIDs()
+        let removedHere = emitRemovedAppLeftovers(ctx, installed: installed)
 
         for root in dataRoots {
             if ctx.isCancelled() { return }
@@ -79,6 +82,8 @@ struct OrphanedAppDataScanner: CairnScanner {
 
                 // Claimed by an installed app? Then it is NOT orphaned.
                 if isClaimed(name, by: installed) { continue }
+                // Already listed as a leftover of an app removed in Cairn.
+                if removedHere.contains(child.standardizedFileURL.path) { continue }
 
                 ctx.progress(name)
 
@@ -102,6 +107,33 @@ struct OrphanedAppDataScanner: CairnScanner {
                 ctx.emit(item)
             }
         }
+    }
+
+    // MARK: - Leftovers of apps removed in Cairn
+
+    /// Support data recorded when the user removed its app in Cairn. Listed
+    /// at once, without the six-month wait, but still REVIEW and never
+    /// pre-selected: containers can hold the user's own documents. Skipped if
+    /// the app has been installed again.
+    private func emitRemovedAppLeftovers(_ ctx: ScanContext, installed: Set<String>) -> Set<String> {
+        var emitted = Set<String>()
+        for entry in RemovedAppLeftovers.pending() {
+            if ctx.isCancelled() { break }
+            let url = URL(fileURLWithPath: entry.path)
+            if isClaimed(url.lastPathComponent, by: installed) { continue }
+            guard let item = makeItem(
+                at: url,
+                severity: .review,
+                minSize: 0,
+                isRegenerable: false,
+                cleanMethod: .trash,
+                note: "Left behind by \(entry.app), which you removed with Cairn on \(entry.removed.formatted(.dateTime.day().month(.abbreviated))) — review before removing",
+                selectedIfSafe: false
+            ) else { continue }
+            ctx.emit(item)
+            emitted.insert(url.standardizedFileURL.path)
+        }
+        return emitted
     }
 
     // MARK: - Installed bundle ids

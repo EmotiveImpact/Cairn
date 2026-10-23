@@ -266,7 +266,7 @@ final class AgentBridge {
                                       emit: { sink.add($0) }, progress: { _ in }, isCancelled: { false })
             await scanner.scan(context)
         }
-        return sink.items
+        return PathDedupe.apply(sink.items)
     }
 
     // MARK: - Run

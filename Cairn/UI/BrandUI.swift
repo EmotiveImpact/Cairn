@@ -90,6 +90,26 @@ struct GhostButtonStyle: ButtonStyle {
         CairnControlSurface(label: configuration.label, pressed: configuration.isPressed)
     }
 }
+/// Plain ice text link (card links, Connect). Brightens and underlines on hover.
+struct QuietLinkStyle: ButtonStyle {
+    var color: Color = Brand.deepBlue
+    func makeBody(configuration: Configuration) -> some View { QuietLinkLabel(label: configuration.label, color: color, pressed: configuration.isPressed) }
+}
+private struct QuietLinkLabel<Label: View>: View {
+    let label: Label
+    let color: Color
+    let pressed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var hovered = false
+    var body: some View {
+        label.foregroundStyle(color.opacity(pressed ? 0.6 : hovered ? 1 : 0.86))
+            .underline(hovered, color: color.opacity(0.5))
+            .offset(x: hovered && !reduceMotion ? 2 : 0)
+            .contentShape(Rectangle())
+            .onHover { hovered = $0 }
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: hovered)
+    }
+}
 /// Keep legacy call sites stable without lift, scaling or geometry changes.
 struct HoverButtonStyle: ButtonStyle {
     var lift: CGFloat = 0

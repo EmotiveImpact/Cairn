@@ -19,9 +19,10 @@ import Foundation
 ///     cairn mcp
 enum CLI {
     static let commands: Set<String> = ["status", "scan", "clean", "categories", "projects", "mcp", "help", "--help", "-h"]
-    /// Commands that only read file sizes and timestamps. They run alongside
-    /// the app because they never open its stores, journals or recovery data.
-    static let readOnlyCommands: Set<String> = ["projects", "mcp"]
+    /// Commands that only read file sizes, timestamps and saved receipts. They
+    /// run alongside the app because they never write its stores, journals or
+    /// recovery data. `clean` stays out: it previews, but it is the removal verb.
+    static let readOnlyCommands: Set<String> = ["status", "scan", "categories", "projects", "mcp", "help", "--help", "-h"]
 
     static func run(_ args: [String]) {
         let command = args.first ?? "help"
@@ -52,21 +53,23 @@ enum CLI {
     private static func status(json: Bool) {
         let free = Volumes.homeFree()
         let total = DeviceInfo.totalCapacity
-        let lifetime = Int64(UserDefaults.standard.integer(forKey: "cairn.lifetimeReclaimedBytes"))
+        let cleans = recordedTotals()
         let trend = StorageHistory.summary(currentFree: free)
 
         if json {
             printJSON([
                 "freeBytes": free,
                 "totalBytes": total,
-                "lifetimeAffectedEstimateBytes": lifetime,
+                "freedBytes": cleans?.freedBytes ?? 0,
+                "movedToTrashBytes": cleans?.movedToTrashBytes ?? 0,
+                "cleans": cleans?.cleans ?? 0,
                 "trend": trend.text,
             ])
             return
         }
         print("Free space   \(Fmt.size(free)) of \(Fmt.size(total))")
         print("Trend        \(trend.text)")
-        print("Affected     \(Fmt.size(lifetime)) in recorded file-size estimates; not space freed")
+        print("Cleans       " + (cleans.map(describe) ?? "No cleans recorded yet"))
     }
 
     private static func scan(json: Bool, category: String?) {
@@ -76,6 +79,7 @@ enum CLI {
         if json {
             printJSON([
                 "totalBytes": total,
+                "readyBytes": bytes(of: items.filter(isReady)),
                 "itemCount": items.count,
                 "items": items.map {
                     [
@@ -101,7 +105,9 @@ enum CLI {
             }
             if entries.count > 10 { print("   … and \(entries.count - 10) more") }
         }
-        print("\nTotal measured candidates: \(Fmt.size(total)) across \(items.count) items")
+        let ready = bytes(of: items.filter(isReady))
+        print("\nReady to free: \(Fmt.size(ready)) (rebuilt on their own)")
+        print("Needs you:     \(Fmt.size(total - ready)) (personal files and advice, never chosen for you)")
     }
 
     private static func clean(category: String?) {
@@ -158,7 +164,7 @@ enum CLI {
         print("""
         cairn — reclaim disk space, safely.
 
-          cairn status                     available capacity, trend, affected-size estimates
+          cairn status                     available capacity, trend, space freed so far
           cairn scan [--category <id>]     measure cleanup candidates
           cairn clean --safe               preview eligible Trash candidates only
           cairn categories                 list scanner ids
@@ -180,6 +186,36 @@ enum CLI {
     }
 
     // MARK: - Helpers
+
+    /// The same rule as the app's Ready pill and Home's number: safe,
+    /// rebuilt by its tool, and something Cairn can act on.
+    static func isReady(_ item: ScanItem) -> Bool {
+        item.severity == .safe && item.isRegenerable && item.isActionable
+    }
+
+    /// What the receipts say was freed, read without opening the app's stores.
+    static func recordedTotals() -> CleanupRunHistory.Totals? {
+        let box = TotalsBox()
+        let semaphore = DispatchSemaphore(value: 0)
+        Task.detached { box.value = await CleanupRunHistory.recordedTotals(); semaphore.signal() }
+        semaphore.wait()
+        return box.value
+    }
+
+    private final class TotalsBox: @unchecked Sendable { var value: CleanupRunHistory.Totals? }
+
+    /// "Freed 22 GB, plus 2.6 GB moved to the Trash, across 3 cleans". Trash bytes
+    /// are never called freed: that space returns only once the Trash is emptied.
+    static func describe(_ totals: CleanupRunHistory.Totals) -> String {
+        let count = "\(totals.cleans) \(totals.cleans == 1 ? "clean" : "cleans")"
+        let trash = "\(Fmt.size(totals.movedToTrashBytes)) moved to the Trash"
+        switch (totals.freedBytes > 0, totals.movedToTrashBytes > 0) {
+        case (true, true): return "Freed \(Fmt.size(totals.freedBytes)), plus \(trash), across \(count)"
+        case (true, false): return "Freed \(Fmt.size(totals.freedBytes)) across \(count)"
+        case (false, true): return "\(trash) across \(count). The space returns when the Trash is emptied"
+        case (false, false): return "\(count) recorded, no change in free space measured"
+        }
+    }
 
     private static func bytes(of items: [ScanItem]) -> Int64 {
         items.reduce(Int64(0)) { $0 + $1.allocatedSize }
@@ -214,7 +250,7 @@ enum CLI {
             semaphore.signal()
         }
         semaphore.wait()
-        return sink.items
+        return PathDedupe.apply(sink.items)
     }
 
     private final class Sink: @unchecked Sendable {
