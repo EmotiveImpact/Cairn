@@ -52,6 +52,9 @@ struct GitMaintenanceScanner: CairnScanner {
         ".Trash", ".Trashes",
         ".cache", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".pyenv",
         ".nvm", ".asdf", ".bun", ".deno", ".docker", ".ollama", ".conda",
+        // Editor extension stores: every extension has a package.json, which
+        // would otherwise read as dozens of abandoned projects.
+        ".vscode", ".vscode-insiders", ".cursor", ".windsurf", ".antigravity", ".kiro", ".trae",
         ".Spotlight-V100", ".fseventsd", ".DocumentRevisions-V100", ".TemporaryItems",
         "node_modules", "node_modules-internal",
     ]

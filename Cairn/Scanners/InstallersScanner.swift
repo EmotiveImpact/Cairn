@@ -29,6 +29,9 @@ struct InstallersScanner: CairnScanner {
 
     /// Files newer than this are likely still in use (just downloaded).
     private static let minAgeDays: Double = 30
+    /// An installer whose app is already installed has done its job; a week
+    /// leaves time to reinstall after a failed first run.
+    private static let installedAppMinAgeDays: Double = 7
 
     /// Small floor so we don't surface trivial stub files.
     private static let floorBytes: Int64 = 1 * 1024 * 1024  // 1 MB
@@ -69,8 +72,9 @@ struct InstallersScanner: CairnScanner {
                     ?? "Installer in Downloads (\(ext), \(age))",
                 selectedIfSafe: true
             ) {
-                // Only surface files that are genuinely stale (older than 30d).
-                guard item.ageDays >= Self.minAgeDays else { continue }
+                // Only surface files that are genuinely stale: 30 days, or a
+                // week when the app it installs is already in Applications.
+                guard item.ageDays >= (app == nil ? Self.minAgeDays : Self.installedAppMinAgeDays) else { continue }
                 ctx.emit(item)
             }
         }

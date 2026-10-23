@@ -44,10 +44,16 @@ struct DockerScanner: CairnScanner {
 
         // Read-only sizing pass. Best-effort — if docker isn't on PATH or the
         // call fails, reclaimable stays unknown (0) and the advice remains visible.
+        // When Docker did answer, a row with nothing to reclaim is left out.
         ctx.progress("docker system df")
         var reclaim = Reclaimable()
+        var sized = false
         if let result = try? ToolRunner.run("docker", ["system", "df"], timeout: 12), result.ok {
             reclaim = parseSystemDF(result.stdout)
+            sized = true
+        }
+        let emitPrune: (ScanItem) -> Void = { item in
+            if !sized || item.allocatedSize > 0 { ctx.emit(item) }
         }
 
         if ctx.isCancelled() { return }
@@ -57,7 +63,7 @@ struct DockerScanner: CairnScanner {
         let dockerHome = FileScan.home
 
         ctx.progress("Build cache")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Docker build cache",
             url: dockerHome.appendingPathComponent(".docker/buildx"),
             severity: .safe,
@@ -68,7 +74,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Unused images")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Unused Docker images",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
@@ -79,7 +85,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Stopped containers")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Stopped Docker containers",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
@@ -90,7 +96,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Volume and system risks")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Docker volumes + everything (DESTRUCTIVE)",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .risky,
