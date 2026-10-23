@@ -104,13 +104,21 @@ struct LookThroughWorkspace: View {
     private func groupRow(_ group: LookGroup, picked: Set<UUID>) -> some View {
         let count = group.items.filter { picked.contains($0.id) }.count
         let isOpen = expanded.contains(group.id)
+        let tickable = group.oneTick
+        let oneByOne = group.items.count - tickable.count
         return HStack(alignment: .top, spacing: 14) {
-            NightCheck(on: count > 0) { setSelected(group.items.map(\.id), count == 0) }
-                .opacity(count > 0 && count < group.items.count ? 0.6 : 1)
-                .help(count > 0 && count < group.items.count ? "\(count) of \(group.items.count) picked" : "")
+            // The tick takes only what is fine to clear together; it clears every pick in the group.
+            NightCheck(on: count > 0, enabled: !tickable.isEmpty || count > 0) {
+                if count > 0 { setSelected(group.items.map(\.id), false) } else { setSelected(tickable.map(\.id), true) }
+            }
+            .opacity(count > 0 && count < group.items.count ? 0.6 : 1)
+            .help(count > 0 && count < group.items.count ? "\(count) of \(group.items.count) picked" : "")
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.title).font(.system(size: 14, weight: .medium))
-                Text(group.line).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
+                Text(oneByOne == 0 ? group.line
+                     : tickable.isEmpty ? group.line + " · pick one by one"
+                     : group.line + " · \(oneByOne) to pick one by one")
+                    .font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
                 HStack(spacing: 6) {
                     Text(group.peek.joined(separator: " · ")).foregroundStyle(Brand.textMuted).lineLimit(1)
                     Button(isOpen ? "Hide" : "See all") { expanded.formSymmetricDifference([group.id]) }

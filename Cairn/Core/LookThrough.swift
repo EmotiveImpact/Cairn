@@ -13,6 +13,8 @@ struct LookGroup: Identifiable {
     var bytes: Int64 { items.reduce(0) { $0 + $1.allocatedSize } }
     /// Bytes in things not changed for over a year: usually the easy yes.
     var oldBytes: Int64 { items.filter { $0.ageDays > 365 }.reduce(0) { $0 + $1.allocatedSize } }
+    /// What one group tick takes. The rest are listed but picked one by one.
+    var oneTick: [ScanItem] { items.filter(LookThrough.inGroupTick) }
     /// The three biggest, by a short readable name.
     var peek: [String] { items.prefix(3).map(LookThrough.shortName) }
 }
@@ -31,6 +33,16 @@ enum LookThrough {
     /// marked risky (Xcode archives) stays out of the groups.
     static func tickable(_ item: ScanItem) -> Bool {
         item.cleanMethod == .trash && item.severity != .risky
+    }
+
+    /// Listed in a group but never taken by the group tick: project folders a
+    /// reinstall won't rebuild (npm links, file: dependencies), model stores that
+    /// are slow to download again, and Android parts the scanner doesn't call old.
+    static func inGroupTick(_ item: ScanItem) -> Bool {
+        if item.categoryID == "dev-projects" && !item.isRegenerable { return false }
+        if item.categoryID == "ai-models" { return false }
+        if item.categoryID == "android" && !item.note.lowercased().contains("old") { return false }
+        return true
     }
 
     /// What the groups leave out, so the page can still account for every byte.
@@ -102,6 +114,7 @@ enum LookThrough {
         if vague {
             let note = item.note.components(separatedBy: " — ").first ?? ""
             if let range = note.range(of: " for ") { name = String(note[range.upperBound...]) }
+            else if item.resolvedURL.path.contains("/huggingface/") { name = "Hugging Face models" }
             else if !note.isEmpty, note.count <= 40 { name = note }
             else { name = item.resolvedURL.deletingLastPathComponent().lastPathComponent }
         }
