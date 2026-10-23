@@ -162,6 +162,9 @@ final class ScanStore {
 
     private var scanTask: Task<Void, Never>?
     private var bucketIndex: [String: Int] = [:]
+    /// Every path already listed in this scan. Scanners overlap (an installer is also an
+    /// old download; a Chrome cache sits inside the Google cache), so each byte is counted once.
+    private var listedPaths: Set<String> = []
 
     // Derived
     var grandTotal: Int64 { buckets.reduce(0) { $0 + $1.totalSize } }
@@ -418,6 +421,7 @@ final class ScanStore {
         // Seed buckets in registry order so the sidebar is stable while scanning.
         buckets = scanners.map { Bucket(info: $0.info) }
         bucketIndex = Dictionary(uniqueKeysWithValues: buckets.enumerated().map { ($1.id, $0) })
+        listedPaths = []
         activeComparisonScope = comparisonScope()
         phase = .scanning
         progressText = "Waiting for other disk work to finish…"
@@ -515,9 +519,25 @@ final class ScanStore {
         // Honor the Developer Tools settings here too.
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
-        if let i = bucketIndex[item.categoryID] {
-            buckets[i].append(item)
+        guard let i = bucketIndex[item.categoryID] else { return }
+        let path = item.resolvedURL.standardizedFileURL.path
+        // Already listed, or inside a folder that is: the first listing keeps it.
+        var parent = path
+        while !parent.isEmpty, parent != "/" {
+            if listedPaths.contains(parent) { return }
+            parent = (parent as NSString).deletingLastPathComponent
         }
+        // A folder arriving after things inside it replaces them, so they are not counted twice.
+        let prefix = path + "/"
+        let inside = listedPaths.filter { $0.hasPrefix(prefix) }
+        if !inside.isEmpty {
+            for b in buckets.indices {
+                buckets[b].removeItems { inside.contains($0.resolvedURL.standardizedFileURL.path) }
+            }
+            listedPaths.subtract(inside)
+        }
+        listedPaths.insert(path)
+        buckets[i].append(item)
     }
 
     private func apply(_ event: ScanEvent) {
