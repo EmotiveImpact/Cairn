@@ -29,7 +29,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 - **Nothing is installed in `/Applications`** on the test Mac, so every check so far has used test builds.
 - **Screen Recording permission is needed** before Claude can take screenshots on the Mac, so the built app cannot yet be compared side by side with the mockups automatically.
 - **The built app does not always match the mockups.** Spacing, type sizes and busy screens have been the repeated complaint. Every screen needs a side-by-side check against its approved mockup.
-- **PR #7 is waiting on two public repositories** (`cairn-plugins` and `cairn-gemini`) before the Claude Code plugin and Gemini extension can be installed by anyone.
+- **The Claude Code plugin and Gemini extension are published** from the public `Emotive-Impact-Studios/cairn-plugins` repository, but they only work once PR #7 (AI tools cleaning) is merged and released in the app.
 - **Website screenshots are out of date.** They show the old look, and some show items as cleanable that Cairn now treats differently.
 - **Pro is on hold.** The licence screen exists, but what Pro unlocks has not been decided.
 - **Some large caches are still refused** by the safety walk (over 100,000 files, or folders containing database files, such as some `node_modules` and DerivedData). Loosening this needs a decision.

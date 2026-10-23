@@ -2,6 +2,6 @@
   "name": "cairn",
   "version": "1.0.0",
   "description": "Disk space for developers. Finds build output, caches and idle projects, plans a safe cleanup and runs it through the Cairn Mac app with a receipt.",
-  "author": { "name": "Emotive Impact" },
+  "author": { "name": "Emotive Impact Studios" },
   "keywords": ["disk", "storage", "cleanup", "macos", "node_modules", "xcode", "docker"]
 }

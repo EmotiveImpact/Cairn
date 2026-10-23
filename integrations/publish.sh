@@ -1,5 +1,5 @@
 #!/bin/sh
-# Assembles the public EmotiveImpact/cairn-plugins repository from these
+# Assembles the public Emotive-Impact-Studios/cairn-plugins repository from these
 # folders. Claude Code reads the marketplace at the root; Gemini CLI reads
 # gemini-extension.json, GEMINI.md and commands/ at the root.
 #

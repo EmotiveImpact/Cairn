@@ -1,20 +1,20 @@
 # Cairn for AI coding tools
 
-[Cairn](https://github.com/EmotiveImpact) is a Mac app that finds the junk in your coding projects: `node_modules`, Xcode `DerivedData`, Rust `target`, package-manager caches and Docker build cache. These add-ons let your AI coding tool ask Cairn what is filling your disk and, if you allow it, free the space for you.
+Cairn is a Mac app that finds the junk in your coding projects: `node_modules`, Xcode `DerivedData`, Rust `target`, package-manager caches and Docker build cache. These add-ons let your AI coding tool ask Cairn what is filling your disk and, if you allow it, free the space for you.
 
 Requires the Cairn app in `/Applications`.
 
 ## Claude Code
 
 ```text
-/plugin marketplace add EmotiveImpact/cairn-plugins
+/plugin marketplace add Emotive-Impact-Studios/cairn-plugins
 /plugin install cairn@cairn
 ```
 
 ## Gemini CLI
 
 ```sh
-gemini extensions install https://github.com/EmotiveImpact/cairn-plugins
+gemini extensions install https://github.com/Emotive-Impact-Studios/cairn-plugins
 ```
 
 ## Commands

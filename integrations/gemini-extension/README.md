@@ -3,7 +3,7 @@
 Requires the Cairn Mac app in `/Applications`.
 
 ```sh
-gemini extensions install https://github.com/EmotiveImpact/cairn-plugins
+gemini extensions install https://github.com/Emotive-Impact-Studios/cairn-plugins
 ```
 
 Commands: `/cairn:status`, `/cairn:free-space [GB]`, `/cairn:projects [idle days]`. `GEMINI.md` tells Gemini to reach for Cairn when a build fails with "No space left on device".
