@@ -417,7 +417,8 @@ struct AppShell: View {
             }
             Text(previewMode ? "Visual preview · sample data · disk actions disabled" : operationStatus)
                 .lineLimit(1).truncationMode(.middle)
-                .shimmer(!previewMode && (store.isScanning || store.isCleaning))
+                // Home has its own shimmering scan line; one moving line at a time.
+                .shimmer(!previewMode && (store.isScanning || store.isCleaning) && !(section == .dashboard && store.isScanning))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "lock.shield").foregroundStyle(Brand.textMuted)
             Text("Review before removal").fixedSize()

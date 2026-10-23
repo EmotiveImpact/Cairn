@@ -213,7 +213,8 @@ struct OverviewWorkspace: View {
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Scanning · \(store.progressText)").font(.system(size: 13)).foregroundStyle(Brand.textSecondary).lineLimit(1)
+                    Text("Scanning · \(store.progressText)").font(.system(size: 13)).lineLimit(1)
+                        .modifier(Shimmer(active: !preview, base: Brand.textSecondary))
                 }.padding(.top, 8)
                 Text(toReviewBytes > 0
                      ? "Plus \(Fmt.size(toReviewBytes)) found for you to look through. Nothing is removed until you review it."
