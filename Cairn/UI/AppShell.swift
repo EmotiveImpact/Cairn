@@ -417,6 +417,7 @@ struct AppShell: View {
             }
             Text(previewMode ? "Visual preview · sample data · disk actions disabled" : operationStatus)
                 .lineLimit(1).truncationMode(.middle)
+                .shimmer(!previewMode && (store.isScanning || store.isCleaning))
                 .frame(maxWidth: .infinity, alignment: .leading)
             Image(systemName: "lock.shield").foregroundStyle(Brand.textMuted)
             Text("Review before removal").fixedSize()
