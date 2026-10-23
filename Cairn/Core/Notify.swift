@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import UserNotifications
 
 /// Local user notifications — used for "scan complete" when the user has the
@@ -19,6 +20,13 @@ enum Notify {
     static var center: UNUserNotificationCenter? {
         guard isAvailable else { return nil }
         return UNUserNotificationCenter.current()
+    }
+
+    /// One quiet chime when a clean finishes (Settings › General, off by default).
+    @MainActor static func finishSound() {
+        guard let sound = NSSound(named: NSSound.Name("Glass"))?.copy() as? NSSound else { return }
+        sound.volume = 0.3
+        sound.play()
     }
 
     static func requestAuth() {

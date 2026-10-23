@@ -6,6 +6,7 @@ import AppKit
 struct LookThroughWorkspace: View {
     var store: ScanStore
     var onReview: () -> Void
+    var onOpen: (NavSection) -> Void = { _ in }
     @State private var expanded: Set<String> = []
     private let settings = AppSettings.shared
 
@@ -13,7 +14,8 @@ struct LookThroughWorkspace: View {
         let titles = Dictionary(store.buckets.map { ($0.id, $0.info.title) }, uniquingKeysWith: { a, _ in a })
         return LookThrough.groups(from: store.buckets.flatMap(\.items), titles: titles)
     }
-    private var totalBytes: Int64 { groups.reduce(0) { $0 + $1.bytes } }
+    /// Matches Home's "more to look through": the groups plus what is tidied elsewhere.
+    private var totalBytes: Int64 { LookThrough.candidates(store.buckets.flatMap(\.items)).reduce(0) { $0 + $1.allocatedSize } }
 
     var body: some View {
         let groups = self.groups
@@ -31,7 +33,7 @@ struct LookThroughWorkspace: View {
             .buttonStyle(ControlPanelButtonStyle(size: .small))
             .disabled(store.isCleaning)
         } content: {
-            if groups.isEmpty {
+            if groups.isEmpty && totalBytes == 0 {
                 NightEmpty(title: store.isScanning ? "Looking through this Mac" : store.hasScanned ? "Nothing to look through" : "Nothing scanned yet",
                            message: store.isScanning ? "Groups appear as the scan finds them."
                                : store.hasScanned ? "No big old downloads, videos, installers or app leftovers were found."
@@ -45,6 +47,7 @@ struct LookThroughWorkspace: View {
                             ForEach(group.items) { item in itemRow(item, on: picked.contains(item.id)) }
                         }
                     }
+                    elsewhereRow
                 }
             }
         } footer: {
@@ -71,16 +74,51 @@ struct LookThroughWorkspace: View {
 
     // MARK: - Rows
 
+    /// Git history, Docker, package stores and risky items: never one tick.
+    /// Shown so this page still accounts for everything Home counts.
+    @ViewBuilder private var elsewhereRow: some View {
+        let items = LookThrough.elsewhere(store.buckets.flatMap(\.items))
+        if !items.isEmpty {
+            HStack(alignment: .top, spacing: 14) {
+                Color.clear.frame(width: 22, height: 22)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Tidied with each tool's own command").font(.system(size: 14, weight: .medium))
+                    Text("Git history, Docker, package stores and Xcode archives need their own clean-up, not the Trash")
+                        .font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
+                    HStack(spacing: 6) {
+                        Text(items.prefix(3).map(LookThrough.shortName).joined(separator: " · ")).foregroundStyle(Brand.textMuted).lineLimit(1)
+                        Button("Open in Clean") { onOpen(.developer) }.buttonStyle(.plain).foregroundStyle(Brand.room)
+                    }
+                    .font(.system(size: 12))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(Fmt.size(items.reduce(0) { $0 + $1.allocatedSize })).font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Brand.textSecondary).monospacedDigit()
+                    .frame(width: 170, alignment: .trailing)
+            }
+            .padding(.vertical, 2)
+            .nightRow()
+        }
+    }
+
     private func groupRow(_ group: LookGroup, picked: Set<UUID>) -> some View {
         let count = group.items.filter { picked.contains($0.id) }.count
         let isOpen = expanded.contains(group.id)
+        let tickable = group.oneTick
+        let oneByOne = group.items.count - tickable.count
         return HStack(alignment: .top, spacing: 14) {
-            NightCheck(on: count > 0) { setSelected(group.items.map(\.id), count == 0) }
-                .opacity(count > 0 && count < group.items.count ? 0.6 : 1)
-                .help(count > 0 && count < group.items.count ? "\(count) of \(group.items.count) picked" : "")
+            // The tick takes only what is fine to clear together; it clears every pick in the group.
+            NightCheck(on: count > 0, enabled: !tickable.isEmpty || count > 0) {
+                if count > 0 { setSelected(group.items.map(\.id), false) } else { setSelected(tickable.map(\.id), true) }
+            }
+            .opacity(count > 0 && count < group.items.count ? 0.6 : 1)
+            .help(count > 0 && count < group.items.count ? "\(count) of \(group.items.count) picked" : "")
             VStack(alignment: .leading, spacing: 3) {
                 Text(group.title).font(.system(size: 14, weight: .medium))
-                Text(group.line).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
+                Text(oneByOne == 0 ? group.line
+                     : tickable.isEmpty ? group.line + " · pick one by one"
+                     : group.line + " · \(oneByOne) to pick one by one")
+                    .font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
                 HStack(spacing: 6) {
                     Text(group.peek.joined(separator: " · ")).foregroundStyle(Brand.textMuted).lineLimit(1)
                     Button(isOpen ? "Hide" : "See all") { expanded.formSymmetricDifference([group.id]) }

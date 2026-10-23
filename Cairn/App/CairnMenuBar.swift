@@ -401,6 +401,7 @@ enum MenuAvailableSpace {
     private func updateBadge() {
         guard let button = statusItem?.button else { return }
         button.title = MenuAvailableSpace.title(available, checked: readAt != nil)
+        if let available, let image = gauge(available: available) { button.image = image }
         let state: String
         if let available {
             state = "\(Fmt.size(available)) available on this Mac"
@@ -411,6 +412,33 @@ enum MenuAvailableSpace {
         button.toolTip = preview
             ? "Cairn Preview · sample data"
             : "\(state). Includes space macOS may reclaim.\(readAt.map { " Checked at \($0.formatted(date: .omitted, time: .shortened))." } ?? "")"
+    }
+
+    /// A small gauge that fills as the disk fills, amber when it is nearly full.
+    /// Drawn as a template so it follows the menu bar's colour, except when amber.
+    private func gauge(available: Int64) -> NSImage? {
+        let total = preview ? PreviewStorageScenario.totalBytes
+            : (try? URL(fileURLWithPath: "/").resourceValues(forKeys: [.volumeTotalCapacityKey]))?.volumeTotalCapacity.map(Int64.init)
+        guard let total, total > 0 else { return nil }
+        let used = min(1, max(0, 1 - Double(available) / Double(total)))
+        let nearlyFull = used >= 0.95
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
+            let outline = NSBezierPath(roundedRect: NSRect(x: 2.15, y: 2.65, width: 13.7, height: 12.7), xRadius: 2.7, yRadius: 2.7)
+            outline.lineWidth = 1.3
+            (nearlyFull ? NSColor.labelColor : NSColor.black).setStroke()
+            outline.stroke()
+            // Fill rises from the bottom, inside a 1.5 pt margin.
+            let inner = NSRect(x: 3.5, y: 4, width: 11, height: 10)
+            let height = max(1.6, inner.height * used)
+            let fill = NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.maxY - height, width: inner.width, height: height),
+                                    xRadius: 1.4, yRadius: 1.4)
+            (nearlyFull ? NSColor.systemOrange : NSColor.black.withAlphaComponent(0.85)).setFill()
+            fill.fill()
+            return true
+        }
+        image.isTemplate = !nearlyFull
+        image.accessibilityDescription = "Disk \(Int((used * 100).rounded()))% full"
+        return image
     }
 
     @discardableResult private func info(_ title: String) -> NSMenuItem {

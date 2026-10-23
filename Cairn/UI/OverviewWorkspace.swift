@@ -117,6 +117,9 @@ struct OverviewWorkspace: View {
     /// Height the chart can take so Home fits the window without scrolling.
     /// Everything else on the page is about 600 pt tall at the default size.
     @State private var chartHeight: CGFloat = 150
+    /// Space a clean just freed, glowing for a moment in the free-space bar.
+    @State private var freedGlow: Int64 = 0
+    @State private var freedGlowOn = false
     @State private var agentStates: [String: AgentConnections.State] = [:]
     @State private var connecting: String?
     @State private var agentMessage: String?
@@ -145,7 +148,12 @@ struct OverviewWorkspace: View {
             chartHeight = min(240, max(110, height - 600))
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
-        .task { if !preview { await control.refreshCapacity(); await storage.refresh() } }
+        .task {
+            guard !preview else { return }
+            await control.refreshCapacity()
+            if let freed = store.takeFreedGlow() { await glowFreed(freed) }
+            await storage.refresh()
+        }
         .onAppear {
             refreshAgents()
             drawChart()
@@ -213,7 +221,8 @@ struct OverviewWorkspace: View {
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
-                    Text("Scanning · \(store.progressText)").font(.system(size: 13)).foregroundStyle(Brand.textSecondary).lineLimit(1)
+                    Text("Scanning · \(store.progressText)").font(.system(size: 13)).lineLimit(1)
+                        .modifier(Shimmer(active: !preview, base: Brand.textSecondary))
                 }.padding(.top, 8)
                 Text(toReviewBytes > 0
                      ? "Plus \(Fmt.size(toReviewBytes)) found for you to look through. Nothing is removed until you review it."
@@ -319,6 +328,18 @@ struct OverviewWorkspace: View {
                     .background(Capsule().fill(Brand.track))
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: ready)
                     .animation(reduceMotion ? nil : .easeOut(duration: 0.7), value: capacity.available)
+                    // The space a clean just freed sits at the start of free space: it lights up, then settles.
+                    .overlay(alignment: .leading) {
+                        if freedGlow > 0 {
+                            let glow = min(freedGlow, capacity.available)
+                            Capsule().fill(Brand.room)
+                                .shadow(color: Brand.room.opacity(0.95), radius: 8)
+                                .frame(width: max(6, geo.size.width * CGFloat(Double(glow) / total)))
+                                .offset(x: geo.size.width * CGFloat(Double(used) / total))
+                                .opacity(freedGlowOn ? 0.95 : 0)
+                                .allowsHitTesting(false)
+                        }
+                    }
                 }
                 .frame(height: 6)
                 .accessibilityLabel("\(Fmt.size(capacity.available)) free, \(Fmt.size(ready)) ready to free")
@@ -345,6 +366,17 @@ struct OverviewWorkspace: View {
             }
         }
     }
+    /// A short glow over the freed space, then back to plain free space.
+    private func glowFreed(_ bytes: Int64) async {
+        freedGlow = bytes
+        try? await Task.sleep(for: .milliseconds(350))
+        withAnimation(.easeOut(duration: reduceMotion ? 0.2 : 0.45)) { freedGlowOn = true }
+        try? await Task.sleep(for: .milliseconds(reduceMotion ? 900 : 1100))
+        withAnimation(.easeInOut(duration: reduceMotion ? 0.2 : 1.2)) { freedGlowOn = false }
+        try? await Task.sleep(for: .milliseconds(1300))
+        freedGlow = 0
+    }
+
     private func legend(_ color: Color, _ title: String) -> some View {
         HStack(spacing: 6) {
             RoundedRectangle(cornerRadius: 2.5).fill(color).frame(width: 9, height: 9)
