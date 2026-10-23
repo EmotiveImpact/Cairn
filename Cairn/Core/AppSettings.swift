@@ -33,6 +33,8 @@ final class AppSettings {
     } }
 
     var showSidebarFocus: Bool { didSet { d.set(showSidebarFocus, forKey: "cairn.showSidebarFocus") } }
+    /// One soft chime when a clean finishes. Off unless the person turns it on.
+    var finishSound: Bool { didSet { d.set(finishSound, forKey: "cairn.finishSound") } }
     /// Read-only capacity monitoring. This does not arm any cleanup rule.
     var reserveEnabled: Bool { didSet { d.set(reserveEnabled, forKey: "cairn.reserveEnabled") } }
     var reservePaused: Bool { didSet { d.set(reservePaused, forKey: "cairn.reservePaused") } }
@@ -90,6 +92,7 @@ final class AppSettings {
         openAtLogin = b("cairn.openAtLogin", false)
         showMenuBarItem = b("cairn.showMenuBarItem", true)
         showSidebarFocus = b("cairn.showSidebarFocus", false)
+        finishSound = b("cairn.finishSound", false)
         reserveEnabled = b("cairn.reserveEnabled", false)
         locationMonitoringEnabled = b("cairn.locationMonitoringEnabled.v1", false)
         growthSuggestionsEnabled = b("cairn.growthSuggestionsEnabled.v1", false)

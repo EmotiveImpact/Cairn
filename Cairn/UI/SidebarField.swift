@@ -34,10 +34,17 @@ struct SidebarSpaceField: View {
     /// The dot layout is worked out once per size and level; each frame only
     /// recomputes the glow, which keeps the idle cost low.
     @State private var layout = DotLayout()
+    /// The higher field the dots sink from after a clean, while it fades away.
+    @State private var sinkLayout = DotLayout()
+    @State private var sinkFrom: CGFloat?
+    @State private var shownReach: CGFloat?
+    /// After a sink the new field is already in place; it doesn't appear again.
+    @State private var settled = false
     /// When the dots last started to appear: on launch and whenever the level changes.
     @State private var revealStart = Date()
     @State private var revealing = true
     private static let revealLength: TimeInterval = 3.9
+    private static let sinkLength: TimeInterval = 2.2
 
     var body: some View {
         // Smooth while the dots appear, then eight frames a second is plenty for a slow glow.
@@ -45,10 +52,33 @@ struct SidebarSpaceField: View {
             let time = still ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let sinceReveal = still ? .infinity : timeline.date.timeIntervalSince(revealStart)
             let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost, reach = Self.reach(for: readyBytes)
+            let sinkFrom = self.sinkFrom, settled = self.settled
             Canvas { context, size in
+                // After a clean the old field fades from the top down to the new, lower level
+                // while the new field comes up underneath it, so the dots seem to settle.
+                var sink = 1.0
+                if let sinkFrom, sinkReach(sinceReveal) < 1 {
+                    let t = sinkReach(sinceReveal)
+                    sink = t
+                    let top = size.height * (1 - (sinkFrom - (sinkFrom - reach) * CGFloat(t)))
+                    for dot in sinkLayout.dots(size: size, reach: sinkFrom, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
+                        // Soft waterline: dots above it are gone, dots just below it fade.
+                        let edge = min(1, max(0, Double((dot.rect.midY - top) / 24)))
+                        var opacity = dot.opacity * edge * (1 - t * 0.5)
+                        if time != 0 { opacity *= 0.75 + 0.25 * sin(time * dot.speed + dot.phase) }
+                        guard opacity > 0.01 else { continue }
+                        context.fill(Path(ellipseIn: dot.rect), with: .color(Self.dot.opacity(opacity)))
+                    }
+                }
                 for dot in layout.dots(size: size, reach: reach, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
+                    if sink < 1 {
+                        var opacity = dot.opacity * sink
+                        if time != 0 { opacity *= 0.75 + 0.25 * sin(time * dot.speed + dot.phase) }
+                        context.fill(Path(ellipseIn: dot.rect), with: .color(Self.dot.opacity(opacity)))
+                        continue
+                    }
                     // Appear from the bottom up: each dot fades in and grows to size on its own cue.
-                    let p = min(1, max(0, (sinceReveal - dot.delay) / 1.4))
+                    let p = settled ? 1 : min(1, max(0, (sinceReveal - dot.delay) / 1.4))
                     guard p > 0 else { continue }
                     let eased = 1 - pow(1 - p, 3)
                     var opacity = dot.opacity * eased
@@ -61,13 +91,25 @@ struct SidebarSpaceField: View {
             }
         }
         .task(id: Self.reach(for: readyBytes)) {
+            let reach = Self.reach(for: readyBytes)
+            let sinking = shownReach.map { reach < $0 } ?? false
+            sinkFrom = sinking ? shownReach : nil
+            settled = sinking
+            shownReach = reach
             revealStart = Date()
             revealing = true
-            try? await Task.sleep(for: .seconds(Self.revealLength))
+            try? await Task.sleep(for: .seconds(sinking ? Self.sinkLength : Self.revealLength))
             revealing = false
+            if sinking { sinkFrom = nil }
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
+    }
+
+    /// How far a sink has gone, 0 to 1, eased.
+    private func sinkReach(_ since: TimeInterval) -> Double {
+        let p = min(1, max(0, since / Self.sinkLength))
+        return p < 0.5 ? 4 * p * p * p : 1 - pow(-2 * p + 2, 3) / 2
     }
 
     struct Dot { let rect: CGRect; let opacity: Double; let speed: Double; let phase: Double; let delay: Double }

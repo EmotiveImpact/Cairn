@@ -132,7 +132,8 @@ struct AppShell: View {
     var body: some View {
         GeometryReader { viewport in
             HStack(spacing: 0) {
-                NavSidebar(section: $section, readyBytes: store.recommendedBytes)
+                NavSidebar(section: $section, readyBytes: store.recommendedBytes,
+                           scanProgress: store.isScanning && !previewMode ? store.scanProgress : nil)
                 VStack(spacing: 0) {
                     if let message = store.removalLogError {
                         Text(message).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Brand.deepPanel)
@@ -149,8 +150,6 @@ struct AppShell: View {
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
         }
@@ -537,9 +536,11 @@ struct AppShell: View {
 }
 
 /// The single dark surface inside Cairn's graphite window surround.
+/// Full-bleed content area, as in the approved Make room mock: no inset card,
+/// with the soft blue glow near the top left.
 struct AppBackground: View {
     var body: some View {
-        Brand.background
+        ZStack { Brand.background; Brand.glow }
     }
 }
 
@@ -548,6 +549,8 @@ struct AppBackground: View {
 struct NavSidebar: View {
     @Binding var section: NavSection
     var readyBytes: Int64 = 0
+    /// Scan progress while a scan runs, so the logo can build stone by stone.
+    var scanProgress: Double? = nil
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
@@ -557,7 +560,7 @@ struct NavSidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                CairnLogo(size: 27).accessibilityHidden(true)
+                CairnLogo(size: 27, building: scanProgress).accessibilityHidden(true)
                 Text("Cairn").font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Brand.textPrimary)
                 Spacer(minLength: 0)
@@ -586,6 +589,8 @@ struct NavSidebar: View {
                 SidebarSpaceField(readyBytes: readyBytes)
             }
         }
+        // A hairline where the sidebar meets the content, as in the mock.
+        .overlay(alignment: .trailing) { Rectangle().fill(Brand.wash(0.06)).frame(width: 1) }
     }
 
 }

@@ -271,6 +271,9 @@ struct WorkspaceCompletion: View {
                 }
             }
             .lineLimit(1).minimumScaleFactor(0.5)
+            if let warm = ReceiptLine.text(freed: freed, seed: finished) {
+                Text(warm).font(.system(size: 14)).foregroundStyle(Brand.room).padding(.top, -6)
+            }
             if let measured, confirmed {
                 HStack(spacing: 8) {
                     Circle().fill(Brand.room).frame(width: 7, height: 7).shadow(color: Brand.room, radius: 5)

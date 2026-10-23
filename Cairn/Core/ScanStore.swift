@@ -115,6 +115,13 @@ final class ScanStore {
     private(set) var lastCleanRunID: UUID?
     private(set) var cleanupRuns: [CleanupRun] = []
     private(set) var receiptError: String?
+    /// Space a clean just freed, waiting for Home to glow it once. Cleared when shown.
+    private(set) var pendingFreedGlow: (bytes: Int64, at: Date)?
+    func takeFreedGlow() -> Int64? {
+        defer { pendingFreedGlow = nil }
+        guard let glow = pendingFreedGlow, Date().timeIntervalSince(glow.at) < 600 else { return nil }
+        return glow.bytes
+    }
     private var activeRunIDs: Set<UUID> = []
     private var receiptRevision: UInt64 = 0
     func isRunActive(_ id: UUID) -> Bool { activeRunIDs.contains(id) }
@@ -813,6 +820,8 @@ final class ScanStore {
         lifecycleCheckpoint("receipt")
         lastCleanSummary = summary
         lastCleanRunID = run.id
+        if summary.freedBytes > 0 { pendingFreedGlow = (summary.freedBytes, Date()) }
+        if !summary.interrupted, summary.trashed > 0, AppSettings.shared.finishSound { Notify.finishSound() }
         // Re-save the snapshot so the cached dashboard reflects post-clean totals
         // (otherwise the next launch over-reports the reclaimable space).
         if hasScanned, customRemovalLogURL == nil { saveSnapshot() }
