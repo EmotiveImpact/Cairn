@@ -9,11 +9,11 @@ struct SidebarSpaceField: View {
     static func reach(for bytes: Int64) -> CGFloat {
         let gb = Double(bytes) / 1_000_000_000
         switch gb {
-        case ..<0.05: return 0.06   // nothing to free
-        case ..<5:    return 0.15
-        case ..<20:   return 0.27
-        case ..<50:   return 0.40
-        default:      return 0.55
+        case ..<0.05: return 0.05   // nothing to free
+        case ..<5:    return 0.12
+        case ..<20:   return 0.24
+        case ..<50:   return 0.38
+        default:      return 0.52
         }
     }
 
@@ -25,16 +25,20 @@ struct SidebarSpaceField: View {
 
     var body: some View {
         Canvas { context, size in
-            let reach = size.height * Self.reach(for: readyBytes)
-            guard reach > 0 else { return }
+            let inset = Self.settingsInset
+            // Measured from the top of the Settings row, so even the lowest level shows.
+            let base = inset.bottom + inset.height
+            let reach = base + (size.height - base) * Self.reach(for: readyBytes)
             let cols = Int(size.width / Self.spacing)
             let rows = Int(reach / Self.spacing)
-            let inset = Self.settingsInset
+            let baseRow = base / Self.spacing
             let settings = CGRect(x: inset.side, y: size.height - inset.bottom - inset.height,
                                   width: size.width - inset.side * 2, height: inset.height)
             for row in 0...rows {
                 let y = size.height - Self.spacing / 2 - CGFloat(row) * Self.spacing
-                let rise = 1 - Double(row) / Double(max(rows, 1))
+                // Full strength up to the top of Settings, then fading upward.
+                let rise = CGFloat(row) <= baseRow ? 1
+                    : 1 - Double(CGFloat(row) - baseRow) / Double(max(CGFloat(rows) - baseRow, 1))
                 for col in 0..<cols {
                     let x = Self.spacing / 2 + CGFloat(col) * Self.spacing
                     let noise = Self.noise(col, row)
@@ -43,7 +47,7 @@ struct SidebarSpaceField: View {
                     var opacity = Self.maxOpacity * pow(rise, 1.6) * (0.45 + 0.55 * Self.noise(row, col + 97))
                     if settings.insetBy(dx: -4, dy: -4).contains(CGPoint(x: x, y: y)) { opacity *= 0.12 }
                     guard opacity > 0.02 else { continue }
-                    let r = CGFloat(0.6 + 0.5 * Self.noise(col + 31, row + 7))
+                    let r = CGFloat(0.8 + 0.5 * Self.noise(col + 31, row + 7))
                     context.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)),
                                  with: .color(Self.dot.opacity(opacity)))
                 }
