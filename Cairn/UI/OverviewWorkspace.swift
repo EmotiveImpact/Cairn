@@ -163,6 +163,20 @@ struct OverviewWorkspace: View {
 
     /// The headline action: what a scan found that can be freed in one go.
     private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    /// Everything else the scan found: real space, but only the person can decide on it.
+    private var toReviewBytes: Int64 { preview ? 21_300_000_000 : max(0, store.grandTotal - store.recommendedBytes) }
+    /// Keeps the bigger number in view without competing with the headline.
+    @ViewBuilder private var toReviewLine: some View {
+        if toReviewBytes > 0 {
+            HStack(spacing: 6) {
+                Text("\(Fmt.size(toReviewBytes)) more to look through yourself")
+                    .foregroundStyle(Brand.textMuted)
+                Button("See what it is") { onOpen(.smartScan) }
+                    .buttonStyle(.plain).foregroundStyle(Brand.room)
+            }
+            .font(.system(size: 13)).padding(.top, 6)
+        }
+    }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
             // Same big number as the result, counting up while the scan runs. It counts only
@@ -177,7 +191,9 @@ struct OverviewWorkspace: View {
                     ProgressView().controlSize(.small)
                     Text("Scanning · \(store.progressText)").font(.system(size: 13)).foregroundStyle(Brand.textSecondary).lineLimit(1)
                 }.padding(.top, 8)
-                Text("Nothing is removed until you review it.")
+                Text(toReviewBytes > 0
+                     ? "Plus \(Fmt.size(toReviewBytes)) found for you to look through. Nothing is removed until you review it."
+                     : "Nothing is removed until you review it.")
                     .font(.system(size: 13)).foregroundStyle(Brand.textMuted).padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -194,6 +210,7 @@ struct OverviewWorkspace: View {
                         .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
                         .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
                         .padding(.top, 8)
+                    toReviewLine
                     HStack(spacing: 10) {
                         Button { onCleanRecommended() } label: {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
@@ -236,6 +253,7 @@ struct OverviewWorkspace: View {
                     .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
                     .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
                     .padding(.top, 8)
+                toReviewLine
                 Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle(size: .large)).padding(.top, 14)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
