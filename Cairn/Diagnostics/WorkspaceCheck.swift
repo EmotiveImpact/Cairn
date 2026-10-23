@@ -142,6 +142,18 @@ enum WorkspaceCheck {
             check(AgentCleanup.displayName("claude-code") == "Claude Code" && AgentCleanup.displayName(nil) == "An AI tool", "Receipts name the AI tool that asked")
             let chosen = UserDefaults.standard.object(forKey: AgentCleaningMode.key) != nil
             check(chosen || AgentCleaningMode.current == .off, "AI tool cleaning is off until the user turns it on")
+            // A value written from outside Cairn, as `defaults write` would, has no
+            // seal and must not turn cleaning on. The real choice is put back after.
+            let defaults = UserDefaults.standard
+            let savedMode = defaults.object(forKey: AgentCleaningMode.key), savedSeal = defaults.object(forKey: AgentCleaningMode.sealKey)
+            defaults.set(AgentCleaningMode.allow.rawValue, forKey: AgentCleaningMode.key)
+            defaults.removeObject(forKey: AgentCleaningMode.sealKey)
+            let unsealed = AgentCleaningMode.current
+            defaults.set("forged", forKey: AgentCleaningMode.sealKey)
+            let forged = AgentCleaningMode.current
+            defaults.set(savedMode, forKey: AgentCleaningMode.key)
+            defaults.set(savedSeal, forKey: AgentCleaningMode.sealKey)
+            check(unsealed == .off && forged == .off, "AI tool cleaning switched on from outside Cairn stays off")
             // The socket between Cairn mcp and the app.
             let socketURL = root.appendingPathComponent("s")
             let server = AgentBridgeServer(url: socketURL) { request in

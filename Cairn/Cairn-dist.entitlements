@@ -15,6 +15,14 @@
       Hardened runtime is required for notarization. We keep entitlements empty:
       spawning separate processes (docker/brew/xcrun) does not require any
       hardened-runtime exception, and we load no third-party plugins.
+
+      Keep it empty. With no exceptions the hardened runtime refuses libraries
+      not signed by Apple or by us, ignores DYLD_* variables and blocks other
+      processes from attaching, so nothing can be slipped into Cairn to borrow
+      its Full Disk Access. build_release.sh refuses to ship if any of
+      disable-library-validation, allow-dyld-environment-variables,
+      allow-unsigned-executable-memory, allow-jit,
+      disable-executable-page-protection or get-task-allow appears here.
     -->
 </dict>
 </plist>

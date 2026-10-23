@@ -210,7 +210,6 @@ final class ScanStore {
     private var activeComparisonScope: ScanComparison.Scope?
     /// Invoked only after a completed scan's snapshot and comparison are saved.
     var onCompletedScan: (() -> Void)?
-    var scanComparison: ScanComparison.Result { ScanComparison.compare(comparisonReadings) }
     var comparisonScopeStable: Bool { activeComparisonScope == comparisonScope() }
     private static var comparisonURL: URL { supportDirectory.appendingPathComponent("scan-comparison.json") }
     private func comparisonScope() -> ScanComparison.Scope {
@@ -251,10 +250,7 @@ final class ScanStore {
                           group: $0.group, bytes: $0.bytes, count: $0.count)
         }
     }
-    var displayGrandTotal: Int64 { displayBuckets.reduce(0) { $0 + $1.bytes } }
     func displayBuckets(in group: CategoryGroup) -> [DisplayBucket] { displayBuckets.filter { $0.group == group } }
-    /// True when the shown numbers come from cache (no fresh scan this session).
-    var showingCachedResults: Bool { !hasLiveResults && lastSnapshot != nil }
     var lastScanDate: Date? { hasLiveResults ? scanStartedAt : lastSnapshot?.date }
 
     /// Our Application Support directory. Never force-unwraps `urls(for:)` — that
@@ -360,7 +356,6 @@ final class ScanStore {
             recoveryJournal.acknowledgeRecovery(Set(entries.map(\.id)))
         }.value
     }
-    func pruneRemovalLog() {} // Never silently expire Put Back records.
     func reconcileActionJournal() async -> Bool {
         let actions = await Task.detached(priority: .utility) { [recoveryJournal] in recoveryJournal.recent }.value
         let snapshot = await recoveryHistory.reconcile(actions); applyRecovery(snapshot)
@@ -626,10 +621,6 @@ final class ScanStore {
         }
     }
 
-    /// Safe, rebuildable findings: what "Clean recommended" removes.
-    var recommendedItems: [ScanItem] {
-        buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }
-    }
     var recommendedBytes: Int64 { buckets.reduce(0) { $0 + $1.readySize } }
 
     /// Replace the selection with every recommended finding.
@@ -638,33 +629,7 @@ final class ScanStore {
         select { item, _ in item.severity == .safe && item.isRegenerable }
     }
 
-    /// Greedily select the largest SAFE+regenerable items until the running total
-    /// reaches `target` bytes (the "Free N GB fast" missions).
-    func selectSafeUpTo(bytes target: Int64) {
-        clearSelection()
-        var refs: [(b: Int, i: Int, size: Int64)] = []
-        for b in buckets.indices {
-            for i in buckets[b].items.indices {
-                let it = buckets[b].items[i]
-                if it.severity == .safe, it.isRegenerable, it.isActionable {
-                    refs.append((b, i, it.allocatedSize))
-                }
-            }
-        }
-        refs.sort { $0.size > $1.size }
-        var acc: Int64 = 0
-        for r in refs {
-            if acc >= target { break }
-            buckets[r.b].setSelected(at: r.i, true)
-            acc += r.size
-        }
-    }
-
     // MARK: - Cleaning
-
-    /// Kept as a closed compatibility entry point. Old preferences cannot grant
-    /// consent to remove data. Future rules require their own reviewed contract.
-    func autoClean(categoryID: String) async -> Int64 { 0 }
 
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
@@ -871,14 +836,4 @@ final class ScanStore {
         }
     }
 
-    /// Undo the last clean by restoring trashed items. Restored items are also
-    /// marked restored in the removal log so Put Back is not offered twice.
-    func undoLast() async {
-        guard let restorable = lastCleanSummary?.restorable else { return }
-        let paths = Set(restorable.map { $0.trash.path })
-        let entries = removalLog.filter { $0.recoverable && $0.trashPath.map(paths.contains) == true }
-        for entry in entries { _ = await restoreFromLog(entry) }
-        lastCleanSummary = nil
-        lastCleanRunID = nil
-    }
 }

@@ -65,9 +65,6 @@ enum NavSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Sections that open an existing sheet rather than routing content.
-    var opensSheet: Bool { false }
-
     @MainActor
     func buckets(_ store: ScanStore) -> [ScanStore.Bucket] {
         switch self {
@@ -106,7 +103,6 @@ struct AppShell: View {
         else { return .dashboard }
         return s
     }()
-    @Environment(\.accessibilityReduceMotion) private var shellReduceMotion
     @State private var showReview = false
     @State private var reviewedGoalPlan: ReviewedSpacePlan?
     @State private var goalReviewPending = false
@@ -389,15 +385,6 @@ struct AppShell: View {
         developerSearch = ""
         searchFocused = false
         showResultFilter = false
-    }
-
-    private var currentScanning: Bool {
-        switch section {
-        case .apps: return appStore.isScanning
-        case .duplicates: return dupStore.isScanning
-        case .bugs: return healthStore.isScanning
-        default: return store.isScanning
-        }
     }
 
     private func rescanCurrentSection() {
@@ -764,91 +751,5 @@ private enum SidebarNavigation {
         var transaction = Transaction(animation: nil)
         transaction.disablesAnimations = true
         withTransaction(transaction, action)
-    }
-}
-
-private struct TopbarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(Brand.textSecondary)
-            .padding(.horizontal, 10).frame(height: 31)
-            .background(RoundedRectangle(cornerRadius: 7)
-                .fill(configuration.isPressed ? Brand.surfaceSubtle : Brand.surfaceElevated.opacity(0.75)))
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Brand.inputBorder.opacity(0.65)))
-    }
-}
-
-struct DeviceCard: View {
-    let store: ScanStore
-
-    // CRITICAL: never read live disk values from this body.
-    //
-    // These used to call `DeviceInfo.available` / `.usedFraction` directly, and the
-    // storage bar's width (inside a GeometryReader) therefore depended on free
-    // space. Free space fluctuates constantly — especially on a nearly-full disk —
-    // so layout read the disk, got a different number, re-laid out, read again…
-    // an infinite layout-feedback loop that pinned the main thread at 100% CPU and
-    // froze navigation across the entire app. The values are snapshotted into
-    // @State and refreshed on a slow timer instead.
-    @State private var freeBytes: Int64 = 0
-    @State private var usedFraction: Double = 0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                deviceImage.frame(width: 40, height: 30)
-                Text(DeviceInfo.name).font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Brand.textPrimary).lineLimit(1)
-            }
-            Text(DeviceInfo.specLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-            Text(DeviceInfo.storageLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-
-            // Storage bar — driven by the snapshot, never a live read.
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Brand.border)
-                    Capsule().fill(Brand.brand)
-                        .frame(width: max(0, geo.size.width * usedFraction))
-                }
-            }
-            .frame(height: 6)
-            .padding(.top, 2)
-
-            Text("\(Fmt.size(freeBytes)) available")
-                .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-        }
-        .cairnCard(14)
-        .task(id: "deviceStats") {
-            while !Task.isCancelled {
-                let free = DeviceInfo.available
-                let frac = DeviceInfo.usedFraction
-                // Only publish a real change, so tiny fluctuations don't redraw.
-                if abs(frac - usedFraction) > 0.001 || abs(free - freeBytes) > 50_000_000 {
-                    freeBytes = free
-                    usedFraction = frac
-                }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)   // 5s
-            }
-        }
-    }
-
-    /// A render for THIS Mac's model if we ship one (`mac-macmini.png`,
-    /// `mac-laptopcomputer.png`, …), else nil. Keyed off the model-matched symbol
-    /// name so a MacBook never shows a Mac mini — falling back to Apple's own
-    /// per-model SF Symbol, which is always correct for the hardware.
-    static let macImage: NSImage? = {
-        Bundle.main.url(forResource: "mac-\(DeviceInfo.deviceSymbol)", withExtension: "png")
-            .flatMap { NSImage(contentsOf: $0) }
-    }()
-
-    @ViewBuilder private var deviceImage: some View {
-        if let img = DeviceCard.macImage {
-            Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-        } else {
-            Image(systemName: DeviceInfo.deviceSymbol)
-                .font(.system(size: 27, weight: .regular))
-                .foregroundStyle(Brand.textPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
     }
 }

@@ -8,9 +8,23 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
+### Clean-up and hardening (PR #11)
+
+- **About 1,100 lines of unused code removed:** old item rows, the disk map, missions, the old sidebar device card, hero art and helpers nothing called. Two unused Mac pictures and three tool icons leave the app too.
+- **Deleting is harder to trick.** Protected folders are matched whatever the capital letters, system folders are refused under both of macOS's spellings, an item swapped at the last instant is put back instead of deleted, and permission changes never follow a link.
+- **Tools Cairn runs are pinned.** macOS tools always come from their system folder, other tool names must be plain names, and a program anyone could have replaced is refused.
+- **AI tools cannot switch their own cleaning on.** The setting is sealed with a Keychain secret, so a `defaults write` from outside Cairn counts as Off.
+- **Signature check covers the whole app** (every file and the hardened runtime), and the release build stops if the hardened runtime is off or an unsafe entitlement is present.
+- The no-trial and licence seal changes from PR #6 ship here too, with Pro at £35.99.
+- [docs/SECURITY.md](docs/SECURITY.md) explains what is protected, what is realistic, the Polar settings to change, and how to set up signed Sparkle updates.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
+- The scroll-story page (`website/v2/story.html`), with a footer ready for buying: Download for Mac and Buy Cairn Pro.
+- **Pro is £35.99, one time, with no trial.** The app's price line changes to match and the 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
+- **Harder to crack.** The developer switch that turned Pro on with one Terminal command is gone from the app that is sold. The saved licence is sealed to the Mac it was activated on, so a hand-made or copied record no longer unlocks Pro, and dates in the future are refused. Pro also stays off in a copy of Cairn whose code has been changed.
+- **Website screenshots of the real app.** `--showcase` captures every screen with the logo, sharp at Retina size, with sample numbers that match the website.
 
 ## 23 October 2026
 
