@@ -195,7 +195,8 @@ final class AgentBridge {
         let client = AgentCleanup.displayName(request["client"] as? String)
         switch request["op"] as? String {
         case "ping":
-            return ["ok": true, "mode": AgentCleaningMode.current.rawValue]
+            let mode = await AgentCleaningMode.verified()
+            return ["ok": true, "mode": mode.rawValue]
         case "plan":
             return await plan(request, client: client)
         case "run":
@@ -236,7 +237,7 @@ final class AgentBridge {
         let plan = AgentCleanup.Plan(id: UUID().uuidString, client: client, created: Date(), items: selection.items, heldBack: selection.heldBack)
         plans = plans.filter { Date().timeIntervalSince($0.value.created) <= AgentCleanup.planLifetime }
         plans[plan.id] = plan
-        let mode = AgentCleaningMode.current
+        let mode = await AgentCleaningMode.verified()
         let next: String
         switch mode {
         case .off: next = "Cleaning by AI tools is off. Show the user this plan and call open_cairn so they can review it in Cairn."
@@ -272,15 +273,18 @@ final class AgentBridge {
     // MARK: - Run
 
     func run(planID: String, client: String) async -> [String: Any] {
+        // Read the setting before taking the plan, so no other request can run
+        // the same plan while this one waits.
+        let mode = await AgentCleaningMode.verified()
         let plan = plans[planID]
-        if let reason = AgentCleanup.refusal(plan: plan, mode: AgentCleaningMode.current) {
+        if let reason = AgentCleanup.refusal(plan: plan, mode: mode) {
             return ["ok": false, "error": reason]
         }
         guard let plan, let store else {
             return ["ok": false, "error": "Cairn's window is closed. Call open_cairn, then try again."]
         }
         plans.removeValue(forKey: planID)
-        if AgentCleaningMode.current == .ask {
+        if mode == .ask {
             guard await approve(plan) else { return ["ok": false, "error": "The user chose not to free this space now."] }
         }
         let summary = await store.clean(plan.items, proEnabled: proEnabled(), runKind: plan.client)

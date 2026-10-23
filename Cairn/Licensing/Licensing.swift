@@ -18,7 +18,7 @@ enum LicenseConfig {
     static let offlineGrace: TimeInterval = 60 * 60 * 24 * 14
     /// Where buyers without a key purchase Cairn Pro (domain TBD pre-launch).
     static let purchaseURL = URL(string: "https://getcairn.app/#pricing")!
-    static let price = "£95"
+    static let price = "£35.99"
 
     /// DEV ONLY, and only in debug builds — unlocks Pro locally so Pro-gated
     /// screens can be built and reviewed without a real key:
@@ -53,14 +53,33 @@ enum AppIntegrity {
         #endif
     }()
 
+    /// Cairn itself, signed with Emotive Impact's Developer ID certificate.
+    static let requirement = "identifier \"com.emotiveimpact.cairn\" and anchor apple generic"
+        + " and certificate 1[field.1.2.840.113635.100.6.2.6] exists"
+        + " and certificate leaf[field.1.2.840.113635.100.6.1.13] exists"
+        + " and certificate leaf[subject.OU] = \"\(teamID)\""
+
     static func signedByUs() -> Bool {
-        var me: SecCode?
         var requirement: SecRequirement?
-        let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\"" as CFString
+        guard SecRequirementCreateWithString(Self.requirement as CFString, [], &requirement) == errSecSuccess,
+              let requirement else { return false }
+        // The code that is running now.
+        var me: SecCode?
         guard SecCodeCopySelf([], &me) == errSecSuccess, let me,
-              SecRequirementCreateWithString(text, [], &requirement) == errSecSuccess, let requirement
+              SecCodeCheckValidity(me, [], requirement) == errSecSuccess else { return false }
+        // The whole app on disk too: every architecture, Info.plist and every
+        // resource, so an edited file inside the app is caught as well.
+        var bundle: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(Bundle.main.bundleURL as CFURL, [], &bundle) == errSecSuccess, let bundle else { return false }
+        let strict = SecCSFlags(rawValue: kSecCSCheckAllArchitectures | kSecCSStrictValidate | kSecCSCheckNestedCode)
+        guard SecStaticCodeCheckValidity(bundle, strict, requirement) == errSecSuccess else { return false }
+        // Our builds always run with the hardened runtime, which is what stops
+        // other code being loaded into Cairn. A copy without it is not ours.
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(bundle, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let flags = ((info as? [String: Any])?[kSecCodeInfoFlags as String] as? NSNumber)?.uint32Value
         else { return false }
-        return SecCodeCheckValidity(me, [], requirement) == errSecSuccess
+        return flags & SecCodeSignatureFlags.runtime.rawValue != 0
     }
 }
 

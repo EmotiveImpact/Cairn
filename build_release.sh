@@ -41,7 +41,22 @@ while IFS= read -r nested; do
 done < <(find "$APP/Contents" \( -name "*.dylib" -o -name "*.framework" \) 2>/dev/null)
 codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" --sign "$IDENTITY" "$APP"
 codesign --verify --strict --verbose=2 "$APP"
-echo "▸ Signed and verified."
+# The hardened runtime must be on, and none of the entitlements that would let
+# other code be loaded into Cairn, or a debugger attach to it, may ship.
+SIGNING="$(codesign -d --verbose=2 "$APP" 2>&1)"
+if ! grep -q "flags=.*runtime" <<<"$SIGNING"; then
+  echo "✗ The hardened runtime is not on."
+  exit 1
+fi
+ENTS="$(codesign -d --entitlements - "$APP" 2>/dev/null || true)"
+for bad in disable-library-validation allow-dyld-environment-variables allow-unsigned-executable-memory \
+           allow-jit disable-executable-page-protection get-task-allow; do
+  if grep -q "$bad" <<<"$ENTS"; then
+    echo "✗ The entitlement $bad must not ship."
+    exit 1
+  fi
+done
+echo "▸ Signed and verified (hardened runtime on, no unsafe entitlements)."
 
 TMPZIP="dist/${APP_NAME}-notarize.zip"
 ditto -c -k --keepParent "$APP" "$TMPZIP"

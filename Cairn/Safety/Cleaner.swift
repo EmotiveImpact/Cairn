@@ -69,6 +69,13 @@ enum Cleaner {
         if let reviewedSource, ReviewedSource.read(item.url) != reviewedSource {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The source changed after goal review. Review a fresh plan.")
         }
+        // The contents check above can take seconds. Look again right before
+        // moving, so a folder swapped in meanwhile (for example a link to
+        // somewhere protected) is never the thing that gets moved.
+        guard item.url.resolvingSymlinksInPath().standardizedFileURL == item.resolvedURL.standardizedFileURL,
+              SourceIdentity.read(item.resolvedURL) == scanned else {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "The file at this location changed since scanning. Run a fresh scan.")
+        }
         let resulting: URL?
         do {
             // Moving first is an atomic rename: the original path disappears at
@@ -79,7 +86,21 @@ enum Cleaner {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: trashErrorText(error))
         }
-        guard item.deleteImmediately, let trashed = resulting else {
+        // What reached the Trash must be the very item that was scanned. A move
+        // keeps a file's identity on the same disk, so a different one means it
+        // was swapped at the last instant: put it straight back and stop.
+        var verified = true
+        if let trashed = resulting, let moved = SourceIdentity.read(trashed) {
+            if moved.device == scanned.device && moved != scanned {
+                _ = renamex_np(trashed.path, item.resolvedURL.path, UInt32(RENAME_EXCL))
+                return Outcome(bytesAffected: 0, usedTool: false,
+                               error: "The item changed while Cairn was moving it, so it was put back and nothing was deleted. Run a fresh scan.")
+            }
+            // Copied to another disk's Trash: the identity cannot be compared,
+            // so leave it in the Trash rather than deleting it.
+            verified = moved.device == scanned.device
+        }
+        guard item.deleteImmediately, verified, let trashed = resulting else {
             return Outcome(movedToTrashURL: resulting, bytesAffected: item.allocatedSize, usedTool: false, error: nil)
         }
         if removeTree(trashed) {
@@ -132,10 +153,12 @@ enum Cleaner {
         let fm = FileManager.default
         do { try fm.removeItem(at: url); return true } catch {}
         if let walker = fm.enumerator(at: url, includingPropertiesForKeys: [.isDirectoryKey, .isSymbolicLinkKey], options: []) {
-            _ = chmod(url.path, 0o700)
+            // Never follow a link: a folder swapped for a link mid-walk must not
+            // change the permissions of whatever the link points at.
+            _ = fchmodat(AT_FDCWD, url.path, 0o700, AT_SYMLINK_NOFOLLOW)
             for case let child as URL in walker {
                 let values = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                if values?.isDirectory == true && values?.isSymbolicLink != true { _ = chmod(child.path, 0o700) }
+                if values?.isDirectory == true && values?.isSymbolicLink != true { _ = fchmodat(AT_FDCWD, child.path, 0o700, AT_SYMLINK_NOFOLLOW) }
             }
         }
         do { try fm.removeItem(at: url); return true } catch { return !FileScan.exists(url) }
