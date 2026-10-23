@@ -139,6 +139,9 @@ struct OverviewWorkspace: View {
                 .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
+            // The scan and clean status strip takes height from this view while it shows;
+            // keep the chart its size then, so nothing below it moves.
+            guard !store.isScanning, !store.isCleaning else { return }
             chartHeight = min(240, max(110, height - 600))
         }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
@@ -328,6 +331,16 @@ struct OverviewWorkspace: View {
                         Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Scanned \(date.formatted(.relative(presentation: .named)))")
                             .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     }
+                }
+            }
+        } else {
+            // Same shape while the disk is first measured, so the cards below don't jump.
+            VStack(alignment: .leading, spacing: 9) {
+                Text("Measuring this Mac…").font(.system(size: 12.5)).foregroundStyle(Brand.textMuted)
+                Capsule().fill(Brand.track).frame(height: 6)
+                HStack(spacing: 18) {
+                    legend(Brand.inUse, "In use")
+                    legend(Brand.track, "Free now")
                 }
             }
         }
