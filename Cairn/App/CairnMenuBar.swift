@@ -370,10 +370,28 @@ enum MenuAvailableSpace {
         drivesRow?.submenu = submenu
     }
 
+    /// Scan progress while a scan runs; the icon is the stacking Cairn until it ends.
+    private var scanBuilding: Double?
+    func setScanProgress(_ progress: Double?) {
+        scanBuilding = progress
+        guard let button = statusItem?.button else { return }
+        if let progress {
+            let renderer = ImageRenderer(content: CairnLogo(size: 22, monochrome: true, building: progress))
+            renderer.scale = 2
+            if let image = renderer.nsImage {
+                image.isTemplate = true
+                image.size = NSSize(width: 20, height: 20)
+                button.image = image
+            }
+        } else {
+            updateBadge()
+        }
+    }
+
     private func updateBadge() {
         guard let button = statusItem?.button else { return }
         button.title = MenuAvailableSpace.title(available, checked: readAt != nil)
-        if let available, let image = gauge(available: available) { button.image = image }
+        if scanBuilding == nil, let available, let image = gauge(available: available) { button.image = image }
         let state: String
         if let available {
             state = "\(Fmt.size(available)) available on this Mac"
@@ -399,9 +417,10 @@ enum MenuAvailableSpace {
             outline.lineWidth = 1.3
             (nearlyFull ? NSColor.labelColor : NSColor.black).setStroke()
             outline.stroke()
-            // Fill rises from the bottom, inside a 1.5 pt margin.
+            // Fill rises from the bottom, inside a 1.5 pt margin. It tops out at 85%
+            // so even a full disk keeps a sliver of headroom and still reads as a gauge.
             let inner = NSRect(x: 3.5, y: 4, width: 11, height: 10)
-            let height = max(1.6, inner.height * used)
+            let height = max(1.6, inner.height * 0.85 * used)
             let fill = NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.maxY - height, width: inner.width, height: height),
                                     xRadius: 1.4, yRadius: 1.4)
             (nearlyFull ? NSColor.systemOrange : NSColor.black.withAlphaComponent(0.85)).setFill()

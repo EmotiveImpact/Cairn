@@ -129,11 +129,12 @@ struct AppShell: View {
             && store.buckets.contains { $0.permissionGap }
     }
 
-    var body: some View {
+    /// Sidebar and page. Kept apart from `body`'s long modifier chain so the
+    /// compiler can type-check each in reasonable time.
+    private var shellLayout: some View {
         GeometryReader { viewport in
             HStack(spacing: 0) {
-                NavSidebar(section: $section, readyBytes: store.recommendedBytes,
-                           scanProgress: store.isScanning && !previewMode ? store.scanProgress : nil)
+                NavSidebar(section: $section, readyBytes: store.recommendedBytes)
                 VStack(spacing: 0) {
                     if let message = store.removalLogError {
                         Text(message).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Brand.deepPanel)
@@ -153,6 +154,12 @@ struct AppShell: View {
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
         }
+    }
+
+    /// The layout with its sheets and scan rotation. Split from `body` so
+    /// neither chain is too long for the type checker.
+    private var shellWithSheets: some View {
+        shellLayout
         .ignoresSafeArea(.container, edges: .top)
         .background(Brand.chrome)
         .sheet(isPresented: $showReview, onDismiss: {
@@ -182,6 +189,10 @@ struct AppShell: View {
                 scanActivityIndex = count > 1 ? (scanActivityIndex + 1) % count : 0
             }
         }
+    }
+
+    var body: some View {
+        shellWithSheets
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
@@ -207,6 +218,10 @@ struct AppShell: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: ScanGate.changed)) { _ in operation = ScanGate.shared.snapshot }
         .onChange(of: MenuBarRoute.shared.pending) { _, _ in handleMenuRequest() }
+        // The menu bar Cairn builds stone by stone while a scan runs.
+        .onChange(of: store.isScanning && !previewMode ? store.scanProgress : -1) { _, progress in
+            CairnMenuBar.shared.setScanProgress(progress < 0 ? nil : progress)
+        }
         .onAppear {
             MenuBarRoute.shared.openWindow = { openWindow(id: "main") }
             CairnMenuBar.shared.scanStatus = { menuScanStatus }
@@ -549,8 +564,6 @@ struct AppBackground: View {
 struct NavSidebar: View {
     @Binding var section: NavSection
     var readyBytes: Int64 = 0
-    /// Scan progress while a scan runs, so the logo can build stone by stone.
-    var scanProgress: Double? = nil
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
@@ -560,7 +573,7 @@ struct NavSidebar: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 9) {
-                CairnLogo(size: 27, building: scanProgress).accessibilityHidden(true)
+                CairnLogo(size: 27).accessibilityHidden(true)
                 Text("Cairn").font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(Brand.textPrimary)
                 Spacer(minLength: 0)

@@ -525,6 +525,8 @@ final class ScanStore {
     /// Filter + file one found item into its bucket (the single item chokepoint).
     private func applyItem(_ item: ScanItem) {
         if AppSettings.shared.isExcluded(item.resolvedURL) { return }
+        // Never list Cairn's own app or the build folder this copy runs from.
+        if InUse.holdsCairn(item) { return }
         // Honor the Developer Tools settings here too.
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
@@ -672,10 +674,18 @@ final class ScanStore {
         // rather than refusing the whole reviewed selection.
         let mode = removal ?? AppSettings.shared.removalMode
         let skipped = items.filter { !$0.isActionable || $0.severity == .risky }
-        let items = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
+        let prepared = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
             var item = item
             item.deleteImmediately = mode.deletesImmediately(item)
             return item
+        }
+        // Leave alone anything a running program or a build in progress is using.
+        let running = await Task.detached(priority: .userInitiated) { InUse.runningExecutables() }.value
+        let busy = prepared.compactMap { item in InUse.reason(item, running: running).map { (item.id, $0) } }
+        let busyIDs = Set(busy.map(\.0))
+        let items = prepared.filter { !busyIDs.contains($0.id) }
+        if items.isEmpty && !busy.isEmpty {
+            return CleanSummary(failed: busy.count, errors: busy.map { "Skipped \($0.1)" })
         }
         guard !items.isEmpty else {
             return CleanSummary(failed: skipped.count, errors: ["Nothing selected has a cleanup action. Advice items are for review only."])
@@ -715,6 +725,10 @@ final class ScanStore {
             uniquingKeysWith: { a, _ in a }
         )
         var summary = CleanSummary()
+        if !busy.isEmpty {
+            summary.failed += busy.count
+            summary.errors.append(contentsOf: busy.map { "Skipped \($0.1)" })
+        }
         if !skipped.isEmpty {
             summary.failed += skipped.count
             summary.errors.append("\(skipped.count) advice-only item\(skipped.count == 1 ? " was" : "s were") skipped.")
