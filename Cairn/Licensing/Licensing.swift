@@ -1,3 +1,4 @@
+import CryptoKit
 import Foundation
 import IOKit
 import Security
@@ -19,18 +20,48 @@ enum LicenseConfig {
     static let purchaseURL = URL(string: "https://getcairn.app/#pricing")!
     static let price = "£35.99"
 
-    /// DEV ONLY — unlocks Pro locally so Pro-gated screens can be built and
-    /// reviewed without a real key. Off unless explicitly switched on for this
-    /// user on this Mac:
+    /// DEV ONLY, and only in debug builds — unlocks Pro locally so Pro-gated
+    /// screens can be built and reviewed without a real key:
     ///
     ///     defaults write com.emotiveimpact.cairn cairn.devPro -bool true
     ///     defaults delete com.emotiveimpact.cairn cairn.devPro     # turn back off
     ///
-    /// No code path enables this by default, so a shipped build is never Pro
-    /// without a key. `--safetycheck` FAILS while it is on, so a build with it
-    /// left enabled can't pass the release gate. The UI also shows a DEV PRO
-    /// badge, so it can never be mistaken for a real licence.
+    /// Release builds (the app that is sold) never read the setting, so no
+    /// command can turn Pro on without a key. `--safetycheck` still FAILS while
+    /// it is on, and the UI shows a DEV PRO badge.
+    #if DEBUG
     static var devProUnlock: Bool { UserDefaults.standard.bool(forKey: "cairn.devPro") }
+    #else
+    static let devProUnlock = false
+    #endif
+}
+
+// MARK: - App integrity
+
+/// Pro runs only in the Cairn that Emotive Impact signed. A copy whose code was
+/// changed, the usual way to crack an app, no longer passes Apple's signature
+/// check, so it keeps the free tier. Debug builds skip this.
+enum AppIntegrity {
+    static let teamID = "FC88M2P4F9"
+    static let message = "This copy of Cairn has been changed or was not signed by Emotive Impact, so Pro can't run in it. Download Cairn again from getcairn.app."
+    /// Worked out once, off the main thread, when the saved licence is first read.
+    static let allowsPro: Bool = {
+        #if DEBUG
+        return true
+        #else
+        return signedByUs()
+        #endif
+    }()
+
+    static func signedByUs() -> Bool {
+        var me: SecCode?
+        var requirement: SecRequirement?
+        let text = "anchor apple generic and certificate leaf[subject.OU] = \"\(teamID)\"" as CFString
+        guard SecCodeCopySelf([], &me) == errSecSuccess, let me,
+              SecRequirementCreateWithString(text, [], &requirement) == errSecSuccess, let requirement
+        else { return false }
+        return SecCodeCheckValidity(me, [], requirement) == errSecSuccess
+    }
 }
 
 // MARK: - Device identity
@@ -55,6 +86,27 @@ struct StoredLicense: Codable {
     var activationID: String
     var lastValidated: Date
     var granted: Bool
+    /// Written by Cairn on this Mac. A record typed in by hand, edited, or
+    /// copied from another Mac has no matching seal, so it needs an online check.
+    var seal: String? = nil
+
+    /// Pro without reaching Polar: only a record this Mac sealed, checked
+    /// within the offline grace period, and never dated in the future.
+    var grantsOffline: Bool {
+        let age = Date().timeIntervalSince(lastValidated)
+        return granted && age > -300 && age < LicenseConfig.offlineGrace && seal == LicenseSeal.make(self)
+    }
+    mutating func reseal() { seal = LicenseSeal.make(self) }
+}
+
+/// Ties a saved licence to this Mac and to what Polar last said about it.
+enum LicenseSeal {
+    private static let pepper = "cairn.licence.seal.v1.4e9b7c21d6"
+    static func make(_ license: StoredLicense) -> String {
+        let key = SymmetricKey(data: SHA256.hash(data: Data((pepper + DeviceIdentity.hardwareUUID).utf8)))
+        let message = "\(license.key)|\(license.activationID)|\(Int(license.lastValidated.timeIntervalSince1970))|\(license.granted)"
+        return Data(HMAC<SHA256>.authenticationCode(for: Data(message.utf8), using: key)).base64EncodedString()
+    }
 }
 
 /// A locked/unavailable or malformed record is never treated as absent.
@@ -133,7 +185,8 @@ enum LicenseStorageWorker {
         }
     }
     static func load() throws -> LocalLicenseState {
-        LocalLicenseState(license: try LicenseStore.load())
+        _ = AppIntegrity.allowsPro
+        return LocalLicenseState(license: try LicenseStore.load())
     }
 }
 
@@ -244,7 +297,7 @@ final class LicenseManager: ObservableObject {
         do {
             let state = try await LicenseStorageWorker.run(loadLocal)
             stored = state.license
-            isPro = state.license.map { $0.granted && Date().timeIntervalSince($0.lastValidated) < LicenseConfig.offlineGrace } ?? false
+            isPro = state.license?.grantsOffline ?? false
             if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true }
             storageMessage = nil
             recompute()
@@ -259,6 +312,10 @@ final class LicenseManager: ObservableObject {
     var hasKey: Bool { stored != nil }
 
     private func recompute() {
+        if isPro && !AppIntegrity.allowsPro {
+            isPro = false
+            lastError = AppIntegrity.message
+        }
         isUnlocked = isPro
     }
 
@@ -271,11 +328,13 @@ final class LicenseManager: ObservableObject {
         do {
             let activationID = try await client.activate(key: key)
             let granted = try await client.validate(key: key, activationID: activationID)
-            let license = StoredLicense(key: key, activationID: activationID, lastValidated: Date(), granted: granted)
-            try await LicenseStorageWorker.run { try LicenseStore.save(license) }; stored = license
+            var license = StoredLicense(key: key, activationID: activationID, lastValidated: Date(), granted: granted)
+            license.reseal()
+            let saved = license
+            try await LicenseStorageWorker.run { try LicenseStore.save(saved) }; stored = saved
             isPro = granted; recompute()
             if !granted { lastError = "This license is not active." }
-            return granted
+            return isPro
         } catch {
             lastError = (error as? LocalizedError)?.errorDescription ?? "Activation failed."
             return false
@@ -308,16 +367,16 @@ final class LicenseManager: ObservableObject {
         guard let s = stored else { isPro = false; return }
         do {
             let granted = try await client.validate(key: s.key, activationID: s.activationID)
-            var u = s; u.granted = granted; u.lastValidated = Date()
+            var u = s; u.granted = granted; u.lastValidated = Date(); u.reseal()
             stored = u; isPro = granted
             do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
             catch { storageMessage = error.localizedDescription }
         } catch let e as PolarClient.PolarError where e.isDefinitiveRejection {
-            isPro = false; var u = s; u.granted = false; stored = u
+            isPro = false; var u = s; u.granted = false; u.reseal(); stored = u
             do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
             catch { storageMessage = error.localizedDescription }
         } catch {
-            isPro = (s.granted && Date().timeIntervalSince(s.lastValidated) < LicenseConfig.offlineGrace)
+            isPro = s.grantsOffline
         }
     }
 }

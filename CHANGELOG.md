@@ -13,6 +13,8 @@ These are finished or nearly finished in open pull requests. None of it is on `m
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
 - The scroll-story page (`website/v2/story.html`), with a footer ready for buying: Download for Mac and Buy Cairn Pro.
 - **Pro is £35.99, one time, with no trial.** The app's price line changes to match and the 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
+- **Harder to crack.** The developer switch that turned Pro on with one Terminal command is gone from the app that is sold. The saved licence is sealed to the Mac it was activated on, so a hand-made or copied record no longer unlocks Pro, and dates in the future are refused. Pro also stays off in a copy of Cairn whose code has been changed.
+- **Website screenshots of the real app.** `--showcase` captures every screen with the logo, sharp at Retina size, with sample numbers that match the website.
 
 ## 23 October 2026
 
