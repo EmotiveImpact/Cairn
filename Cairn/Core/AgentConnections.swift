@@ -42,6 +42,18 @@ struct AgentTool: Identifiable, Equatable {
                       format: .json(key: "servers", typed: true), marker: support.appendingPathComponent("Code/User")),
             AgentTool(id: "windsurf", title: "Windsurf", config: home.appendingPathComponent(".codeium/windsurf/mcp_config.json"),
                       format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".codeium/windsurf")),
+            AgentTool(id: "cline", title: "Cline", config: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev")),
+            AgentTool(id: "roo", title: "Roo Code", config: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline")),
+            AgentTool(id: "kiro", title: "Kiro", config: home.appendingPathComponent(".kiro/settings/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".kiro")),
+            AgentTool(id: "amazon-q", title: "Amazon Q", config: home.appendingPathComponent(".aws/amazonq/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".aws/amazonq")),
+            AgentTool(id: "junie", title: "JetBrains Junie", config: home.appendingPathComponent(".junie/mcp/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".junie")),
+            AgentTool(id: "lm-studio", title: "LM Studio", config: home.appendingPathComponent(".lmstudio/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".lmstudio")),
         ]
     }
 }

@@ -426,20 +426,22 @@ struct OverviewWorkspace: View {
     }
     private var agentsTile: some View {
         let tools = shownAgents
-        return card("Your AI coding tools", tools.isEmpty ? "AI tools settings" : nil, { onOpen(.settings) }) {
+        let others = agentTools.count - tools.count
+        return card("Your AI coding tools", tools.isEmpty ? "AI tools settings" : others > 0 ? "All AI tools" : nil, { onOpen(.settings) }) {
             if tools.isEmpty {
                 Text("No coding tools found").font(.system(size: 13.5, weight: .medium))
                 Text("Claude Code, Codex, Cursor and others can ask Cairn what is using space.").font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
             } else {
                 ForEach(tools) { tool in
                     logoRow(BrandLogo.forAgent(tool.id), "chevron.left.forwardslash.chevron.right", tool.title) {
-                        if case .connected = agentState(tool) {
+                        if case .connected(current: true) = agentState(tool) {
                             HStack(spacing: 5) {
                                 Circle().fill(Brand.safeCyan).frame(width: 6, height: 6)
                                 Text("Connected").font(.system(size: 12)).foregroundStyle(Brand.safeCyan)
                             }
                         } else {
-                            Button(connecting == tool.id ? "Connecting…" : "Connect") { connect(tool) }
+                            let stale = agentState(tool) == .connected(current: false)
+                            Button(connecting == tool.id ? "Connecting…" : stale ? "Reconnect" : "Connect") { connect(tool) }
                                 .buttonStyle(QuietLinkStyle()).font(.system(size: 12))
                                 .disabled(preview || connecting != nil)
                         }
