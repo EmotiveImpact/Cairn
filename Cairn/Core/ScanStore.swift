@@ -40,6 +40,13 @@ final class ScanStore {
         /// total is maintained incrementally as items are added/removed.
         private var runningTotal: Int64 = 0
         var totalSize: Int64 { runningTotal }
+        /// The part of the total that is ready to free (safe and rebuildable),
+        /// kept the same way so the live scan can show the same number as the result.
+        private var runningReady: Int64 = 0
+        var readySize: Int64 { runningReady }
+        private static func readyBytes(_ item: ScanItem) -> Int64 {
+            item.severity == .safe && item.isRegenerable && item.isActionable ? item.allocatedSize : 0
+        }
 
         init(info: CategoryInfo) { self.info = info }
 
@@ -56,10 +63,12 @@ final class ScanStore {
             if !item.isActionable || item.severity == .risky { item.selected = false }
             items.append(item)
             if item.isActionable { runningTotal += item.allocatedSize }
+            runningReady += Self.readyBytes(item)
         }
         mutating func removeItems(where shouldRemove: (ScanItem) -> Bool) {
             items.removeAll(where: shouldRemove)
             runningTotal = items.reduce(0) { $0 + ($1.isActionable ? $1.allocatedSize : 0) }
+            runningReady = items.reduce(0) { $0 + Self.readyBytes($1) }
         }
         mutating func sortBySizeDescending() {
             items.sort { $0.allocatedSize > $1.allocatedSize }
@@ -67,8 +76,10 @@ final class ScanStore {
         /// Mutate one item in place (selection), keeping the total correct.
         mutating func updateItem(at index: Int, _ transform: (inout ScanItem) -> Void) {
             let before = items[index].isActionable ? items[index].allocatedSize : 0
+            let readyBefore = Self.readyBytes(items[index])
             transform(&items[index])
             runningTotal += (items[index].isActionable ? items[index].allocatedSize : 0) - before
+            runningReady += Self.readyBytes(items[index]) - readyBefore
         }
         var selectedSize: Int64 { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.reduce(0) { $0 + $1.allocatedSize } }
         var selectedCount: Int { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.count }
@@ -493,8 +504,7 @@ final class ScanStore {
             recordComparison()
             onCompletedScan?()
             if AppSettings.shared.scanNotifications {
-                Notify.scanComplete(totalBytes: grandTotal,
-                                    items: buckets.reduce(0) { $0 + $1.items.count })
+                Notify.scanComplete(readyBytes: recommendedBytes, foundBytes: grandTotal)
             }
         }
     }
@@ -589,7 +599,7 @@ final class ScanStore {
     var recommendedItems: [ScanItem] {
         buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }
     }
-    var recommendedBytes: Int64 { recommendedItems.reduce(0) { $0 + $1.allocatedSize } }
+    var recommendedBytes: Int64 { buckets.reduce(0) { $0 + $1.readySize } }
 
     /// Replace the selection with every recommended finding.
     func selectRecommended() {

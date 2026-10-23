@@ -165,12 +165,13 @@ struct OverviewWorkspace: View {
     private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
-            // Same big number as the result, counting up while the scan runs.
+            // Same big number as the result, counting up while the scan runs. It counts only
+            // what is ready to free, so it never shrinks to a smaller number at the end.
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    CountingBytes(bytes: store.grandTotal, duration: 0.3, still: reduceMotion)
+                    CountingBytes(bytes: store.recommendedBytes, duration: 0.3, still: reduceMotion)
                         .font(.system(size: 58, weight: .light)).tracking(-2.3)
-                    Text("found so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                    Text("ready so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
