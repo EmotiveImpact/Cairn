@@ -54,6 +54,10 @@ struct AgentTool: Identifiable, Equatable {
                       format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".junie")),
             AgentTool(id: "lm-studio", title: "LM Studio", config: home.appendingPathComponent(".lmstudio/mcp.json"),
                       format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".lmstudio")),
+            AgentTool(id: "qwen", title: "Qwen Code", config: home.appendingPathComponent(".qwen/settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".qwen")),
+            AgentTool(id: "amp", title: "Amp", config: home.appendingPathComponent(".config/amp/settings.json"),
+                      format: .json(key: "amp.mcpServers", typed: false), marker: home.appendingPathComponent(".config/amp")),
         ]
     }
 }
