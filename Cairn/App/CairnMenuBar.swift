@@ -370,10 +370,28 @@ enum MenuAvailableSpace {
         drivesRow?.submenu = submenu
     }
 
+    /// Scan progress while a scan runs; the icon is the stacking Cairn until it ends.
+    private var scanBuilding: Double?
+    func setScanProgress(_ progress: Double?) {
+        scanBuilding = progress
+        guard let button = statusItem?.button else { return }
+        if let progress {
+            let renderer = ImageRenderer(content: CairnLogo(size: 22, monochrome: true, building: progress))
+            renderer.scale = 2
+            if let image = renderer.nsImage {
+                image.isTemplate = true
+                image.size = NSSize(width: 20, height: 20)
+                button.image = image
+            }
+        } else {
+            updateBadge()
+        }
+    }
+
     private func updateBadge() {
         guard let button = statusItem?.button else { return }
         button.title = MenuAvailableSpace.title(available, checked: readAt != nil)
-        if let available, let image = gauge(available: available) { button.image = image }
+        if scanBuilding == nil, let available, let image = gauge(available: available) { button.image = image }
         let state: String
         if let available {
             state = "\(Fmt.size(available)) available on this Mac"
