@@ -19,7 +19,7 @@ enum LicenseConfig {
     static let offlineGrace: TimeInterval = 60 * 60 * 24 * 14
     /// Where buyers without a key purchase Cairn Pro (domain TBD pre-launch).
     static let purchaseURL = URL(string: "https://getcairn.app/#pricing")!
-    static let price = "£95"
+    static let price = "£35.99"
 
     /// DEV ONLY — unlocks Pro locally so Pro-gated screens can be built and
     /// reviewed without a real key. Off unless explicitly switched on for this
