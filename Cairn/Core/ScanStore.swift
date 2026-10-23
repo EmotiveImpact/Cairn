@@ -669,7 +669,7 @@ final class ScanStore {
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
     func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil,
-               removal: RemovalMode? = nil) async -> CleanSummary {
+               removal: RemovalMode? = nil, runKind: String? = nil) async -> CleanSummary {
         // Advice and risky findings never execute. Drop them and run the rest
         // rather than refusing the whole reviewed selection.
         let mode = removal ?? AppSettings.shared.removalMode
@@ -733,7 +733,7 @@ final class ScanStore {
             summary.failed += skipped.count
             summary.errors.append("\(skipped.count) advice-only item\(skipped.count == 1 ? " was" : "s were") skipped.")
         }
-        var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary)
+        var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary, kind: runKind)
         guard await saveRun(run) else { return CleanSummary(failed: items.count, errors: [receiptError ?? "Receipt history unavailable."]) }
         activeRunIDs.insert(run.id)
         defer { activeRunIDs.remove(run.id) }
