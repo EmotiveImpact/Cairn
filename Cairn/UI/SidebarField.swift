@@ -34,26 +34,43 @@ struct SidebarSpaceField: View {
     /// The dot layout is worked out once per size and level; each frame only
     /// recomputes the glow, which keeps the idle cost low.
     @State private var layout = DotLayout()
+    /// When the dots last started to appear: on launch and whenever the level changes.
+    @State private var revealStart = Date()
+    @State private var revealing = true
+    private static let revealLength: TimeInterval = 3.9
 
     var body: some View {
-        // Eight frames a second is plenty for a slow glow.
-        TimelineView(.animation(minimumInterval: 1.0 / 8, paused: still)) { timeline in
+        // Smooth while the dots appear, then eight frames a second is plenty for a slow glow.
+        TimelineView(.animation(minimumInterval: revealing ? 1.0 / 30 : 1.0 / 8, paused: still)) { timeline in
             let time = still ? 0 : timeline.date.timeIntervalSinceReferenceDate
+            let sinceReveal = still ? .infinity : timeline.date.timeIntervalSince(revealStart)
             let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost, reach = Self.reach(for: readyBytes)
             Canvas { context, size in
                 for dot in layout.dots(size: size, reach: reach, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
-                    var opacity = dot.opacity
+                    // Appear from the bottom up: each dot fades in and grows to size on its own cue.
+                    let p = min(1, max(0, (sinceReveal - dot.delay) / 1.4))
+                    guard p > 0 else { continue }
+                    let eased = 1 - pow(1 - p, 3)
+                    var opacity = dot.opacity * eased
                     // Each dot breathes on its own slow beat.
                     if time != 0 { opacity *= 0.75 + 0.25 * sin(time * dot.speed + dot.phase) }
-                    context.fill(Path(ellipseIn: dot.rect), with: .color(Self.dot.opacity(opacity)))
+                    let rect = eased < 1 ? dot.rect.insetBy(dx: dot.rect.width * (1 - eased) * 0.35,
+                                                            dy: dot.rect.height * (1 - eased) * 0.35) : dot.rect
+                    context.fill(Path(ellipseIn: rect), with: .color(Self.dot.opacity(opacity)))
                 }
             }
+        }
+        .task(id: Self.reach(for: readyBytes)) {
+            revealStart = Date()
+            revealing = true
+            try? await Task.sleep(for: .seconds(Self.revealLength))
+            revealing = false
         }
         .allowsHitTesting(false)
         .accessibilityHidden(true)
     }
 
-    struct Dot { let rect: CGRect; let opacity: Double; let speed: Double; let phase: Double }
+    struct Dot { let rect: CGRect; let opacity: Double; let speed: Double; let phase: Double; let delay: Double }
 
     final class DotLayout {
         private var key: [Double] = []
@@ -80,7 +97,9 @@ struct SidebarSpaceField: View {
                     cached.append(Dot(rect: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2),
                                       opacity: opacity,
                                       speed: 2 * .pi / (2.8 + 3.2 * noise(col + 13, row + 41)),
-                                      phase: 2 * .pi * noise(col + 59, row + 3)))
+                                      phase: 2 * .pi * noise(col + 59, row + 3),
+                                      // Lower rows first, with a little scatter so it doesn't read as a wipe.
+                                      delay: 0.15 + 1.8 * (1 - fade) + 0.45 * noise(col + 71, row + 19)))
                 }
             }
             return cached

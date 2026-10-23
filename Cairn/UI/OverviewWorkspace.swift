@@ -125,7 +125,13 @@ struct OverviewWorkspace: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 header
-                cleanHero.padding(.top, 14)
+                // Every state sits in the space of the tallest one, so the graph and
+                // everything below stay put when a scan starts, runs and finishes.
+                ZStack(alignment: .topLeading) {
+                    heroFootprint.hidden().accessibilityHidden(true)
+                    cleanHero
+                }
+                .padding(.top, 14)
                 graphPanel.padding(.top, 14)
                 diskCard.padding(.top, 14)
                 nextTiles.padding(.top, 14)
@@ -177,6 +183,21 @@ struct OverviewWorkspace: View {
             .font(.system(size: 13)).padding(.top, 6)
         }
     }
+    /// The tallest hero (number, two-line note, to-look-through line, buttons),
+    /// built from the same fonts and spacing, used only to reserve its height.
+    private var heroFootprint: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("00.0 GB").font(.system(size: 58, weight: .light)).tracking(-2.3)
+            Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
+                .font(.system(size: 13.5))
+                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                .padding(.top, 8)
+            Text("00.0 GB more to look through yourself").font(.system(size: 13)).padding(.top, 6)
+            Text("Review").padding(.horizontal, 16).frame(minHeight: 34).padding(.top, 14)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     @ViewBuilder private var cleanHero: some View {
         if store.isScanning && !preview {
             // Same big number as the result, counting up while the scan runs. It counts only
