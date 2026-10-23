@@ -466,3 +466,9 @@ body:not(.staged) .disk-next { display: none; }
   .story-app.beam-hero .night-window { aspect-ratio: 1.555 / 1.68; }
   .story-app.beam-hero .night-window img { width: 168%; margin-left: 0; }
 }
+/* on a phone the disk bar is narrow: smaller sizes and padding so "81.2 GB" fits in the free space */
+@media (max-width: 760px) {
+  .seg { padding: 10px 7px; }
+  .seg b { font-size: 14px; }
+  .cleaned .seg.free { flex-grow: 130; }
+}

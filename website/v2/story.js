@@ -40,7 +40,7 @@
   measure();
   // phones held upright get the stack too; only short, wide windows (a phone on its side) scroll as a plain page
   var staged = !!track && !reduced && vh >= 520 && (innerWidth >= 760 || vh > innerWidth);
-  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask (and its chat, on a phone), then the app's Home, Projects and Activity
+  var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 ask (and its chat, on a phone), then the app's Home, Projects and Activity
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
   var ask = document.getElementById('ask'), askSplit = staged && innerWidth < 760 && !!ask;   // on a phone, its words first, then the chat
@@ -89,7 +89,7 @@
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
       if (here[i] && !at[i] && Math.abs(d) < 0.06) { at[i] = true; here[i].forEach(function (p) { p[0](); }); }
       if (here[i] && at[i] && Math.abs(d) > 0.7) { at[i] = false; here[i].forEach(function (p) { p[1](); }); }
-      if (el === disk && ends[i] > starts[i] && built) setCleaned(stageAt >= starts[i] + 0.5);
+      if (el === disk && ends[i] > starts[i]) { var clean = stageAt >= starts[i] + 0.5; if (built) setCleaned(clean); else if (clean && diskUp) hurryDisk(); }
       if (el === ask && askSplit) chatUp(stageAt >= starts[i] + 0.5);
       if (el === app && ends[i] > starts[i]) showShot(Math.round(Math.min(Math.max(stageAt - starts[i], 0), ends[i] - starts[i])));
     });
@@ -426,15 +426,15 @@
   }
   function setCleaned(on) {
     if (on === cleaned) return;
-    cleaned = on; disk.classList.toggle('cleaned', on); countFree(on ? 72.4 : 33.8);
+    cleaned = on; disk.classList.toggle('cleaned', on); countFree(on ? 81.2 : 42.6);
   }
   // on the stage the white box settles into the bar's place first, then fades as the sections line up inside it
-  var diskRun = 0;
+  var diskRun = 0, buildAt = 0, hurry = false;
   function melt() { if (staged && morph) { morph.classList.add('melt'); setTimeout(function () { morph.classList.remove('melt'); }, 900); } }
   function buildDisk() {
     if (diskUp) return;
-    diskUp = true; melt();
-    disk.classList.add('build');
+    diskUp = true; hurry = false; melt();
+    disk.classList.add('build'); buildAt = performance.now();
     var mine = ++diskRun;
     setTimeout(function () {
       if (mine !== diskRun) return;
@@ -442,9 +442,20 @@
       if (staged) stage(); else setTimeout(function () { setCleaned(true); }, reduced ? 0 : 2600);
     }, reduced ? 0 : 1900);
   }
+  // a flick on before the junk has lit: light it as soon as the bar has lined up, then clean straight away,
+  // so that flick never seems to do nothing
+  function hurryDisk() {
+    if (hurry) return;
+    hurry = true;
+    var mine = ++diskRun;
+    setTimeout(function () {
+      if (mine !== diskRun) return;
+      disk.classList.add('lit'); built = true; stage();
+    }, reduced ? 0 : Math.max(0, 1100 - (performance.now() - buildAt)));
+  }
   function unbuildDisk() {
     if (!diskUp) return;
-    diskUp = false; built = false; diskRun++; melt();
+    diskUp = false; built = false; hurry = false; diskRun++; melt();
     setCleaned(false);
     disk.classList.remove('build', 'lit');
   }
