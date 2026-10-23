@@ -2,7 +2,9 @@
 
 Requires the Cairn Mac app in `/Applications`.
 
-Gemini CLI installs extensions only from a repository whose root holds `gemini-extension.json`, so this folder is published as a small repository of its own (not created yet). Until then, connect Gemini from Cairn › Settings › AI tools.
+```sh
+gemini extensions install https://github.com/EmotiveImpact/cairn-plugins
+```
 
 Commands: `/cairn:status`, `/cairn:free-space [GB]`, `/cairn:projects [idle days]`. `GEMINI.md` tells Gemini to reach for Cairn when a build fails with "No space left on device".
 

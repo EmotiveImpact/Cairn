@@ -3,7 +3,7 @@
 Requires the Cairn Mac app in `/Applications`.
 
 ```text
-/plugin marketplace add EmotiveImpact/Cairn
+/plugin marketplace add EmotiveImpact/cairn-plugins
 /plugin install cairn@cairn
 ```
 

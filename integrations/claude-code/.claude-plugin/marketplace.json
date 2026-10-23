@@ -8,7 +8,7 @@
       "name": "cairn",
       "description": "Disk space for developers. Finds build output, caches and idle projects, plans a safe cleanup and runs it through the Cairn Mac app with a receipt.",
       "version": "1.0.0",
-      "source": "./integrations/claude-code/plugins/cairn",
+      "source": "./plugins/cairn",
       "category": "productivity"
     }
   ]
