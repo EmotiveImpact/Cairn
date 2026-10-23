@@ -201,6 +201,9 @@ struct ScanItem: Identifiable {
     /// build output, plus any node_modules (dependencies, never personal data).
     var isRebuildable: Bool {
         guard case .trash = cleanMethod, severity != .risky else { return false }
+        // An installer is re-downloadable, not rebuilt: it is still the user's
+        // own download, so Smart removal sends it to the Trash.
+        if categoryID == "installers" { return false }
         return (isRegenerable && severity == .safe) || resolvedURL.lastPathComponent == "node_modules"
     }
 }

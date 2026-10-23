@@ -48,27 +48,34 @@ struct AndroidSDKScanner: CairnScanner {
             }
         }
 
-        // 2) NDK versions — one REVIEW item per child of sdk/ndk.
+        // 2) NDK versions — one item per child of sdk/ndk. The newest version
+        //    stays REVIEW. An older side-by-side version untouched for 90+ days
+        //    has been superseded and re-downloads via sdkmanager → SAFE.
         if ctx.isCancelled() { return }
         ctx.progress("NDK")
         let ndk = sdk.appendingPathComponent("ndk")
         if FileScan.exists(ndk), let children = FileScan.children(of: ndk) {
-            for child in children {
+            let versions = children.filter(isRealDirectory)
+            let newest = versions.map(\.lastPathComponent).max(by: Self.versionLess)
+            for child in versions {
                 if ctx.isCancelled() { return }
-                guard isRealDirectory(child) else { continue }
                 let name = child.lastPathComponent
-                if let item = makeItem(
+                guard var item = makeItem(
                     at: child,
                     severity: .review,
                     minSize: ctx.minSizeBytes,
                     isRegenerable: true,
                     cleanMethod: .trash,
-                    note: "Android NDK \(name) — old NDK version",
+                    note: "Android NDK \(name) — re-download via sdkmanager",
                     selectedIfSafe: false,
                     maxFiles: 60_000
-                ) {
-                    ctx.emit(item)
+                ) else { continue }
+                if name != newest && item.ageDays >= Self.supersededNDKDays {
+                    item.severity = .safe
+                    item.selected = !item.permissionDenied
+                    item.note = "Android NDK \(name) — older than \(newest ?? "the newest version") and unused for \(Int(Self.supersededNDKDays))+ days; re-download via sdkmanager"
                 }
+                ctx.emit(item)
             }
         }
 
@@ -140,6 +147,20 @@ struct AndroidSDKScanner: CairnScanner {
     }
 
     // MARK: - helpers
+
+    /// An older NDK this long untouched is treated as superseded.
+    static let supersededNDKDays: Double = 90
+
+    /// Numeric, component-wise version order ("25.1.8937393" < "26.3.11579264").
+    static func versionLess(_ a: String, _ b: String) -> Bool {
+        let x = a.split(separator: ".").map { Int($0) ?? 0 }
+        let y = b.split(separator: ".").map { Int($0) ?? 0 }
+        for i in 0..<max(x.count, y.count) {
+            let l = i < x.count ? x[i] : 0, r = i < y.count ? y[i] : 0
+            if l != r { return l < r }
+        }
+        return false
+    }
 
     /// True only for a real directory (not a symlink, not iCloud stub). We never
     /// follow symlinks, which would double-count or escape the SDK tree.

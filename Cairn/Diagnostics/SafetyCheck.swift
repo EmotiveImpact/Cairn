@@ -247,6 +247,25 @@ enum SafetyCheck {
             fails += 1
         }
 
+        // Cleaning-coverage rules: matching, version order and simctl parsing.
+        func rule(_ ok: Bool, _ label: String) {
+            if ok { print("✅ \(label)") } else { print("❌ \(label)"); fails += 1 }
+        }
+        let apps = ["docker": "Docker", "notion": "Notion", "visualstudiocode": "Visual Studio Code"]
+        rule(InstallersScanner.installedApp(matching: "Docker-4.34.2-arm64", in: apps) == "Docker", "installer matches its installed app")
+        rule(InstallersScanner.installedApp(matching: "Notion Calendar", in: apps) == nil, "installer for a different app does not match")
+        rule(InstallersScanner.installedApp(matching: "tax-return-2024", in: apps) == nil, "unrelated disk image does not match")
+        rule(AndroidSDKScanner.versionLess("25.1.8937393", "26.3.11579264")
+             && !AndroidSDKScanner.versionLess("27.0.1", "26.9"), "NDK versions order numerically")
+        let runtimesJSON = """
+        {"A":{"identifier":"A","version":"17.5","platformIdentifier":"com.apple.platform.iphonesimulator","sizeBytes":7000000000,"deletable":true},
+         "B":{"identifier":"B","version":"18.2","platformIdentifier":"com.apple.platform.iphonesimulator","sizeBytes":8000000000,"deletable":true},
+         "C":{"identifier":"C","version":"10.5","platformIdentifier":"com.apple.platform.watchsimulator","sizeBytes":4000000000,"deletable":true},
+         "D":{"identifier":"D","version":"16.4","platformIdentifier":"com.apple.platform.iphonesimulator","sizeBytes":6000000000,"deletable":false}}
+        """
+        let old = XcodeScanner.supersededRuntimes(XcodeScanner.parseRuntimes(runtimesJSON)).map(\.identifier)
+        rule(old == ["A"], "only superseded, deletable simulator runtimes are offered")
+
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
         if LicenseConfig.devProUnlock {

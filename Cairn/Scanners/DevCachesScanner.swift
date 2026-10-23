@@ -51,6 +51,11 @@ struct DevCachesScanner: CairnScanner {
         .init(label: "Composer cache", rel: ".composer/cache", sev: .safe, method: .trash, note: "PHP Composer cache"),
         .init(label: "Homebrew cache", rel: "Library/Caches/Homebrew", sev: .safe, method: DevCachesScanner.tool("brew", ["cleanup", "--prune=all"], "brew cleanup --prune=all"), note: "Downloaded bottles and old versions"),
         .init(label: "Deno cache", rel: "Library/Caches/deno", sev: .review, method: .trash, note: "Deno module cache"),
+        .init(label: "Dart and Flutter packages", rel: ".pub-cache", sev: .review, method: .trash, note: "Downloaded again on the next pub get"),
+        .init(label: "Conda packages (Miniconda)", rel: "miniconda3/pkgs", sev: .review, method: DevCachesScanner.tool("conda", ["clean", "--all", "--yes"], "conda clean --all"), note: "Package downloads. conda clean removes only what no environment uses, so it can free less than the size shown"),
+        .init(label: "Conda packages (Anaconda)", rel: "anaconda3/pkgs", sev: .review, method: DevCachesScanner.tool("conda", ["clean", "--all", "--yes"], "conda clean --all"), note: "Package downloads. conda clean removes only what no environment uses, so it can free less than the size shown"),
+        .init(label: "Conda packages (Miniforge)", rel: "miniforge3/pkgs", sev: .review, method: DevCachesScanner.tool("conda", ["clean", "--all", "--yes"], "conda clean --all"), note: "Package downloads. conda clean removes only what no environment uses, so it can free less than the size shown"),
+        .init(label: "Conda packages", rel: ".conda/pkgs", sev: .review, method: DevCachesScanner.tool("conda", ["clean", "--all", "--yes"], "conda clean --all"), note: "Package downloads. conda clean removes only what no environment uses, so it can free less than the size shown"),
         .init(label: "NuGet packages", rel: ".nuget/packages", sev: .review, method: .trash, note: ".NET packages — restored on the next build"),
     ]
 
