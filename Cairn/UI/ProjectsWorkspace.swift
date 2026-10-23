@@ -40,6 +40,12 @@ struct ProjectsWorkspace: View {
         let selected = Set(store.selectedItems().map(\.id))
         return projects.flatMap(\.rebuildable).filter { selected.contains($0.id) }.reduce(0) { $0 + $1.allocatedSize }
     }
+    /// True once the person has picked something here. Safe caches start ticked
+    /// (they make up Home's number), so those alone don't count as a choice.
+    private var pickedInProjects: Bool {
+        let selected = Set(store.selectedItems().map(\.id))
+        return projects.flatMap(\.rebuildable).contains { selected.contains($0.id) && !CLI.isReady($0) }
+    }
     private var totalBytes: Int64 { projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes } }
     private var largestBytes: Int64 { max(1, projects.map(\.rebuildableBytes).max() ?? 1) }
 
@@ -64,11 +70,12 @@ struct ProjectsWorkspace: View {
         } content: {
             list
         } footer: {
-            if selectedProjectBytes > 0 {
+            if pickedInProjects {
+                // The button frees exactly what this footer counts, nothing picked elsewhere.
                 NightTotal(strong: Fmt.size(selectedProjectBytes), rest: "selected from projects")
                 Spacer()
                 Button("Select none") { clearProjects() }.buttonStyle(ControlPanelButtonStyle(size: .large))
-                Button("Review and free \(Fmt.size(store.selectedTotal))", action: onReview)
+                Button("Review and free \(Fmt.size(selectedProjectBytes))") { keepOnlyProjects(); onReview() }
                     .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                     .disabled(store.isCleaning || store.isScanning)
             } else {
@@ -153,7 +160,7 @@ struct ProjectsWorkspace: View {
         if state != .none { return NightPill(text: "Selected", tone: .ok) }
         if project.rebuildable.isEmpty { return NightPill(text: "Nothing to free") }
         if (project.idleDays() ?? 0) < Self.idleDays { return NightPill(text: "Active") }
-        return NightPill(text: "Ready", tone: .ok)
+        return NightPill(text: "Idle", tone: .ok)
     }
 
     private func lastTouched(_ project: ProjectSummary) -> String {
@@ -196,7 +203,16 @@ struct ProjectsWorkspace: View {
 
     private func selectIdle(_ idle: [ProjectSummary]) {
         let wanted = Set(idle.flatMap(\.rebuildable).map(\.id))
+        store.clearSelection()
         store.select { item, _ in wanted.contains(item.id) }
+    }
+
+    /// Review shows only this page's picks, so its total matches the button.
+    private func keepOnlyProjects() {
+        let mine = Set(projects.flatMap(\.rebuildable).map(\.id))
+        let picked = Set(store.selectedItems().map(\.id)).intersection(mine)
+        store.clearSelection()
+        store.select { item, _ in picked.contains(item.id) }
     }
 
     // MARK: - Indexing
