@@ -30,7 +30,14 @@ struct RelocationTarget: Identifiable, Sendable, Hashable {
 
     private static func home(_ relative: String) -> URL { FileScan.home.appendingPathComponent(relative) }
 
-    static let all: [RelocationTarget] = [
+    static let all: [RelocationTarget] = appTargets + (DockerMove.installed ? [docker] : [])
+
+    /// Docker quits itself and is pointed at the drive through its own setting,
+    /// so there is no link and nothing for the person to close by hand.
+    static let docker = RelocationTarget(id: "docker-desktop", title: "Docker's disk", url: DockerMove.currentDataFolder(), mode: .archive,
+                                         whileDisconnected: "Docker will not start until the drive is back.", driveFolder: "docker-desktop")
+
+    private static let appTargets: [RelocationTarget] = [
         RelocationTarget(id: "ollama-models", title: "Ollama models", url: home(".ollama/models"), mode: .linkBack,
                          closeFirst: "Ollama", bundleIDs: ["com.electron.ollama"], processNames: ["ollama", "Ollama"],
                          whileDisconnected: "Ollama cannot load or pull models until the drive is back.", driveFolder: "ollama-models"),
@@ -320,6 +327,10 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
             guard fresh.available > size + 2_000_000_000 else {
                 throw Relocation.Failure(message: "\(fresh.name) needs \(Fmt.size(size + 2_000_000_000)) free for this. Nothing was moved.")
             }
+            if target.id == RelocationTarget.docker.id {
+                return try DockerMove.move(from: target.url, to: destination, cancel: cancel,
+                                           destinationValid: { drive.stillMounted() }, progress: publish)
+            }
             return try Relocation.offload(source: target.url, destination: destination, mode: target.mode, cancel: cancel,
                                           destinationValid: { drive.stillMounted() }, progress: publish)
         } finish: { record, inventory in
@@ -353,6 +364,10 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
             setTotal(previous.bytes)
             guard Volumes.homeFree() > previous.bytes + 2_000_000_000 else {
                 throw Relocation.Failure(message: "This Mac needs \(Fmt.size(previous.bytes + 2_000_000_000)) free to bring it back. Nothing was changed.")
+            }
+            if target.id == RelocationTarget.docker.id {
+                return try DockerMove.bringBack(to: target.url, from: destination, cancel: cancel,
+                                                destinationValid: { Relocation.exists(destination) }, progress: publish)
             }
             return try Relocation.restore(source: target.url, destination: destination, mode: mode, cancel: cancel,
                                           destinationValid: { Relocation.exists(destination) }, progress: publish)

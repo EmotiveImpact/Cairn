@@ -27,20 +27,24 @@ struct StorageDrive: Identifiable, Sendable {
     }
 
     /// Moves need a Mac (APFS) drive: links, permissions and large sparse files
-    /// all depend on it. Your own files and iPhone backups also need the drive
-    /// locked with a password, since a lost drive would expose them.
-    func acceptsMove(privateFiles: Bool) -> Bool {
-        external && writable && !uuid.isEmpty && !identityAmbiguous
-            && format.lowercased().contains("apfs") && (!privateFiles || encrypted)
+    /// all depend on it. A drive without a password is allowed; your own files
+    /// and iPhone backups get a warning first (`passwordWarning`).
+    func acceptsMove(privateFiles: Bool = false) -> Bool {
+        external && writable && !uuid.isEmpty && !identityAmbiguous && format.lowercased().contains("apfs")
     }
-    func moveStatus(privateFiles: Bool) -> String {
+    func moveStatus(privateFiles: Bool = false) -> String {
         if !external { return "This is the Mac's own drive" }
         if uuid.isEmpty { return "Cairn could not identify this drive" }
         if identityAmbiguous { return "Two drives look identical. Unplug the other one" }
         if !writable { return "This drive is read-only" }
         if !format.lowercased().contains("apfs") { return "Format this drive for Mac (APFS) in Disk Utility to move things to it" }
-        if privateFiles && !encrypted { return "Your own files and iPhone backups need a drive locked with a password" }
         return "Ready"
+    }
+    /// Shown before your own files or iPhone backups go to a drive anyone
+    /// could open. The person can carry on.
+    func passwordWarning(privateFiles: Bool) -> String? {
+        guard privateFiles, !encrypted else { return nil }
+        return "\(name) has no password, so anyone who finds it could open these. You can lock it in Disk Utility, or carry on."
     }
 
     static func uniqueIdentity(_ uuid: String, mountedIDs: [String]) -> Bool {
