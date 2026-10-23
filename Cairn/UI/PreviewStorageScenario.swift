@@ -12,14 +12,13 @@ enum PreviewStorageScenario {
 
     private static let now = Date()
     private static func daysAgo(_ days: Int) -> Date { now.addingTimeInterval(-Double(days) * 86_400) }
-    /// A set time of day, so receipts don't all show the minute the preview opened.
-    private static func daysAgo(_ days: Int, at hour: Int, _ minute: Int) -> Date {
-        Calendar.current.date(bySettingHour: hour, minute: minute, second: 0, of: daysAgo(days)) ?? daysAgo(days)
-    }
 
     /// The two sample cleans, the same ones Activity lists as receipts. Each one
-    /// is a step up in the free-space history below, on the day it ran.
-    static let cleans: [(date: Date, freed: Int64)] = [(daysAgo(21, at: 18, 12), 17_100_000_000), (daysAgo(11, at: 9, 40), 14_000_000_000)]
+    /// is a step up in the free-space history below, run a little before that
+    /// day's reading so its chart mark sits on the peak; the different minutes
+    /// keep the receipts from both showing the time the preview opened.
+    static let cleans: [(date: Date, freed: Int64)] = [(daysAgo(21).addingTimeInterval(-20 * 60), 17_100_000_000),
+                                                       (daysAgo(11).addingTimeInterval(-55 * 60), 14_000_000_000)]
 
     /// Thirty daily readings: free space falling about 3 GB a day, which is what
     /// the sample "full in about 12 days" forecast says, lifted by the two cleans.
