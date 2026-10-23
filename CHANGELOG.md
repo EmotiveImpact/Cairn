@@ -15,6 +15,8 @@ These are finished or nearly finished in open pull requests. None of it is on `m
 - **Pro is £35.99, one time, with no trial.** The app's price line changes to match and the 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
 - **Harder to crack.** The developer switch that turned Pro on with one Terminal command is gone from the app that is sold. The saved licence is sealed to the Mac it was activated on, so a hand-made or copied record no longer unlocks Pro, and dates in the future are refused. Pro also stays off in a copy of Cairn whose code has been changed.
 - **Website screenshots of the real app.** `--showcase` captures every screen with the logo, sharp at Retina size, with sample numbers that match the website.
+- **The Done screen no longer warns "No Put Back recorded"** for files that were deleted outright. Those are gone on purpose, so the amber line only counts items really left in the Trash without a record.
+- **The review sheet fits its list.** A short list no longer leaves an empty band above the buttons; a long one still scrolls.
 
 ## 23 October 2026
 

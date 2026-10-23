@@ -16,6 +16,10 @@ struct ReviewSheet: View {
     @State private var items: [ScanItem] = []
     @State private var expanded: Set<String> = []
     @State private var mode: RemovalMode = .smart
+    /// The list's own height, so the sheet is only as tall as what it holds.
+    @State private var listHeight: CGFloat?
+    /// The most the list takes before it scrolls: the old fixed sheet was 600 points.
+    private static let listRoom: CGFloat = 340
 
     private var runnable: [ScanItem] { items.filter { $0.isActionable && $0.severity != .risky } }
     private var skipped: [ScanItem] { items.filter { !$0.isActionable || $0.severity == .risky } }
@@ -67,13 +71,15 @@ struct ReviewSheet: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groups, id: \.id) { groupRow($0) }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if $0 > 0 { listHeight = $0 } }
             }
-            .frame(maxHeight: .infinity)
+            // A short list leaves no empty band above the buttons; a long one scrolls.
+            .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             notes
             footer
         }
         .padding(.vertical, 26).padding(.horizontal, 30)
-        .frame(width: 760, height: 600)
+        .frame(width: 760)
         .foregroundStyle(Brand.textPrimary)
         .background(Brand.surfaceElevated)
         .interactiveDismissDisabled(cleaning)

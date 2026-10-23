@@ -38,6 +38,8 @@ import Darwin
         check(receipt.toolBytes == 400, "Negative size estimates cannot reduce activity totals")
         receipt.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/.Trash/unrecorded"), bytesAffected: 100, usedTool: false))
         check(receipt.recordedRecoveryCount == 1 && receipt.missingRecoveryCount == 2, "A returned Trash path alone does not claim saved recovery history")
+        receipt.record(.init(bytesAffected: 300, usedTool: false, deleted: true))
+        check(receipt.missingRecoveryCount == 2, "Files deleted outright are not reported as waiting in the Trash")
         let capacityBefore = CleanupCapacityChange.Reading(volumeID: "original", name: "Fixture", available: 1_000)
         let unchanged = CleanupCapacityChange(id: "/fixture", before: capacityBefore, after: capacityBefore)
         check(unchanged.delta == 0 && unchanged.changeText == "No measured change", "Zero capacity change is not replaced by affected file sizes")

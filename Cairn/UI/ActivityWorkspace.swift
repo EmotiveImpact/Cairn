@@ -404,9 +404,9 @@ struct RecoveryWorkspace: View {
 
     private var runLines: [RunLine] {
         if preview {
-            let day: TimeInterval = 86_400
-            return [RunLine(id: UUID(), title: "Xcode, Docker and npm", date: Date().addingTimeInterval(-11 * day), amount: "Freed 14.0 GB", pill: "Checked", tone: .ok),
-                    RunLine(id: UUID(), title: "Developer caches and simulators", date: Date().addingTimeInterval(-21 * day), amount: "Freed 17.1 GB", pill: "Checked", tone: .ok)]
+            let cleans = PreviewStorageScenario.cleans
+            return [RunLine(id: UUID(), title: "Xcode, Docker and npm", date: cleans[1].date, amount: "Freed 14.0 GB", pill: "Checked", tone: .ok),
+                    RunLine(id: UUID(), title: "Developer caches and simulators", date: cleans[0].date, amount: "Freed 17.1 GB", pill: "Checked", tone: .ok)]
         }
         return store.cleanupRuns.map { run in
             let freed = Self.freed(run.summary)
