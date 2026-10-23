@@ -400,13 +400,20 @@
   var more = document.getElementById('features');
   whenHere(more, function () { more.classList.add('shown'); }, function () { more.classList.remove('shown'); });
 
-  // the count runs once the number chapter has settled, and again each time you come back to it
+  // the count runs once the number chapter has settled, and again each time you come back to it;
+  // the list of what makes it up shows as it lands, each size counting up with it and finishing together
   var count = document.getElementById('count'), run = 0;
+  var sizes = [].map.call(number.querySelectorAll('.parts b'), function (b) { return [b.firstElementChild, parseFloat(b.getAttribute('data-gb'))]; });
+  function tally(t) {
+    count.textContent = (38.6 * t).toFixed(1);
+    sizes.forEach(function (z) { z[0].textContent = (z[1] * t).toFixed(1) + ' GB'; });
+  }
   whenHere(number, function () {
-    if (reduced) { count.textContent = '38.6'; number.classList.add('done'); return; }
+    number.classList.add('landed');
+    if (reduced) { tally(1); number.classList.add('done'); return; }
     var s = performance.now(), mine = ++run;
-    (function step(now) { if (mine !== run) return; var t = clamp((now - s) / 1800); count.textContent = (38.6 * ease(t)).toFixed(1); if (t < 1) requestAnimationFrame(step); else number.classList.add('done'); })(s);
-  }, function () { run++; count.textContent = '0.0'; number.classList.remove('done'); });
+    (function step(now) { if (mine !== run) return; var t = clamp((now - s) / 1800); tally(ease(t)); if (t < 1) requestAnimationFrame(step); else number.classList.add('done'); })(s);
+  }, function () { run++; tally(0); number.classList.remove('landed', 'done'); });
 
   // the disk: words first, then the bar builds, the junk lights up, and scrolling on cleans it away
   var freeGb = document.getElementById('free-gb'), built = false, cleaned = false, freeRun = 0;

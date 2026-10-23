@@ -115,8 +115,11 @@ body { background: #090b0d; }
 .parts li { display: flex; align-items: center; gap: 10px; padding: 6px 4px; font-size: 14px; color: #aab6c0; white-space: nowrap;
   opacity: 0; filter: blur(8px); transition: opacity .7s ease, filter .7s ease; transition-delay: calc(var(--i) * 120ms); }
 .parts img { width: 16px; height: 16px; filter: brightness(0) invert(.75); }
-.parts b { color: #fff; font-weight: 500; }
-.done .parts li { opacity: 1; filter: none; }
+.parts b { display: inline-grid; justify-items: end; color: #fff; font-weight: 500; font-variant-numeric: tabular-nums; }
+/* each size keeps the width of its final value while it counts, so nothing beside it moves */
+.parts b::after { content: attr(data-gb) " GB"; grid-area: 1 / 1; visibility: hidden; }
+.parts b > span { grid-area: 1 / 1; }
+.landed .parts li { opacity: 1; filter: none; }
 
 /* the disk: one storage bar */
 .story-disk .centre { text-align: center; }
@@ -299,7 +302,10 @@ body:not(.staged) .disk-next { display: none; }
 .story-number { overflow: hidden; }
 .story-number::after { content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none; opacity: var(--veil, 1); background: radial-gradient(70% 48% at 50% 50%, rgba(5,8,13,.72), rgba(5,8,13,.3) 60%, transparent 80%), linear-gradient(to bottom, rgba(5,8,13,.6), transparent 30%); }
 .story-number[data-hall="original"]::after { opacity: 1; background: linear-gradient(to top, rgba(5,8,13,.85), rgba(5,8,13,.3) 40%, transparent 60%); }   /* the hallway as it first looked */
-.dive-tunnel { position: absolute; inset: 0; z-index: -2; display: block; width: 100%; height: 100%; }
+/* the canvas sits in a plain box that fills the section: Safari sizes a canvas placed straight on the section
+   inside its padding, which left a dark band along the bottom on iPhones */
+.dive-tunnel { position: absolute; inset: 0; z-index: -2; }
+.dive-tunnel canvas { display: block; width: 100%; height: 100%; }
 .story-number .parts { margin-top: 28px; }
 /* on a phone, one line per type: its icon and name on the left, its size on the right */
 @media (max-width: 760px) {

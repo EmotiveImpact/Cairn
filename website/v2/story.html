@@ -15,9 +15,9 @@
     <link rel="stylesheet" href="footer-matrix.css?v=1" />
     <script src="footer-matrix.js?v=2" defer></script>
     <link rel="stylesheet" href="beam-hero.css?v=7" />
-    <link rel="stylesheet" href="story.css?v=35" />
+    <link rel="stylesheet" href="story.css?v=36" />
     <script src="beam-hero.js?v=7" defer></script>
-    <script src="story.js?v=35" defer></script>
+    <script src="story.js?v=36" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -61,17 +61,17 @@
       </section>
 
       <section class="chapter story-number" id="number" data-hall="original" aria-labelledby="number-title">
-        <canvas class="dive-tunnel" id="tunnel" aria-hidden="true"></canvas>
+        <div class="dive-tunnel" aria-hidden="true"><canvas id="tunnel"></canvas></div>
         <div class="photo-switch hall-switch" role="group" aria-label="Try another hallway"><button type="button" data-hall="original" aria-pressed="true">Original</button><button type="button" data-hall="darker" aria-pressed="false">Darker</button></div>
         <div class="shell dive-words">
           <p class="label reveal">On a typical developer Mac</p>
           <p class="big-num reveal" aria-label="38.6 gigabytes"><span id="count">0.0</span><small>GB</small></p>
           <h2 id="number-title" class="reveal">That’s what your tools left behind. <span>Build files and caches, made again when needed.</span></h2>
           <ul class="parts" aria-label="What makes up 38.6 GB">
-            <li style="--i:0"><img src="assets/tool-icons/xcode.svg" alt="" /><span>Xcode build files</span><b>14.2 GB</b></li>
-            <li style="--i:1"><img src="assets/tool-icons/docker.svg" alt="" /><span>Docker build cache</span><b>9.8 GB</b></li>
-            <li style="--i:2"><img src="assets/tool-icons/npm.svg" alt="" /><span>node_modules</span><b>9.5 GB</b></li>
-            <li style="--i:3"><img src="assets/tool-icons/npm.svg" alt="" /><span>npm cache</span><b>5.1 GB</b></li>
+            <li style="--i:0"><img src="assets/tool-icons/xcode.svg" alt="" /><span>Xcode build files</span><b data-gb="14.2"><span>14.2 GB</span></b></li>
+            <li style="--i:1"><img src="assets/tool-icons/docker.svg" alt="" /><span>Docker build cache</span><b data-gb="9.8"><span>9.8 GB</span></b></li>
+            <li style="--i:2"><img src="assets/tool-icons/npm.svg" alt="" /><span>node_modules</span><b data-gb="9.5"><span>9.5 GB</span></b></li>
+            <li style="--i:3"><img src="assets/tool-icons/npm.svg" alt="" /><span>npm cache</span><b data-gb="5.1"><span>5.1 GB</span></b></li>
           </ul>
         </div>
       </section>
