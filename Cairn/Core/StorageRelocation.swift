@@ -361,7 +361,10 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
         }
     }
 
-    func bringBack(_ target: RelocationTarget) {
+    /// `keepDriveCopy` leaves the drive copy as a spare, renamed so it is
+    /// never mistaken for the live copy; otherwise it is removed once this
+    /// Mac's copy checks out. Xcode build files are always removed.
+    func bringBack(_ target: RelocationTarget, keepDriveCopy: Bool = false) {
         load()
         guard busyTarget == nil, !journalBroken, let previous = latest(target), previous.status == .offloaded else { return }
         guard !Self.ownerRunning(target) else {
@@ -373,6 +376,8 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
         record.id = UUID(); record.date = Date(); record.status = .restoring
         record.detail = "Copying back and checking. The drive copy stays until this Mac's copy matches."
         let mode = previous.resolvedMode
+        let keep = keepDriveCopy && mode != .freshOnDrive
+        let spare = Relocation.spareName(for: destination)
         run(target, record: &record) { cancel, publish, setTotal in
             if mode == .freshOnDrive {
                 try Relocation.unredirect(source: target.url, destination: destination, destinationValid: { Relocation.exists(destination) })
@@ -383,15 +388,24 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
                 throw Relocation.Failure(message: "This Mac needs \(Fmt.size(previous.bytes + 2_000_000_000)) free to bring it back. Nothing was changed.")
             }
             if target.id == RelocationTarget.docker.id {
-                return try DockerMove.bringBack(to: target.url, from: destination, cancel: cancel,
-                                                destinationValid: { Relocation.exists(destination) }, progress: publish)
+                let copied = try DockerMove.bringBack(to: target.url, from: destination, keepDriveCopy: keep, cancel: cancel,
+                                                      destinationValid: { Relocation.exists(destination) }, progress: publish)
+                if keep { _ = Relocation.keepAsSpare(destination, at: spare) }
+                return copied
             }
-            return try Relocation.restore(source: target.url, destination: destination, mode: mode, cancel: cancel,
-                                          destinationValid: { Relocation.exists(destination) }, progress: publish)
+            let copied = try Relocation.restore(source: target.url, destination: destination, mode: mode, removeDriveCopy: !keep, cancel: cancel,
+                                                destinationValid: { Relocation.exists(destination) }, progress: publish)
+            if keep { _ = Relocation.keepAsSpare(destination, at: spare) }
+            return copied
         } finish: { record, inventory in
             record.status = .restored
             record.bytes = inventory.bytes; record.files = inventory.files.count
-            record.detail = mode == .freshOnDrive ? "Xcode builds on this Mac again." : "Back on this Mac, and removed from \(previous.volumeName)."
+            if keep {
+                if Relocation.exists(spare) { record.destination = spare.path }
+                record.detail = "Back on this Mac. A spare copy stays on \(previous.volumeName) as \(URL(fileURLWithPath: record.destination).lastPathComponent)."
+            } else {
+                record.detail = mode == .freshOnDrive ? "Xcode builds on this Mac again." : "Back on this Mac, and removed from \(previous.volumeName)."
+            }
         }
     }
 

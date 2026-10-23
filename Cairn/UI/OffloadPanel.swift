@@ -44,11 +44,19 @@ struct OffloadPanel: View {
             }
         }
         .sheet(item: $restoring) { target in
+            let rebuildable = store.latest(target)?.resolvedMode == .freshOnDrive
             WorkspaceConfirmation(
                 title: "Bring \(target.title) back to this Mac?",
-                explanation: "Cairn copies it back, checks every file, puts it in place, then removes the copy from the drive.",
+                explanation: rebuildable
+                    ? "Xcode builds on this Mac again. The build files on the drive are removed; Xcode makes new ones as it needs them."
+                    : "Cairn copies it back and checks every file. Then you choose: remove the copy from the drive to free its space, or keep it there as a spare.",
                 entries: [store.latest(target)?.destination ?? "", "Back to: \(target.url.path)"],
-                actionTitle: "Bring back") {
+                actionTitle: rebuildable ? "Bring back" : "Bring back and remove from drive",
+                secondaryTitle: rebuildable ? nil : "Keep a spare on the drive",
+                secondary: {
+                    guard !preview else { return }
+                    store.bringBack(target, keepDriveCopy: true)
+                }) {
                     guard !preview else { return }
                     store.bringBack(target)
                 }

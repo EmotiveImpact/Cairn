@@ -104,7 +104,7 @@ enum DockerMove {
 
     /// The reverse: copy back, point Docker home, check it starts, then
     /// remove the drive copy.
-    static func bringBack(to source: URL, from destination: URL, cancel: CancelBox,
+    static func bringBack(to source: URL, from destination: URL, keepDriveCopy: Bool = false, cancel: CancelBox,
                           destinationValid: () -> Bool, progress: (Int64) -> Void) throws -> Relocation.Inventory {
         guard !running() || quit() else { throw Relocation.Failure(message: "Docker did not quit. Quit it from its menu, then try again.") }
         guard !Relocation.exists(source) else { throw Relocation.Failure(message: "Something is already at \(source.path). Nothing was replaced.") }
@@ -120,7 +120,7 @@ enum DockerMove {
             try? FileManager.default.removeItem(at: source)
             throw Relocation.Failure(message: "Docker did not start on this Mac, so it was left on the drive.")
         }
-        if destinationValid() { try? FileManager.default.removeItem(at: destination) }
+        if !keepDriveCopy, destinationValid() { try? FileManager.default.removeItem(at: destination) }
         return copied
     }
 }

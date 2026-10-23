@@ -435,6 +435,25 @@ enum Relocation {
         return copied
     }
 
+    /// A free name beside a drive copy kept after a bring-back, e.g.
+    /// "models (kept 23 Oct 2026)", so a later move never collides with it.
+    static func spareName(for destination: URL, date: Date = Date()) -> URL {
+        let day = date.formatted(.dateTime.day().month(.abbreviated).year())
+        let base = destination.deletingLastPathComponent()
+        var candidate = base.appendingPathComponent("\(destination.lastPathComponent) (kept \(day))")
+        var number = 2
+        while exists(candidate) {
+            candidate = base.appendingPathComponent("\(destination.lastPathComponent) (kept \(day) \(number))")
+            number += 1
+        }
+        return candidate
+    }
+
+    /// Renames a kept drive copy to its spare name. Never replaces anything.
+    static func keepAsSpare(_ destination: URL, at spare: URL) -> Bool {
+        exists(destination) && !isLink(destination) && renamex_np(destination.path, spare.path, UInt32(RENAME_EXCL)) == 0
+    }
+
     /// Takes a redirected folder back: an empty local folder replaces the link
     /// and the rebuildable files on the drive are removed.
     static func unredirect(source: URL, destination: URL, destinationValid: () -> Bool) throws {

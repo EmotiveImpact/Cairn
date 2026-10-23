@@ -248,6 +248,19 @@ enum WorkspaceCheck {
             let done = CloudMove.advance(fresh, isUploaded: { _ in true }, release: { released = $0 })
             check(done.status == .done && !Relocation.exists(home.appendingPathComponent("Films")) && released.count == 1,
                   "Once uploaded the original goes to the Bin and the Mac copy is released")
+            // Bring back can keep a spare on the drive under a name that never collides.
+            let onDrive = root.appendingPathComponent("drive/models"), onMac = root.appendingPathComponent("mac/models")
+            try fm.createDirectory(at: onDrive, withIntermediateDirectories: true)
+            try fm.createDirectory(at: onMac.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(repeating: 5, count: 2_048).write(to: onDrive.appendingPathComponent("weights.bin"))
+            _ = try Relocation.restore(source: onMac, destination: onDrive, mode: .archive, removeDriveCopy: false, cancel: CancelBox(),
+                                       destinationValid: { true })
+            let spare = Relocation.spareName(for: onDrive)
+            check(Relocation.keepAsSpare(onDrive, at: spare) && Relocation.exists(spare.appendingPathComponent("weights.bin"))
+                  && Relocation.exists(onMac.appendingPathComponent("weights.bin")) && !Relocation.exists(onDrive)
+                  && spare.lastPathComponent.hasPrefix("models (kept "), "Bring back can keep a spare copy on the drive")
+            check(Relocation.spareName(for: onDrive) != spare,
+                  "A second spare gets its own name")
             let gone = root.appendingPathComponent("Volumes/Studio SSD/Cairn Offload/models").path
             func moved(_ id: String, _ title: String, _ status: RelocationRecord.Status, _ mode: Relocation.Mode, _ destination: String) -> RelocationRecord {
                 RelocationRecord(targetID: id, source: "/x/\(id)", destination: destination, volumeID: "V", volumeName: "Studio SSD",
