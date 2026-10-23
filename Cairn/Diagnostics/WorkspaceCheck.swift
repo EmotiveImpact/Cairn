@@ -199,6 +199,18 @@ enum WorkspaceCheck {
             check(listing.backups.count == 1 && found?.deviceName == "Edem's iPhone" && found?.model == "iPhone 12"
                   && found?.passwordProtected == true && found?.isOld == true, "iPhone backups show device, model, date and password")
             check(found?.target.mode == .archive && found?.target.privateFiles == false, "Password-protected backups move as archives without a warning")
+            if let found {
+                let stray = PhoneBackup(id: "stray", url: root.appendingPathComponent("stray"), deviceName: "x", model: "x", iosVersion: "",
+                                        lastBackup: nil, passwordProtected: false, bytes: 0)
+                try fm.createDirectory(at: stray.url, withIntermediateDirectories: true)
+                check((try? PhoneBackups.moveToBin(stray, root: root.appendingPathComponent("Backup"), isBusy: { false })) == nil
+                      && Relocation.exists(stray.url), "The Bin only takes real backup folders")
+                check((try? PhoneBackups.moveToBin(found, root: root.appendingPathComponent("Backup"), isBusy: { true })) == nil
+                      && Relocation.exists(found.url), "A running backup is never put in the Bin")
+                let landed = try? PhoneBackups.moveToBin(found, root: root.appendingPathComponent("Backup"), isBusy: { false })
+                check(!Relocation.exists(found.url) && landed.map { Relocation.exists($0) } == true, "An old backup goes to the Bin, not deleted")
+                if let landed { try? fm.removeItem(at: landed) }
+            }
             check(PhoneBackups.friendlyModel("iPad13,1") == "iPad" && PhoneBackups.friendlyModel("x") == "iPhone", "Unknown models read as plain names")
             let old = root.appendingPathComponent("home/Dropbox (Old)")
             let live = root.appendingPathComponent("home/Library/CloudStorage/Dropbox")

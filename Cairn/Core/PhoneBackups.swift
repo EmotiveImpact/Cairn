@@ -77,6 +77,33 @@ enum PhoneBackups {
         return (try? PropertyListSerialization.propertyList(from: data, format: nil)) as? [String: Any]
     }
 
+    enum BinError: LocalizedError {
+        case busy, notABackup
+        var errorDescription: String? {
+            switch self {
+            case .busy: "A backup or restore is running. Try again when it finishes."
+            case .notABackup: "This is not a Finder backup folder, so Cairn left it alone."
+            }
+        }
+    }
+
+    /// Puts one backup in the Bin, where it can still be put back until the
+    /// Bin is emptied. Only a real backup folder directly inside `root` is
+    /// accepted; the Backup folder itself never is.
+    @discardableResult
+    static func moveToBin(_ backup: PhoneBackup, root: URL = root, isBusy: () -> Bool = PhoneBackups.busy) throws -> URL? {
+        let folder = backup.url.standardizedFileURL
+        guard folder.deletingLastPathComponent().path == root.standardizedFileURL.path,
+              folder.lastPathComponent == backup.id, !backup.id.isEmpty, !backup.id.hasPrefix("."),
+              Relocation.isRealDirectory(folder),
+              Relocation.exists(folder.appendingPathComponent("Info.plist")) || Relocation.exists(folder.appendingPathComponent("Manifest.plist"))
+        else { throw BinError.notABackup }
+        guard !isBusy() else { throw BinError.busy }
+        var landed: NSURL?
+        try FileManager.default.trashItem(at: folder, resultingItemURL: &landed)
+        return landed as URL?
+    }
+
     /// A backup or restore in progress must not be moved.
     static func busy() -> Bool {
         ["AppleMobileBackup", "MobileDeviceUpdater"].contains { name in
