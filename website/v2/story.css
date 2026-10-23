@@ -306,6 +306,8 @@ body:not(.staged) .disk-next { display: none; }
   .story-number .parts { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0; width: min(100%, 300px); margin-top: 22px; text-align: left; }
   .story-number .parts li { display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; gap: 10px; padding: 5px 0; font-size: 13px; }
   .story-number .parts b { text-align: right; }
+  /* on the stage, the words sit in the middle of the space under the menu and its switch, the same gap above and below */
+  .staged .stage > .story-number { padding-top: 124px; padding-bottom: 0; }
 }
 /* the light at the end of the tunnel, carried on into the next chapter as the disk bar */
 .morph { position: absolute; left: 0; top: 0; z-index: 5; pointer-events: none; opacity: 0; border: 1px solid rgba(220,235,247,.1); border-radius: 4px; background: #eaf5ff; box-shadow: 0 0 60px 14px rgba(110,180,255,.55); }
