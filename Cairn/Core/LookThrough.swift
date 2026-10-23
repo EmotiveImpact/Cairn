@@ -26,6 +26,18 @@ enum LookThrough {
         items.filter { $0.isActionable && !CLI.isReady($0) }
     }
 
+    /// Safe to clear a whole group with one tick: plain files that go to the
+    /// Trash. Anything tidied by its own tool (git history, Docker, pnpm) or
+    /// marked risky (Xcode archives) stays out of the groups.
+    static func tickable(_ item: ScanItem) -> Bool {
+        item.cleanMethod == .trash && item.severity != .risky
+    }
+
+    /// What the groups leave out, so the page can still account for every byte.
+    static func elsewhere(_ items: [ScanItem]) -> [ScanItem] {
+        candidates(items).filter { !tickable($0) }.sorted { $0.allocatedSize > $1.allocatedSize }
+    }
+
     static func groups(from items: [ScanItem], titles: [String: String] = [:],
                        home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [LookGroup] {
         let homePath = home.standardizedFileURL.path
@@ -33,7 +45,7 @@ enum LookThrough {
             item.resolvedURL.standardizedFileURL.path.hasPrefix(homePath + "/" + folder + "/")
         }
         var buckets: [String: [ScanItem]] = [:]
-        for item in candidates(items) {
+        for item in candidates(items) where tickable(item) {
             let ext = item.resolvedURL.pathExtension.lowercased()
             let name = item.resolvedURL.lastPathComponent
             let key: String
@@ -50,7 +62,10 @@ enum LookThrough {
         }
         return buckets.map { key, items in
             let sorted = items.sorted { $0.allocatedSize > $1.allocatedSize }
-            let (title, line) = describe(key, count: sorted.count, titles: titles)
+            var (title, line) = describe(key, count: sorted.count, titles: titles)
+            if key == "recordings", sorted.contains(where: { $0.resolvedURL.lastPathComponent.hasPrefix("Screenshot") }) {
+                title = "Screen recordings and screenshots"
+            }
             return LookGroup(id: key, title: title, line: line, items: sorted)
         }
         .sorted { $0.bytes > $1.bytes }
@@ -60,14 +75,14 @@ enum LookThrough {
         func files(_ word: String) -> String { "\(n) \(word)\(n == 1 ? "" : "s")" }
         switch key {
         case "movies": return ("Videos in Movies", files("video"))
-        case "archives": return ("Zip files in Downloads", files("archive"))
+        case "archives": return ("Archives in Downloads", files("zip or archive file"))
         case "downloads": return ("Other big downloads", files("file"))
         case "installers": return ("App installers", files("installer") + " · once an app is installed you don't need these")
         case "recordings": return ("Screen recordings", files("recording"))
-        case "desktop": return ("Desktop files", files("file"))
-        case "android": return ("Old Android kit", "Only needed if you build Android apps")
+        case "desktop": return ("Big files on your Desktop", files("file"))
+        case "android": return ("Android SDK parts", "Only needed if you build Android apps · downloadable again")
         case "orphaned": return ("Leftovers from deleted apps", files("folder") + " from apps no longer on this Mac")
-        case "projects": return ("Rebuildable files in your projects", files("folder") + " · your code is never touched")
+        case "projects": return ("Project folders to check", files("folder") + " · environments and packages, never your code")
         default:
             let id = String(key.dropFirst(4))
             return (titles[id] ?? "Other", files("item"))
@@ -75,8 +90,21 @@ enum LookThrough {
     }
 
     /// "WhatsApp" from "group.net.whatsapp.WhatsApp.shared", "Cymatics Equinox" from a zip name.
+    private static let vagueNames: Set<String> = ["venv", "node_modules", "dists", "caches", "cache", "store", "hub",
+                                                    "archives", "devices", "build", "target", "dist", "models", "data"]
+
     static func shortName(_ item: ScanItem) -> String {
         var name = item.resolvedURL.deletingPathExtension().lastPathComponent
+        // ".git", "venv" or "27.1.12297006" says nothing: use the scanner's note
+        // ("Android NDK 27.1 — …", "Python virtualenv for hermes-agent") or the parent folder.
+        let vague = name.hasPrefix(".") || vagueNames.contains(name.lowercased())
+            || name.allSatisfy { $0.isNumber || $0 == "." }
+        if vague {
+            let note = item.note.components(separatedBy: " — ").first ?? ""
+            if let range = note.range(of: " for ") { name = String(note[range.upperBound...]) }
+            else if !note.isEmpty, note.count <= 40 { name = note }
+            else { name = item.resolvedURL.deletingLastPathComponent().lastPathComponent }
+        }
         if item.categoryID == "orphaned" {
             let parts = name.split(separator: ".").filter { !["group", "com", "net", "org", "io", "app", "shared"].contains($0.lowercased()) }
             if let last = parts.last { name = String(last) }

@@ -510,7 +510,7 @@ struct AppShell: View {
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
         case .lookThrough:
-            LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } })
+            LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
