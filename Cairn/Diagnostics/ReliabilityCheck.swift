@@ -98,6 +98,20 @@ import Darwin
         await denied.reloadStorage()
         check(!denied.isLoading && !denied.isUnlocked && denied.storageMessage != nil, "Denied Keychain leaves free UI available and no false unlock")
 
+        // A saved licence counts offline only when this Mac sealed it, recently.
+        var sealed = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date(), granted: true)
+        check(!sealed.grantsOffline, "A hand-written licence record does not unlock Pro")
+        sealed.reseal()
+        check(sealed.grantsOffline, "A licence record sealed on this Mac unlocks Pro offline")
+        var edited = sealed; edited.key = "OTHER-KEY"
+        check(!edited.grantsOffline, "An edited licence record does not unlock Pro")
+        var future = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date().addingTimeInterval(365 * 86_400), granted: true)
+        future.reseal()
+        check(!future.grantsOffline, "A licence record dated in the future does not unlock Pro")
+        var stale = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date().addingTimeInterval(-LicenseConfig.offlineGrace - 60), granted: true)
+        stale.reseal()
+        check(!stale.grantsOffline, "Pro needs an online check after the offline grace period")
+
         let gate = ScanGate()
         let first = await gate.acquire()
         check(first, "First operation acquires scan gate")
