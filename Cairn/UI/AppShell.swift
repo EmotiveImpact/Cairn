@@ -130,7 +130,7 @@ struct AppShell: View {
     var body: some View {
         GeometryReader { viewport in
             HStack(spacing: 0) {
-                NavSidebar(section: $section)
+                NavSidebar(section: $section, readyBytes: store.recommendedBytes)
                 VStack(spacing: 0) {
                     if let message = store.removalLogError {
                         Text(message).font(.system(size: 12)).foregroundStyle(Brand.amber).padding(12).frame(maxWidth: .infinity, alignment: .leading).background(Brand.deepPanel)
@@ -540,6 +540,7 @@ struct AppBackground: View {
 
 struct NavSidebar: View {
     @Binding var section: NavSection
+    var readyBytes: Int64 = 0
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
@@ -572,7 +573,12 @@ struct NavSidebar: View {
                 .padding(.horizontal, 11).padding(.bottom, 10)
         }
         .frame(width: 200)
-        .background(Brand.chrome)
+        .background {
+            ZStack {
+                Brand.chrome
+                SidebarSpaceField(readyBytes: readyBytes)
+            }
+        }
     }
 
 }
