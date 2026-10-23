@@ -115,6 +115,7 @@ struct AppShell: View {
     @State private var celebration: CompletionPresentation?
     @State private var pendingSummary: ScanStore.CleanSummary?
     @State private var showStatePreview = false
+    @State private var showcaseReview = false
     @State private var fdaBannerDismissed = false
     @State private var developerSearch = ""
     @FocusState private var searchFocused: Bool
@@ -175,6 +176,7 @@ struct AppShell: View {
                         })
         }
         .sheet(isPresented: $showStatePreview) { DialogStatePreview() }
+        .sheet(isPresented: $showcaseReview) { ReviewSheet(store: store, proEnabled: proEnabled, sample: .showcase, onDone: { _ in }) }
         .task { if previewMode && CommandLine.arguments.contains("--preview-states") { showStatePreview = true } }
         // A slow scan can legitimately spend time in one category. Rotate only
         // categories the scanner has actually started; the footer remains calm
@@ -292,24 +294,31 @@ struct AppShell: View {
         }
         // Deterministic screenshots of the actual NSHostingView, with fixtures
         // and no disk actions. This is also a navigation/layout regression pass.
+        // With --showcase it also takes the Done screen and the review sheet.
         .task {
             guard previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--capture-workspaces=") }) else { return }
             let folder = URL(fileURLWithPath: String(argument.dropFirst("--capture-workspaces=".count)))
             do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch { return }
+            // The showcase waits for the big number to count and the chart to draw.
+            let settle: UInt64 = Showcase.active ? 1_800_000_000 : 900_000_000
             for route in NavSection.allCases {
                 section = route
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                guard !Task.isCancelled, let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) }), let contentView = window.contentView else { return }
-                let view = contentView.superview ?? contentView
-                view.layoutSubtreeIfNeeded()
-                guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                if let data = bitmap.representation(using: .png, properties: [:]) {
-                    let destination = folder.appendingPathComponent(route.rawValue + ".png")
-                    await Task.detached(priority: .utility) {
-                        try? data.write(to: destination)
-                    }.value
-                }
+                try? await Task.sleep(nanoseconds: settle)
+                guard !Task.isCancelled else { return }
+                await WindowCapture.save(route.rawValue, to: folder)
+            }
+            if Showcase.active {
+                section = .dashboard
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                celebration = CompletionPresentation(summary: RecoveryWorkspace.sampleSummary)
+                try? await Task.sleep(nanoseconds: settle)
+                await WindowCapture.save("result", to: folder)
+                celebration = nil
+                try? await Task.sleep(nanoseconds: settle)
+                showcaseReview = true
+                try? await Task.sleep(nanoseconds: settle)
+                await WindowCapture.save("review", to: folder)
+                showcaseReview = false
             }
             section = .developer
         }
@@ -644,7 +653,7 @@ private struct SidebarDisclosure: View {
                 .background {
                     if hovering { RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04)) }
                 }
-                .onHover { hovering = $0 }
+                .onHover { hovering = $0 && !Showcase.active }
                 .contentShape(Rectangle())
             }
             .buttonStyle(SidebarButtonStyle())
@@ -740,7 +749,7 @@ private struct NavRow: View {
                     RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04))
                 }
             }
-            .onHover { hovering = $0 }
+            .onHover { hovering = $0 && !Showcase.active }
             .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
         }
@@ -850,5 +859,73 @@ struct DeviceCard: View {
                 .foregroundStyle(Brand.textPrimary)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+}
+
+/// Writes the main window, and any sheet open on it, to a PNG. Pixels follow
+/// the display unless `--capture-scale=2` asks for Retina sharpness on any screen.
+@MainActor
+enum WindowCapture {
+    private static let scale: CGFloat? = CommandLine.arguments
+        .first { $0.hasPrefix("--capture-scale=") }
+        .flatMap { Double($0.dropFirst("--capture-scale=".count)) }
+        .map { CGFloat(max(1, min(3, $0))) }
+
+    static func save(_ name: String, to folder: URL) async {
+        guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) && $0.sheetParent == nil && $0.isVisible }),
+              let frameView = window.contentView?.superview ?? window.contentView,
+              let page = bitmap(frameView, scale: scale ?? window.backingScaleFactor) else { return }
+        var output = page
+        if let sheet = window.attachedSheet, let sheetView = sheet.contentView,
+           let card = bitmap(sheetView, scale: scale ?? window.backingScaleFactor) {
+            // Where the sheet sits on the window, in points from the bottom left.
+            let origin = NSPoint(x: sheet.frame.minX - window.frame.minX, y: sheet.frame.minY - window.frame.minY)
+            output = composite(page, card, at: origin, size: frameView.bounds.size) ?? page
+        }
+        guard let data = output.representation(using: .png, properties: [:]) else { return }
+        let destination = folder.appendingPathComponent(name + ".png")
+        await Task.detached(priority: .utility) { try? data.write(to: destination) }.value
+    }
+
+    private static func bitmap(_ view: NSView, scale: CGFloat) -> NSBitmapImageRep? {
+        view.layoutSubtreeIfNeeded()
+        let bounds = view.bounds
+        guard bounds.width > 0, bounds.height > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(bounds.width * scale), pixelsHigh: Int(bounds.height * scale),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = bounds.size
+        view.cacheDisplay(in: bounds, to: rep)
+        return rep
+    }
+
+    /// The sheet drawn over the window with rounded corners and a soft shadow, as macOS shows it.
+    private static func composite(_ page: NSBitmapImageRep, _ card: NSBitmapImageRep, at origin: NSPoint, size: NSSize) -> NSBitmapImageRep? {
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: page.pixelsWide, pixelsHigh: page.pixelsHigh,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = size
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        page.draw(in: NSRect(origin: .zero, size: size))
+        let frame = NSRect(origin: origin, size: card.size)
+        let shape = NSBezierPath(roundedRect: frame, xRadius: 12, yRadius: 12)
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        shadow.shadowBlurRadius = 40
+        shadow.shadowOffset = NSSize(width: 0, height: -12)
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        NSColor.black.setFill()
+        shape.fill()
+        NSGraphicsContext.restoreGraphicsState()
+        shape.addClip()
+        card.draw(in: frame)
+        NSColor.white.withAlphaComponent(0.08).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
     }
 }

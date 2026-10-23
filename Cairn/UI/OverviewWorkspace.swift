@@ -178,8 +178,13 @@ struct OverviewWorkspace: View {
     }
     private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
 
+    /// When the shown results were scanned. The showcase gives its sample scan a time.
+    private var scannedAt: Date? {
+        if Showcase.active { return Showcase.scanDate }
+        return preview ? nil : store.lastScanDate
+    }
     /// The headline action: what a scan found that can be freed in one go.
-    private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    private var recommendedBytes: Int64 { preview ? 38_600_000_000 : store.recommendedBytes }
     /// Everything else the scan found: real space, but only the person can decide on it.
     private var toReviewBytes: Int64 { preview ? 21_300_000_000 : max(0, store.grandTotal - store.recommendedBytes) }
     /// Keeps the bigger number in view without competing with the headline.
@@ -249,7 +254,7 @@ struct OverviewWorkspace: View {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
                         }
                         .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                        .disabled(preview || store.isCleaning)
+                        .disabled((preview && !Showcase.active) || store.isCleaning)
                         .help("Check the list once, then free the space")
                         Button("See everything") { onOpen(.smartScan) }
                             .buttonStyle(ControlPanelButtonStyle(size: .large))
@@ -348,7 +353,7 @@ struct OverviewWorkspace: View {
                     if ready > 0 { legend(Brand.room, "Ready to free") }
                     legend(Brand.track, "Free now")
                     Spacer()
-                    if let date = store.lastScanDate, !preview {
+                    if let date = scannedAt {
                         Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Scanned \(date.formatted(.relative(presentation: .named)))")
                             .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     }
@@ -445,7 +450,9 @@ struct OverviewWorkspace: View {
         }
     }
     private var lastCleanTile: some View {
-        if preview { return tile("Last clean", "3 October · 23.4 GB freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) } }
+        if preview, let last = PreviewStorageScenario.cleans.last {
+            return tile("Last clean", "\(last.date.formatted(.dateTime.day().month(.wide))) · \(Fmt.size(last.freed)) freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) }
+        }
         if let run = store.cleanupRuns.first(where: { $0.finished != nil && $0.summary.accounting.completedCount > 0 }) {
             let gains = run.summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
             let freed = max(run.summary.accounting.freedBytes, gains)
@@ -554,7 +561,7 @@ struct OverviewWorkspace: View {
     private var cleanMarks: [CleanMark] {
         guard let first = points.first?.date else { return [] }
         let runs: [Date] = preview
-            ? [first.addingTimeInterval(Double(period) * 86_400 * 0.35)]
+            ? PreviewStorageScenario.cleans.map { $0.date }
             : store.cleanupRuns.filter { RecoveryWorkspace.freed($0.summary) > 0 }.map { $0.finished ?? $0.started }
         return runs.filter { $0 >= first }.compactMap { date in
             guard let reading = points.first(where: { $0.date >= date }) ?? points.last else { return nil }
@@ -588,11 +595,11 @@ struct OverviewWorkspace: View {
             if let drive = externalDrive { drivePill(drive).padding(.leading, 14) }
             Spacer()
             HStack(spacing: 8) {
-                Button { scan() } label: {
+                Button { if !preview { scan() } } label: {
                     Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
                 }.buttonStyle(ControlPanelButtonStyle(size: .small))
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(preview || store.isCleaning)
+                    .disabled((preview && !Showcase.active) || store.isCleaning)
                     .help(preview ? "Scanning is disabled in this sample preview." : "Scan this Mac (⌘R)")
                 Button("Make room") { onOpen(.makeRoom) }
                     .buttonStyle(ControlPanelButtonStyle(size: .small))

@@ -7,6 +7,8 @@ struct ReviewSheet: View {
     let store: ScanStore
     let proEnabled: Bool
     var goalPlan: ReviewedSpacePlan? = nil
+    /// Fixed items for the showcase screenshot. Nothing in a sample is ever cleaned.
+    var sample: ReviewSample? = nil
     var onDone: (ScanStore.CleanSummary) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -75,14 +77,14 @@ struct ReviewSheet: View {
         .foregroundStyle(Brand.textPrimary)
         .background(Brand.surfaceElevated)
         .interactiveDismissDisabled(cleaning)
-        .task { mode = AppSettings.shared.removalMode; items = goalPlan?.items ?? store.selectedItems() }
+        .task { mode = sample == nil ? AppSettings.shared.removalMode : .smart; items = sample?.items ?? goalPlan?.items ?? store.selectedItems() }
     }
 
     /// Items grouped by the tool or area that made them, largest group first.
     private struct ReviewGroup { let id: String; let title: String; let items: [ScanItem]; let bytes: Int64 }
     private var groups: [ReviewGroup] {
         Dictionary(grouping: runnable, by: \.categoryID).map { id, items in
-            ReviewGroup(id: id, title: store.buckets.first { $0.id == id }?.info.title ?? id.capitalized,
+            ReviewGroup(id: id, title: store.buckets.first { $0.id == id }?.info.title ?? sample?.titles[id] ?? id.capitalized,
                   items: items.sorted { $0.allocatedSize > $1.allocatedSize },
                   bytes: items.reduce(0) { $0 + $1.allocatedSize })
         }
@@ -224,10 +226,34 @@ struct ReviewSheet: View {
     }
 
     private func runClean() async {
+        guard sample == nil, !CommandLine.arguments.contains("--preview-ui") else { dismiss(); return }
         cleaning = true
         let summary = await store.clean(items, proEnabled: proEnabled, reviewedPlan: goalPlan, removal: mode)
         cleaning = false
         onDone(summary)
         dismiss()
+    }
+}
+
+/// The review sheet's showcase contents: the website story's 38.6 GB, by tool.
+struct ReviewSample {
+    let items: [ScanItem]
+    let titles: [String: String]
+
+    static var showcase: ReviewSample {
+        let home = FileScan.home
+        func item(_ path: String, _ gigabytes: Double, _ category: String) -> ScanItem {
+            ScanItem(url: home.appendingPathComponent(path), allocatedSize: Int64(gigabytes * 1_000_000_000),
+                     categoryID: category, severity: .safe)
+        }
+        return ReviewSample(items: [
+            item("Library/Developer/Xcode/DerivedData", 14.2, "xcode"),
+            item("Library/Containers/com.docker.docker/Data/build-cache", 9.8, "docker"),
+            item("Developer/storefront-web/node_modules", 5.2, "dev-projects"),
+            item("Developer/design-system/node_modules", 2.5, "dev-projects"),
+            item("Developer/marketing-site/node_modules", 1.8, "dev-projects"),
+            item(".npm/_cacache", 5.1, "npm"),
+        ], titles: ["xcode": "Xcode build files", "docker": "Docker build cache",
+                    "dev-projects": "node_modules", "npm": "npm cache"])
     }
 }

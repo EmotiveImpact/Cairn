@@ -32,8 +32,8 @@ struct RecoveryWorkspace: View {
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let inset: CGFloat = 40
 
-    /// The reference result screen's clean, for the design preview.
-    private static var sampleSummary: ScanStore.CleanSummary {
+    /// The reference result screen's clean, for the design preview and the showcase's Done screen.
+    static var sampleSummary: ScanStore.CleanSummary {
         var result = ScanStore.CleanSummary(failed: 1, errors: ["Xcode build files · Xcode was open"])
         for bytes in [8_200_000_000, 5_100_000_000, 3_400_000_000, 1_900_000_000, 1_000_000_000] as [Int64] {
             result.accounting.record(.init(bytesAffected: bytes, usedTool: false))
@@ -92,9 +92,7 @@ struct RecoveryWorkspace: View {
     }
     /// Cleans that released space, for the dots on the chart.
     private var freeSpaceCleans: [FreeSpaceCard.Clean] {
-        if preview, let last = PreviewStorageScenario.capacityHistory.last {
-            return [.init(date: last.date, freed: 6_400_000_000)]
-        }
+        if preview { return PreviewStorageScenario.cleans.map { .init(date: $0.date, freed: $0.freed) } }
         return store.cleanupRuns.compactMap { run in
             let freed = Self.freed(run.summary)
             return freed > 0 ? FreeSpaceCard.Clean(date: run.finished ?? run.started, freed: freed) : nil
@@ -511,7 +509,7 @@ struct RecoveryWorkspace: View {
             Text("Recorded size is an estimate, not space freed. History does not expire automatically; Trash contents can still disappear outside Cairn.")
                 .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 18)
-            if preview { sampleFootnote }
+            if preview && !Showcase.active { sampleFootnote }
         }
     }
 
@@ -538,7 +536,7 @@ struct RecoveryWorkspace: View {
                                message: restoreMessage, compact: true).padding(.top, 16)
             }
             if hasSafetyNotices { safetyNotices.padding(.top, 16) }
-            if preview { sampleFootnote }
+            if preview && !Showcase.active { sampleFootnote }
         }
     }
 

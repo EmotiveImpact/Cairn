@@ -55,7 +55,7 @@ struct DeveloperCleanupView: View {
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
             .keyboardShortcut("r", modifiers: .command)
-            .disabled(previewMode || store.isCleaning)
+            .disabled((previewMode && !Showcase.active) || store.isCleaning)
         } content: {
             if visibleBuckets.isEmpty {
                 emptyState
@@ -84,9 +84,16 @@ struct DeveloperCleanupView: View {
                 Button("Select none") { clearPageSelection() }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
             }
-            Button(store.selectedCount == 0 ? "Review and free" : "Review and free \(Fmt.size(store.selectedTotal))") { onReview() }
-                .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(previewMode || store.selectedCount == 0 || store.isScanning)
+            if Showcase.active {
+                // The sample ticks live on this page, not in the store.
+                Button("Review and free \(Fmt.size(pageSelectedBytes))") { onReview() }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .disabled(pageSelected.isEmpty)
+            } else {
+                Button(store.selectedCount == 0 ? "Review and free" : "Review and free \(Fmt.size(store.selectedTotal))") { onReview() }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .disabled(previewMode || store.selectedCount == 0 || store.isScanning)
+            }
         }
         .onAppear { if previewMode && section != .developer { previewBuckets = PreviewLibrary.buckets(section) } }
         .onChange(of: section) { _, value in
@@ -107,6 +114,7 @@ struct DeveloperCleanupView: View {
     // MARK: Header
 
     private var eyebrow: String {
+        if Showcase.active { return "Clean · scanned \(Showcase.scanDate.formatted(.relative(presentation: .named)))" }
         if previewMode { return "Clean · sample results" }
         if store.isScanning { return "Clean · scanning" }
         if store.phase == .cancelled { return "Clean · scan stopped early" }

@@ -53,6 +53,7 @@ Open `dist/Cairn.app` normally for live functionality. A preview process was ope
 
 Developer checks: `Cairn --safetycheck`, `Cairn --workspacecheck`.
 Deterministic native captures: `Cairn --preview-ui --capture-workspaces=/absolute/output/folder`.
+Website screenshots: `Cairn --preview-ui --showcase --preview-window=1244x800 --capture-scale=2 --capture-workspaces=/absolute/output/folder`. The showcase hides the sample labels and hover marks, matches the website's numbers, and also saves `result.png` (the Done screen) and `review.png` (the review sheet). Disk actions stay off.
 
 Current build and check logs: `artifacts/checks/`. Visual QA: `design-qa.md`.
 
