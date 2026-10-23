@@ -77,7 +77,7 @@ struct RelocationTarget: Identifiable, Sendable, Hashable {
         let relative = String(path.dropFirst(homePath.count + 1))
         let lowered = relative.lowercased()
         let refused = ["library/", ".", "applications/"]
-        guard !refused.contains(where: { lowered.hasPrefix($0) }),
+        guard !refused.contains(where: { lowered.hasPrefix($0) || lowered + "/" == $0 }),
               !lowered.contains("/."), !lowered.hasSuffix(".app"),
               !lowered.hasSuffix(".photoslibrary"), !lowered.hasSuffix(".musiclibrary"),
               !lowered.contains(".photoslibrary/"), !lowered.contains(".musiclibrary/"),
