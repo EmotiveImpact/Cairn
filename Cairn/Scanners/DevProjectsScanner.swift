@@ -186,6 +186,21 @@ struct DevProjectsScanner: CairnScanner {
 
     // MARK: - Per-target evaluation
 
+    /// Days without work on a project before its rebuildable venv counts as
+    /// ordinary build output.
+    static let idleDays = 30
+
+    /// True when the project's git metadata and manifests (never its build
+    /// output) were last touched at least `idleDays` ago. Unknown activity is
+    /// treated as active.
+    private func isIdle(_ project: URL) -> Bool {
+        var cache: [String: URL?] = [:]
+        let root = ProjectIndex.repositoryRoot(from: project, stopAt: FileScan.home, cache: &cache) ?? project
+        let marks = [ProjectIndex.lastActivity(of: root), ProjectIndex.lastActivity(of: project)].compactMap { $0 }
+        guard let last = marks.max() else { return false }
+        return Date().timeIntervalSince(last) >= Double(Self.idleDays) * 86_400
+    }
+
     private func evaluate(target: String, dir: URL, parent: URL, ctx: ScanContext) -> ScanItem? {
         let project = parent.lastPathComponent
         switch target {
@@ -221,16 +236,26 @@ struct DevProjectsScanner: CairnScanner {
             let pyprojectSibling = FileScan.exists(parent.appendingPathComponent("pyproject.toml"))
             guard cfgInside || reqSibling || pyprojectSibling else { return nil }
             let recreatable = reqSibling || pyprojectSibling
+            // A recreatable venv in a project nobody has worked on for a month
+            // is ordinary build output. In an active project it stays review,
+            // because rebuilding it interrupts current work.
+            let idle = recreatable && isIdle(parent)
+            let note: String
+            if !recreatable {
+                note = "Python virtualenv for \(project) — no manifest found; may be the only copy"
+            } else if idle {
+                note = "Python virtualenv for \(project) — project untouched for \(Self.idleDays)+ days; recreatable from its requirements/pyproject"
+            } else {
+                note = "Python virtualenv for \(project) — recreatable from its requirements/pyproject"
+            }
             return makeItem(
                 at: dir,
-                severity: .review,
+                severity: idle ? .safe : .review,
                 minSize: smallFloor,
                 isRegenerable: recreatable,   // only truly regenerable if a manifest exists
                 cleanMethod: .trash,
-                note: recreatable
-                    ? "Python virtualenv for \(project) — recreatable from its requirements/pyproject"
-                    : "Python virtualenv for \(project) — no manifest found; may be the only copy",
-                selectedIfSafe: false,
+                note: note,
+                selectedIfSafe: idle,
                 maxFiles: 50_000
             )
 

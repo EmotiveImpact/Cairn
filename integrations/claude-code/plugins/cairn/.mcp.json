@@ -1,0 +1,6 @@
+{
+  "cairn": {
+    "command": "/Applications/Cairn.app/Contents/MacOS/Cairn",
+    "args": ["mcp"]
+  }
+}

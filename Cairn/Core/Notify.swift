@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 import UserNotifications
 
 /// Local user notifications — used for "scan complete" when the user has the
@@ -21,6 +22,13 @@ enum Notify {
         return UNUserNotificationCenter.current()
     }
 
+    /// One quiet chime when a clean finishes (Settings › General, off by default).
+    @MainActor static func finishSound() {
+        guard let sound = NSSound(named: NSSound.Name("Glass"))?.copy() as? NSSound else { return }
+        sound.volume = 0.3
+        sound.play()
+    }
+
     static func requestAuth() {
         center?.requestAuthorization(options: [.alert, .sound]) { _, _ in }
     }
@@ -36,10 +44,12 @@ enum Notify {
     }
 
     /// Candidate estimates are not guaranteed released capacity.
-    static func scanComplete(totalBytes: Int64, items: Int) {
+    static func scanComplete(readyBytes: Int64, foundBytes: Int64) {
         let content = UNMutableNotificationContent()
         content.title = "Scan complete"
-        content.body = "\(Fmt.size(totalBytes)) in candidate file-size estimates across \(items) items. Review before removal."
+        let more = foundBytes - readyBytes
+        content.body = (readyBytes > 0 ? "\(Fmt.size(readyBytes)) ready to free." : "Nothing ready to free right now.")
+            + (more > 0 ? " \(Fmt.size(more)) more to look through yourself." : "")
         content.sound = .default
         let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
         center?.add(request)

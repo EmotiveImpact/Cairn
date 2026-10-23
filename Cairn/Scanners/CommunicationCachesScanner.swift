@@ -12,7 +12,7 @@ struct CommunicationCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "comm-caches",
         title: "Communication & App Caches",
-        subtitle: "Zoom, Teams, Spotify, Figma, Dropbox",
+        subtitle: "Zoom, Teams, Spotify, Figma, Mail attachment copies",
         systemImage: "bubble.left.and.bubble.right.fill",
         group: .general,
         requiresFDA: false
@@ -67,6 +67,28 @@ struct CommunicationCachesScanner: CairnScanner {
             if ctx.isCancelled() { return }
             let url = home.appendingPathComponent(target.rel)
             emitCache(at: url, app: target.app, quit: target.quit, ctx: ctx)
+        }
+
+        // Mail Downloads — copies Mail makes of attachments you open or
+        // preview. The messages keep the originals, so these are rebuildable.
+        if ctx.isCancelled() { return }
+        for rel in ["Library/Containers/com.apple.mail/Data/Library/Mail Downloads", "Library/Mail Downloads"] {
+            let url = home.appendingPathComponent(rel)
+            guard FileScan.exists(url) else { continue }
+            ctx.progress("Mail attachment copies")
+            if let item = makeItem(
+                at: url,
+                severity: .safe,
+                minSize: ctx.minSizeBytes,
+                isRegenerable: true,
+                requiresQuitBundleIDs: ["com.apple.mail"],
+                cleanMethod: .trash,
+                note: "Mail — copies of attachments you opened; the messages keep the originals",
+                selectedIfSafe: true,
+                maxFiles: Self.maxCacheFiles
+            ) {
+                ctx.emit(item)
+            }
         }
 
         // Figma `Desktop/*Cache` — enumerate the Desktop dir and match any

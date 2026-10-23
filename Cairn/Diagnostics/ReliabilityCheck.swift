@@ -21,7 +21,7 @@ import Darwin
             // prompt, post, or crash when no application bundle exists.
             Notify.requestAuth()
             Notify.send(title: "Fixture", body: "No notification should be posted")
-            Notify.scanComplete(totalBytes: 1, items: 1)
+            Notify.scanComplete(readyBytes: 1, foundBytes: 1)
             await StorageControl.shared.refreshNotificationStatus()
             check(StorageControl.shared.notificationStatus.contains("unbundled build"),
                   "Unbundled executable skips UserNotifications without crashing")

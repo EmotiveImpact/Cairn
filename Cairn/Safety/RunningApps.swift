@@ -57,11 +57,14 @@ enum RunningApps {
     }
 
     /// Is the Docker daemon reachable? Prune requires it UP; otherwise advice-only.
+    /// Docker Desktop, OrbStack or Colima has a live engine the `docker` CLI
+    /// can reach. OrbStack and Colima only create their sockets while running.
     static func isDockerRunning() -> Bool {
-        runningBundleIDs().contains("com.docker.docker") ||
-        FileManager.default.fileExists(
-            atPath: FileScan.home.appendingPathComponent(".docker/run/docker.sock").path
-        )
+        let ids = runningBundleIDs()
+        if ids.contains("com.docker.docker") || ids.contains("dev.kdrag0n.MacVirt") { return true }
+        return [".docker/run/docker.sock", ".orbstack/run/docker.sock", ".colima/default/docker.sock"].contains {
+            FileManager.default.fileExists(atPath: FileScan.home.appendingPathComponent($0).path)
+        }
     }
 
     /// Request quit for a set of apps (used by the quit-first prompt).

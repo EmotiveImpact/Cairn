@@ -42,6 +42,22 @@ struct AgentTool: Identifiable, Equatable {
                       format: .json(key: "servers", typed: true), marker: support.appendingPathComponent("Code/User")),
             AgentTool(id: "windsurf", title: "Windsurf", config: home.appendingPathComponent(".codeium/windsurf/mcp_config.json"),
                       format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".codeium/windsurf")),
+            AgentTool(id: "cline", title: "Cline", config: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev")),
+            AgentTool(id: "roo", title: "Roo Code", config: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline")),
+            AgentTool(id: "kiro", title: "Kiro", config: home.appendingPathComponent(".kiro/settings/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".kiro")),
+            AgentTool(id: "amazon-q", title: "Amazon Q", config: home.appendingPathComponent(".aws/amazonq/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".aws/amazonq")),
+            AgentTool(id: "junie", title: "JetBrains Junie", config: home.appendingPathComponent(".junie/mcp/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".junie")),
+            AgentTool(id: "lm-studio", title: "LM Studio", config: home.appendingPathComponent(".lmstudio/mcp.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".lmstudio")),
+            AgentTool(id: "qwen", title: "Qwen Code", config: home.appendingPathComponent(".qwen/settings.json"),
+                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".qwen")),
+            AgentTool(id: "amp", title: "Amp", config: home.appendingPathComponent(".config/amp/settings.json"),
+                      format: .json(key: "amp.mcpServers", typed: false), marker: home.appendingPathComponent(".config/amp")),
         ]
     }
 }
@@ -60,8 +76,27 @@ enum AgentConnections {
     static let backupSuffix = ".cairn-backup"
 
     /// The executable an agent should launch. Inside an app bundle this is the
-    /// bundle's own binary, so no command-line install is needed.
-    static var command: String { Bundle.main.executableURL?.path ?? "/usr/local/bin/cairn" }
+    /// bundle's own binary, so no command-line install is needed. A test copy
+    /// run from elsewhere points agents at the installed app instead, so the
+    /// connection keeps working after the test copy is deleted.
+    static var command: String {
+        let running = Bundle.main.executableURL?.path
+        if let installed = installedExecutable(), installed != running { return installed }
+        return running ?? "/usr/local/bin/cairn"
+    }
+
+    /// Cairn in Applications, when it is at least as new as the running copy.
+    static func installedExecutable(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> String? {
+        let fm = FileManager.default
+        let mine = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        for folder in [URL(fileURLWithPath: "/Applications"), home.appendingPathComponent("Applications")] {
+            guard let bundle = Bundle(url: folder.appendingPathComponent("Cairn.app")),
+                  let executable = bundle.executableURL?.path, fm.isExecutableFile(atPath: executable) else { continue }
+            let theirs = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+            if theirs.compare(mine, options: .numeric) != .orderedAscending { return executable }
+        }
+        return nil
+    }
 
     /// Terminal command for tools Cairn does not edit, or when it cannot.
     static func manualCommand(_ command: String = command) -> String {

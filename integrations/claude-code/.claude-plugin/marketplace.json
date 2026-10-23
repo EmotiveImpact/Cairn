@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "cairn",
+  "description": "Cairn for Claude Code: see what is filling your Mac and free rebuildable junk without leaving your session.",
+  "owner": { "name": "Emotive Impact Studios" },
+  "plugins": [
+    {
+      "name": "cairn",
+      "description": "Disk space for developers. Finds build output, caches and idle projects, plans a safe cleanup and runs it through the Cairn Mac app with a receipt.",
+      "version": "1.0.0",
+      "source": "./plugins/cairn",
+      "category": "productivity"
+    }
+  ]
+}

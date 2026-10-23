@@ -40,6 +40,13 @@ final class ScanStore {
         /// total is maintained incrementally as items are added/removed.
         private var runningTotal: Int64 = 0
         var totalSize: Int64 { runningTotal }
+        /// The part of the total that is ready to free (safe and rebuildable),
+        /// kept the same way so the live scan can show the same number as the result.
+        private var runningReady: Int64 = 0
+        var readySize: Int64 { runningReady }
+        private static func readyBytes(_ item: ScanItem) -> Int64 {
+            item.severity == .safe && item.isRegenerable && item.isActionable ? item.allocatedSize : 0
+        }
 
         init(info: CategoryInfo) { self.info = info }
 
@@ -56,10 +63,12 @@ final class ScanStore {
             if !item.isActionable || item.severity == .risky { item.selected = false }
             items.append(item)
             if item.isActionable { runningTotal += item.allocatedSize }
+            runningReady += Self.readyBytes(item)
         }
         mutating func removeItems(where shouldRemove: (ScanItem) -> Bool) {
             items.removeAll(where: shouldRemove)
             runningTotal = items.reduce(0) { $0 + ($1.isActionable ? $1.allocatedSize : 0) }
+            runningReady = items.reduce(0) { $0 + Self.readyBytes($1) }
         }
         mutating func sortBySizeDescending() {
             items.sort { $0.allocatedSize > $1.allocatedSize }
@@ -67,8 +76,10 @@ final class ScanStore {
         /// Mutate one item in place (selection), keeping the total correct.
         mutating func updateItem(at index: Int, _ transform: (inout ScanItem) -> Void) {
             let before = items[index].isActionable ? items[index].allocatedSize : 0
+            let readyBefore = Self.readyBytes(items[index])
             transform(&items[index])
             runningTotal += (items[index].isActionable ? items[index].allocatedSize : 0) - before
+            runningReady += Self.readyBytes(items[index]) - readyBefore
         }
         var selectedSize: Int64 { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.reduce(0) { $0 + $1.allocatedSize } }
         var selectedCount: Int { items.lazy.filter { $0.selected && $0.isActionable && $0.severity != .risky }.count }
@@ -104,6 +115,13 @@ final class ScanStore {
     private(set) var lastCleanRunID: UUID?
     private(set) var cleanupRuns: [CleanupRun] = []
     private(set) var receiptError: String?
+    /// Space a clean just freed, waiting for Home to glow it once. Cleared when shown.
+    private(set) var pendingFreedGlow: (bytes: Int64, at: Date)?
+    func takeFreedGlow() -> Int64? {
+        defer { pendingFreedGlow = nil }
+        guard let glow = pendingFreedGlow, Date().timeIntervalSince(glow.at) < 600 else { return nil }
+        return glow.bytes
+    }
     private var activeRunIDs: Set<UUID> = []
     private var receiptRevision: UInt64 = 0
     func isRunActive(_ id: UUID) -> Bool { activeRunIDs.contains(id) }
@@ -151,6 +169,11 @@ final class ScanStore {
 
     private var scanTask: Task<Void, Never>?
     private var bucketIndex: [String: Int] = [:]
+    /// Every path already listed in this scan. Scanners overlap (an installer is also an
+    /// old download; a Chrome cache sits inside the Google cache), so each byte is counted once.
+    private var dedupe = PathDedupe()
+    /// The selection to put back when a review that showed only part of it closes.
+    private var selectionBeforeScopedReview: Set<UUID>?
 
     // Derived
     var grandTotal: Int64 { buckets.reduce(0) { $0 + $1.totalSize } }
@@ -176,6 +199,9 @@ final class ScanStore {
     struct BucketSnapshot: Codable {
         let id: String; let title: String; let systemImage: String
         let group: CategoryGroup; let bytes: Int64; let count: Int
+        /// Safe, rebuildable and actionable: the same rule as Home's number.
+        /// Optional so snapshots saved before it existed still decode.
+        var readyBytes: Int64? = nil
     }
     struct Snapshot: Codable { let date: Date; let buckets: [BucketSnapshot] }
     private(set) var lastSnapshot: Snapshot?
@@ -209,12 +235,16 @@ final class ScanStore {
     struct DisplayBucket: Identifiable {
         let id: String; let title: String; let systemImage: String
         let group: CategoryGroup; let bytes: Int64; let count: Int
+        /// Safe, rebuildable and actionable: the same rule as Home's number.
+        /// Optional so snapshots saved before it existed still decode.
+        var readyBytes: Int64? = nil
     }
     var hasLiveResults: Bool { hasScanned && !buckets.isEmpty }
     var displayBuckets: [DisplayBucket] {
         if hasLiveResults {
             return buckets.map { DisplayBucket(id: $0.id, title: $0.info.title, systemImage: $0.info.systemImage,
-                                               group: $0.info.group, bytes: $0.totalSize, count: $0.items.count) }
+                                               group: $0.info.group, bytes: $0.totalSize, count: $0.items.count,
+                           readyBytes: $0.items.filter(CLI.isReady).reduce(Int64(0)) { $0 + $1.allocatedSize }) }
         }
         return (lastSnapshot?.buckets ?? []).map {
             DisplayBucket(id: $0.id, title: $0.title, systemImage: $0.systemImage,
@@ -229,7 +259,7 @@ final class ScanStore {
 
     /// Our Application Support directory. Never force-unwraps `urls(for:)` — that
     /// would trap in a sandboxed/odd environment; falls back to ~/Library.
-    private static var supportDirectory: URL {
+    nonisolated private static var supportDirectory: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileScan.home.appendingPathComponent("Library/Application Support", isDirectory: true)
         let dir = base.appendingPathComponent("Cairn", isDirectory: true)
@@ -237,7 +267,13 @@ final class ScanStore {
         return dir
     }
 
-    private static var snapshotURL: URL {
+    /// Where cleanup receipts live. Read-only callers (the CLI and agents) use
+    /// this to report what was freed from the same records Activity shows.
+    nonisolated static var receiptsURL: URL {
+        supportDirectory.appendingPathComponent("removal-log.json").appendingPathExtension("runs")
+    }
+
+    nonisolated private static var snapshotURL: URL {
         supportDirectory.appendingPathComponent("last-scan.json")
     }
 
@@ -254,10 +290,17 @@ final class ScanStore {
         ReclaimStats.shared.reclaimableBytes = snap.buckets.reduce(Int64(0)) { $0 + $1.bytes }
     }
 
+    /// The app's last completed scan, read without scanning. For the CLI and MCP.
+    nonisolated static func savedSnapshot() -> Snapshot? {
+        guard let data = try? Data(contentsOf: snapshotURL) else { return nil }
+        return try? JSONDecoder().decode(Snapshot.self, from: data)
+    }
+
     private func saveSnapshot() {
         let snaps = buckets.map {
             BucketSnapshot(id: $0.id, title: $0.info.title, systemImage: $0.info.systemImage,
-                           group: $0.info.group, bytes: $0.totalSize, count: $0.items.count)
+                           group: $0.info.group, bytes: $0.totalSize, count: $0.items.count,
+                           readyBytes: $0.items.filter(CLI.isReady).reduce(Int64(0)) { $0 + $1.allocatedSize })
         }
         let snap = Snapshot(date: Date(), buckets: snaps)
         lastSnapshot = snap
@@ -387,6 +430,7 @@ final class ScanStore {
         // Seed buckets in registry order so the sidebar is stable while scanning.
         buckets = scanners.map { Bucket(info: $0.info) }
         bucketIndex = Dictionary(uniqueKeysWithValues: buckets.enumerated().map { ($1.id, $0) })
+        dedupe = PathDedupe()
         activeComparisonScope = comparisonScope()
         phase = .scanning
         progressText = "Waiting for other disk work to finish…"
@@ -473,8 +517,7 @@ final class ScanStore {
             recordComparison()
             onCompletedScan?()
             if AppSettings.shared.scanNotifications {
-                Notify.scanComplete(totalBytes: grandTotal,
-                                    items: buckets.reduce(0) { $0 + $1.items.count })
+                Notify.scanComplete(readyBytes: recommendedBytes, foundBytes: grandTotal)
             }
         }
     }
@@ -482,12 +525,17 @@ final class ScanStore {
     /// Filter + file one found item into its bucket (the single item chokepoint).
     private func applyItem(_ item: ScanItem) {
         if AppSettings.shared.isExcluded(item.resolvedURL) { return }
+        // Never list Cairn's own app or the build folder this copy runs from.
+        if InUse.holdsCairn(item) { return }
         // Honor the Developer Tools settings here too.
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
-        if let i = bucketIndex[item.categoryID] {
-            buckets[i].append(item)
+        guard let i = bucketIndex[item.categoryID] else { return }
+        guard case .keep(let replaced) = dedupe.admit(item) else { return }
+        if !replaced.isEmpty {
+            for b in buckets.indices { buckets[b].removeItems { replaced.contains(PathDedupe.key($0)) } }
         }
+        buckets[i].append(item)
     }
 
     private func apply(_ event: ScanEvent) {
@@ -545,6 +593,19 @@ final class ScanStore {
 
     // MARK: - Space Missions selection
 
+    /// Review only `ids`; `endScopedReview()` puts the earlier selection back.
+    func beginScopedReview(_ ids: Set<UUID>) {
+        selectionBeforeScopedReview = Set(selectedItems().map(\.id))
+        clearSelection()
+        select { item, _ in ids.contains(item.id) }
+    }
+    func endScopedReview() {
+        guard let before = selectionBeforeScopedReview else { return }
+        selectionBeforeScopedReview = nil
+        clearSelection()
+        select { item, _ in before.contains(item.id) }
+    }
+
     func clearSelection() {
         for b in buckets.indices {
             for i in buckets[b].items.indices { buckets[b].setSelected(at: i, false) }
@@ -569,7 +630,7 @@ final class ScanStore {
     var recommendedItems: [ScanItem] {
         buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }
     }
-    var recommendedBytes: Int64 { recommendedItems.reduce(0) { $0 + $1.allocatedSize } }
+    var recommendedBytes: Int64 { buckets.reduce(0) { $0 + $1.readySize } }
 
     /// Replace the selection with every recommended finding.
     func selectRecommended() {
@@ -608,15 +669,23 @@ final class ScanStore {
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
     func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil,
-               removal: RemovalMode? = nil) async -> CleanSummary {
+               removal: RemovalMode? = nil, runKind: String? = nil) async -> CleanSummary {
         // Advice and risky findings never execute. Drop them and run the rest
         // rather than refusing the whole reviewed selection.
         let mode = removal ?? AppSettings.shared.removalMode
         let skipped = items.filter { !$0.isActionable || $0.severity == .risky }
-        let items = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
+        let prepared = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
             var item = item
             item.deleteImmediately = mode.deletesImmediately(item)
             return item
+        }
+        // Leave alone anything a running program or a build in progress is using.
+        let running = await Task.detached(priority: .userInitiated) { InUse.runningExecutables() }.value
+        let busy = prepared.compactMap { item in InUse.reason(item, running: running).map { (item.id, $0) } }
+        let busyIDs = Set(busy.map(\.0))
+        let items = prepared.filter { !busyIDs.contains($0.id) }
+        if items.isEmpty && !busy.isEmpty {
+            return CleanSummary(failed: busy.count, errors: busy.map { "Skipped \($0.1)" })
         }
         guard !items.isEmpty else {
             return CleanSummary(failed: skipped.count, errors: ["Nothing selected has a cleanup action. Advice items are for review only."])
@@ -656,11 +725,15 @@ final class ScanStore {
             uniquingKeysWith: { a, _ in a }
         )
         var summary = CleanSummary()
+        if !busy.isEmpty {
+            summary.failed += busy.count
+            summary.errors.append(contentsOf: busy.map { "Skipped \($0.1)" })
+        }
         if !skipped.isEmpty {
             summary.failed += skipped.count
             summary.errors.append("\(skipped.count) advice-only item\(skipped.count == 1 ? " was" : "s were") skipped.")
         }
-        var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary)
+        var run = CleanupRun(id: UUID(), started: Date(), finished: nil, summary: summary, kind: runKind)
         guard await saveRun(run) else { return CleanSummary(failed: items.count, errors: [receiptError ?? "Receipt history unavailable."]) }
         activeRunIDs.insert(run.id)
         defer { activeRunIDs.remove(run.id) }
@@ -761,6 +834,8 @@ final class ScanStore {
         lifecycleCheckpoint("receipt")
         lastCleanSummary = summary
         lastCleanRunID = run.id
+        if summary.freedBytes > 0 { pendingFreedGlow = (summary.freedBytes, Date()) }
+        if !summary.interrupted, summary.trashed > 0, AppSettings.shared.finishSound { Notify.finishSound() }
         // Re-save the snapshot so the cached dashboard reflects post-clean totals
         // (otherwise the next launch over-reports the reclaimable space).
         if hasScanned, customRemovalLogURL == nil { saveSnapshot() }

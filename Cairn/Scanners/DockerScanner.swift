@@ -5,7 +5,8 @@ import Foundation
 /// the host is meaningless: the reclaim is `docker … prune`, run while the
 /// daemon is up. We size with the read-only `docker system df` and offer
 /// graduated prune actions, safest first. The host `Docker.raw` is advice-only — pruning frees space INSIDE
-/// the VM but the sparse host image only shrinks on a manual disk resize.
+/// the VM, which current Docker Desktop then returns to the Mac. OrbStack and
+/// Colima disks are sized as advice with their own way to give space back.
 struct DockerScanner: CairnScanner {
     let info = CategoryInfo(
         id: "docker",
@@ -19,6 +20,11 @@ struct DockerScanner: CairnScanner {
     func scan(_ ctx: ScanContext) async {
         if ctx.isCancelled() { return }
 
+        // OrbStack and Colima keep their own VM disks. Sized whether or not
+        // they are running, so their space is never invisible.
+        emitOtherVMDisks(ctx)
+        if ctx.isCancelled() { return }
+
         // Daemon down → we cannot size or prune. One advice card, then stop.
         guard RunningApps.isDockerRunning() else {
             ctx.progress("Docker (not running)")
@@ -30,7 +36,7 @@ struct DockerScanner: CairnScanner {
                 isRegenerable: false,
                 requiresRunning: true,
                 cleanMethod: .adviceOnly,
-                note: "Docker isn't running — start Docker Desktop to size and prune reclaimable space",
+                note: "Docker isn't running — start Docker Desktop, OrbStack or Colima to size and prune reclaimable space",
                 volumeURL: FileScan.volumeURL(of: FileScan.home)
             ))
             return
@@ -38,10 +44,16 @@ struct DockerScanner: CairnScanner {
 
         // Read-only sizing pass. Best-effort — if docker isn't on PATH or the
         // call fails, reclaimable stays unknown (0) and the advice remains visible.
+        // When Docker did answer, a row with nothing to reclaim is left out.
         ctx.progress("docker system df")
         var reclaim = Reclaimable()
+        var sized = false
         if let result = try? ToolRunner.run("docker", ["system", "df"], timeout: 12), result.ok {
             reclaim = parseSystemDF(result.stdout)
+            sized = true
+        }
+        let emitPrune: (ScanItem) -> Void = { item in
+            if !sized || item.allocatedSize > 0 { ctx.emit(item) }
         }
 
         if ctx.isCancelled() { return }
@@ -51,7 +63,7 @@ struct DockerScanner: CairnScanner {
         let dockerHome = FileScan.home
 
         ctx.progress("Build cache")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Docker build cache",
             url: dockerHome.appendingPathComponent(".docker/buildx"),
             severity: .safe,
@@ -62,7 +74,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Unused images")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Unused Docker images",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
@@ -73,7 +85,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Stopped containers")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Stopped Docker containers",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .review,
@@ -84,7 +96,7 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
         ctx.progress("Volume and system risks")
-        ctx.emit(pruneItem(
+        emitPrune(pruneItem(
             label: "Docker volumes + everything (DESTRUCTIVE)",
             url: dockerHome.appendingPathComponent(".docker"),
             severity: .risky,
@@ -95,8 +107,10 @@ struct DockerScanner: CairnScanner {
 
         if ctx.isCancelled() { return }
 
-        // The host VM disk image. Advice-only: pruning frees space INSIDE the VM,
-        // but Docker.raw only shrinks on a manual disk resize (which wipes the VM).
+        // The host VM disk image. Advice-only: never delete it, it IS every
+        // image, container and volume. Pruning frees space inside the VM, and
+        // current Docker Desktop hands those blocks back to the Mac shortly
+        // after; older qcow2 images can take minutes.
         let rawURL = dockerHome.appendingPathComponent(
             "Library/Containers/com.docker.docker/Data/vms/0/data/Docker.raw")
         if FileScan.exists(rawURL) {
@@ -112,11 +126,52 @@ struct DockerScanner: CairnScanner {
                 isRegenerable: false,
                 requiresRunning: false,
                 cleanMethod: .adviceOnly,
-                note: "Pruning frees space INSIDE the VM; the host Docker.raw only shrinks if you resize the disk image in Docker settings (which erases all images/volumes).",
+                note: "Docker's disk holds every image, container and volume, so Cairn never deletes it. After a prune, current Docker Desktop gives the space back to the Mac within a minute or so; scan again to see the new size.",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: rawURL)
             ))
         }
+    }
+
+    // MARK: - OrbStack and Colima
+
+    private func emitOtherVMDisks(_ ctx: ScanContext) {
+        let home = FileScan.home
+        let orbstack = [
+            home.appendingPathComponent("Library/Group Containers/HUAQ24HBR6.dev.orbstack/data"),
+            home.appendingPathComponent(".orbstack/data"),
+        ].first(where: FileScan.exists)
+        if let orbstack {
+            emitVMDisk(orbstack, ctx: ctx,
+                       note: "OrbStack's disk holds its containers, images and Linux machines, so Cairn never deletes it. Prune unused images in OrbStack, and it returns freed space to the Mac by itself")
+        }
+        // Colima keeps one lima VM per profile; sized together.
+        let colima = [home.appendingPathComponent(".colima/_lima"), home.appendingPathComponent(".lima")]
+            .first(where: FileScan.exists)
+        if let colima {
+            emitVMDisk(colima, ctx: ctx,
+                       note: "Colima's disks hold its containers and images, so Cairn never deletes them. After a prune, restarting Colima (0.5 or newer) gives the freed space back to the Mac; `colima ssh -- sudo fstrim -a` does the same without a restart")
+        }
+    }
+
+    private func emitVMDisk(_ url: URL, ctx: ScanContext, note: String) {
+        ctx.progress(url.lastPathComponent)
+        let stats = FileScan.measure(url)
+        guard stats.allocatedSize >= ctx.minSizeBytes else { return }
+        ctx.emit(ScanItem(
+            url: url,
+            allocatedSize: stats.allocatedSize,
+            itemCount: stats.fileCount,
+            latestModified: stats.latestModified,
+            categoryID: info.id,
+            severity: .risky,
+            isRegenerable: false,
+            requiresRunning: false,
+            cleanMethod: .adviceOnly,
+            note: note,
+            permissionDenied: stats.permissionDenied,
+            volumeURL: FileScan.volumeURL(of: url)
+        ))
     }
 
     // MARK: - Item construction
