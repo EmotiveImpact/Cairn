@@ -79,33 +79,3 @@ struct ProStatusCard: View {
         return Brand.textMuted
     }
 }
-
-/// Compact sidebar pill showing license state; tap to open Settings.
-struct ProPill: View {
-    @ObservedObject var license: LicenseManager
-    var action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 7) {
-                Image(systemName: license.isPro ? "checkmark.seal.fill" : "sparkles")
-                    .font(.system(size: 11)).foregroundStyle(license.isPro ? Brand.safeCyan : Brand.purple)
-                Text(label).font(.system(size: 11, weight: .semibold)).foregroundStyle(Brand.textSecondary)
-                Spacer()
-                if !license.isPro { Image(systemName: "chevron.right").font(.system(size: 9)).foregroundStyle(Brand.textMuted) }
-            }
-            .padding(.horizontal, 12).padding(.vertical, 8)
-            .background(RoundedRectangle(cornerRadius: 9).fill(license.isPro ? Brand.safeCyan.opacity(0.10) : Brand.purple.opacity(0.10)))
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain).pointerCursor()
-    }
-
-    private var label: String {
-        // Unmistakable while the local dev unlock is on, so a dev build is never
-        // mistaken for a real licence.
-        if LicenseConfig.devProUnlock { return "Cairn Pro · DEV" }
-        if license.isPro { return "Cairn Pro" }
-        return "Licence status"
-    }
-}

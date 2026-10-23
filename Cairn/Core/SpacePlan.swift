@@ -85,7 +85,6 @@ struct ReviewedSpacePlan {
     let sources: [UUID: ReviewedSource]
     var itemIDs: Set<UUID> { Set(items.map(\.id)) }
     var expectedImmediateReclaim: Int64 { items.reduce(0) { $0 + SpaceActionCapability.forItem($1).immediateReclaim } }
-    var recoveryText: String { "Items sent to Trash can be put back from Activity until you delete them." }
 
     static func internalVolumeID(_ url: URL) -> String? {
         guard let values = try? url.resourceValues(forKeys: [.volumeUUIDStringKey, .volumeIsInternalKey]), values.volumeIsInternal == true else { return nil }

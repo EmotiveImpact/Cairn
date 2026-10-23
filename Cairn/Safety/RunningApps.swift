@@ -67,11 +67,4 @@ enum RunningApps {
         }
     }
 
-    /// Request quit for a set of apps (used by the quit-first prompt).
-    @MainActor
-    static func requestQuit(_ ids: [String]) {
-        for app in NSWorkspace.shared.runningApplications where ids.contains(app.bundleIdentifier ?? "") {
-            app.terminate()
-        }
-    }
 }

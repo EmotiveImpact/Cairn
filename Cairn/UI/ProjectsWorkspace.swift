@@ -237,20 +237,6 @@ struct ProjectsWorkspace: View {
         return item.url.path.hasPrefix(base) ? String(item.url.path.dropFirst(base.count)) : item.url.lastPathComponent
     }
 
-    private func idleText(_ project: ProjectSummary) -> String {
-        guard let days = project.idleDays() else { return "Unknown" }
-        switch days {
-        case 0: return "Today"
-        case 1: return "Yesterday"
-        case ..<30: return "\(days) days ago"
-        default: return "Idle \(days) days"
-        }
-    }
-
-    private func idleTint(_ project: ProjectSummary) -> Color {
-        (project.idleDays() ?? 0) >= 30 ? Brand.textSecondary : Brand.textMuted
-    }
-
     private func activitySentence(_ project: ProjectSummary) -> String {
         guard let date = project.lastActivity else {
             return "Cairn could not find git or manifest dates for this folder."

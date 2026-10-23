@@ -228,31 +228,11 @@ struct DeveloperCleanupView: View {
         }
     }
 
-    private func requirementText(for item: ScanItem) -> String {
-        if !item.isActionable { return "Advice only" }
-        if item.severity == .risky { return "Protected" }
-        if case .tool(let command) = item.cleanMethod { return "Use \(command.tool)" }
-        if case .emptyTrash = item.cleanMethod { return "Frees space now" }
-        if item.severity == .review { return "Review required" }
-        if !item.requiresQuitBundleIDs.isEmpty { return "Close app first" }
-        return item.isRegenerable ? "Ready" : "Review required"
-    }
-
     private func consequence(for item: ScanItem) -> String {
         if !item.isActionable { return "Cairn provides guidance only and does not remove this path." }
         if case .emptyTrash = item.cleanMethod { return "Items already in Trash are permanently removed." }
         if item.isRegenerable { return "The owning tool may download or rebuild these files when next used." }
         return "This may be the only local copy. Check the path and make a backup before proceeding."
-    }
-    private func methodText(for item: ScanItem) -> String {
-        switch item.cleanMethod {
-        case .trash: return RemovalMode.current.deletesImmediately(item)
-            ? "Deleted straight away so the space is freed now (Settings › Cleaning)."
-            : "Moved to Trash. Put Back is available from Activity until you delete it."
-        case .emptyTrash: return "Deleted from the Trash; the space is freed now."
-        case .tool(let command): return "Runs \(command.display)."
-        case .adviceOnly: return "No removal action."
-        }
     }
     private func shortPath(_ path: String) -> String {
         path.replacingOccurrences(of: NSHomeDirectory(), with: "~")

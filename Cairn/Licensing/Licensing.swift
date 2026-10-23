@@ -309,8 +309,6 @@ final class LicenseManager: ObservableObject {
         }
     }
 
-    var hasKey: Bool { stored != nil }
-
     private func recompute() {
         if isPro && !AppIntegrity.allowsPro {
             isPro = false

@@ -678,7 +678,6 @@ private struct ActivityReceipt {
     let capacityChanges: [CleanupCapacityChange]
     var inProgress = false
     var freedBytes: Int64 = 0
-    var inTrashBytes: Int64 { max(0, movedBytes + toolBytes - freedBytes) }
 
     var title: String {
         if inProgress { return "Cleanup in progress" }
