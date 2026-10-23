@@ -29,8 +29,17 @@
   // ---- the stack: chapters hold still and dissolve into one another ----
   var track = document.querySelector('.stage-track');
   var layers = track ? [].slice.call(track.querySelectorAll('.stage > .chapter')) : [];
+  // the height of the window the page is actually shown in: measured from an empty pinned box, because inside
+  // another app's frame (Safari on a phone, the Claude app) innerHeight and 100svh can both come up short
+  var probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = 'position:fixed;left:0;top:0;bottom:0;width:0;visibility:hidden;pointer-events:none';
+  document.body.appendChild(probe);
+  var vh = innerHeight;
+  function measure() { var h = probe.getBoundingClientRect().height; vh = h > 200 ? Math.round(h) : innerHeight; }
+  measure();
   // phones held upright get the stack too; only short, wide windows (a phone on its side) scroll as a plain page
-  var staged = !!track && !reduced && innerHeight >= 520 && (innerWidth >= 760 || innerHeight > innerWidth);
+  var staged = !!track && !reduced && vh >= 520 && (innerWidth >= 760 || vh > innerWidth);
   var stageAt = 0;            // stops: 0 opening, 1 the number over the hallway, 2 disk, 3 disk cleaned, 4 cleaned and held, 5 ask (and its chat, on a phone), then the app's Home, Projects and Activity
   // a chapter can hold more than one stop (data-stops), so the disk can be shown and then cleaned
   var starts = [], ends = [], N = 0;
@@ -41,7 +50,8 @@
   var disk = document.getElementById('disk');
   var open = document.getElementById('open'), number = document.getElementById('number');
   // the chapter with the hallway of data behind it (the number), and its words
-  var dive = document.getElementById('tunnel') && document.getElementById('tunnel').closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
+  var tunnelEl = document.getElementById('tunnel');
+  var dive = tunnelEl && tunnelEl.closest('.chapter'), diveWords = dive && dive.querySelector('.dive-words');
   var morph = track && track.querySelector('.morph');
   // the app, whose window the chat's "Review in Cairn" button grows into
   var app = document.getElementById('app'), morphApp = track && track.querySelector('.morph-app');
@@ -51,13 +61,16 @@
   var LOW = 0.035;           // drops the hallway's far end to the very middle of the screen (a share of its height)
   var arrive = [];            // callbacks per chapter, run the first time it settles
   var here = [], at = [];     // enter/leave pairs per chapter, run each time it settles or leaves
-  // the stage is as tall as the window the page is shown in (100svh can come up short on a phone and leave a dark band below)
-  function fit() { document.documentElement.style.setProperty('--stage-h', innerHeight + 'px'); }
+  // the stage is exactly as tall as that window, so each chapter fills it with no dark band below
+  function fit() { measure(); document.documentElement.style.setProperty('--stage-h', vh + 'px'); }
   if (staged) { document.body.classList.add('staged'); track.style.height = 'calc(100svh + ' + N + ' * 115svh)'; fit(); }
   function lerp(a, b, t) { return a + (b - a) * t; }
+  // the scroll position of each stop, and the stop we are at (always with the measured height, as the stage uses it)
+  function stopY(k) { return Math.round(track.offsetTop + (track.offsetHeight - vh) * k / N); }
+  function stopNow() { return Math.round(clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - vh)) * N); }
   function stage() {
     if (!staged) return;
-    var len = track.offsetHeight - innerHeight;
+    var len = track.offsetHeight - vh;
     stageAt = clamp((scrollY - track.offsetTop) / Math.max(1, len)) * N;
     layers.forEach(function (el, i) {
       var d = stageAt < starts[i] ? stageAt - starts[i] : stageAt > ends[i] ? stageAt - ends[i] : 0;
@@ -68,8 +81,9 @@
       el.style.opacity = o.toFixed(3);
       // the hallway simply fades (its words lift away, below); the others shrink back and blur
       var lift = el === number && el !== dive, still = el === dive;
-      el.style.filter = 'blur(' + ((1 - inn) * 14 + (lift || still ? 0 : out * 8)).toFixed(1) + 'px)';
-      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * innerHeight : still ? 0 : 28)).toFixed(1) + 'px)';
+      var blur = (1 - inn) * 14 + (lift || still ? 0 : out * 8);
+      el.style.filter = blur > 0.05 ? 'blur(' + blur.toFixed(1) + 'px)' : 'none';   // (a blur of nothing still costs a redraw every frame)
+      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * vh : still ? 0 : 28)).toFixed(1) + 'px)';
       el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
       el.style.visibility = o < 0.01 ? 'hidden' : 'visible';
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }
@@ -94,19 +108,21 @@
     tunnelDoor = p > 0 ? clamp(p / 0.25) * (1 - clamp((p - 0.44) / 0.04)) : 0;
     // the words lift up and away first
     if (dive) dive.style.setProperty('--veil', p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : 1);   // the shade behind the words goes with them
-    if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * innerHeight).toFixed(1) + 'px)' : ''; }
+    if (diveWords) { diveWords.style.opacity = p > 0 ? (1 - clamp(p / 0.3)).toFixed(3) : ''; diveWords.style.transform = p > 0 ? 'translateY(' + (-clamp(p / 0.3) * 0.25 * vh).toFixed(1) + 'px)' : ''; }
     if (!morph) return;
     // it plays each way: landed, the sections line up; heading back, they go and the box carries the light back in
     if (p > 0.99 && !diskUp) buildDisk();
     else if (p < 0.98 && diskUp) unbuildDisk();
     var o = clamp((p - 0.38) / 0.07) * (diskUp ? 0 : 1);
     if (o === 0) { morph.style.opacity = '0'; return; }
-    // where the tunnel draws its light (centred, a little above the middle), and where the disk bar is now
-    var H = innerHeight, sz = 0.04 * H * zoomAt(Math.min(p, 0.45)), cx = innerWidth / 2, cy = H * (0.465 + LOW);
+    // where the tunnel draws its light (in the middle of its canvas, at the size the shader gives it) and where the
+    // disk bar is now, both taken from the page and counted from the stage the box sits in
+    var st = morph.parentNode.getBoundingClientRect(), cv = tunnelEl.getBoundingClientRect();
+    var sz = 0.04 * cv.height * zoomAt(Math.min(p, 0.45)), cx = cv.left + cv.width / 2 - st.left, cy = cv.top + cv.height * (0.465 + LOW) - st.top;
     var bar = disk.querySelector('.disk-bar').getBoundingClientRect();
     var t = clamp((p - 0.45) / 0.4), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    morph.style.left = lerp(cx - sz / 2, bar.left, e).toFixed(1) + 'px';
-    morph.style.top = lerp(cy - sz / 2, bar.top, e).toFixed(1) + 'px';
+    morph.style.left = lerp(cx - sz / 2, bar.left - st.left, e).toFixed(1) + 'px';
+    morph.style.top = lerp(cy - sz / 2, bar.top - st.top, e).toFixed(1) + 'px';
     morph.style.width = lerp(sz, bar.width, e).toFixed(1) + 'px';
     morph.style.height = lerp(sz, bar.height, e).toFixed(1) + 'px';
     morph.style.borderRadius = lerp(4, 18, e).toFixed(1) + 'px';
@@ -123,10 +139,10 @@
     else if (q < 0.98 && appUp) setApp(false);
     var o = appUp || q <= 0 ? 0 : clamp(q / 0.1);
     if (o === 0) { morphApp.style.opacity = '0'; return; }
-    var a = askBtn.getBoundingClientRect(), w = appWin.getBoundingClientRect();
+    var a = askBtn.getBoundingClientRect(), w = appWin.getBoundingClientRect(), st = morphApp.parentNode.getBoundingClientRect();
     var t = clamp((q - 0.12) / 0.7), e = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-    morphApp.style.left = lerp(a.left, w.left, e).toFixed(1) + 'px';
-    morphApp.style.top = lerp(a.top, w.top, e).toFixed(1) + 'px';
+    morphApp.style.left = lerp(a.left - st.left, w.left - st.left, e).toFixed(1) + 'px';
+    morphApp.style.top = lerp(a.top - st.top, w.top - st.top, e).toFixed(1) + 'px';
     morphApp.style.width = lerp(a.width, w.width, e).toFixed(1) + 'px';
     morphApp.style.height = lerp(a.height, w.height, e).toFixed(1) + 'px';
     morphApp.style.borderRadius = lerp(9, 14, e).toFixed(1) + 'px';
@@ -136,19 +152,29 @@
     appUp = on; app.classList.toggle('panel-up', on);
     morphApp.classList.add('melt'); setTimeout(function () { morphApp.classList.remove('melt'); }, 900);
   }
-  if (staged) { window.addEventListener('scroll', stage, { passive: true }); window.addEventListener('resize', function () { fit(); stage(); }); stage(); }
+  var moving = false;
+  function refit() {
+    var k = stopNow(), before = vh;
+    fit();
+    if (vh !== before && !moving) window.scrollTo(0, stopY(k));
+    stage();
+  }
+  if (staged) {
+    window.addEventListener('scroll', stage, { passive: true });
+    window.addEventListener('resize', refit);
+    if (window.visualViewport) visualViewport.addEventListener('resize', refit);
+    stage();
+  }
 
   // one flick, one stop: inside the stack, a wheel, swipe or key press moves exactly one stop,
   // glides there, and then holds until the gesture has finished
   if (staged) {
     document.documentElement.style.scrollBehavior = 'auto';
-    var moving = false, quietUntil = 0, lastWheel = 0, lastMag = 0;
-    var stopY = function (k) { return Math.round(track.offsetTop + (track.offsetHeight - innerHeight) * k / N); };
-    var stopNow = function () { return Math.round(clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - innerHeight)) * N); };
+    var quietUntil = 0, lastWheel = 0, lastMag = 0;
     var inside = function () { return scrollY >= track.offsetTop - 2 && scrollY <= stopY(N) + 2; };
     var go = function (k) {
       k = Math.max(0, Math.min(N, k));
-      var from = scrollY, to = stopY(k), s0 = performance.now(), dur = Math.min(1100, 650 + Math.abs(to - from) / innerHeight * 180);
+      var from = scrollY, to = stopY(k), s0 = performance.now(), dur = Math.min(1100, 650 + Math.abs(to - from) / vh * 180);
       // flying into the light and out as the disk bar is the one step that takes its time
       var di = layers.indexOf(dive), here0 = stopNow();
       var long = di >= 0 && Math.min(here0, k) === starts[di] && Math.max(here0, k) === starts[di] + 1;
@@ -161,6 +187,7 @@
       (function step(now) {
         var t = clamp((now - s0) / dur), e = long ? (1 - Math.cos(Math.PI * t)) / 2 : t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
         window.scrollTo(0, from + (to - from) * e);
+        stage();   // draw this frame's stop now, rather than waiting for the scroll event (a frame late on some phones)
         if (t < 1) requestAnimationFrame(step); else { moving = false; quietUntil = performance.now() + 250; }
       })(s0);
     };
@@ -188,8 +215,8 @@
       held = true;
       // caught between two stops (say, coming back up from below): settle on the next one in that direction,
       // or back on the one just passed if it is only a little way behind
-      var raw = clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - innerHeight)) * N, f = raw - Math.floor(raw);
-      if (Math.abs(raw - Math.round(raw)) * (track.offsetHeight - innerHeight) / N > 2) { go(down ? (f < 0.3 ? Math.floor(raw) : Math.ceil(raw)) : (f > 0.7 ? Math.ceil(raw) : Math.floor(raw))); return; }
+      var raw = clamp((scrollY - track.offsetTop) / Math.max(1, track.offsetHeight - vh)) * N, f = raw - Math.floor(raw);
+      if (Math.abs(raw - Math.round(raw)) * (track.offsetHeight - vh) / N > 2) { go(down ? (f < 0.3 ? Math.floor(raw) : Math.ceil(raw)) : (f > 0.7 ? Math.ceil(raw) : Math.floor(raw))); return; }
       go(k + (down ? 1 : -1));
     }, { passive: false });
     // coming back up from the page below: land on the last stop rather than part-way
@@ -306,7 +333,9 @@
     var dpr = Math.min(window.devicePixelRatio || 1, 1.5);
     tc.width = Math.round(tc.clientWidth * dpr); tc.height = Math.round(tc.clientHeight * dpr); tg.viewport(0, 0, tc.width, tc.height);
   };
-  window.addEventListener('resize', tresize); tresize();
+  // redraw at the canvas's own size whenever it changes (the stage can change height without the window resizing)
+  if (window.ResizeObserver) new ResizeObserver(tresize).observe(tc); else window.addEventListener('resize', tresize);
+  tresize();
   var last = performance.now(), zpos = 0;
   var tframe = function (now) {
     var dt = Math.min(0.05, (now - last) / 1000); last = now;
