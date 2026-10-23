@@ -41,9 +41,12 @@ struct ReviewSheet: View {
         if toTrash > 0 { return "Move \(Fmt.size(toTrash)) to the Trash" }
         return "Nothing to free"
     }
+    /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
-        guard freedNow > 0, toTrash > 0 else { return nil }
-        return "Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back."
+        guard freedNow > 0 else { return nil }
+        let removed = "Caches and build files are removed straight away and can't be put back. They rebuild on their own when needed."
+        guard toTrash > 0 else { return removed }
+        return removed + " Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back."
     }
 
     /// The review sheet from the reference (night-screens-v2.html, s2): eyebrow,

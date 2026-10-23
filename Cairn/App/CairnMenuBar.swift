@@ -417,9 +417,10 @@ enum MenuAvailableSpace {
             outline.lineWidth = 1.3
             (nearlyFull ? NSColor.labelColor : NSColor.black).setStroke()
             outline.stroke()
-            // Fill rises from the bottom, inside a 1.5 pt margin.
+            // Fill rises from the bottom, inside a 1.5 pt margin. It tops out at 85%
+            // so even a full disk keeps a sliver of headroom and still reads as a gauge.
             let inner = NSRect(x: 3.5, y: 4, width: 11, height: 10)
-            let height = max(1.6, inner.height * used)
+            let height = max(1.6, inner.height * 0.85 * used)
             let fill = NSBezierPath(roundedRect: NSRect(x: inner.minX, y: inner.maxY - height, width: inner.width, height: height),
                                     xRadius: 1.4, yRadius: 1.4)
             (nearlyFull ? NSColor.systemOrange : NSColor.black.withAlphaComponent(0.85)).setFill()
