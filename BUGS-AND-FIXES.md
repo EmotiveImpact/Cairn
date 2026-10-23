@@ -6,7 +6,7 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 ---
 
-## Where things stand, 22 October 2026
+## Where things stand, 23 October 2026
 
 A plain summary of what is wrong now, what has been fixed but not merged, and what is still to build. The detailed log from earlier passes follows underneath.
 
@@ -14,7 +14,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 
 | | Problem | What it means | Next step |
 | --- | --- | --- | --- |
-| 🟠 | **Freed space was over-reported.** The old lifetime counter said 90 GB freed; the receipts only show about 2.6 GB, and that went to the Trash rather than being freed. | Any "you have freed X" figure on `master` cannot be trusted. | Fixed in PR #5: figures now come from receipts and Trash is called Trash. Merge #5. The old counter is still stored and should be removed. |
+| 🟠 | **Freed space was over-reported.** The old lifetime counter said 90 GB freed; the receipts only show about 2.6 GB, and that went to the Trash rather than being freed. | Any "you have freed X" figure on `master` cannot be trusted. | Fixed (PR #5, merged): figures come from receipts and Trash is called Trash. The old counter is still stored and should be removed. |
 | 🟡 | **The command line refused to run while the app was open.** | AI tools and scripts could not even read the status. | Fixed in PR #5 for `status`, `scan`, `categories` and `help`. `clean` still needs the app closed, on purpose. |
 | 🟡 | **Claude Code and Codex point at a test build** in `~/imagetemp` on Edem's Mac. | They stop working if that folder is cleared. | PR #5 makes Connect prefer `/Applications/Cairn.app`. Cairn is not installed there yet, so this needs an installed build and then Reconnect in Settings › AI tools. |
 | 🟡 | **The AI tool link was slow** (7.5 minutes for a full answer on a busy Mac). | AI tools time out or give up. | Fixed in PR #5 with a 10-minute scan memory and answers from the last scan. The first scan is still slow (about 5.5 minutes). |
@@ -38,9 +38,12 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 
 | Date | Fix | Where |
 | --- | --- | --- |
-| 22 Oct | Freed space is read from receipts; Trash is no longer counted as freed; scan age shown correctly; "0 KB" instead of "Zero KB". | PR #5 (open) |
-| 22 Oct | Read-only commands run beside the app; scan splits Ready from Needs you; AI tool answers cached. | PR #5 (open) |
-| 22 Oct | Pages no longer slide when switching; numbers count cleanly instead of rolling digits. | PR #5 (open) |
+| 23 Oct | A ready clean removed a running test build's `.build` folder and the review didn't say caches are deleted outright. Cleaning now needs a click, the review says what can't be put back, and Cairn skips its own app, folders in use and fresh builds. | PR #5 (merged 23 Oct) |
+| 23 Oct | Items found by two scanners were counted twice (about 1 GB on the test Mac). | PR #5 (merged 23 Oct) |
+| 23 Oct | Home's scan number counted everything found, then dropped to the ready amount at the end. It now counts only ready space, with "to look through" shown separately. | PR #5 (merged 23 Oct) |
+| 22 Oct | Freed space is read from receipts; Trash is no longer counted as freed; scan age shown correctly; "0 KB" instead of "Zero KB". | PR #5 (merged 23 Oct) |
+| 22 Oct | Read-only commands run beside the app; scan splits Ready from Needs you; AI tool answers cached. | PR #5 (merged 23 Oct) |
+| 22 Oct | Pages no longer slide when switching; numbers count cleanly instead of rolling digits. | PR #5 (merged 23 Oct) |
 | 21 Oct | Cairn now actually frees space: deletes rebuildable caches, empties the Trash and runs each tool's own clean. Before this it only moved things to the Trash. | PR #1 (merged) |
 | 21 Oct | Rebuildable caches, build output and `node_modules` are no longer refused, while AI chats, personal files, iCloud, Mail, Keychains, `.git` and `.ssh` stay protected. | PR #1 (merged) |
 | 21 Oct | Fixed CI workflow quoting; relocation records now change only inside their own task. | PR #2 (merged) |

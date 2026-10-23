@@ -6,18 +6,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 ## Waiting to be merged
 
-These are finished or nearly finished in open pull requests. None of it is on `master` yet.
-
-### Night look and honest numbers (PR #5)
-
-- **New look across the whole app.** A calm dark "Night" style with one soft ice-blue accent, replacing the stones. Home, Clean, Review, Projects, Activity, Files, Apps, Mac health, Settings and External storage were all rebuilt to the approved Night screens.
-- **Home** shows the space ready to free, the free space graph (brought back, with a dotted forecast line), a This Mac bar, what grew, AI coding tools with their logos and a "Connect" link, and an SSD pill when a drive is plugged in.
-- **Calmer motion.** Screens switch without sliding, sections fade in without moving anything else, and the big number counts up cleanly.
-- **Done screen** sits beside the sidebar instead of in a pop-up, says where the space went, and can empty that clean's items from the Trash. Past receipts open as their own page.
-- **Honest reporting.** `cairn status` and the AI tool link now read freed space from cleanup receipts, and say "moved to the Trash" when the space has not actually been freed yet. The scan shows "Ready to free" separately from things that need you.
-- **The command line works while the app is open** for read-only commands (`status`, `scan`, `categories`, `help`). Cleaning still needs the app closed.
-- **Faster answers for AI tools.** Cairn remembers each scan for ten minutes within a session and can answer straight from the last scan.
-- **Connecting AI tools prefers the installed app** in `/Applications` over a test build.
+These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
 ### AI tools can clean (PR #7)
 
@@ -30,6 +19,33 @@ These are finished or nearly finished in open pull requests. None of it is on `m
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
+
+## 23 October 2026
+
+### Night look and honest numbers (PR #5)
+
+- **New look across the whole app.** A calm dark "Night" style with one soft ice-blue accent, replacing the stones. Home, Clean, Review, Projects, Activity, Files, Apps, Mac health, Settings and External storage were all rebuilt to the approved Night screens.
+- **Home** shows the space ready to free, the free space graph (brought back, with a dotted forecast line), a This Mac bar, what grew, AI coding tools with their logos and a "Connect" link, and an SSD pill when a drive is plugged in.
+- **Calmer motion.** Screens switch without sliding, sections fade in without moving anything else, and the big number counts up cleanly.
+- **Done screen** sits beside the sidebar instead of in a pop-up, says where the space went, and can empty that clean's items from the Trash. Past receipts open as their own page.
+- **Honest reporting.** `cairn status` and the AI tool link now read freed space from cleanup receipts, and say "moved to the Trash" when the space has not actually been freed yet. The scan shows "Ready to free" separately from things that need you.
+- **The command line works while the app is open** for read-only commands (`status`, `scan`, `categories`, `help`). Cleaning still needs the app closed.
+- **Faster answers for AI tools.** Cairn remembers each scan for ten minutes within a session and can answer straight from the last scan.
+- **Connecting AI tools prefers the installed app** in `/Applications` over a test build.
+- **Two numbers on Home.** The big number is only what is ready to free in one click, and it counts live during a scan. A second line says how much more there is to look through yourself, and opens the new **Look through** page.
+- **Look through** groups everything else Cairn found (videos, archives, installers, old downloads, app leftovers, project folders) with one tick per group. A group tick only takes plain files that go to the Trash; anything fragile is picked one by one.
+- **Nothing counted twice.** A file that two scanners both find (an installer that is also an old download) is listed once, in the app, the command line and the AI tool link.
+- **Sidebar dots** rise higher the more space is ready to free, appear slowly, and settle down after a clean. **Projects** numbers now match their button.
+- **Small touches:** the scanning line shimmers, the menu bar icon is a disk gauge (amber when nearly full) and builds the Cairn stone by stone during a scan, the free-space bar glows over freed space, an optional finish chime (off by default), and a friendly line on each receipt.
+- **15 AI coding tools** can be connected, up from 7, including Cline, Roo Code, Kiro, Amazon Q, Junie, LM Studio, Qwen Code and Amp.
+- **Full-width layout:** the content runs to the window edge with a flat sidebar.
+- **Safer cleaning:** cleaning needs a click (Return no longer triggers it), the review says plainly that caches and build files can't be put back, and Cairn skips its own app, folders a running program uses, and build folders changed in the last 15 minutes.
+
+### Cleaning coverage (PR #10)
+
+- More one-click items, kept honest: idle Python environments, older Android NDKs, and installers for apps already installed (these go to the Trash, never straight to deletion).
+- Git clean-up shows the estimated saving rather than the whole `.git` size.
+- New finds: old simulator runtimes, extra Xcode copies, OrbStack and Colima disks, Mail attachment copies, `.pub-cache` and Conda packages, and leftovers from apps removed with Cairn.
 
 ## 21 October 2026
 
