@@ -156,6 +156,7 @@ struct AppShell: View {
         .background(Brand.chrome)
         .sheet(isPresented: $showReview, onDismiss: {
             goalReviewPending = false; reviewedGoalPlan = nil
+            store.endScopedReview()
             if let pendingSummary { celebration = CompletionPresentation(summary: pendingSummary); self.pendingSummary = nil }
         }) {
             ReviewSheet(store: store, proEnabled: proEnabled, goalPlan: goalReviewPending ? reviewedGoalPlan : nil,
@@ -595,6 +596,7 @@ private struct SidebarDisclosure: View {
     @State private var manuallyExpanded = false
     @State private var occupiesSpace = false
     @State private var visible = false
+    @State private var hovering = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -609,7 +611,12 @@ private struct SidebarDisclosure: View {
                     Spacer(minLength: 0)
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
-                }.padding(.horizontal, 10).frame(height: 33).contentShape(Rectangle())
+                }.padding(.horizontal, 10).frame(height: 33)
+                .background {
+                    if hovering { RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04)) }
+                }
+                .onHover { hovering = $0 }
+                .contentShape(Rectangle())
             }
             .buttonStyle(SidebarButtonStyle())
             .focusEffectDisabled(!AppSettings.shared.showSidebarFocus)
@@ -673,6 +680,7 @@ private struct NavRow: View {
     var label: String? = nil
     /// Pages reached from this row that should keep it highlighted.
     var also: [NavSection] = []
+    @State private var hovering = false
 
     var body: some View {
         let selected = section == item || also.contains(section)
@@ -699,8 +707,11 @@ private struct NavRow: View {
             .background {
                 if selected && !child {
                     RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Brand.surfaceSubtle)
+                } else if hovering {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04))
                 }
             }
+            .onHover { hovering = $0 }
             .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
         }

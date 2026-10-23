@@ -210,9 +210,7 @@ struct ProjectsWorkspace: View {
     /// Review shows only this page's picks, so its total matches the button.
     private func keepOnlyProjects() {
         let mine = Set(projects.flatMap(\.rebuildable).map(\.id))
-        let picked = Set(store.selectedItems().map(\.id)).intersection(mine)
-        store.clearSelection()
-        store.select { item, _ in picked.contains(item.id) }
+        store.beginScopedReview(Set(store.selectedItems().map(\.id)).intersection(mine))
     }
 
     // MARK: - Indexing

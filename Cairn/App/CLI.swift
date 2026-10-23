@@ -250,7 +250,7 @@ enum CLI {
             semaphore.signal()
         }
         semaphore.wait()
-        return sink.items
+        return PathDedupe.apply(sink.items)
     }
 
     private final class Sink: @unchecked Sendable {

@@ -255,7 +255,7 @@ enum MCPServer {
             items += entry.items
             oldest = min(oldest ?? entry.date, entry.date)
         }
-        return (items, oldest.map { Int(Date().timeIntervalSince($0)) } ?? 0)
+        return (PathDedupe.apply(items), oldest.map { Int(Date().timeIntervalSince($0)) } ?? 0)
     }
 
     // MARK: - Encoding

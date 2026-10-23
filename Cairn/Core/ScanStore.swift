@@ -164,7 +164,9 @@ final class ScanStore {
     private var bucketIndex: [String: Int] = [:]
     /// Every path already listed in this scan. Scanners overlap (an installer is also an
     /// old download; a Chrome cache sits inside the Google cache), so each byte is counted once.
-    private var listedPaths: Set<String> = []
+    private var dedupe = PathDedupe()
+    /// The selection to put back when a review that showed only part of it closes.
+    private var selectionBeforeScopedReview: Set<UUID>?
 
     // Derived
     var grandTotal: Int64 { buckets.reduce(0) { $0 + $1.totalSize } }
@@ -421,7 +423,7 @@ final class ScanStore {
         // Seed buckets in registry order so the sidebar is stable while scanning.
         buckets = scanners.map { Bucket(info: $0.info) }
         bucketIndex = Dictionary(uniqueKeysWithValues: buckets.enumerated().map { ($1.id, $0) })
-        listedPaths = []
+        dedupe = PathDedupe()
         activeComparisonScope = comparisonScope()
         phase = .scanning
         progressText = "Waiting for other disk work to finish…"
@@ -520,23 +522,10 @@ final class ScanStore {
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
         guard let i = bucketIndex[item.categoryID] else { return }
-        let path = item.resolvedURL.standardizedFileURL.path
-        // Already listed, or inside a folder that is: the first listing keeps it.
-        var parent = path
-        while !parent.isEmpty, parent != "/" {
-            if listedPaths.contains(parent) { return }
-            parent = (parent as NSString).deletingLastPathComponent
+        guard case .keep(let replaced) = dedupe.admit(item) else { return }
+        if !replaced.isEmpty {
+            for b in buckets.indices { buckets[b].removeItems { replaced.contains(PathDedupe.key($0)) } }
         }
-        // A folder arriving after things inside it replaces them, so they are not counted twice.
-        let prefix = path + "/"
-        let inside = listedPaths.filter { $0.hasPrefix(prefix) }
-        if !inside.isEmpty {
-            for b in buckets.indices {
-                buckets[b].removeItems { inside.contains($0.resolvedURL.standardizedFileURL.path) }
-            }
-            listedPaths.subtract(inside)
-        }
-        listedPaths.insert(path)
         buckets[i].append(item)
     }
 
@@ -594,6 +583,19 @@ final class ScanStore {
     }
 
     // MARK: - Space Missions selection
+
+    /// Review only `ids`; `endScopedReview()` puts the earlier selection back.
+    func beginScopedReview(_ ids: Set<UUID>) {
+        selectionBeforeScopedReview = Set(selectedItems().map(\.id))
+        clearSelection()
+        select { item, _ in ids.contains(item.id) }
+    }
+    func endScopedReview() {
+        guard let before = selectionBeforeScopedReview else { return }
+        selectionBeforeScopedReview = nil
+        clearSelection()
+        select { item, _ in before.contains(item.id) }
+    }
 
     func clearSelection() {
         for b in buckets.indices {
