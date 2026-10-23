@@ -15,8 +15,10 @@ enum MCPServer {
     Cairn measures disk usage on this Mac and knows which developer output can be rebuilt. \
     Use storage_status for available space, list_projects for repositories and their rebuildable \
     build output, and find_reclaimable for caches by category. Cairn never deletes from here: \
-    to free space, call open_cairn and tell the user what to review. Scans read file sizes only, \
-    and a whole-machine scan can take a minute, so pass a category when you can.
+    to free space, call open_cairn and tell the user what to review. Scans read file sizes only. \
+    find_reclaimable with no category answers at once from Cairn's last scan when it is under a day old; \
+    a fresh whole-machine scan can take several minutes, and results are kept for ten minutes, \
+    so pass a category when you can.
     """
 
     static func run() {
@@ -98,6 +100,7 @@ enum MCPServer {
                 "type": "object",
                 "properties": obj([
                     "category": obj(["type": "string", "description": "One scanner id, for example xcode, docker, dev-caches or browser-caches."]),
+                    "fresh": obj(["type": "boolean", "description": "Rescan now instead of using Cairn's last scan from today. A full rescan can take several minutes."]),
                     "limit": obj(["type": "integer", "minimum": 1, "maximum": 200, "description": "Maximum items to return (default 25)."]),
                 ]),
             ]),
@@ -125,16 +128,22 @@ enum MCPServer {
         case "storage_status":
             let free = Volumes.homeFree()
             let total = DeviceInfo.totalCapacity
+            let cleans = CLI.recordedTotals()
             return .success([
                 "availableBytes": free, "available": Fmt.size(free),
                 "totalBytes": total, "total": Fmt.size(total),
                 "trend": StorageHistory.summary(currentFree: free).text,
+                "freedByCairnBytes": cleans?.freedBytes ?? 0,
+                "movedToTrashByCairnBytes": cleans?.movedToTrashBytes ?? 0,
+                "cleans": cleans?.cleans ?? 0,
+                "cleanHistory": cleans.map(CLI.describe) ?? "No cleans recorded yet",
             ])
 
         case "list_projects":
             let limit = boundedLimit(arguments["limit"])
             let minimumIdle = max(0, arguments["minIdleDays"] as? Int ?? 0)
-            let projects = ProjectIndex.build(from: CLI.collect(category: ProjectIndex.categoryID))
+            let measured = measure(ProjectIndex.categoryID)
+            let projects = ProjectIndex.build(from: measured.items)
                 .filter { minimumIdle == 0 || ($0.idleDays() ?? 0) >= minimumIdle }
                 .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
             return .success([
@@ -142,6 +151,7 @@ enum MCPServer {
                 "rebuildableBytes": projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes },
                 "projects": projects.prefix(limit).map(describeProject),
                 "nextStep": "To free this space, call open_cairn with section projects and ask the user to review the selection.",
+                "measuredSecondsAgo": measured.age,
             ])
 
         case "find_reclaimable":
@@ -150,16 +160,27 @@ enum MCPServer {
             if let category, !ScannerRegistry.all().contains(where: { $0.info.id == category }) {
                 return .failure(ToolError(message: "Unknown category '\(category)'. Call list_categories for valid ids."))
             }
-            let items = CLI.collect(category: category).sorted { $0.allocatedSize > $1.allocatedSize }
+            if category == nil, arguments["fresh"] as? Bool != true, cache.isEmpty,
+               let snapshot = ScanStore.savedSnapshot(), Date().timeIntervalSince(snapshot.date) < 86_400 {
+                return .success(summarise(snapshot))
+            }
+            let measured = measure(category)
+            let items = measured.items.sorted { $0.allocatedSize > $1.allocatedSize }
+            func bytes(_ list: [ScanItem]) -> Int64 { list.reduce(Int64(0)) { $0 + $1.allocatedSize } }
             let byCategory = Dictionary(grouping: items, by: \.categoryID)
-                .map { ["category": $0.key, "bytes": $0.value.reduce(Int64(0)) { $0 + $1.allocatedSize }, "items": $0.value.count] as [String: Any] }
+                .map { ["category": $0.key, "bytes": bytes($0.value), "readyBytes": bytes($0.value.filter(CLI.isReady)),
+                        "items": $0.value.count] as [String: Any] }
                 .sorted { ($0["bytes"] as? Int64 ?? 0) > ($1["bytes"] as? Int64 ?? 0) }
+            let ready = bytes(items.filter(CLI.isReady))
             return .success([
-                "totalBytes": items.reduce(Int64(0)) { $0 + $1.allocatedSize },
+                "readyBytes": ready, "ready": Fmt.size(ready),
+                "needsUserBytes": bytes(items) - ready,
+                "totalBytes": bytes(items),
                 "itemCount": items.count,
                 "categories": byCategory,
                 "items": items.prefix(limit).map(describeItem),
-                "note": "Sizes are measured file sizes, not space already freed. Removal happens in Cairn after the user reviews it.",
+                "measuredSecondsAgo": measured.age,
+                "note": "readyBytes is what Cairn can free once the user reviews it: safe items their tools rebuild. The rest are personal files or advice the user must decide on, so never present them as free space. Sizes are measured file sizes, not space already freed.",
             ])
 
         case "list_categories":
@@ -186,6 +207,55 @@ enum MCPServer {
         default:
             return .failure(ToolError(message: "Unknown tool '\(name)'."))
         }
+    }
+
+    // MARK: - Measuring
+
+    /// Totals from the app's last scan, returned instantly. Item lists need a
+    /// category or `fresh`, which scan now.
+    private static func summarise(_ snapshot: ScanStore.Snapshot) -> [String: Any] {
+        let buckets = snapshot.buckets.filter { $0.bytes > 0 }.sorted { $0.bytes > $1.bytes }
+        let total = buckets.reduce(Int64(0)) { $0 + $1.bytes }
+        let known = buckets.allSatisfy { $0.readyBytes != nil }
+        let ready = buckets.reduce(Int64(0)) { $0 + ($1.readyBytes ?? 0) }
+        var result: [String: Any] = [
+            "source": "Cairn's last scan",
+            "measuredSecondsAgo": Int(Date().timeIntervalSince(snapshot.date)),
+            "totalBytes": total,
+            "itemCount": buckets.reduce(0) { $0 + $1.count },
+            "categories": buckets.map { bucket -> [String: Any] in
+                var entry: [String: Any] = ["category": bucket.id, "title": bucket.title, "bytes": bucket.bytes, "items": bucket.count]
+                if let ready = bucket.readyBytes { entry["readyBytes"] = ready }
+                return entry
+            },
+            "note": "Totals from Cairn's last scan, without rescanning. Call again with a category for its items, or with fresh: true to rescan everything. readyBytes is what Cairn can free once the user reviews it; never present the rest as free space.",
+        ]
+        if known { result["readyBytes"] = ready; result["ready"] = Fmt.size(ready); result["needsUserBytes"] = total - ready }
+        return result
+    }
+
+    /// Scans are slow (a full project sweep can take minutes), so results are
+    /// kept per scanner for ten minutes within one agent session. A later call
+    /// rescans only the scanners whose results have gone stale.
+    private static var cache: [String: (date: Date, items: [ScanItem])] = [:]
+    private static let cacheLifetime: TimeInterval = 600
+
+    private static func measure(_ category: String?) -> (items: [ScanItem], age: Int) {
+        let ids = category.map { [$0] } ?? ScannerRegistry.all().map(\.info.id)
+        var items: [ScanItem] = []
+        var oldest: Date?
+        for id in ids {
+            let entry: (date: Date, items: [ScanItem])
+            if let hit = cache[id], Date().timeIntervalSince(hit.date) < cacheLifetime {
+                entry = hit
+            } else {
+                entry = (date: Date(), items: CLI.collect(category: id))
+                cache[id] = entry
+            }
+            items += entry.items
+            oldest = min(oldest ?? entry.date, entry.date)
+        }
+        return (PathDedupe.apply(items), oldest.map { Int(Date().timeIntervalSince($0)) } ?? 0)
     }
 
     // MARK: - Encoding

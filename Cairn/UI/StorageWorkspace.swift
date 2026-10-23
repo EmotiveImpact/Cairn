@@ -29,48 +29,46 @@ struct StorageWorkspace: View {
     private let guides = ["Xcode build output", "npm cache", "Docker disk image", "Cloud & remote machines", "Sessions, databases & swap"]
     private let areas = ["Models & archives", "Build output", "Finished exports", "Conversations & source"]
 
+    private var title: String {
+        guard let drive else { return externalDrives.isEmpty ? "No drive plugged in" : "Choose a drive" }
+        return "\(Fmt.size(max(0, drive.available))) free on \(drive.name)"
+    }
+    private var visibleAreas: [String] {
+        areas.filter { search.isEmpty || ($0 + areaSubtitle($0)).localizedCaseInsensitiveContains(search) }
+    }
+
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text("Where your work lives").font(.system(size: 28, weight: .semibold))
-                        Text("See your drives and choose the right next step for your files.").font(.system(size: 13)).foregroundStyle(Brand.textMuted)
+        NightPage(eyebrow: "Files · external storage", title: title,
+                  subtitle: "Move big things you rarely open to a drive, and keep checked copies of finished work.") {
+            Button("Transfers") { showTransfers = true }
+                .buttonStyle(ControlPanelButtonStyle(size: .small))
+            Button("Refresh") { Task { await store.refresh() } }
+                .buttonStyle(ControlPanelButtonStyle(size: .small)).disabled(preview)
+        } content: {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    driveStrip
+                    LazyVStack(alignment: .leading, spacing: 0) {
+                        ForEach(visibleAreas, id: \.self) { area in areaRow(area) }
+                        if visibleAreas.isEmpty {
+                            NightEmpty(title: "No matches", message: "Try another search.")
+                        }
                     }
-                    Spacer()
-                    VStack(alignment: .trailing, spacing: 10) {
-                        Text(Date(), format: .dateTime.day().month(.abbreviated).year()).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                        HStack(spacing: 12) {
-                            Button("Transfers") { showTransfers = true }.buttonStyle(.plain)
-                            Button { Task { await store.refresh() } } label: { Image(systemName: "arrow.clockwise") }.buttonStyle(.plain).disabled(preview).help("Refresh drives").accessibilityLabel("Refresh drives")
-                        }.font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                    detail
+                        .padding(.top, 6)
+                    if !localMessage.isEmpty || !store.message.isEmpty {
+                        Text(localMessage.isEmpty ? store.message : localMessage).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).textSelection(.enabled)
                     }
                 }
-                driveStrip
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Data").frame(maxWidth: .infinity, alignment: .leading)
-                        Text("Location").frame(width: 190, alignment: .leading)
-                        Text("Next step").frame(width: 175, alignment: .leading)
-                    }.font(.system(size: 12)).foregroundStyle(Brand.textMuted).padding(.horizontal, 19).frame(height: 35)
-                    ForEach(areas.filter { search.isEmpty || ($0 + areaSubtitle($0)).localizedCaseInsensitiveContains(search) }, id: \.self) { area in areaRow(area) }
-                    if !search.isEmpty && !areas.contains(where: { ($0 + areaSubtitle($0)).localizedCaseInsensitiveContains(search) }) {
-                        Text("No storage categories match your search.").foregroundStyle(Brand.textMuted).padding(20)
-                    }
-                    Rectangle().fill(Brand.separator).frame(height: 0.5).padding(.horizontal, 18).padding(.top, 14)
-                    detail.padding(20)
-                }
-                if !localMessage.isEmpty || !store.message.isEmpty {
-                    Text(localMessage.isEmpty ? store.message : localMessage).font(.system(size: 12)).foregroundStyle(Brand.textSecondary).textSelection(.enabled)
-                }
-            }.padding(30)
-        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
+            }
+        }
+        .background(Brand.background)
         .task { if !preview { await store.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await store.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await store.refresh() } } }
         .sheet(isPresented: $confirm) {
             if let source, let plannedDrive {
-                WorkspaceConfirmation(title: "Copy and verify this export?", explanation: "Copy the file content to \(plannedDrive.name). The original stays in place. This does not free internal space or create a versioned backup. Close any application still writing this export. Extended attributes and resource forks are not copied; archive files that require them.", entries: [source.path, "Destination: \(plannedDrive.url.path)", "Drive identity: \(plannedDrive.uuid)"], actionTitle: "Copy & verify") {
+                WorkspaceConfirmation(title: "Copy and check this file?", explanation: "Copy it to \(plannedDrive.name). The original stays where it is, so this does not free space on your Mac, and it is not a versioned backup. Close any app still writing it. Extended attributes and resource forks are not copied.", entries: [source.path, "Destination: \(plannedDrive.url.path)", "Drive identity: \(plannedDrive.uuid)"], actionTitle: "Copy and check") {
                     guard !preview else { return }
                     store.start(source: source, drive: plannedDrive); showTransfers = true
                 }
@@ -81,103 +79,109 @@ struct StorageWorkspace: View {
             CairnDialog(title: item.name, subtitle: "Drive information") {
                 ScrollView { VStack(alignment: .leading, spacing: 18) {
                 WorkspaceDetail(title: "Drive identity", text: item.uuid.isEmpty ? "Unavailable" : item.uuid)
-                WorkspaceDetail(title: "Format & protection", text: "\(item.format.uppercased()) · \(item.encrypted ? "encryption reported by macOS" : "encryption not confirmed") · \(item.writable ? "writable" : "read-only or unknown")")
+                WorkspaceDetail(title: "Format and protection", text: "\(item.format.uppercased()) · \(item.encrypted ? "encrypted" : "encryption not confirmed") · \(item.writable ? "writable" : "read-only or unknown")")
                 WorkspaceDetail(title: "Location", text: item.url.path)
-                WorkspaceDetail(title: "Available capacity", text: "\(Fmt.size(item.available)) of \(Fmt.size(item.capacity)). Includes space macOS may reclaim.")
-                WorkspaceDetail(title: "Export readiness", text: item.exportStatus)
+                WorkspaceDetail(title: "Free space", text: "\(Fmt.size(item.available)) of \(Fmt.size(item.capacity)). Includes space macOS can reclaim.")
+                WorkspaceDetail(title: "Ready for copies", text: item.exportStatus)
                 } }
             } actions: { Button("Done") { inspectedDrive = nil }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction) }
         }
     }
     private var driveStrip: some View {
-        HStack(spacing: 20) {
+        HStack(alignment: .top, spacing: 28) {
             if let internalDrive = drives.first(where: { !$0.external }) {
-                Button { inspectedDrive = internalDrive } label: {
-                    driveSummary(internalDrive, icon: "laptopcomputer")
-                }.buttonStyle(.plain).frame(maxWidth: .infinity, alignment: .leading)
-            } else { driveLabel("This Mac", subtitle: "Reading capacity…", icon: "laptopcomputer").frame(maxWidth: .infinity, alignment: .leading) }
-            Rectangle().fill(Brand.separator).frame(width: 0.5, height: 80)
-            HStack(spacing: 8) {
-                if let drive {
-                    Button { inspectedDrive = drive } label: {
-                        driveSummary(drive, icon: "externaldrive")
-                    }.buttonStyle(.plain)
-                    Menu {
-                        ForEach(externalDrives) { item in Button(item.name) { focused = item.id } }
-                    } label: { Image(systemName: "chevron.down") }
-                        .menuStyle(.borderlessButton).frame(width: 18).accessibilityLabel("Choose destination drive")
-                } else {
-                    VStack(alignment: .leading, spacing: 8) {
-                        driveLabel(focused == nil ? "No external drive" : "Selected drive disconnected", subtitle: "Reconnect it or choose another drive", icon: "externaldrive")
-                        if !externalDrives.isEmpty {
-                            Menu("Choose connected drive") { ForEach(externalDrives) { item in Button(item.name) { focused = item.id } } }
-                        }
+                Button { inspectedDrive = internalDrive } label: { driveSummary(internalDrive) }
+                    .buttonStyle(.plain)
+            } else {
+                driveLabel("This Mac", subtitle: "Reading free space…")
+            }
+            if let drive {
+                HStack(alignment: .top, spacing: 6) {
+                    Button { inspectedDrive = drive } label: { driveSummary(drive) }.buttonStyle(.plain)
+                    if externalDrives.count > 1 {
+                        Menu {
+                            ForEach(externalDrives) { item in Button(item.name) { focused = item.id } }
+                        } label: { Image(systemName: "chevron.down") }
+                            .menuStyle(.borderlessButton).frame(width: 18).accessibilityLabel("Choose drive")
                     }
                 }
-            }.frame(maxWidth: .infinity, alignment: .leading)
-        }.padding(.vertical, 12)
+            } else {
+                VStack(alignment: .leading, spacing: 8) {
+                    driveLabel(focused == nil ? "No external drive" : "That drive is unplugged", subtitle: "Plug one in to move or copy files to it")
+                    if !externalDrives.isEmpty {
+                        Menu("Choose a drive") { ForEach(externalDrives) { item in Button(item.name) { focused = item.id } } }
+                            .fixedSize()
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
     }
-    private func driveSummary(_ item: StorageDrive, icon: String) -> some View {
+    /// Name, a 6 pt bar of what is used, then free and total, as in the reference before/after bars.
+    private func driveSummary(_ item: StorageDrive) -> some View {
         let available = min(max(item.available, 0), max(item.capacity, 0))
         let used = item.capacity > 0 ? 1 - Double(available) / Double(item.capacity) : 0
-        return VStack(alignment: .leading, spacing: 12) {
-            driveLabel(item.name, subtitle: "\(item.external ? "External" : "Internal") · \(item.encrypted ? "Encrypted" : "Encryption unconfirmed")", icon: icon)
+        return VStack(alignment: .leading, spacing: 9) {
+            driveLabel(item.name, subtitle: "\(item.external ? "External" : "This Mac") · \(item.encrypted ? "encrypted" : "encryption not confirmed")")
             if item.capacity > 0 {
                 GeometryReader { geometry in
-                    Capsule().fill(Brand.surfaceSubtle)
-                    Capsule().fill(used > 0.95 ? Brand.amber : Brand.blue).frame(width: geometry.size.width * used)
-                }.frame(height: 5).accessibilityLabel("\(Int(used * 100)) percent used")
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Brand.wash(0.07))
+                        Capsule().fill(used > 0.95 ? Brand.amber : Brand.wash(0.28)).frame(width: geometry.size.width * used)
+                    }
+                }.frame(height: 6).accessibilityLabel("\(Int(used * 100)) percent used")
                 HStack {
-                    Text("\(Fmt.size(available)) available")
+                    Text("\(Fmt.size(available)) free").foregroundStyle(Brand.textPrimary).fontWeight(.medium)
                     Spacer(minLength: 4)
-                    Text(Fmt.size(item.capacity)).foregroundStyle(Brand.textMuted)
-                }.font(.system(size: 11)).monospacedDigit()
+                    Text("of \(Fmt.size(item.capacity))").foregroundStyle(Brand.textMuted)
+                }.font(.system(size: 12.5)).monospacedDigit()
             }
-        }.frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
     }
-    private func driveLabel(_ title: String, subtitle: String, icon: String) -> some View {
-        HStack(spacing: 14) {
-            Image(systemName: icon).font(.system(size: 29, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 36)
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.system(size: 14, weight: .regular)).lineLimit(1)
-                Text(subtitle).font(.system(size: 11)).foregroundStyle(Brand.textMuted).lineLimit(2)
-            }
-        }.frame(maxWidth: .infinity, alignment: .leading).contentShape(Rectangle())
+    private func driveLabel(_ title: String, subtitle: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+            Text(subtitle).font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
+    /// What kind of data | what Cairn offers for it, as a reference row.
     private func areaRow(_ area: String) -> some View {
         Button { selected = area } label: {
-            HStack(spacing: 0) {
-                HStack(spacing: 14) {
-                    Image(systemName: areaIcon(area)).font(.system(size: 23, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 30)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text(area).font(.system(size: 13, weight: .regular))
-                        Text(areaSubtitle(area)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+            HStack(spacing: 14) {
+                HStack(spacing: 10) {
+                    Image(systemName: areaIcon(area)).font(.system(size: 15, weight: .light)).foregroundStyle(Brand.textSecondary)
+                        .frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(area).font(.system(size: 13, weight: .medium))
+                        Text(areaSubtitle(area)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }
-                }.frame(maxWidth: .infinity, alignment: .leading)
-                VStack(alignment: .leading, spacing: 5) {
-                    Label(area == "Models & archives" ? "Moved to your drive" : area == "Conversations & source" ? "Protected locations" : (area == "Finished exports" ? "Choose a local file" : "Tool-managed paths"), systemImage: area == "Conversations & source" ? "lock.shield" : area == "Models & archives" ? "externaldrive" : "laptopcomputer")
-                        .font(.system(size: 12))
-                    Text(area == "Models & archives" ? "Link left behind" : area == "Build output" ? "Check in the owning tool" : (area == "Finished exports" ? "Original kept in place" : "No relocation offered"))
-                        .font(.system(size: 10.5)).foregroundStyle(Brand.textMuted)
-                }.frame(width: 190, alignment: .leading)
-                HStack {
-                    Text(area == "Models & archives" ? "Move and link" : area == "Build output" ? "Supported-path guidance" : (area == "Finished exports" ? "Copy and verify" : "Keep protected")).font(.system(size: 12))
-                    Spacer(minLength: 4)
-                    Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(Brand.textMuted)
-                }.frame(width: 175, alignment: .leading)
-            }.padding(.horizontal, 19).frame(height: 58).contentShape(Rectangle())
-        }.buttonStyle(.plain).background(selected == area ? Brand.wash(0.045) : Color.clear)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Text(area == "Models & archives" ? "Moves to your drive, link left behind" : area == "Build output" ? "Changed in the tool itself"
+                     : area == "Finished exports" ? "Original stays on your Mac" : "Never moved")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
+                    .frame(width: 230, alignment: .leading)
+                NightPill(text: area == "Models & archives" ? "Move and link" : area == "Build output" ? "How to"
+                          : area == "Finished exports" ? "Copy and check" : "Kept safe",
+                          tone: area == "Models & archives" || area == "Finished exports" ? .ok : .neutral)
+                    .frame(width: 120, alignment: .leading)
+            }
+            .nightRow()
+            .background(selected == area ? Brand.wash(0.035) : Color.clear)
+        }
+        .buttonStyle(.plain)
     }
     @ViewBuilder private var detail: some View {
         if selected == "Models & archives" {
             OffloadPanel(drive: drive)
         } else if selected == "Finished exports" {
-            HStack(alignment: .top, spacing: 28) {
-                Image(systemName: "folder").font(.system(size: 31, weight: .light)).foregroundStyle(Brand.textSecondary)
+            HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 15) {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("Finished exports").font(.system(size: 18, weight: .regular))
-                        Text("A verified copy, with the original kept.").font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                        Text("Finished exports").font(.system(size: 15, weight: .medium))
+                        Text("A checked copy on your drive, with the original kept.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     }
                     HStack(alignment: .top, spacing: 8) {
                         copyStep("Choose file", active: true)
@@ -210,7 +214,7 @@ struct StorageWorkspace: View {
         } else if selected == "Build output" {
             VStack(alignment: .leading, spacing: 14) {
                 HStack {
-                    Text("Supported-path guidance").font(.system(size: 17, weight: .regular))
+                    Text("How to move build output").font(.system(size: 15, weight: .medium))
                     Spacer()
                     Picker("Tool", selection: $selectedGuide) { ForEach(guides, id: \.self) { Text($0) } }.frame(width: 220)
                 }
@@ -239,7 +243,7 @@ struct StorageWorkspace: View {
             }.frame(maxWidth: .infinity, alignment: .leading)
         } else {
             VStack(alignment: .leading, spacing: 14) {
-                Label("Keep your working state protected", systemImage: "lock.shield").font(.system(size: 17, weight: .regular))
+                Text("Your working state stays put").font(.system(size: 15, weight: .medium))
                 Text("Known conversation history, credentials, source repositories and recovery locations are excluded from cleanup. This screen does not move them.").font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
                 Text("Databases require application-aware backups. macOS manages swap. Ordinary folder synchronization is not a safe substitute for either.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             }.frame(maxWidth: .infinity, alignment: .leading)
@@ -247,7 +251,7 @@ struct StorageWorkspace: View {
     }
     private func copyStep(_ title: String, active: Bool = false) -> some View {
         HStack(spacing: 7) {
-            Image(systemName: active ? "circle.fill" : "circle").font(.system(size: 11)).foregroundStyle(active ? Brand.blue : Brand.textMuted)
+            Image(systemName: active ? "circle.fill" : "circle").font(.system(size: 11)).foregroundStyle(active ? Brand.room : Brand.textMuted)
             Text(title).font(.system(size: 11.5)).foregroundStyle(active ? Brand.textPrimary : Brand.textMuted).fixedSize()
         }
     }

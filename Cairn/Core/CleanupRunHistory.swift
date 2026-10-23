@@ -9,6 +9,36 @@ struct CleanupRun: Codable, Identifiable, Sendable {
     var kind: String? = nil
 }
 
+extension ScanStore.CleanSummary {
+    /// Space this clean gave back: what was deleted, emptied or cleaned by its
+    /// tool, or the measured rise in free space when that is larger. Files
+    /// still in the Trash are not counted.
+    var freedBytes: Int64 {
+        let gains = capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
+        return max(accounting.freedBytes, gains)
+    }
+}
+
+extension CleanupRunHistory {
+    /// What the receipts show across every clean: space measured free, and bytes
+    /// that only went to the Trash (that space returns once the Trash is emptied).
+    struct Totals: Sendable {
+        var cleans = 0
+        var freedBytes: Int64 = 0
+        var movedToTrashBytes: Int64 = 0
+    }
+    /// Read without changing anything. Nil when there are no receipts or they cannot be read.
+    static func recordedTotals(at url: URL = ScanStore.receiptsURL) async -> Totals? {
+        let snapshot = await CleanupRunHistory(url: url).load()
+        guard snapshot.error == nil, !snapshot.runs.isEmpty else { return nil }
+        return snapshot.runs.reduce(into: Totals()) { totals, run in
+            totals.cleans += 1
+            totals.freedBytes += run.summary.freedBytes
+            totals.movedToTrashBytes += max(0, run.summary.accounting.trashBytes - run.summary.accounting.freedBytes)
+        }
+    }
+}
+
 /// Durable, bounded receipts, separate from the per-file recovery authority.
 /// Never silently discards history to make room for a new cleanup.
 actor CleanupRunHistory {
