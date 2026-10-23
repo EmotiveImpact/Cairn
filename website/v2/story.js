@@ -362,7 +362,7 @@
     if (!b || n === shotAt) return;
     shotAt = n;
     stepBtns.forEach(function (x) { x.setAttribute('aria-selected', String(x === b)); });
-    var src = 'assets/app-night-' + b.dataset.shot + '.png';
+    var src = 'assets/app-shot-' + b.dataset.shot + '.webp';
     shot.href = src; shot.dataset.preview = b.dataset.key;
     shotImg.style.opacity = '0';
     setTimeout(function () { if (shotAt !== n) return; shotImg.onload = function () { shotImg.style.opacity = '1'; }; shotImg.src = src; shotImg.alt = b.dataset.alt; }, 250);
@@ -371,7 +371,7 @@
     b.addEventListener('click', function () { if (staged && go) go(starts[layers.indexOf(app)] + n); else showShot(n); });
   });
   // fetch the other screens ahead, so each step changes at once
-  stepBtns.forEach(function (b) { new Image().src = 'assets/app-night-' + b.dataset.shot + '.png'; });
+  stepBtns.forEach(function (b) { new Image().src = 'assets/app-shot-' + b.dataset.shot + '.webp'; });
 
   // ---- chapter arrivals ----
   function once(el, threshold, fn) {

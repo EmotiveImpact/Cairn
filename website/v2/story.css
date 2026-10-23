@@ -458,3 +458,11 @@ body:not(.staged) .disk-next { display: none; }
   .story-page .footer-links h2 { margin-bottom: 8px; }
   .story-page .footer-bottom { flex-direction: column; gap: 6px; }
 }
+
+/* real app screenshots are 2x captures of a 1244 x 800 window: Actual size shows them at that size */
+.preview-image-wrap.is-zoomed .preview-image { width: 1244px; height: 800px; }
+/* on a phone the real screens start at the window's left edge, so the Cairn logo and sidebar stay in view */
+@media (max-width: 760px) {
+  .story-app.beam-hero .night-window { aspect-ratio: 1.555 / 1.68; }
+  .story-app.beam-hero .night-window img { width: 168%; margin-left: 0; }
+}
