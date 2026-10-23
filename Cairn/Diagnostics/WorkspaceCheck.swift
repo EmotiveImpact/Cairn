@@ -223,6 +223,31 @@ enum WorkspaceCheck {
             check(spares.count == 1 && spares.first?.onlyHere == 1, "Old sync folders count files that exist only there")
             check(CloudSpace.providerName("GoogleDrive-me@example.com") == "Google Drive" && CloudSpace.providerName("OneDrive-Personal") == "OneDrive",
                   "Cloud folders get plain names")
+            // Move to the cloud: copy, wait for the upload, then the original goes to the Bin.
+            let home = root.appendingPathComponent("home")
+            let cloud = (id: "Dropbox", name: "Dropbox", url: live)
+            let films = home.appendingPathComponent("Films/2019")
+            try fm.createDirectory(at: films, withIntermediateDirectories: true)
+            try Data(repeating: 3, count: 4_096).write(to: films.appendingPathComponent("trip.mov"))
+            check(!CloudMove.allowed(home.appendingPathComponent("Library"), home: home) && CloudMove.allowed(films, home: home),
+                  "Only your own folders can go to the cloud")
+            let job = try CloudMove.copy(films, into: cloud, home: home)
+            let copied = live.appendingPathComponent("Moved by Cairn/Films/2019/trip.mov")
+            check(job.status == .uploading && fm.contents(atPath: copied.path) == Data(repeating: 3, count: 4_096) && Relocation.exists(films),
+                  "Cloud copies are checked and the original kept while uploading")
+            check(CloudMove.advance(job, isUploaded: { _ in false }).status == .uploading && Relocation.exists(films), "Nothing is removed before the upload")
+            check(CloudMove.advance(job, now: Date().addingTimeInterval(15 * 86_400), isUploaded: { _ in nil }).status == .stopped && Relocation.exists(films),
+                  "A move that never uploads stops and keeps the original")
+            try Data(repeating: 4, count: 10).write(to: films.appendingPathComponent("new.txt"))
+            check(CloudMove.advance(job, isUploaded: { _ in true }, release: { _ in }).status == .stopped && Relocation.exists(films),
+                  "An original changed after copying is kept")
+            try fm.removeItem(at: films.appendingPathComponent("new.txt"))
+            try fm.removeItem(at: live.appendingPathComponent("Moved by Cairn"))
+            let fresh = try CloudMove.copy(home.appendingPathComponent("Films"), into: cloud, home: home)
+            var released: [URL] = []
+            let done = CloudMove.advance(fresh, isUploaded: { _ in true }, release: { released = $0 })
+            check(done.status == .done && !Relocation.exists(home.appendingPathComponent("Films")) && released.count == 1,
+                  "Once uploaded the original goes to the Bin and the Mac copy is released")
             let gone = root.appendingPathComponent("Volumes/Studio SSD/Cairn Offload/models").path
             func moved(_ id: String, _ title: String, _ status: RelocationRecord.Status, _ mode: Relocation.Mode, _ destination: String) -> RelocationRecord {
                 RelocationRecord(targetID: id, source: "/x/\(id)", destination: destination, volumeID: "V", volumeName: "Studio SSD",
