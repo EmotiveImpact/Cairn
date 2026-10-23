@@ -8,19 +8,20 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
+### Website beam options (PR #6)
+
+- A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
+
+## 23 October 2026
+
 ### AI tools can clean (PR #7)
 
 - AI coding tools linked to Cairn can **plan a clean and, if you allow it, run it**. This is off by default. Settings › AI tools has three choices: Off, Ask me each time, or Let them clean safe junk.
 - Only safe, rebuildable items qualify. Plans list every item, expire after 15 minutes and can be used once.
 - **Claude Code plugin** with `/cairn:status`, `/cairn:free-space` and `/cairn:projects`, plus a skill that steps in when a build fails with "no space left on device".
 - **Gemini CLI extension** with the same commands.
+- Both add-ons install from the public [Emotive-Impact-Studios/cairn-plugins](https://github.com/Emotive-Impact-Studios/cairn-plugins) repository, which is built from `integrations/` with `integrations/publish.sh`.
 - **One-click install links** for Cursor and VS Code, for the website.
-
-### Website beam options (PR #6)
-
-- A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
-
-## 23 October 2026
 
 ### Night look and honest numbers (PR #5)
 
