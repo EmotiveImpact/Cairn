@@ -426,3 +426,9 @@ body:not(.staged) .disk-next { display: none; }
   .story-more .shell { row-gap: 20px; }
   .staged .stage > .story-more .more-also { display: none; }
 }
+/* with five rows, the space between them closes up on shorter screens so the whole list fits under the menu */
+.staged .stage > .story-more .more-list li { padding-block: clamp(10px, calc((var(--stage-h, 100svh) - 566px) / 10), 22px); }
+@media (max-width: 759px) {
+  .staged .stage > .story-more { padding-bottom: 24px; }
+  .staged .stage > .story-more .more-list li { padding-block: clamp(6px, calc((var(--stage-h, 100svh) - 600px) / 10), 14px); }
+}
