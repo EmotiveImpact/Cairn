@@ -179,6 +179,7 @@ struct MakeRoomWorkspace: View {
         touched.contains(row.id) ? choices[row.id] : row.suggested
     }
     private func available(_ way: MakeRoomWay, _ row: MakeRoomRow) -> Bool {
+        if preview { return true }
         switch way {
         case .ssd: return drive != nil
         case .cloud: if case .online = row.kind { return true } else { return cloudTarget != nil }
@@ -247,7 +248,7 @@ struct MakeRoomWorkspace: View {
                     .disabled(totals.isEmpty)
                 Button("Review and make room") { confirming = true }
                     .buttonStyle(ControlPanelButtonStyle(primary: true))
-                    .disabled(preview || totals.isEmpty || moves.busyTarget != nil || store.isScanning || store.isCleaning)
+                    .disabled(totals.isEmpty || moves.busyTarget != nil || (!preview && (store.isScanning || store.isCleaning)))
             }
             .padding(.top, 14)
             .overlay(alignment: .top) { Rectangle().fill(Brand.wash(0.07)).frame(height: 1) }
@@ -323,7 +324,7 @@ struct MakeRoomWorkspace: View {
         }
         .buttonStyle(.plain)
         .opacity(offered ? 1 : 0)
-        .disabled(!enabled || preview)
+        .disabled(!enabled)
         .help(offered && !enabled ? (way == .ssd ? "Plug in an SSD to move this" : "Set up a cloud folder to use this") : "")
         .accessibilityHidden(!offered)
         .accessibilityAddTraits(on ? .isSelected : [])
