@@ -72,12 +72,10 @@ struct ProStatusCard: View {
         if license.isLoading { return "Checking saved license · Cairn remains available" }
         if license.storageMessage != nil { return "Saved license unavailable · free features available" }
         if license.isPro { return "Active licence · supported actions available" }
-        if license.isInTrial { return "Trial licence · \(license.trialDaysRemaining) day\(license.trialDaysRemaining == 1 ? "" : "s") left" }
         return "Supported actions available without an upgrade"
     }
     private var statusColor: Color {
         if license.isPro { return Brand.safeCyan }
-        if license.isInTrial { return Brand.purple }
         return Brand.textMuted
     }
 }
@@ -108,7 +106,6 @@ struct ProPill: View {
         // mistaken for a real licence.
         if LicenseConfig.devProUnlock { return "Cairn Pro · DEV" }
         if license.isPro { return "Cairn Pro" }
-        if license.isInTrial { return "Trial · \(license.trialDaysRemaining)d left" }
         return "Licence status"
     }
 }

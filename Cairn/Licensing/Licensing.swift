@@ -7,14 +7,12 @@ import SwiftUI
 
 /// Cairn uses FREEMIUM + one-time Pro (no subscription). The free tier always
 /// works (scan + basic clean); Pro unlocks tool-mediated cleans (docker prune,
-/// simctl, git gc…), app uninstall, and batch power features. A 14-day trial
-/// unlocks everything. Validation is by the customer's Polar license key + the
-/// public org ID — no secret/product ID ships in the client.
+/// simctl, git gc…), app uninstall, and batch power features. There is no
+/// trial: Pro needs a key. Validation is by the customer's Polar license key +
+/// the public org ID — no secret/product ID ships in the client.
 enum LicenseConfig {
     /// Polar organization "Emotive Impact" — public (appears in checkout URLs).
     static let organizationID = "033c682c-186b-46fd-8f3a-03a686e96cba"
-    /// Free, full-feature trial before Pro features require a key.
-    static let trialDays = 14
     /// How long Pro keeps working fully offline before a required online re-check.
     static let offlineGrace: TimeInterval = 60 * 60 * 24 * 14
     /// Where buyers without a key purchase Cairn Pro (domain TBD pre-launch).
@@ -118,22 +116,7 @@ enum LicenseStore {
     static func clear() throws { try LicenseKeychain.clear("primary") }
 }
 
-enum TrialStore {
-    static func startDate() throws -> Date {
-        if let seconds = try LicenseKeychain.read("trial", as: Double.self) { return Date(timeIntervalSince1970: seconds) }
-        let now = Date()
-        do { try LicenseKeychain.write("trial", value: now.timeIntervalSince1970, onlyIfAbsent: true) }
-        catch LicenseStorageError.keychain(let status) where status == errSecDuplicateItem {
-            // Another process created it after our read. Never reset its date.
-            guard let seconds = try LicenseKeychain.read("trial", as: Double.self) else { throw LicenseStorageError.malformed }
-            return Date(timeIntervalSince1970: seconds)
-        }
-        return now
-    }
-}
-
 struct LocalLicenseState {
-    let trialStart: Date
     let license: StoredLicense?
 }
 
@@ -150,9 +133,7 @@ enum LicenseStorageWorker {
         }
     }
     static func load() throws -> LocalLicenseState {
-        // Read the existing key before attempting creation of a missing trial.
-        let license = try LicenseStore.load()
-        return LocalLicenseState(trialStart: try TrialStore.startDate(), license: license)
+        LocalLicenseState(license: try LicenseStore.load())
     }
 }
 
@@ -218,10 +199,8 @@ struct PolarClient {
 @MainActor
 final class LicenseManager: ObservableObject {
     @Published private(set) var isPro = false
-    @Published private(set) var isInTrial = false
-    /// Pro features unlocked (Pro OR within trial). Free tier always works regardless.
+    /// Pro features unlocked (a valid Pro licence; there is no trial). Free tier always works regardless.
     @Published private(set) var isUnlocked = false
-    @Published private(set) var trialDaysRemaining = 0
     @Published private(set) var isBusy = false
     @Published var lastError: String?
 
@@ -229,7 +208,6 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var isLoading = false
     @Published private(set) var storageMessage: String?
     private let client = PolarClient(organizationID: LicenseConfig.organizationID)
-    private var trialStart = Date.distantPast
     private var stored: StoredLicense?
     private let loadLocal: () throws -> LocalLicenseState
     private let checkOnline: Bool
@@ -265,7 +243,6 @@ final class LicenseManager: ObservableObject {
         defer { watchdog.cancel(); isLoading = false }
         do {
             let state = try await LicenseStorageWorker.run(loadLocal)
-            trialStart = state.trialStart
             stored = state.license
             isPro = state.license.map { $0.granted && Date().timeIntervalSince($0.lastValidated) < LicenseConfig.offlineGrace } ?? false
             if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true }
@@ -274,18 +251,15 @@ final class LicenseManager: ObservableObject {
             if checkOnline { await refreshStoredLicense() }
         } catch {
             storageMessage = error.localizedDescription
-            // Preserve any already loaded state. Do not create a new trial or
-            // replace a saved license after a failed read.
+            // Preserve any already loaded state. Do not replace a saved
+            // license after a failed read.
         }
     }
 
     var hasKey: Bool { stored != nil }
 
     private func recompute() {
-        let trialEnd = trialStart.addingTimeInterval(Double(LicenseConfig.trialDays) * 86400)
-        isInTrial = !isPro && Date() < trialEnd
-        trialDaysRemaining = isInTrial ? max(1, Int(ceil(trialEnd.timeIntervalSinceNow / 86400))) : 0
-        isUnlocked = isPro || isInTrial
+        isUnlocked = isPro
     }
 
     @discardableResult

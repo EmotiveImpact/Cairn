@@ -11,6 +11,8 @@ These are finished or nearly finished in open pull requests. None of it is on `m
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
+- The scroll-story page (`website/v2/story.html`), with a footer ready for buying: Download for Mac and Buy Cairn Pro.
+- **Pro is £35.99, one time, with no trial.** The app's price line changes to match and the 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
 
 ## 23 October 2026
 
