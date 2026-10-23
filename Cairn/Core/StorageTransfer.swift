@@ -26,6 +26,23 @@ struct StorageDrive: Identifiable, Sendable {
         return "Ready for verified file exports"
     }
 
+    /// Moves need a Mac (APFS) drive: links, permissions and large sparse files
+    /// all depend on it. Your own files and iPhone backups also need the drive
+    /// locked with a password, since a lost drive would expose them.
+    func acceptsMove(privateFiles: Bool) -> Bool {
+        external && writable && !uuid.isEmpty && !identityAmbiguous
+            && format.lowercased().contains("apfs") && (!privateFiles || encrypted)
+    }
+    func moveStatus(privateFiles: Bool) -> String {
+        if !external { return "This is the Mac's own drive" }
+        if uuid.isEmpty { return "Cairn could not identify this drive" }
+        if identityAmbiguous { return "Two drives look identical. Unplug the other one" }
+        if !writable { return "This drive is read-only" }
+        if !format.lowercased().contains("apfs") { return "Format this drive for Mac (APFS) in Disk Utility to move things to it" }
+        if privateFiles && !encrypted { return "Your own files and iPhone backups need a drive locked with a password" }
+        return "Ready"
+    }
+
     static func uniqueIdentity(_ uuid: String, mountedIDs: [String]) -> Bool {
         !uuid.isEmpty && mountedIDs.filter { $0 == uuid }.count == 1
     }

@@ -54,7 +54,7 @@ enum WorkspaceCheck {
         check(MCPServer.handle(["jsonrpc": "2.0", "id": 5, "method": "nope"])?["error"] != nil, "MCP reports unknown methods")
         check(CLI.readOnlyCommands == ["status", "scan", "categories", "projects", "mcp", "help", "--help", "-h"], "Only read-only CLI commands run beside the app")
         check(!CLI.readOnlyCommands.contains("clean"), "The clean command never runs beside the app")
-        // Offload: copy, verify, link, remove; restore; crash recovery; refusals.
+        // Moves: copy, read back, link, remove; bring back; crash recovery; refusals.
         do {
             let fm = FileManager.default
             let root = fm.temporaryDirectory.appendingPathComponent("cairn-offload-\(UUID().uuidString)").standardizedFileURL
@@ -63,40 +63,124 @@ enum WorkspaceCheck {
             let drive = root.appendingPathComponent("drive")
             let destination = drive.appendingPathComponent("Cairn Offload/models")
             try fm.createDirectory(at: source.appendingPathComponent("blobs"), withIntermediateDirectories: true)
+            try fm.createDirectory(at: source.appendingPathComponent("snapshots/abc"), withIntermediateDirectories: true)
             try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             try Data(repeating: 7, count: 300_000).write(to: source.appendingPathComponent("blobs/sha256-a"))
             try Data("manifest".utf8).write(to: source.appendingPathComponent("manifest.json"))
+            // A Hugging Face style link that stays inside the folder.
+            try fm.createSymbolicLink(atPath: source.appendingPathComponent("snapshots/abc/weights").path, withDestinationPath: "../../blobs/sha256-a")
+            try fm.setAttributes([.posixPermissions: 0o640], ofItemAtPath: source.appendingPathComponent("manifest.json").path)
             let cancel = CancelBox()
             let moved = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true })
-            check(moved.files.count == 2 && moved.bytes == 300_008, "Offload copies every file")
-            check(Relocation.linkDestination(source) == destination.path, "Offload leaves a link to the drive copy")
-            check(!Relocation.exists(URL(fileURLWithPath: source.path + Relocation.movingSuffix)), "Offload removes the original after the link checks out")
-            check((try? Data(contentsOf: source.appendingPathComponent("manifest.json"))) == Data("manifest".utf8), "Apps still read offloaded files through the link")
+            check(moved.files.count == 2 && moved.bytes == 300_008 && moved.links.count == 1, "Move copies every file and inner link")
+            check(Relocation.linkDestination(source) == destination.path, "Move leaves a link to the drive copy")
+            check(!Relocation.exists(URL(fileURLWithPath: source.path + Relocation.movingSuffix)), "Move removes the original after the link checks out")
+            check((try? Data(contentsOf: source.appendingPathComponent("manifest.json"))) == Data("manifest".utf8), "Apps still read moved files through the link")
+            check((try? Data(contentsOf: source.appendingPathComponent("snapshots/abc/weights")))?.count == 300_000, "Links inside a moved folder still work")
+            let perms = (try? fm.attributesOfItem(atPath: destination.appendingPathComponent("manifest.json").path))?[.posixPermissions] as? Int
+            check(perms == 0o640, "Moves keep file permissions")
+            check(!Relocation.exists(URL(fileURLWithPath: destination.path + Relocation.partialSuffix)), "No unfinished copy is left behind")
             let restored = try Relocation.restore(source: source, destination: destination, cancel: cancel, destinationValid: { true })
-            check(Relocation.isRealDirectory(source) && restored.files.count == 2, "Restore puts a real folder back")
-            check(Relocation.isRealDirectory(destination), "Restore keeps the drive copy")
+            check(Relocation.isRealDirectory(source) && restored.files.count == 2, "Bring back puts a real folder back")
+            check(!Relocation.exists(destination), "Bring back removes the drive copy once the Mac copy matches")
+            check(Relocation.linkDestination(source.appendingPathComponent("snapshots/abc/weights")) == "../../blobs/sha256-a", "Bring back keeps inner links as they were")
             // A crash after setting the original aside but before linking.
             let moving = URL(fileURLWithPath: source.path + Relocation.movingSuffix)
             try fm.moveItem(at: source, to: moving)
             check(Relocation.reconcile(source: source) == .interrupted && Relocation.isRealDirectory(source), "Recovery puts an interrupted original back")
-            // A second offload must not replace an existing drive copy.
+            // A crash after the link, before removing the original: finish the move.
+            _ = try Relocation.copyTree(from: source, to: destination, cancel: cancel, destinationValid: { true })
+            try fm.moveItem(at: source, to: moving)
+            try fm.createSymbolicLink(atPath: source.path, withDestinationPath: destination.path)
+            check(Relocation.reconcile(source: source, destination: destination) == .offloaded && !Relocation.exists(moving)
+                  && Relocation.linkDestination(source) == destination.path, "Recovery finishes a move whose drive copy matches")
+            // Same crash, but the drive is gone: put the original back.
+            _ = try Relocation.restore(source: source, destination: destination, cancel: cancel, destinationValid: { true })
+            _ = try Relocation.copyTree(from: source, to: destination, cancel: cancel, destinationValid: { true })
+            try fm.moveItem(at: source, to: moving)
+            try fm.createSymbolicLink(atPath: source.path, withDestinationPath: destination.path)
+            try fm.moveItem(at: destination, to: drive.appendingPathComponent("unplugged"))
+            check(Relocation.reconcile(source: source, destination: destination) == .interrupted && Relocation.isRealDirectory(source),
+                  "Recovery puts the original back when the drive copy cannot be checked")
+            try fm.removeItem(at: drive.appendingPathComponent("unplugged"))
+            // A second move must not replace an existing drive copy.
+            try fm.createDirectory(at: destination, withIntermediateDirectories: true)
             var refusedExisting = false
             do { _ = try Relocation.offload(source: source, destination: destination, cancel: cancel, destinationValid: { true }) }
             catch { refusedExisting = true }
-            check(refusedExisting && Relocation.isRealDirectory(source), "Offload never replaces an existing drive copy")
-            // Folders containing links are not plain data stores.
+            check(refusedExisting && Relocation.isRealDirectory(source), "A move never replaces an existing drive copy")
+            try fm.removeItem(at: destination)
+            // Links that point outside the folder are refused.
             try fm.createSymbolicLink(at: source.appendingPathComponent("escape"), withDestinationURL: root)
             var refusedLink = false
             do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("other"), cancel: cancel, destinationValid: { true }) }
             catch { refusedLink = true }
-            check(refusedLink && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("other")), "Offload refuses folders that contain links")
-            var refusedMissing = false
+            check(refusedLink && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("other")), "Moves refuse links that point outside")
             try fm.removeItem(at: source.appendingPathComponent("escape"))
+            // Hard links would be split in two, so they are refused.
+            try fm.linkItem(at: source.appendingPathComponent("manifest.json"), to: source.appendingPathComponent("twin.json"))
+            var refusedHard = false
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("hard"), cancel: cancel, destinationValid: { true }) }
+            catch { refusedHard = true }
+            check(refusedHard && Relocation.isRealDirectory(source), "Moves refuse hard-linked files")
+            try fm.removeItem(at: source.appendingPathComponent("twin.json"))
+            var refusedMissing = false
             do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("gone"), cancel: cancel, destinationValid: { false }) }
             catch { refusedMissing = true }
-            check(refusedMissing && Relocation.isRealDirectory(source), "Offload stops when the drive disappears")
+            check(refusedMissing && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("gone.partial")),
+                  "A move stops when the drive disappears and leaves nothing half done")
+            // The drive goes away part way through: the original stays, the partial is cleared.
+            var calls = 0
+            var refusedMidway = false
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("mid"), cancel: cancel,
+                                            destinationValid: { calls += 1; return calls < 3 }) }
+            catch { refusedMidway = true }
+            check(refusedMidway && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("mid"))
+                  && !Relocation.exists(drive.appendingPathComponent("mid.partial")), "A drive pulled mid-move leaves the original and no partial")
+            // A file written during the copy stops the move.
+            let busyFile = source.appendingPathComponent("blobs/sha256-a")
+            var refusedChange = false
+            do { _ = try Relocation.offload(source: source, destination: drive.appendingPathComponent("changed"), cancel: cancel, destinationValid: {
+                if let handle = try? FileHandle(forWritingTo: busyFile) { handle.seekToEndOfFile(); handle.write(Data([1])); try? handle.close() }
+                return true
+            }) } catch { refusedChange = true }
+            check(refusedChange && Relocation.isRealDirectory(source) && !Relocation.exists(drive.appendingPathComponent("changed")),
+                  "A file changing during the copy stops the move")
+            // Your own single file: moved without a link, brought back.
+            let video = root.appendingPathComponent("home/Movies/Trip.mov")
+            try fm.createDirectory(at: video.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(repeating: 3, count: 50_000).write(to: video)
+            let videoCopy = drive.appendingPathComponent("Cairn Offload/From this Mac/Movies/Trip.mov")
+            try fm.createDirectory(at: videoCopy.deletingLastPathComponent(), withIntermediateDirectories: true)
+            _ = try Relocation.offload(source: video, destination: videoCopy, mode: .archive, cancel: cancel, destinationValid: { true })
+            check(!Relocation.exists(video) && Relocation.isRegularFile(videoCopy), "Your own files move without a link")
+            _ = try Relocation.restore(source: video, destination: videoCopy, mode: .archive, cancel: cancel, destinationValid: { true })
+            check(Relocation.isRegularFile(video) && !Relocation.exists(videoCopy), "Your own files come back")
+            check(RelocationTarget.own(video, home: root.appendingPathComponent("home"))?.driveFolder == "From this Mac/Movies/Trip.mov",
+                  "Own files keep their folder layout on the drive")
+            check(RelocationTarget.own(root.appendingPathComponent("home/Library/Mail"), home: root.appendingPathComponent("home")) == nil,
+                  "Library folders are never offered as your own files")
+            // A mostly empty disk image stays small on the drive.
+            let disk = root.appendingPathComponent("home/Docker.raw")
+            fm.createFile(atPath: disk.path, contents: nil)
+            if let handle = try? FileHandle(forWritingTo: disk) { try handle.truncate(atOffset: 64 << 20); try handle.seek(toOffset: 8 << 20); handle.write(Data(repeating: 9, count: 4096)); try handle.close() }
+            let diskCopy = drive.appendingPathComponent("Docker.raw")
+            let digest = try Relocation.copyFile(disk, diskCopy, expected: nil, cancel: cancel)
+            let allocated = (try? diskCopy.resourceValues(forKeys: [.totalFileAllocatedSizeKey]))?.totalFileAllocatedSize ?? Int.max
+            check(Relocation.readBackDigest(diskCopy, cancel: cancel) == digest && allocated < 16 << 20, "Mostly empty disk images stay small and match")
+            // Rebuildable build files: nothing copied, future files go to the drive.
+            let derived = root.appendingPathComponent("home/DerivedData")
+            try fm.createDirectory(at: derived.appendingPathComponent("App-abc"), withIntermediateDirectories: true)
+            let derivedOnDrive = drive.appendingPathComponent("Cairn Offload/xcode-derived-data")
+            try Relocation.redirect(source: derived, destination: derivedOnDrive, destinationValid: { true })
+            check(Relocation.linkDestination(derived) == derivedOnDrive.path && (try? fm.contentsOfDirectory(atPath: derivedOnDrive.path))?.isEmpty == true,
+                  "Build files point at the drive without copying")
+            try Relocation.unredirect(source: derived, destination: derivedOnDrive, destinationValid: { true })
+            check(Relocation.isRealDirectory(derived) && !Relocation.exists(derivedOnDrive), "Build files come back to the Mac")
+            check(Relocation.staysInside(link: "a/b/c", target: "../d") && !Relocation.staysInside(link: "a", target: "../x")
+                  && !Relocation.staysInside(link: "a", target: "/etc"), "Inner links are judged correctly")
         } catch {
-            check(false, "Offload fixture failed: \(error)")
+            check(false, "Move fixture failed: \(error)")
         }
         // AI tool connections: only the cairn entry changes, and unreadable files are left alone.
         do {

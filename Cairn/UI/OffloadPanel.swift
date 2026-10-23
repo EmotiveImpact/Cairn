@@ -15,12 +15,12 @@ struct OffloadPanel: View {
             Text("Move these to \(drive?.name ?? "an external drive") and Cairn leaves a link in their place. The app that owns them keeps working while the drive is connected. Cairn checks every file before removing the original.")
                 .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 0) {
-                ForEach(RelocationTarget.all) { target in row(target) }
+                ForEach(store.targets) { target in row(target) }
             }
-            if let busy = store.busyTarget, let target = RelocationTarget.all.first(where: { $0.id == busy }) {
+            if let busy = store.busyTarget, let target = store.targets.first(where: { $0.id == busy }) {
                 HStack(spacing: 10) {
                     ProgressView().controlSize(.small)
-                    Text("\(target.title): \(Fmt.size(store.copied)) copied and verified").font(.system(size: 12)).monospacedDigit()
+                    Text("\(target.title): \(Fmt.size(store.copied)) of \(Fmt.size(store.total)) copied and checked").font(.system(size: 12)).monospacedDigit()
                     Spacer()
                     Button("Stop") { store.cancel() }.buttonStyle(ControlPanelButtonStyle())
                 }
@@ -35,22 +35,22 @@ struct OffloadPanel: View {
             if let drive {
                 WorkspaceConfirmation(
                     title: "Move \(target.title) to \(drive.name)?",
-                    explanation: "Cairn copies every file to \(drive.name), checks each one, then replaces the folder with a link and removes the original from this Mac. \(target.whileDisconnected) You can bring it back at any time from this page.",
-                    entries: [target.url.path, "Destination: \(drive.url.appendingPathComponent("Cairn Offload/\(target.id)").path)", "Drive identity: \(drive.uuid)"],
+                    explanation: "Cairn copies every file to \(drive.name), reads each one back from the drive to check it, then removes the original from this Mac\(target.mode == .linkBack ? " and leaves a link so the app still finds it" : ""). \(target.whileDisconnected) You can bring it back at any time.",
+                    entries: [target.url.path, "To: \(drive.url.appendingPathComponent(RelocationTarget.driveRoot + "/" + target.driveFolder).path)"],
                     actionTitle: "Move & link") {
                         guard !preview else { return }
-                        store.offload(target, to: drive)
+                        store.move(target, to: drive)
                     }
             }
         }
         .sheet(item: $restoring) { target in
             WorkspaceConfirmation(
                 title: "Bring \(target.title) back to this Mac?",
-                explanation: "Cairn copies the folder back, checks every file, then replaces the link with the folder. The copy on the drive is kept until you delete it.",
+                explanation: "Cairn copies it back, checks every file, puts it in place, then removes the copy from the drive.",
                 entries: [store.latest(target)?.destination ?? "", "Back to: \(target.url.path)"],
                 actionTitle: "Bring back") {
                     guard !preview else { return }
-                    store.restore(target)
+                    store.bringBack(target)
                 }
         }
     }
@@ -75,8 +75,8 @@ struct OffloadPanel: View {
             } else if let bytes = state?.bytes, bytes > 0 {
                 Button("Move to drive") { planned = target }
                     .buttonStyle(ControlPanelButtonStyle())
-                    .disabled(busy || drive?.acceptsCopy != true)
-                    .help(drive?.exportStatus ?? "Connect an encrypted APFS drive")
+                    .disabled(busy || drive?.acceptsMove(privateFiles: target.privateFiles) != true)
+                    .help(drive?.moveStatus(privateFiles: target.privateFiles) ?? "Plug in a drive")
             }
         }
         .padding(.vertical, 10)
