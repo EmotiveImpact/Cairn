@@ -211,7 +211,7 @@ struct ReviewSheet: View {
                 }
             }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-            .keyboardShortcut(.defaultAction)
+            // Deliberately no Return shortcut: removing files takes a click, never a stray key press.
             .disabled(!canClean)
         }
     }
