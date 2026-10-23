@@ -129,7 +129,9 @@ struct AppShell: View {
             && store.buckets.contains { $0.permissionGap }
     }
 
-    var body: some View {
+    /// Sidebar and page. Kept apart from `body`'s long modifier chain so the
+    /// compiler can type-check each in reasonable time.
+    private var shellLayout: some View {
         GeometryReader { viewport in
             HStack(spacing: 0) {
                 NavSidebar(section: $section, readyBytes: store.recommendedBytes)
@@ -152,6 +154,12 @@ struct AppShell: View {
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
         }
+    }
+
+    /// The layout with its sheets and scan rotation. Split from `body` so
+    /// neither chain is too long for the type checker.
+    private var shellWithSheets: some View {
+        shellLayout
         .ignoresSafeArea(.container, edges: .top)
         .background(Brand.chrome)
         .sheet(isPresented: $showReview, onDismiss: {
@@ -181,6 +189,10 @@ struct AppShell: View {
                 scanActivityIndex = count > 1 ? (scanActivityIndex + 1) % count : 0
             }
         }
+    }
+
+    var body: some View {
+        shellWithSheets
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
