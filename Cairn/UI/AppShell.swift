@@ -126,6 +126,8 @@ struct AppShell: View {
     @State private var showResultFilter = false
     @State private var scanActivityIndex = 0
     private let previewMode = CommandLine.arguments.contains("--preview-ui")
+    /// The dots follow Home's number, sample included.
+    private var sidebarReadyBytes: Int64 { previewMode ? OverviewWorkspace.previewReadyBytes : store.recommendedBytes }
 
     private var proEnabled: Bool { license.isUnlocked }
     private var showFDABanner: Bool {
@@ -160,7 +162,7 @@ struct AppShell: View {
                     ZStack(alignment: .topLeading) {
                         AppBackground()
                         GeometryReader { card in
-                            SidebarSpaceField(readyBytes: store.recommendedBytes)
+                            SidebarSpaceField(readyBytes: sidebarReadyBytes)
                                 .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
                                 .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
                                 .opacity(0.95)
@@ -173,7 +175,7 @@ struct AppShell: View {
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
             .background(alignment: .topLeading) {
-                SidebarSpaceField(readyBytes: store.recommendedBytes)
+                SidebarSpaceField(readyBytes: sidebarReadyBytes)
                     .frame(width: SidebarSpaceField.fieldWidth, height: viewport.size.height)
             }
         }

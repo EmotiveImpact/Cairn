@@ -179,7 +179,14 @@ struct OverviewWorkspace: View {
     private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
 
     /// The headline action: what a scan found that can be freed in one go.
-    private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    private var recommendedBytes: Int64 { preview ? Self.previewReadyBytes : store.recommendedBytes }
+    /// `--preview-ui` sample for the headline and the sidebar dots: 18.4 GB, or
+    /// `--preview-ready-gb=<n>` to capture another dot level.
+    static let previewReadyBytes: Int64 = {
+        let flag = "--preview-ready-gb="
+        let gb = CommandLine.arguments.first { $0.hasPrefix(flag) }.flatMap { Double($0.dropFirst(flag.count)) }
+        return Int64((gb ?? 18.4) * 1_000_000_000)
+    }()
     /// Everything else the scan found: real space, but only the person can decide on it.
     private var toReviewBytes: Int64 { preview ? 21_300_000_000 : max(0, store.grandTotal - store.recommendedBytes) }
     /// Keeps the bigger number in view without competing with the headline.
