@@ -75,15 +75,17 @@
     layers.forEach(function (el, i) {
       var d = stageAt < starts[i] ? stageAt - starts[i] : stageAt > ends[i] ? stageAt - ends[i] : 0;
       var inn = i === 0 ? 1 : clamp((d + 0.6) / 0.4);        // dissolves in from d = -0.6 to -0.2
-      // and out from 0.2 to 0.6; the tunnel stays a little longer, while we fly on into its light
-      var out = i === layers.length - 1 ? 0 : el === dive ? clamp((d - 0.45) / 0.4) : clamp((d - 0.2) / 0.4);
+      // and out from 0.2 to 0.6; the tunnel stays a little longer, while we fly on into its light.
+      // The last one fades and blurs as the page carries it up and away to the footer, and comes back the same way.
+      var last = i === layers.length - 1;
+      var out = last ? clamp((scrollY - stopY(N)) / (0.55 * vh)) : el === dive ? clamp((d - 0.45) / 0.4) : clamp((d - 0.2) / 0.4);
       var o = Math.min(inn, 1 - out);
       el.style.opacity = o.toFixed(3);
       // the hallway simply fades (its words lift away, below); the others shrink back and blur
       var lift = el === number && el !== dive, still = el === dive;
       var blur = (1 - inn) * 14 + (lift || still ? 0 : out * 8);
       el.style.filter = blur > 0.05 ? 'blur(' + blur.toFixed(1) + 'px)' : 'none';   // (a blur of nothing still costs a redraw every frame)
-      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * vh : still ? 0 : 28)).toFixed(1) + 'px)';
+      el.style.transform = 'scale(' + (lerp(1.04, 1, inn) * (lift || still || last ? 1 : lerp(1, 0.94, out))).toFixed(4) + ') translateY(' + (-out * (lift ? 0.3 * vh : still || last ? 0 : 28)).toFixed(1) + 'px)';
       el.style.pointerEvents = o > 0.5 ? 'auto' : 'none';
       el.style.visibility = o < 0.01 ? 'hidden' : 'visible';
       if (Math.abs(d) < 0.2 && arrive[i]) { var fs = arrive[i]; arrive[i] = null; fs.forEach(function (f) { f(); }); }

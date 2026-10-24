@@ -441,12 +441,15 @@ body:not(.staged) .disk-next { display: none; }
 }
 
 /* the footer: ready to buy, with the same pill buttons as the menu */
-.story-page .footer-hero > p:not(.section-label):not(.footer-availability) { max-width: 560px; }
+.story-page .footer-hero > p:not(.section-label):not(.footer-availability):not(.footer-price) { max-width: 560px; }
 .story-page .footer-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 32px; }
 .story-page .footer-hero .footer-actions .button { margin-top: 0; min-height: 48px; padding: 0 24px; gap: 9px; border-radius: 999px; font-size: 14px; }
 .story-page .button-ghost { border-color: rgba(244,248,251,.3); background: none; color: #f4f8fb; }
 .story-page .button-ghost:hover { border-color: rgba(244,248,251,.65); }
 .story-page .footer-hero > p.footer-availability { max-width: none; margin: 18px auto 0; font-size: 12px; }
+/* what Pro costs over time, just under the buttons */
+.story-page .footer-hero > p.footer-price { max-width: 680px; margin: 20px auto 0; font-size: 13px; line-height: 1.55; color: #9aa7b2; }
+.story-page .footer-hero > p.footer-price + .footer-availability { margin-top: 8px; }
 .story-page .footer-actions .button-light { border-color: #f4f8fb; background: #f4f8fb; color: #0b0f14; }
 .story-page .footer-actions .button-light:hover { border-color: #fff; background: #fff; }
 .story-page .footer-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
