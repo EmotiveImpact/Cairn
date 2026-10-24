@@ -340,6 +340,20 @@ enum SafetyCheck {
              && AppInventoryStore.caskAppNames("{\"artifacts\":[{\"app\":[\"Google Chrome.app\"]}]}") == ["Google Chrome.app"],
              "Homebrew apps are found from each cask's recipe")
 
+        // The share card names kinds of things, never a project, file or folder of yours.
+        func cleared(_ path: String, _ category: String) -> String {
+            ShareCard.kind(of: ScanItem(url: home.appendingPathComponent(path), allocatedSize: 1, categoryID: category,
+                                        severity: .safe, isRegenerable: true))
+        }
+        rule(cleared("Projects/Secret Client/node_modules", "dev-projects") == "node_modules"
+             && cleared("Projects/Secret Client/out-of-tree", "dev-projects") == "Project builds"
+             && cleared("Library/Developer/Xcode/DerivedData/SecretApp-abc", "xcode") == "Xcode"
+             && cleared("Downloads/Secret.dmg", "something-new") == "Other files",
+             "the share card never shows a file or folder name")
+        rule(ReceiptLine.share(freed: 38_600_000_000) == "back on my Mac. That's about 10 films' worth."
+             && ReceiptLine.share(freed: 600_000_000) == "back on my Mac. That's about 200 photos' worth.",
+             "the share card's line reads naturally")
+
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
         if LicenseConfig.devProUnlock {

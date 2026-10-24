@@ -116,6 +116,11 @@ struct DockerScanner: CairnScanner {
         if FileScan.exists(rawURL) {
             ctx.progress("Docker.raw")
             let stats = FileScan.measure(rawURL)
+            // The file is sparse: Finder shows its maximum, the disk holds far less.
+            let maximum = (try? rawURL.resourceValues(forKeys: [.fileSizeKey]).fileSize).map(Int64.init) ?? 0
+            let real = maximum > stats.allocatedSize + 1_000_000_000
+                ? "Uses \(Fmt.size(stats.allocatedSize)) on disk, out of the \(Fmt.size(maximum)) Docker may grow to. Finder shows the \(Fmt.size(maximum)), which is only the limit. "
+                : ""
             ctx.emit(ScanItem(
                 url: rawURL,
                 allocatedSize: stats.allocatedSize,
@@ -126,7 +131,7 @@ struct DockerScanner: CairnScanner {
                 isRegenerable: false,
                 requiresRunning: false,
                 cleanMethod: .adviceOnly,
-                note: "Docker's disk holds every image, container and volume, so Cairn never deletes it. After a prune, current Docker Desktop gives the space back to the Mac within a minute or so; scan again to see the new size.",
+                note: real + "Docker's disk holds every image, container and volume, so Cairn never deletes it. After a prune, current Docker Desktop gives the space back to the Mac within a minute or so; scan again to see the new size.",
                 permissionDenied: stats.permissionDenied,
                 volumeURL: FileScan.volumeURL(of: rawURL)
             ))

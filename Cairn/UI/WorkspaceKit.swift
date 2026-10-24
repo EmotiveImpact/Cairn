@@ -228,6 +228,7 @@ struct WorkspaceCompletion: View {
     @State private var confirmEmpty = false
     @State private var emptying = false
     @State private var emptiedBytes: Int64 = 0
+    @State private var sharing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var finished: Date { date ?? shownAt }
 
@@ -241,6 +242,15 @@ struct WorkspaceCompletion: View {
         return Set(store.removalLog.filter { $0.recoverable && $0.trashPath.map { paths.contains($0) } == true }.map(\.id))
     }
     private var confirmed: Bool { summary.capacityChanges.contains { ($0.delta ?? 0) > 0 } }
+
+    /// Cairn deleted more than free space rose by on the one disk it measured:
+    /// local snapshots or purgeable space are holding the rest for now.
+    private var heldBack: Int64 {
+        guard emptiedBytes == 0, summary.capacityChanges.count == 1, let measured else { return 0 }
+        let deleted = summary.accounting.freedBytes
+        let gap = deleted - max(0, measured.after - measured.before)
+        return gap >= 500_000_000 && gap * 3 >= deleted ? gap : 0
+    }
 
     /// The first volume Cairn measured before and after, usually Macintosh HD.
     private var measured: (name: String, before: Int64, after: Int64, total: Int64)? {
@@ -296,6 +306,11 @@ struct WorkspaceCompletion: View {
             } else if summary.interrupted {
                 Text("Stopped before the end").font(.system(size: 13)).foregroundStyle(Brand.amber)
             }
+            if heldBack > 0 {
+                Text("\(Fmt.size(heldBack)) has not shown up as free space yet. macOS can keep it for a while in local Time Machine snapshots or as purgeable space, then lets it go on its own.")
+                    .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             if let measured {
                 Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
                     GridRow {
@@ -343,6 +358,10 @@ struct WorkspaceCompletion: View {
                     Button("Empty from Trash…", action: onEmptyTrash)
                         .buttonStyle(ControlPanelButtonStyle(size: .large))
                 }
+                if freed > 0 {
+                    Button { sharing = true } label: { Label("Share", systemImage: "square.and.arrow.up") }
+                        .buttonStyle(ControlPanelButtonStyle(size: .large))
+                }
             }
             .padding(.top, 4)
         }
@@ -358,6 +377,13 @@ struct WorkspaceCompletion: View {
         .frame(minWidth: 720, minHeight: 560)
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
+        .overlay {
+            if sharing {
+                ShareCardSheet(freed: freed, cleared: summary.cleared) { sharing = false }
+                    .transition(.opacity)
+            }
+        }
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.18), value: sharing)
     }
 
     private func emptyTrash() {

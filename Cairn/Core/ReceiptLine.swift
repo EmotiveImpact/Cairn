@@ -37,6 +37,18 @@ enum ReceiptLine {
         return lines[abs(pick)]
     }
 
+    /// The share card's line under the number: "back on my Mac. That's about
+    /// nine films' worth." Films from 2 GB, then photos, then songs.
+    static func share(freed bytes: Int64) -> String {
+        let mb = Double(max(0, bytes)) / 1_000_000
+        let worth: String
+        if mb >= 2_000 { worth = count(mb / 4_000, unit: "film") }
+        else if mb >= 30 { worth = "\(count(mb / 3)) photos'" }
+        else if mb >= 12 { worth = "\(count(mb / 8)) songs'" }
+        else { worth = "a song's" }
+        return "back on my Mac. That's about \(worth) worth."
+    }
+
     /// "four films'", "120", "2,400": words under ten, round numbers above.
     private static func count(_ value: Double, unit: String? = nil) -> String {
         let n = max(1, Int(value.rounded()))

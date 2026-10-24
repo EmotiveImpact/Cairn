@@ -95,6 +95,9 @@ final class ScanStore {
         var accounting = CleanupAccounting()
         var capacityChanges: [CleanupCapacityChange] = []
         var interrupted = false
+        /// Space each kind of thing took up, for the share card: kinds only,
+        /// never file names. Optional so older receipts still decode.
+        var cleared: [String: Int64]? = nil
         var trashed: Int { accounting.completedCount } // legacy view name: all completed actions
         var bytes: Int64 { accounting.estimatedAffectedBytes }
         var recoverableCount: Int { accounting.recordedRecoveryCount }
@@ -832,6 +835,9 @@ final class ScanStore {
             }
             lifecycleCheckpoint("recovery")
             summary.accounting.record(outcome, recoveryRecorded: logEntry != nil)
+            if outcome.ok {
+                summary.cleared = (summary.cleared ?? [:]).merging([ShareCard.kind(of: item): max(0, outcome.bytesAffected)], uniquingKeysWith: +)
+            }
             if !journalSaved {
                 summary.interrupted = true
                 summary.errors.append(journal.error ?? "Action outcome could not be recorded; further cleanup stopped.")
