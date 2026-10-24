@@ -68,6 +68,37 @@ enum SafetyCheck {
             print("❌ unrelated cache wrongly blocked")
             fails += 1
         }
+        // Apple's own caches stay off limits unless known safe; a macOS update in
+        // progress and parts of Ollama's shared store are never cleanable.
+        let appleBlocked = [
+            "Library/Caches/com.apple.e5rt.e5bundlecache", "Library/Caches/com.apple.e5rt.e5bundlecache/x",
+            "Library/Caches/com.apple.Photos", "Library/Caches/com.apple.Safari.SafeBrowsing",
+            "Library/Caches/GeoServices", "Library/Caches/CloudKit/x",
+            ".ollama/models/blobs/sha256-1", ".ollama/models/manifests",
+        ]
+        for rel in appleBlocked {
+            let u = home.appendingPathComponent(rel)
+            if SafePaths.evaluate(u, allowedRoots: [home]).isAllowed
+                || SafePaths.evaluate(u, allowedRoots: [home], rebuildable: true).isAllowed {
+                print("❌ ALLOWED (should be blocked): \(rel)"); fails += 1
+            } else { print("✅ blocked: \(rel)") }
+        }
+        for path in ["/macOS Install Data/x", "/System/Volumes/Data/macOS Install Data/x"] {
+            if SafePaths.evaluate(URL(fileURLWithPath: path), allowedRoots: [URL(fileURLWithPath: "/")]).isAllowed {
+                print("❌ ALLOWED (should be blocked): \(path)"); fails += 1
+            } else { print("✅ blocked: \(path)") }
+        }
+        let neuralTemp = FileManager.default.temporaryDirectory.appendingPathComponent("com.apple.e5rt.e5bundlecache")
+        if SafePaths.evaluate(neuralTemp, allowedRoots: [FileManager.default.temporaryDirectory]).isAllowed {
+            print("❌ Neural Engine cache in temp folder ALLOWED"); fails += 1
+        } else { print("✅ blocked: Neural Engine cache in temp folder") }
+        for rel in ["Library/Caches/com.apple.Safari", "Library/Caches/com.apple.FinalCut",
+                    "Library/Caches/com.apple.dt.Xcode", "Library/Caches/com.spotify.client", ".ollama/models"] {
+            if SafePaths.evaluate(home.appendingPathComponent(rel), allowedRoots: [home]).isAllowed {
+                print("✅ known-safe cache still cleanable: \(rel)")
+            } else { print("❌ known-safe cache wrongly blocked: \(rel)"); fails += 1 }
+        }
+
         let agentApp = URL(fileURLWithPath: "/Applications/ChatGPT.app")
         if AppInventoryStore.isUninstallSafe(agentApp) {
             print("❌ protected app can be uninstalled")
