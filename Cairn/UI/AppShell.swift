@@ -165,7 +165,7 @@ struct AppShell: View {
                             SidebarSpaceField(readyBytes: sidebarReadyBytes)
                                 .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
                                 .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
-                                .opacity(0.95)
+                                .opacity(1)
                         }
                     }
                 }

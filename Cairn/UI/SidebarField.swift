@@ -29,14 +29,14 @@ struct SidebarSpaceField: View {
         let gb = Double(bytes) / 1_000_000_000
         switch gb {
         case ..<20:   return 0
-        case ..<50:   return 170
-        default:      return 320
+        case ..<50:   return 200
+        default:      return 380
         }
     }
     /// The sidebar's width, where the field's slanted edge is measured from.
     static let sidebarWidth: CGFloat = 200
     /// The widest the field ever draws: the sidebar plus the largest spill.
-    static let fieldWidth: CGFloat = 540
+    static let fieldWidth: CGFloat = 600
 
     private static let dot = Color(red: 0x5d / 255, green: 0x9b / 255, blue: 0xff / 255)
     fileprivate static let spacing: CGFloat = 5
@@ -153,7 +153,7 @@ struct SidebarSpaceField: View {
                     // a hard vertical line. With more to free it spills under the page.
                     let rise = CGFloat(1 - fade)
                     let right = SidebarSpaceField.sidebarWidth + spill - 6 - (78 + spill) * rise
-                    let edge = Double(min(1, max(0, (right - x) / (44 + spill * 0.3))))
+                    let edge = Double(min(1, max(0, (right - x) / (44 + spill * 0.15))))
                     guard noise(col + 5, row + 89) < 0.1 + edge else { continue }
                     let opacity = min(maxOpacity, maxOpacity * fade * edge * (0.55 + 0.6 * noise(row, col + 97)))
                     guard opacity > 0.015 else { continue }
