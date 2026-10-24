@@ -157,20 +157,22 @@ struct AppShell: View {
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
                 .background {
-                    // The dot field carries on under the page, a little softer,
-                    // lined up with the shell's field behind the sidebar.
+                    // The dot field carries on under the page, much softer than in the
+                    // sidebar so the page stays a calm surface with a clear edge.
                     ZStack(alignment: .topLeading) {
                         AppBackground()
                         GeometryReader { card in
                             SidebarSpaceField(readyBytes: sidebarReadyBytes)
                                 .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
                                 .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
-                                .opacity(1)
+                                .opacity(0.38)
                         }
                     }
                 }
                 // The page sits as a rounded card inside the sidebar's frame (Edem chose this, option C).
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // A hairline keeps the card's edge clear when the dots run past it.
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Brand.wash(0.07), lineWidth: 1))
                 .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
