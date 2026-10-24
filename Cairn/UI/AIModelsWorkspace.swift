@@ -29,19 +29,23 @@ struct AIModelsWorkspace: View {
     }
 
     var body: some View {
-        NightPage(eyebrow: "AI models",
-                  title: models.isEmpty ? "AI models" : "\(Fmt.size(total)) of AI models",
-                  subtitle: subtitle) {
+        NightNumberPage(eyebrow: "Clean · AI models",
+                        number: models.isEmpty ? "AI models" : Fmt.size(total),
+                        phrase: models.isEmpty ? "" : "of AI models",
+                        lead: subtitle) {
             Button { Task { await load() } } label: {
                 Label(loading ? "Looking…" : "Look again", systemImage: "arrow.clockwise")
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
             .disabled(loading)
         } content: {
-            list
+            VStack(alignment: .leading, spacing: 18) {
+                if !models.isEmpty { toolStrip }
+                list
+            }
         } footer: {
             if let model = chosen {
-                NightTotal(strong: Fmt.size(model.bytes), rest: model.name)
+                NightTotal(strong: Fmt.size(model.bytes), rest: model.name + (model.updated.map { " · added " + $0.formatted(.relative(presentation: .named)) } ?? ""))
                 Spacer()
                 Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.url]) }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
@@ -74,8 +78,7 @@ struct AIModelsWorkspace: View {
 
     private var subtitle: String {
         if models.isEmpty { return "Models downloaded by Ollama, LM Studio, Hugging Face, Whisper, ComfyUI and other local AI tools." }
-        let names = tools.prefix(3).joined(separator: ", ")
-        return "From \(names)\(tools.count > 3 ? " and \(tools.count - 3) more" : ""). Models are slow to download again, so Cairn never picks one for you."
+        return "Slow to download again, so Cairn never picks one for you."
     }
 
     @ViewBuilder private var list: some View {
@@ -94,23 +97,69 @@ struct AIModelsWorkspace: View {
         }
     }
 
+    /// Which tool holds what: one thin strip in steps of ice, then a key.
+    private var toolStrip: some View {
+        let shares = toolTotals
+        let sum = Double(max(1, shares.reduce(Int64(0)) { $0 + $1.bytes }))
+        return VStack(alignment: .leading, spacing: 10) {
+            GeometryReader { geo in
+                let gaps = CGFloat(max(0, shares.count - 1)) * 2
+                HStack(spacing: 2) {
+                    ForEach(Array(shares.enumerated()), id: \.element.tool) { index, share in
+                        Rectangle().fill(Self.step(index))
+                            .frame(width: max(3, (geo.size.width - gaps) * CGFloat(Double(share.bytes) / sum)))
+                    }
+                }
+            }
+            .frame(height: 6)
+            .clipShape(Capsule())
+            HStack(spacing: 22) {
+                ForEach(Array(shares.enumerated()), id: \.element.tool) { index, share in
+                    HStack(spacing: 7) {
+                        Circle().fill(Self.step(index)).frame(width: 8, height: 8)
+                        Text(share.tool).foregroundStyle(Brand.textMuted)
+                        Text(Fmt.size(share.bytes)).fontWeight(.medium).foregroundStyle(Brand.textPrimary).monospacedDigit()
+                    }
+                    .font(.system(size: 12)).lineLimit(1)
+                }
+            }
+        }
+    }
+
+    private var toolTotals: [(tool: String, bytes: Int64)] {
+        var totals: [String: Int64] = [:]
+        for model in models { totals[toolName(model), default: 0] += model.bytes }
+        return totals.map { (tool: $0.key, bytes: $0.value) }.sorted { $0.bytes > $1.bytes }
+    }
+
+    private func toolName(_ model: LocalModel) -> String { model.tool.components(separatedBy: " · ").first ?? model.tool }
+
+    static func step(_ index: Int) -> Color { Brand.room.opacity([1, 0.62, 0.4, 0.24, 0.16][min(index, 4)]) }
+
     private func row(_ model: LocalModel) -> some View {
-        Button { selected = selected == model.id ? nil : model.id } label: {
-            HStack(spacing: 14) {
-                NightName(logo: BrandLogo(name: nil, fallback: "brain.head.profile", size: 25),
+        let isChosen = selected == model.id
+        return Button { selected = isChosen ? nil : model.id } label: {
+            HStack(spacing: 16) {
+                NightName(logo: BrandLogo(name: toolName(model) == "Ollama" ? "ollama" : nil, fallback: "brain.head.profile", size: 25),
                           title: model.name, subtitle: model.tool)
                 NightMeter(share: Double(model.bytes) / Double(largest))
                 Text((model.partial ? "≥ " : "") + Fmt.size(model.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
-                    .frame(width: 90, alignment: .trailing)
+                    .frame(width: 70, alignment: .trailing)
                 Text(updated(model)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     .lineLimit(1).frame(width: 120, alignment: .leading)
-                NightPill(text: selected == model.id ? "Selected" : model.removal == .trash ? "Trash" : "Ollama command",
-                          tone: selected == model.id ? .ok : .neutral)
-                    .frame(width: 120, alignment: .leading)
+                HStack(spacing: 6) {
+                    Image(systemName: model.removal == .trash ? "trash" : "doc.on.doc").font(.system(size: 11))
+                    Text(model.removal == .trash ? "Move to Trash" : "Copy ollama rm")
+                }
+                .font(.system(size: 12)).foregroundStyle(Brand.room)
+                .opacity(isChosen ? 1 : 0)
+                .frame(width: 128, alignment: .trailing)
             }
+            .padding(.horizontal, 6)
         }
         .buttonStyle(.plain)
         .nightRow()
+        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(isChosen ? Brand.room.opacity(0.05) : Color.clear))
         .contextMenu {
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([model.url]) }
             if case .command(let command) = model.removal { Button("Copy \(command)") { copy(command) } }

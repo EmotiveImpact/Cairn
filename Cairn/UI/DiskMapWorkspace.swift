@@ -26,12 +26,14 @@ import AppKit
     func showSample() { reading = DiskMapWorkspace.sample }
 }
 
-/// Files › Disk map: the whole internal disk as two rings. The inner ring
-/// is macOS, System Data, apps, coding, your files and free space; the outer
-/// ring is what is inside each. Click a slice to look inside it.
+/// Files › Disk map: the whole internal disk as one wide bar, each kind of
+/// space a clear step of blue (design/new-pages/diskmap2.png). The list
+/// below names every part; choosing one shows what is inside it beside the
+/// list. Nothing slides: hover and choice only change light.
 struct DiskMapWorkspace: View {
     private var map: DiskMapStore { .shared }
     @State private var path: [String] = []
+    @State private var chosen: String?
     @State private var hovered: String?
     private let preview = CommandLine.arguments.contains("--preview-ui")
 
@@ -49,17 +51,20 @@ struct DiskMapWorkspace: View {
         return current
     }
     private var shown: [DiskArea] { focus?.children ?? reading?.areas ?? [] }
-    private var hoveredArea: DiskArea? {
-        guard let hovered else { return nil }
-        return shown.first { $0.id == hovered } ?? shown.flatMap(\.children).first { $0.id == hovered }
+    /// The part whose insides show beside the list: the one clicked, else the
+    /// largest part that has something inside (System Data on most Macs).
+    private var opened: DiskArea? {
+        if let chosen, let area = shown.first(where: { $0.id == chosen }), !area.children.isEmpty { return area }
+        return shown.first { $0.kind == .systemData && !$0.children.isEmpty }
+            ?? shown.filter { !$0.children.isEmpty }.max { $0.bytes < $1.bytes }
     }
 
     var body: some View {
-        NightPage(eyebrow: path.isEmpty ? "Disk map" : "Disk map · " + breadcrumb,
-                  title: title, subtitle: subtitle) {
+        NightNumberPage(eyebrow: path.isEmpty ? "Files · Disk map" : "Disk map · " + breadcrumb,
+                        number: number, phrase: phrase, lead: lead) {
             HStack(spacing: 8) {
                 if !path.isEmpty {
-                    Button { path.removeLast() } label: { Label("Back", systemImage: "chevron.left") }
+                    Button { path.removeLast(); chosen = nil } label: { Label("Back", systemImage: "chevron.left") }
                         .buttonStyle(ControlPanelButtonStyle(size: .small))
                 }
                 Button { measure() } label: {
@@ -69,10 +74,13 @@ struct DiskMapWorkspace: View {
                 .disabled(map.measuring)
             }
         } content: {
-            if let reading {
-                HStack(alignment: .top, spacing: 36) {
-                    rings(reading).frame(width: 340, height: 340)
-                    legend.frame(maxWidth: .infinity, alignment: .topLeading)
+            if reading != nil {
+                VStack(alignment: .leading, spacing: 26) {
+                    diskBar
+                    HStack(alignment: .top, spacing: 36) {
+                        legend.frame(maxWidth: .infinity)
+                        inside.frame(maxWidth: .infinity, alignment: .topLeading)
+                    }
                 }
             } else {
                 NightEmpty(title: map.measuring ? "Mapping your disk" : "Not mapped yet",
@@ -102,127 +110,126 @@ struct DiskMapWorkspace: View {
         return names.joined(separator: " › ")
     }
 
-    private var title: String {
+    private var number: String {
         guard let reading else { return "Disk map" }
-        if let focus { return "\(focus.partial ? "≥ " : "")\(Fmt.size(focus.bytes)) in \(focus.title)" }
-        return "\(Fmt.size(reading.used)) used of \(Fmt.size(reading.total))"
+        if let focus { return (focus.partial ? "≥ " : "") + Fmt.size(focus.bytes) }
+        return Fmt.size(reading.used)
     }
 
-    private var subtitle: String {
-        if let focus { return focus.note.isEmpty ? "Click a slice to look inside it." : focus.note }
+    private var phrase: String {
+        guard let reading else { return "" }
+        if let focus { return "in \(focus.title)" }
+        return "used of \(Fmt.size(reading.total))"
+    }
+
+    private var lead: String {
+        if let focus { return focus.note.isEmpty ? "Choose a part to see what is inside it." : focus.note }
         return reading == nil ? "A picture of everything on this Mac's disk, System Data included."
-                              : "Click a slice to look inside it. Sizes marked ≥ hit a measuring limit."
+                              : "Everything on this disk, System Data included. Choose a part to look inside."
     }
 
     private func measure() {
         guard !preview else { map.showSample(); return }
         path = []
+        chosen = nil
         map.measure()
     }
 
-    // MARK: - Rings
+    // MARK: - Colour
 
-    private struct Slice: Identifiable {
-        let area: DiskArea
-        let start: Double
-        let end: Double
-        let outer: Bool
-        let tint: Color
-        var id: String { area.id }
+    /// Blues only: each kind of space is its own clear step, so the bar and
+    /// the list match at a glance. Free space is a faint track.
+    static func tone(_ kind: DiskArea.Kind) -> Color {
+        switch kind {
+        case .macOS: return Color(light: 0x8DA4BD, dark: 0x3D5A7A)
+        case .systemData: return Brand.room
+        case .apps: return Color(light: 0x4F86C6, dark: 0x5D8FC4)
+        case .developer: return Color(light: 0x6E9FD9, dark: 0x7FB0E8)
+        case .files, .other: return Color(light: 0xA3C3E6, dark: 0xA9CDF4)
+        case .free: return Brand.wash(0.07)
+        }
     }
 
-    private func slices(_ areas: [DiskArea]) -> [Slice] {
-        let total = max(1, areas.reduce(Int64(0)) { $0 + $1.bytes })
-        var result: [Slice] = []
-        var cursor = -90.0
-        for (index, area) in areas.enumerated() {
-            let span = 360 * Double(area.bytes) / Double(total)
-            let tint = tint(area, index: index)
-            result.append(Slice(area: area, start: cursor, end: cursor + span, outer: false, tint: tint))
-            var inner = cursor
-            let childTotal = max(1, area.children.reduce(Int64(0)) { $0 + $1.bytes })
-            for (childIndex, child) in area.children.enumerated() {
-                let childSpan = span * Double(child.bytes) / Double(max(childTotal, area.bytes))
-                if childSpan >= 0.5 {
-                    result.append(Slice(area: child, start: inner, end: inner + childSpan, outer: true,
-                                        tint: tint.opacity(childIndex % 2 == 0 ? 0.72 : 0.5)))
+    private func tone(_ area: DiskArea, index: Int) -> Color {
+        focus == nil ? Self.tone(area.kind) : Self.step(index)
+    }
+
+    /// Steps of ice for the parts inside one area, largest first.
+    static func step(_ index: Int) -> Color {
+        Brand.room.opacity([1, 0.78, 0.6, 0.46, 0.34, 0.24, 0.18][min(index, 6)])
+    }
+
+    // MARK: - Bar
+
+    private var diskBar: some View {
+        let areas = shown
+        let total = Double(max(1, areas.reduce(Int64(0)) { $0 + $1.bytes }))
+        return VStack(alignment: .leading, spacing: 8) {
+            GeometryReader { geo in
+                let gaps = CGFloat(max(0, areas.count - 1)) * 3
+                HStack(spacing: 3) {
+                    ForEach(Array(areas.enumerated()), id: \.element.id) { index, area in
+                        let width = max(4, (geo.size.width - gaps) * CGFloat(Double(area.bytes) / total))
+                        let lit = opened?.id == area.id || hovered == area.id
+                        RoundedRectangle(cornerRadius: 6, style: .continuous)
+                            .fill(tone(area, index: index))
+                            .opacity(hovered == nil || hovered == area.id || area.kind == .free ? 1 : 0.8)
+                            .shadow(color: lit && area.kind != .free ? Brand.room.opacity(0.45) : .clear, radius: 9)
+                            .overlay(alignment: .leading) {
+                                if width > 74 {
+                                    Text(area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title)
+                                        .font(.system(size: 11.5, weight: .medium)).lineLimit(1)
+                                        .foregroundStyle(area.kind == .free ? Brand.textMuted : Brand.onRoom)
+                                        .padding(.leading, 10)
+                                }
+                            }
+                            .frame(width: width)
+                            .onHover { inside in
+                                if inside { hovered = area.id } else if hovered == area.id { hovered = nil }
+                            }
+                            .onTapGesture { open(area) }
+                            .help("\(area.title): \(Fmt.size(area.bytes))")
+                            .accessibilityLabel("\(area.title), \(Fmt.size(area.bytes))")
+                    }
                 }
-                inner += childSpan
             }
-            cursor += span
-        }
-        return result
-    }
-
-    /// Blues only: each kind is one step of the same blue, free space a faint track.
-    private func tint(_ area: DiskArea, index: Int) -> Color {
-        if focus != nil { return Brand.room.opacity([0.95, 0.8, 0.65, 0.5, 0.38][index % 5]) }
-        switch area.kind {
-        case .free: return Brand.wash(0.10)
-        case .macOS: return Brand.room.opacity(0.32)
-        case .systemData: return Brand.room.opacity(0.5)
-        case .apps: return Brand.room.opacity(0.66)
-        case .developer: return Brand.room.opacity(0.82)
-        case .files, .other: return Brand.room.opacity(0.96)
-        }
-    }
-
-    private func rings(_ reading: DiskMap.Reading) -> some View {
-        GeometryReader { geo in
-            let radius = min(geo.size.width, geo.size.height) / 2 - 4
-            let center = CGPoint(x: geo.size.width / 2, y: geo.size.height / 2)
-            let all = slices(shown)
-            ZStack {
-                ForEach(all) { slice in
-                    let gap = slice.end - slice.start > 1.2 ? 0.35 : 0
-                    DiskMapArc(start: .degrees(slice.start + gap), end: .degrees(max(slice.start + gap, slice.end - gap)),
-                               inner: radius * (slice.outer ? 0.70 : 0.44), outer: radius * (slice.outer ? 0.98 : 0.68), center: center)
-                        .fill(slice.tint.opacity(hovered == nil || hovered == slice.id ? 1 : 0.55))
-                        .onHover { inside in
-                            if inside { hovered = slice.id } else if hovered == slice.id { hovered = nil }
-                        }
-                        .onTapGesture { open(slice.area) }
-                        .accessibilityLabel("\(slice.area.title), \(Fmt.size(slice.area.bytes))")
-                }
-                VStack(spacing: 3) {
-                    let area = hoveredArea
-                    Text(Fmt.size(area?.bytes ?? focus?.bytes ?? reading.used))
-                        .font(.system(size: 26, weight: .light)).monospacedDigit()
-                        .foregroundStyle(Brand.textPrimary)
-                    Text(area?.title ?? focus?.title ?? "used")
-                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                        .lineLimit(2).multilineTextAlignment(.center)
-                        .frame(maxWidth: radius * 0.75)
-                }
-                .allowsHitTesting(false)
+            .frame(height: 44)
+            HStack {
+                Text("0")
+                Spacer()
+                Text(Fmt.size(Int64(total)))
             }
-            .animation(.easeOut(duration: 0.15), value: hovered)
+            .font(.system(size: 11)).foregroundStyle(Brand.textMuted).monospacedDigit()
         }
+        .animation(.easeOut(duration: 0.15), value: hovered)
     }
 
-    // MARK: - Legend
+    // MARK: - List
 
     private var legend: some View {
-        let areas = shown
-        let largest = max(1, areas.map(\.bytes).max() ?? 1)
-        return NightList {
-            ForEach(Array(areas.enumerated()), id: \.element.id) { index, area in
+        NightList {
+            ForEach(Array(shown.enumerated()), id: \.element.id) { index, area in
                 Button { open(area) } label: {
                     HStack(spacing: 12) {
-                        Circle().fill(tint(area, index: index)).frame(width: 9, height: 9)
-                        NightName(logo: nil, title: area.title, subtitle: area.note)
-                        NightMeter(share: Double(area.bytes) / Double(largest))
-                        Text((area.partial ? "≥ " : "") + Fmt.size(area.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
-                            .frame(width: 90, alignment: .trailing)
+                        Circle().fill(area.kind == .free && focus == nil ? Brand.wash(0.14) : tone(area, index: index))
+                            .frame(width: 9, height: 9)
+                        Text(area.title).font(.system(size: 13.5, weight: .medium)).lineLimit(1)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Text((area.partial ? "≥ " : "") + Fmt.size(area.bytes))
+                            .font(.system(size: 13, weight: .medium)).monospacedDigit()
                         Image(systemName: "chevron.right").font(.system(size: 10, weight: .semibold))
                             .foregroundStyle(area.children.isEmpty ? Color.clear : Brand.textMuted)
                     }
+                    .padding(.horizontal, 6)
                 }
                 .buttonStyle(.plain)
                 .nightRow()
+                .background(RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(opened?.id == area.id || hovered == area.id ? Brand.room.opacity(0.05) : Color.clear))
                 .onHover { inside in
                     if inside { hovered = area.id } else if hovered == area.id { hovered = nil }
                 }
+                .help(area.note)
                 .contextMenu {
                     if let url = area.url { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([url]) } }
                 }
@@ -230,16 +237,63 @@ struct DiskMapWorkspace: View {
         }
     }
 
-    /// Opens an area with something inside it; otherwise shows it in Finder.
-    private func open(_ area: DiskArea) {
-        if !area.children.isEmpty {
-            // An outer slice belongs to an inner one; open the path down to it.
-            if let parent = shown.first(where: { $0.children.contains { $0.id == area.id } }) {
-                path.append(parent.id)
+    /// What is inside the opened part: its own small bar and list.
+    @ViewBuilder private var inside: some View {
+        if let area = opened {
+            let parts = area.children.sorted { $0.bytes > $1.bytes }
+            let total = Double(max(1, parts.reduce(Int64(0)) { $0 + $1.bytes }))
+            VStack(alignment: .leading, spacing: 12) {
+                Text("Inside \(area.title) · \(Fmt.size(area.bytes))").nightEyebrow().lineLimit(1)
+                GeometryReader { geo in
+                    let gaps = CGFloat(max(0, parts.count - 1)) * 2
+                    HStack(spacing: 2) {
+                        ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
+                            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Self.step(index))
+                                .frame(width: max(3, (geo.size.width - gaps) * CGFloat(Double(part.bytes) / total)))
+                        }
+                    }
+                }
+                .frame(height: 10)
+                NightList {
+                    ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
+                        Button { open(part) } label: {
+                            HStack(spacing: 12) {
+                                Circle().fill(Self.step(index)).frame(width: 9, height: 9)
+                                Text(part.title).font(.system(size: 13)).lineLimit(1)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Text((part.partial ? "≥ " : "") + Fmt.size(part.bytes))
+                                    .font(.system(size: 13, weight: .medium)).monospacedDigit()
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, -4)
+                        .nightRow()
+                        .help(part.note.isEmpty ? part.title : part.note)
+                    }
+                }
+                if !area.note.isEmpty {
+                    Text(area.note).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
+        }
+    }
+
+    /// Choosing a part shows its insides; a part inside the opened one drills
+    /// down when it has parts of its own, otherwise shows it in Finder.
+    private func open(_ area: DiskArea) {
+        if shown.contains(where: { $0.id == area.id }) {
+            chosen = area.id
+            if area.children.isEmpty, area.kind != .free, let url = area.url, !preview {
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+            }
+        } else if !area.children.isEmpty, let parent = opened {
+            path.append(parent.id)
             path.append(area.id)
+            chosen = nil
             hovered = nil
-        } else if area.kind != .free, let url = area.url, !preview {
+        } else if let url = area.url, !preview {
             NSWorkspace.shared.activateFileViewerSelecting([url])
         }
     }
@@ -264,21 +318,4 @@ struct DiskMapWorkspace: View {
             a("files", "Your files", .files, 120, files), a("free", "Free", .free, 412),
         ], date: Date())
     }()
-}
-
-/// A filled ring segment between two radii.
-struct DiskMapArc: Shape {
-    let start: Angle
-    let end: Angle
-    let inner: CGFloat
-    let outer: CGFloat
-    let center: CGPoint
-
-    func path(in rect: CGRect) -> Path {
-        var p = Path()
-        p.addArc(center: center, radius: outer, startAngle: start, endAngle: end, clockwise: false)
-        p.addArc(center: center, radius: inner, startAngle: end, endAngle: start, clockwise: true)
-        p.closeSubpath()
-        return p
-    }
 }

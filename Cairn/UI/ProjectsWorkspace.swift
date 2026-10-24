@@ -65,11 +65,14 @@ struct ProjectsWorkspace: View {
     }
 
     var body: some View {
-        NightPage(eyebrow: projects.isEmpty || commonRoot.isEmpty ? "Projects" : "Projects · \(commonRoot)",
-                  title: totalBytes > 0 ? "\(Fmt.size(totalBytes)) of build output" : "Projects",
-                  subtitle: projects.isEmpty
-                      ? "Your coding projects, how long since you worked on them, and what can be rebuilt."
-                      : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.") {
+        NightNumberPage(eyebrow: projects.isEmpty || commonRoot.isEmpty ? "Projects" : "Projects · \(commonRoot)",
+                        number: idleBytes > 0 ? Fmt.size(idleBytes) : totalBytes > 0 ? Fmt.size(totalBytes) : "Projects",
+                        phrase: idleBytes > 0 ? "can go to sleep" : totalBytes > 0 ? "of build output" : "",
+                        lead: idleBytes > 0
+                            ? "Untouched for a month. Sleeping clears what they can rebuild and keeps a note to bring it back."
+                            : projects.isEmpty
+                                ? "Your coding projects, how long since you worked on them, and what can be rebuilt."
+                                : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.") {
             Button {
                 guard !preview else { return }
                 if store.isScanning { store.cancel() } else { store.rescan() }
@@ -90,9 +93,11 @@ struct ProjectsWorkspace: View {
                     .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                     .disabled(store.isCleaning || store.isScanning)
             } else {
-                NightTotal(strong: Fmt.size(idleBytes), rest: "in projects idle for \(Self.idleDays)+ days")
+                NightTotal(strong: Fmt.size(idleBytes), rest: idleLine)
                 Spacer()
-                Button("Put idle projects to sleep") { putToSleep(idle) }
+                Button(sleepTargets.count < idle.count
+                       ? "Put \(sleepTargets.count) ready project\(sleepTargets.count == 1 ? "" : "s") to sleep"
+                       : "Put idle projects to sleep") { putToSleep(sleepTargets) }
                     .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                     .disabled(idle.isEmpty || store.isCleaning || store.isScanning)
                     .help("Selects rebuildable output in projects untouched for \(Self.idleDays) days or more, keeps a note of how to rebuild it, then shows it for review")
@@ -102,6 +107,17 @@ struct ProjectsWorkspace: View {
     }
 
     // MARK: - Sleep
+
+    /// Idle projects whose git work is all pushed (or that git can't speak for).
+    private var ready: [ProjectSummary] { idle.filter { git[$0.id]?.backedUp != false } }
+    /// The footer button sleeps the ready ones when some still need pushing;
+    /// a single project with unpushed work is put to sleep from its own row.
+    private var sleepTargets: [ProjectSummary] { ready.isEmpty ? idle : ready }
+    private var idleLine: String {
+        let waiting = idle.count - ready.count
+        let base = "in \(idle.count) idle project\(idle.count == 1 ? "" : "s")"
+        return waiting > 0 ? base + " · \(waiting) need\(waiting == 1 ? "s" : "") pushing first" : base
+    }
 
     /// Selects the projects' rebuildable output, notes how to bring it back,
     /// and opens the normal review. The note only counts once the clean has run.
@@ -125,28 +141,32 @@ struct ProjectsWorkspace: View {
 
     @ViewBuilder private var asleepSection: some View {
         if !asleep.isEmpty {
-            Text("Asleep").nightEyebrow().padding(.top, 22).padding(.bottom, 8)
+            Text("Asleep · \(asleep.count)").nightEyebrow().padding(.top, 22).padding(.bottom, 8)
             ForEach(asleep) { note in sleepingRow(note) }
         }
     }
 
     private func sleepingRow(_ note: SleepingProject) -> some View {
         HStack(spacing: 14) {
-            NightName(logo: BrandLogo(name: nil, fallback: "moon.zzz", size: 25),
-                      title: note.name, subtitle: displayPath(URL(fileURLWithPath: note.path)))
-            Text(Fmt.size(note.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
-                .frame(width: 90, alignment: .trailing)
+            HStack(spacing: 10) {
+                Image(systemName: "moon").font(.system(size: 15)).foregroundStyle(Brand.room).frame(width: 22, height: 22)
+                NightName(logo: nil, title: note.name, subtitle: displayPath(URL(fileURLWithPath: note.path)))
+            }
+            Text(Fmt.size(note.bytes) + " cleared").font(.system(size: 12)).foregroundStyle(Brand.textMuted).monospacedDigit()
+                .lineLimit(1).frame(width: 120, alignment: .leading)
             Text("Asleep since " + note.asleepSince.formatted(.dateTime.day().month(.abbreviated)))
                 .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 .lineLimit(1).frame(width: 140, alignment: .leading)
             if let command = note.wakeCommand {
-                Button(copied == note.path ? "Copied" : "Copy wake-up command") {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(command, forType: .string)
+                NightLink(title: copied == note.path ? "Copied" : "Wake: " + command, systemImage: "doc.on.doc") {
+                    copy(command)
                     copied = note.path
                 }
-                .buttonStyle(ControlPanelButtonStyle(size: .small))
-                .help(command)
+                .lineLimit(1)
+                .frame(width: 170, alignment: .trailing)
+                .help("Copies the command. Paste it into Terminal in the project folder to rebuild what was cleared.")
+            } else {
+                Spacer().frame(width: 170)
             }
         }
         .nightRow()
@@ -156,6 +176,11 @@ struct ProjectsWorkspace: View {
         }
         .help(note.wakeCommand.map { "Paste into Terminal to rebuild what was cleared: \($0)" }
               ?? "Cairn could not tell how this project rebuilds. Use its own install or build step.")
+    }
+
+    private func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     // MARK: - Sections
@@ -192,8 +217,15 @@ struct ProjectsWorkspace: View {
         let state = selectionState(project)
         return Button { expanded.formSymmetricDifference([project.id]) } label: {
             HStack(spacing: 14) {
-                NightName(logo: BrandLogo(name: nil, fallback: "folder", size: 25),
-                          title: project.name, subtitle: subtitle(project))
+                HStack(spacing: 10) {
+                    BrandLogo(name: nil, fallback: "folder", size: 25).frame(width: 22, height: 22)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(project.name).font(.system(size: 13.5, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                            .lineLimit(1).truncationMode(.middle)
+                        gitLine(project).font(.system(size: 12)).lineLimit(1).truncationMode(.tail)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 NightMeter(share: Double(project.rebuildableBytes) / Double(largestBytes))
                 Text(Fmt.size(project.rebuildableBytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
                     .frame(width: 90, alignment: .trailing)
@@ -212,37 +244,73 @@ struct ProjectsWorkspace: View {
             }
             Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([project.url]) }
         }
-        .help(activitySentence(project))
+        .help(displayPath(project.url) + " · " + activitySentence(project))
     }
 
-    /// Inside an opened project: what git says, and the sleep button.
+    /// Inside an opened project: what git says, and the sleep button. Amber
+    /// when work exists only on this Mac.
     private func sleepLine(_ project: ProjectSummary) -> some View {
         let status = git[project.id]
+        let names = project.rebuildable.map { relativeName($0, in: project) }.prefix(3).joined(separator: " and ")
+        let clears = names.isEmpty ? "files the project can rebuild" : names
+        let warning = status?.warning?.components(separatedBy: ". Sleeping").first
+        let strong: String
         let text: String
-        if let warning = status?.warning { text = warning }
-        else if status != nil { text = "Everything is committed and pushed. Sleeping clears \(Fmt.size(project.rebuildableBytes)) that the project can rebuild." }
-        else if project.isRepository { text = "Cairn could not read this project's git status. Sleeping only clears files the project can rebuild." }
-        else { text = "Not a git repository, so nothing here is backed up by git. Sleeping only clears files the project can rebuild." }
-        return HStack(spacing: 14) {
-            Image(systemName: status?.warning != nil || status == nil ? "exclamationmark.circle" : "checkmark.circle")
-                .font(.system(size: 13)).foregroundStyle(status?.warning != nil ? Brand.amber : Brand.textMuted)
-                .frame(width: 22)
-            Text(text).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        if let warning {
+            strong = "This work is only on this Mac."
+            text = "\(warning). Push it first, or sleep anyway: sleeping only clears \(clears), never your code."
+        } else if status != nil {
+            strong = "Everything is committed and pushed."
+            text = "Sleeping clears \(Fmt.size(project.rebuildableBytes)) in \(clears), and keeps a note of how to rebuild it."
+        } else if project.isRepository {
+            strong = ""
+            text = "Cairn could not read this project's git status. Sleeping only clears \(clears), never your code."
+        } else {
+            strong = "Not in git,"
+            text = "so nothing here is backed up by git. Sleeping only clears \(clears), never your code."
+        }
+        return NightNote(tone: warning != nil ? .warn : .info, strong: strong, text: text) {
+            if let command = pushCommand(project, status: status) {
+                NightLink(title: copied == project.id ? "Copied" : "Copy git push") {
+                    copy(command)
+                    copied = project.id
+                }
+                .help(command)
+            }
             if !project.rebuildable.isEmpty {
-                Button("Put to sleep") { putToSleep([project]) }
+                Button { putToSleep([project]) } label: { Label("Put to sleep", systemImage: "moon") }
                     .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .disabled(store.isCleaning || store.isScanning)
             }
         }
-        .padding(.leading, 32)
-        .nightRow()
+        .padding(.leading, 34)
+        .padding(.vertical, 6)
     }
 
-    private func subtitle(_ project: ProjectSummary) -> String {
-        guard let status = git[project.id], !status.summary.isEmpty else { return displayPath(project.url) }
-        return displayPath(project.url) + " · " + status.summary
+    /// The command that pushes this branch, when commits are waiting. Cairn
+    /// only copies it; it never runs git commands that change anything.
+    private func pushCommand(_ project: ProjectSummary, status: GitStatus?) -> String? {
+        guard let status, let branch = status.branch else { return nil }
+        let folder = "'" + project.url.path.replacingOccurrences(of: "'", with: "'\\''") + "'"
+        if status.upstream == nil { return "git -C \(folder) push -u origin \(branch)" }
+        return status.ahead > 0 ? "git -C \(folder) push" : nil
+    }
+
+    /// "checkout-redesign · 3 not pushed · 2 changed", the problem part in amber.
+    private func gitLine(_ project: ProjectSummary) -> Text {
+        guard let status = git[project.id] else {
+            return Text(project.isRepository ? displayPath(project.url) : "not in git").foregroundStyle(Brand.textMuted)
+        }
+        let head = Text((status.branch ?? "detached") + " · ").foregroundStyle(Brand.textMuted)
+        if status.backedUp {
+            return head + Text("✓ ").foregroundStyle(Brand.room) + Text("all pushed").foregroundStyle(Brand.textMuted)
+        }
+        var parts: [String] = []
+        if status.upstream == nil { parts.append("never pushed") }
+        else if status.ahead > 0 { parts.append("\(status.ahead) commit\(status.ahead == 1 ? "" : "s") not pushed") }
+        if status.changed > 0 { parts.append("\(status.changed) unsaved") }
+        if status.untracked > 0 { parts.append("\(status.untracked) new file\(status.untracked == 1 ? "" : "s") not in git") }
+        return head + Text(parts.joined(separator: " · ")).foregroundStyle(Brand.amber)
     }
 
     private func itemRow(_ item: ScanItem, in project: ProjectSummary) -> some View {
@@ -266,7 +334,8 @@ struct ProjectsWorkspace: View {
         if (project.idleDays() ?? 0) < Self.idleDays { return NightPill(text: "Active") }
         // An old project with work that exists only on this Mac.
         if git[project.id]?.backedUp == false { return NightPill(text: "Not pushed", tone: .warn) }
-        return NightPill(text: "Idle", tone: .ok)
+        if git[project.id]?.backedUp == true { return NightPill(text: "Ready to sleep", tone: .ok) }
+        return NightPill(text: "Idle")
     }
 
     private func lastTouched(_ project: ProjectSummary) -> String {
