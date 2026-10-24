@@ -16,8 +16,8 @@ enum LicenseConfig {
     static let organizationID = "033c682c-186b-46fd-8f3a-03a686e96cba"
     /// How long Pro keeps working fully offline before a required online re-check.
     static let offlineGrace: TimeInterval = 60 * 60 * 24 * 14
-    /// Where buyers without a key purchase Cairn Pro (domain TBD pre-launch).
-    static let purchaseURL = URL(string: "https://getcairn.app/#pricing")!
+    /// Where buyers without a key purchase Cairn Pro.
+    static let purchaseURL = URL(string: "https://cairnmac.com/#pricing")!
     static let price = "£35.99"
 
     /// DEV ONLY, and only in debug builds — unlocks Pro locally so Pro-gated
@@ -43,7 +43,7 @@ enum LicenseConfig {
 /// check, so it keeps the free tier. Debug builds skip this.
 enum AppIntegrity {
     static let teamID = "FC88M2P4F9"
-    static let message = "This copy of Cairn has been changed or was not signed by Emotive Impact, so Pro can't run in it. Download Cairn again from getcairn.app."
+    static let message = "This copy of Cairn has been changed or was not signed by Emotive Impact, so Pro can't run in it. Download Cairn again from cairnmac.com."
     /// Worked out once, off the main thread, when the saved licence is first read.
     static let allowsPro: Bool = {
         #if DEBUG
