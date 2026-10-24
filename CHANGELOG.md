@@ -8,6 +8,14 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
+### Sleeping projects, AI models, disk map and cleaning rules (this branch)
+
+- **Put a project to sleep.** Projects shows each repository's git state (branch, changed files, commits not pushed). An idle project with work that exists only on this Mac gets an amber "Not pushed" label. "Put to sleep" selects the project's rebuildable output for the normal review and keeps a note with the command that brings it back, such as `pnpm install`. Sleeping projects are listed under Asleep with a "Copy wake-up command" button. Cairn never runs that command itself.
+- **AI models page.** Clean › AI Models lists every model from Ollama, LM Studio, Hugging Face, GPT4All, Jan, Whisper, PyTorch, ComfyUI, Stable Diffusion, Fooocus, InvokeAI, DiffusionBee and Draw Things, with its size and the date it was downloaded. Nothing is picked for you. A model can go to the Trash after a confirmation; Ollama models share files, so Cairn gives you the `ollama rm` command instead.
+- **Disk map.** Files › Disk map draws the whole disk as two rings: macOS, System Data, apps, coding, your files and free space, and what is inside each. System Data is broken into swap, app caches, app support data, containers, Xcode and simulators, Mail, Messages, logs, the shared Library and what Cairn could not measure (such as local Time Machine snapshots). Click a slice to look inside it. It only reads sizes and stops after two minutes.
+- **Cleaning rules you approve once.** Settings › Rules has six rules: old Xcode build files, package manager caches, build output in idle projects, browser caches, app caches and old logs. All start off. Turning one on measures and shows what it would clear today before you approve it. Each has a schedule, an age, and a size limit per run, can be paused, uses the same safety checks and receipts as a normal clean, and only takes items an AI tool would also be allowed to clean. The same page has the single low-space warning from Monitoring.
+- **AI tool link for Zed, opencode and Goose, and Cursor files with comments.** Cairn now connects to 17 tools. Settings files with comments (Cursor, Zed, opencode) are edited in place so the comments stay. Goose's YAML file gets one `cairn` extension and nothing else changes.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.

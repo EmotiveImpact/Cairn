@@ -9,11 +9,12 @@ struct PreferencesWorkspace: View {
     @State private var message = ""
     @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "AI tools", "License", "About & CLI"]
+    private let tabs = ["General", "Cleaning", "Rules", "Scanning", "Monitoring", "Protection", "Excluded locations", "AI tools", "License", "About & CLI"]
     private var tabLine: String {
         switch tab {
         case "General": return "How Cairn looks and starts."
         case "Cleaning": return "What happens when you clean."
+        case "Rules": return "Cleanups you approve once. Cairn runs them on its own and leaves a receipt."
         case "Scanning": return "What Cairn looks at when it scans."
         case "Monitoring": return "Watching your free space while Cairn runs. Nothing is ever removed."
         case "Protection": return "What Cairn never touches, whatever you choose."
@@ -76,6 +77,8 @@ struct PreferencesWorkspace: View {
             }.nightRow()
             fixed("Tool cleans", "Docker, pnpm, Go, Homebrew, conda, simctl, git gc and Time Machine snapshots are cleaned with each tool's own command, so nothing is deleted behind the tool's back.")
             fixed("Always protected", "System files, credentials, Mail, Messages, Photos, iCloud, source repositories and AI conversation history are never removed, whichever mode you choose.")
+        case "Rules":
+            RulesPanel()
         case "Scanning":
             option("Refresh older scans", "On launch, rescan if the previous scan is more than a week old.", $settings.autoScanWeekly)
             option("Skip external drives", "Keep general scans on this Mac.", $settings.ignoreExternalDrives)
@@ -164,7 +167,7 @@ struct PreferencesWorkspace: View {
             fixed("System files & credentials", "Protected by the shared safety guard at scan and action time.")
             fixed("Running applications", "Cache cleanup skips known owners that are still running.")
             fixed("Source & recovery data", "Source, Git metadata, worktrees and recovery locations are protected.")
-            fixed("Nothing runs without review", "Every deletion, Trash emptying and tool clean is shown to you first.")
+            fixed("Nothing runs without review", "Every deletion, Trash emptying and tool clean is shown to you first. Rules you approve in Settings › Rules are the only exception, and only clear files that rebuild themselves.")
             fixed("Unknown application data", "An absent application or old folder date never proves its data is disposable.")
         case "Excluded locations":
             if settings.excludedPaths.isEmpty {

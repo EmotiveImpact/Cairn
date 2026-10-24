@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, lookThrough, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, lookThrough, largeFiles, diskMap, duplicates, apps, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -20,6 +20,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .creative: return "Creative Pro"
         case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
+        case .diskMap: return "Disk map"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
         case .storage: return "Storage"
@@ -44,6 +45,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .creative: return "film"
         case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
+        case .diskMap: return "chart.pie"
         case .duplicates: return "doc.on.doc"
         case .apps: return "square.grid.2x2"
         case .storage: return "externaldrive"
@@ -286,6 +288,8 @@ struct AppShell: View {
         .task {
             guard !previewMode else { return }
             AgentBridge.shared.attach(store: store, proEnabled: { license.isUnlocked })
+            // Cleaning rules the person approved in Settings › Rules.
+            RuleRunner.shared.attach(store: store, proEnabled: { license.isUnlocked })
         }
         .task {
             guard !previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--scan-memory-report=") }) else { return }
@@ -366,7 +370,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .makeRoom, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .storage, .diskMap, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -529,12 +533,16 @@ struct AppShell: View {
                     store.select { item, _ in plan.itemIDs.contains(item.id) }
                     if store.selectedCount > 0 { goalReviewPending = true; showReview = true }
                 }, onOpen: { section = $0 })
-        case .smartScan, .general, .browsers, .developer, .ai, .creative:
+        case .ai:
+            AIModelsWorkspace(search: developerSearch)
+        case .smartScan, .general, .browsers, .developer, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
         case .lookThrough:
             LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
+        case .diskMap:
+            DiskMapWorkspace()
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
@@ -575,7 +583,7 @@ struct NavSidebar: View {
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
     private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .bugs]
-    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
+    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .diskMap, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {

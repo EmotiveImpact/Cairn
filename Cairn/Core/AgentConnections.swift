@@ -3,17 +3,32 @@ import Foundation
 /// Connects Cairn's read-only MCP server (`Cairn mcp`) to AI coding tools on
 /// this Mac by adding one `cairn` entry to each tool's own MCP config file.
 ///
-/// Only that entry is written. Every other setting in the file is kept, a file
-/// Cairn cannot parse (JSON with comments, for example) is left untouched, and
-/// the previous file is kept beside it as `<name>.cairn-backup` before the
-/// first change. Claude Code keeps its settings in a large, busy file, so it is
+/// Only that entry is written. Every other setting in the file is kept. JSON
+/// with comments (Cursor, Zed and opencode allow them) is edited in place so
+/// the comments survive, a file Cairn cannot parse is left untouched, and the
+/// previous file is kept beside it as `<name>.cairn-backup` before the first
+/// change. Claude Code keeps its settings in a large, busy file, so it is
 /// connected through its own `claude mcp add` command instead.
 struct AgentTool: Identifiable, Equatable {
     enum Format: Equatable {
-        /// `key` holds a server table; VS Code also wants `"type": "stdio"`.
-        case json(key: String, typed: Bool)
+        /// `key` holds a server table; `entry` is the shape of Cairn's entry in it.
+        case json(key: String, entry: Entry)
         case codexTOML
         case claudeCLI
+        /// Goose keeps its extensions in YAML.
+        case gooseYAML
+    }
+
+    /// How each tool spells one server.
+    enum Entry: Equatable {
+        /// `{"command": ..., "args": ["mcp"]}`, used by most tools.
+        case plain
+        /// VS Code also wants `"type": "stdio"`.
+        case stdio
+        /// Zed adds an `env` table.
+        case zed
+        /// opencode takes the command and its arguments as one list.
+        case opencode
     }
 
     let id: String
@@ -27,37 +42,48 @@ struct AgentTool: Identifiable, Equatable {
 
     static func all(home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [AgentTool] {
         let support = home.appendingPathComponent("Library/Application Support")
+        let config = home.appendingPathComponent(".config")
+        // opencode reads either spelling; edit the one the person already has.
+        let opencodeJSONC = config.appendingPathComponent("opencode/opencode.jsonc")
+        let opencode = FileManager.default.fileExists(atPath: opencodeJSONC.path)
+            ? opencodeJSONC : config.appendingPathComponent("opencode/opencode.json")
         return [
             AgentTool(id: "claude-code", title: "Claude Code", config: home.appendingPathComponent(".claude.json"),
                       format: .claudeCLI, marker: home.appendingPathComponent(".claude")),
             AgentTool(id: "claude-desktop", title: "Claude Desktop", config: support.appendingPathComponent("Claude/claude_desktop_config.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Claude")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: support.appendingPathComponent("Claude")),
             AgentTool(id: "codex", title: "Codex", config: home.appendingPathComponent(".codex/config.toml"),
                       format: .codexTOML, marker: home.appendingPathComponent(".codex")),
             AgentTool(id: "cursor", title: "Cursor", config: home.appendingPathComponent(".cursor/mcp.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".cursor")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".cursor")),
             AgentTool(id: "gemini", title: "Gemini CLI", config: home.appendingPathComponent(".gemini/settings.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".gemini")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".gemini")),
             AgentTool(id: "vscode", title: "VS Code", config: support.appendingPathComponent("Code/User/mcp.json"),
-                      format: .json(key: "servers", typed: true), marker: support.appendingPathComponent("Code/User")),
+                      format: .json(key: "servers", entry: .stdio), marker: support.appendingPathComponent("Code/User")),
             AgentTool(id: "windsurf", title: "Windsurf", config: home.appendingPathComponent(".codeium/windsurf/mcp_config.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".codeium/windsurf")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".codeium/windsurf")),
             AgentTool(id: "cline", title: "Cline", config: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev/settings/cline_mcp_settings.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: support.appendingPathComponent("Code/User/globalStorage/saoudrizwan.claude-dev")),
             AgentTool(id: "roo", title: "Roo Code", config: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: support.appendingPathComponent("Code/User/globalStorage/rooveterinaryinc.roo-cline")),
             AgentTool(id: "kiro", title: "Kiro", config: home.appendingPathComponent(".kiro/settings/mcp.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".kiro")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".kiro")),
             AgentTool(id: "amazon-q", title: "Amazon Q", config: home.appendingPathComponent(".aws/amazonq/mcp.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".aws/amazonq")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".aws/amazonq")),
             AgentTool(id: "junie", title: "JetBrains Junie", config: home.appendingPathComponent(".junie/mcp/mcp.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".junie")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".junie")),
             AgentTool(id: "lm-studio", title: "LM Studio", config: home.appendingPathComponent(".lmstudio/mcp.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".lmstudio")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".lmstudio")),
             AgentTool(id: "qwen", title: "Qwen Code", config: home.appendingPathComponent(".qwen/settings.json"),
-                      format: .json(key: "mcpServers", typed: false), marker: home.appendingPathComponent(".qwen")),
+                      format: .json(key: "mcpServers", entry: .plain), marker: home.appendingPathComponent(".qwen")),
             AgentTool(id: "amp", title: "Amp", config: home.appendingPathComponent(".config/amp/settings.json"),
-                      format: .json(key: "amp.mcpServers", typed: false), marker: home.appendingPathComponent(".config/amp")),
+                      format: .json(key: "amp.mcpServers", entry: .plain), marker: home.appendingPathComponent(".config/amp")),
+            AgentTool(id: "zed", title: "Zed", config: config.appendingPathComponent("zed/settings.json"),
+                      format: .json(key: "context_servers", entry: .zed), marker: config.appendingPathComponent("zed")),
+            AgentTool(id: "opencode", title: "opencode", config: opencode,
+                      format: .json(key: "mcp", entry: .opencode), marker: config.appendingPathComponent("opencode")),
+            AgentTool(id: "goose", title: "Goose", config: config.appendingPathComponent("goose/config.yaml"),
+                      format: .gooseYAML, marker: config.appendingPathComponent("goose")),
         ]
     }
 }
@@ -111,9 +137,9 @@ enum AgentConnections {
         guard fm.fileExists(atPath: tool.config.path) else { return .available }
         switch tool.format {
         case .json(let key, _):
-            guard let root = readJSON(tool.config) else { return .unreadable("\(tool.config.lastPathComponent) is not plain JSON, so Cairn leaves it alone.") }
+            guard let root = readJSON(tool.config) else { return .unreadable("Cairn could not read \(tool.config.lastPathComponent), so it leaves it alone.") }
             guard let entry = (root[key] as? [String: Any])?[AgentTool.serverName] as? [String: Any] else { return .available }
-            return .connected(current: entry["command"] as? String == command)
+            return .connected(current: entryCommand(entry) == command)
         case .claudeCLI:
             guard let root = readJSON(tool.config) else { return .available }
             guard let entry = (root["mcpServers"] as? [String: Any])?[AgentTool.serverName] as? [String: Any] else { return .available }
@@ -122,23 +148,56 @@ enum AgentConnections {
             guard let text = try? String(contentsOf: tool.config, encoding: .utf8) else { return .unreadable("Cairn could not read config.toml.") }
             guard let range = codexTable(in: text) else { return .available }
             return .connected(current: text[range].contains("command = \(tomlString(command))"))
+        case .gooseYAML:
+            guard let text = try? String(contentsOf: tool.config, encoding: .utf8) else { return .unreadable("Cairn could not read config.yaml.") }
+            guard let entry = GooseYAML.entry(in: text) else { return .available }
+            let lines = text[entry].split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            return .connected(current: lines.contains("cmd: \(tomlString(command))") || lines.contains("cmd: \(command)"))
         }
+    }
+
+    /// The JSON for Cairn's entry in a tool's server table.
+    static func entry(_ style: AgentTool.Entry, command: String) -> [String: Any] {
+        switch style {
+        case .plain: return ["command": command, "args": ["mcp"]]
+        case .stdio: return ["type": "stdio", "command": command, "args": ["mcp"]]
+        case .zed: return ["command": command, "args": ["mcp"], "env": [String: String]()]
+        case .opencode: return ["type": "local", "command": [command, "mcp"], "enabled": true]
+        }
+    }
+
+    /// The executable an existing entry launches, in any of the tools' spellings.
+    static func entryCommand(_ entry: [String: Any]) -> String? {
+        if let text = entry["command"] as? String { return text }
+        if let list = entry["command"] as? [String] { return list.first }
+        // Zed's older form: {"command": {"path": ..., "args": [...]}}.
+        if let table = entry["command"] as? [String: Any] { return table["path"] as? String }
+        return nil
     }
 
     // MARK: - Connect and disconnect
 
     static func connect(_ tool: AgentTool, command: String = command, claudeBinary: URL? = findClaude()) throws {
         switch tool.format {
-        case .json(let key, let typed):
+        case .json(let key, let style):
             var root: [String: Any] = [:]
+            let value = entry(style, command: command)
             if FileManager.default.fileExists(atPath: tool.config.path) {
-                guard let existing = readJSON(tool.config) else { throw Failure(message: "\(tool.title)'s settings file is not plain JSON, so Cairn left it unchanged.") }
+                guard let existing = readJSON(tool.config) else { throw Failure(message: "Cairn could not read \(tool.title)'s settings file, so it left it unchanged.") }
+                if let text = commentedText(tool.config) {
+                    // Splice the entry in so the person's comments and layout survive.
+                    guard let edited = JSONC.setMember(in: text, object: key, name: AgentTool.serverName, value: value),
+                          let check = JSONC.parse(edited), Set(check.keys).isSuperset(of: existing.keys),
+                          (check[key] as? [String: Any])?[AgentTool.serverName] != nil else {
+                        throw Failure(message: "Cairn could not safely add itself to \(tool.title)'s settings file, so it left it unchanged.")
+                    }
+                    try write(Data(edited.utf8), to: tool.config)
+                    return
+                }
                 root = existing
             }
             var servers = root[key] as? [String: Any] ?? [:]
-            var entry: [String: Any] = ["command": command, "args": ["mcp"]]
-            if typed { entry["type"] = "stdio" }
-            servers[AgentTool.serverName] = entry
+            servers[AgentTool.serverName] = value
             root[key] = servers
             try writeJSON(root, to: tool.config)
         case .codexTOML:
@@ -148,6 +207,16 @@ enum AgentConnections {
             if !text.isEmpty && !text.hasSuffix("\n\n") { text += "\n" }
             text += "[mcp_servers.\(AgentTool.serverName)]\ncommand = \(tomlString(command))\nargs = [\"mcp\"]\n"
             try write(Data(text.utf8), to: tool.config)
+        case .gooseYAML:
+            var text = ""
+            if FileManager.default.fileExists(atPath: tool.config.path) {
+                guard let existing = try? String(contentsOf: tool.config, encoding: .utf8) else { throw Failure(message: "Cairn could not read Goose's config.yaml, so it left it unchanged.") }
+                text = existing
+            }
+            guard let edited = GooseYAML.connect(text, command: command) else {
+                throw Failure(message: "Goose's config.yaml has an extensions section Cairn does not recognise, so it left it unchanged.")
+            }
+            try write(Data(edited.utf8), to: tool.config)
         case .claudeCLI:
             guard let claude = claudeBinary else {
                 throw Failure(message: "Cairn could not find the claude command. Paste this into Terminal instead: \(manualCommand(command))")
@@ -165,14 +234,26 @@ enum AgentConnections {
         guard FileManager.default.fileExists(atPath: tool.config.path) else { return }
         switch tool.format {
         case .json(let key, _):
-            guard var root = readJSON(tool.config) else { throw Failure(message: "\(tool.title)'s settings file is not plain JSON, so Cairn left it unchanged.") }
+            guard var root = readJSON(tool.config) else { throw Failure(message: "Cairn could not read \(tool.title)'s settings file, so it left it unchanged.") }
             guard var servers = root[key] as? [String: Any], servers[AgentTool.serverName] != nil else { return }
+            if let text = commentedText(tool.config) {
+                guard let edited = JSONC.removeMember(in: text, object: key, name: AgentTool.serverName),
+                      let check = JSONC.parse(edited), (check[key] as? [String: Any])?[AgentTool.serverName] == nil,
+                      Set(check.keys) == Set(root.keys) else {
+                    throw Failure(message: "Cairn could not safely remove itself from \(tool.title)'s settings file, so it left it unchanged.")
+                }
+                try write(Data(edited.utf8), to: tool.config)
+                return
+            }
             servers.removeValue(forKey: AgentTool.serverName)
             root[key] = servers
             try writeJSON(root, to: tool.config)
         case .codexTOML:
             guard var text = try? String(contentsOf: tool.config, encoding: .utf8), removeCodexTable(from: &text) else { return }
             try write(Data(text.utf8), to: tool.config)
+        case .gooseYAML:
+            guard let text = try? String(contentsOf: tool.config, encoding: .utf8), let edited = GooseYAML.disconnect(text) else { return }
+            try write(Data(edited.utf8), to: tool.config)
         case .claudeCLI:
             guard let claude = claudeBinary else { throw Failure(message: "Cairn could not find the claude command. Run: claude mcp remove --scope user cairn") }
             let output = try runClaude(claude, ["mcp", "remove", "--scope", "user", AgentTool.serverName])
@@ -182,10 +263,21 @@ enum AgentConnections {
 
     // MARK: - Files
 
+    /// Reads plain JSON, or JSON with comments and trailing commas.
     static func readJSON(_ url: URL) -> [String: Any]? {
         guard let data = try? Data(contentsOf: url) else { return nil }
         if data.allSatisfy({ $0 == 0x20 || $0 == 0x0A || $0 == 0x0D || $0 == 0x09 }) { return [:] }
-        return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        if let plain = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] { return plain }
+        return String(data: data, encoding: .utf8).flatMap(JSONC.parse)
+    }
+
+    /// The file's text when it holds comments or trailing commas, which a
+    /// plain JSON rewrite would lose.
+    private static func commentedText(_ url: URL) -> String? {
+        guard let data = try? Data(contentsOf: url),
+              (try? JSONSerialization.jsonObject(with: data)) == nil,
+              let text = String(data: data, encoding: .utf8) else { return nil }
+        return text
     }
 
     private static func writeJSON(_ object: [String: Any], to url: URL) throws {

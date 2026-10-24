@@ -39,6 +39,98 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Projects fixture could not be created: \(error)")
         }
+        // Git status, project sleep notes, cleaning rules, AI models and the disk map.
+        do {
+            let parsed = GitStatus.parse("# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +3 -1\n1 .M N... 100644 100644 100644 a b src/app.ts\n? notes.txt\n")
+            check(parsed.branch == "main" && parsed.ahead == 3 && parsed.behind == 1 && parsed.changed == 1 && parsed.untracked == 1,
+                  "git status is read from porcelain output")
+            check(!parsed.backedUp && parsed.warning?.contains("not been pushed") == true && parsed.summary.contains("3 not pushed"),
+                  "Unpushed and uncommitted work is called out")
+            let clean = GitStatus.parse("# branch.head main\n# branch.upstream origin/main\n# branch.ab +0 -0\n")
+            check(clean.backedUp && clean.warning == nil && clean.summary.contains("all pushed"), "A pushed project reads as backed up")
+            check(!GitStatus.parse("# branch.head feature\n").backedUp, "A branch never pushed is not backed up")
+            check(ProjectGit.executable != "/usr/bin/git", "Cairn never runs the git shim that asks to install developer tools")
+
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-sleep-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let app = root.appendingPathComponent("app")
+            try fm.createDirectory(at: app.appendingPathComponent("node_modules"), withIntermediateDirectories: true)
+            fm.createFile(atPath: app.appendingPathComponent("package.json").path, contents: Data("{}".utf8))
+            fm.createFile(atPath: app.appendingPathComponent("pnpm-lock.yaml").path, contents: Data())
+            let wake = ProjectSleep.wakeCommand(for: app, cleared: [app.appendingPathComponent("node_modules")])
+            check(wake?.hasSuffix("&& pnpm install") == true && wake?.contains(app.path) == true, "A sleeping project's wake-up command uses its own package manager")
+            let note = SleepingProject(path: app.path, name: "app", asleepSince: Date(), bytes: 10, cleared: [app.appendingPathComponent("node_modules").path], wakeCommand: wake)
+            check(!ProjectSleep.isAsleep(note) && ProjectSleep.reconcile([note]).count == 1, "A project still in review is not asleep yet, and its note waits")
+            let stale = SleepingProject(path: app.path, name: "app", asleepSince: Date(timeIntervalSinceNow: -7_200), bytes: 10, cleared: note.cleared, wakeCommand: wake)
+            check(ProjectSleep.reconcile([stale]).isEmpty, "A note whose folders came back is dropped")
+            try fm.removeItem(at: app.appendingPathComponent("node_modules"))
+            check(ProjectSleep.isAsleep(stale) && ProjectSleep.reconcile([stale]).count == 1, "Once its folders are gone the project is asleep")
+            let notesURL = root.appendingPathComponent("notes.json")
+            ProjectSleep.save([stale], to: notesURL)
+            let reloaded = ProjectSleep.load(from: notesURL)
+            check(reloaded.map(\.path) == [stale.path] && reloaded.first?.cleared == stale.cleared && reloaded.first?.wakeCommand == wake,
+                  "Sleep notes survive a restart")
+
+            // Cleaning rules take only safe, rebuildable findings and stop at the cap.
+            let old = Date(timeIntervalSinceNow: -40 * 86_400)
+            let gb: Int64 = 1_000_000_000
+            let found = [
+                ScanItem(url: root.appendingPathComponent("dd1"), allocatedSize: 6 * gb, latestModified: old, categoryID: "xcode", severity: .safe),
+                ScanItem(url: root.appendingPathComponent("dd2"), allocatedSize: 5 * gb, latestModified: old, categoryID: "xcode", severity: .safe),
+                ScanItem(url: root.appendingPathComponent("fresh"), allocatedSize: 1 * gb, latestModified: Date(), categoryID: "xcode", severity: .safe),
+                ScanItem(url: root.appendingPathComponent("archive"), allocatedSize: 1 * gb, latestModified: old, categoryID: "xcode", severity: .review),
+                ScanItem(url: root.appendingPathComponent("other"), allocatedSize: 1 * gb, latestModified: old, categoryID: "logs", severity: .safe),
+            ]
+            var rule = CleaningRule(kind: .xcodeBuild)
+            check(!rule.isDue() && rule.select(found).count == 2, "A rule is never due before it is approved")
+            rule.capGB = 7
+            let picked = rule.select(found)
+            check(picked.count == 1 && picked.reduce(0) { $0 + $1.allocatedSize } <= 7 * gb, "A rule stays under its size cap")
+            check(!picked.contains { $0.categoryID != "xcode" || $0.severity != .safe || $0.url.lastPathComponent == "fresh" },
+                  "A rule takes only safe items of its own kind that are old enough")
+            rule.approved = true
+            check(rule.isDue(), "An approved rule runs on its first check")
+            rule.lastRun = Date()
+            check(!rule.isDue(), "A rule waits for its schedule after running")
+            rule.lastRun = Date(timeIntervalSinceNow: -8 * 86_400)
+            rule.paused = true
+            check(!rule.isDue(), "A paused rule never runs")
+
+            // AI models: Ollama manifests, Hugging Face folders and loose weight files.
+            let home = root.appendingPathComponent("home")
+            let manifest = home.appendingPathComponent(".ollama/models/manifests/registry.ollama.ai/library/llama3/8b")
+            try fm.createDirectory(at: manifest.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data(#"{"config":{"size":500},"layers":[{"size":4000000000},{"size":1200}]}"#.utf8).write(to: manifest)
+            let hf = home.appendingPathComponent(".cache/huggingface/hub/models--org--tiny/blobs")
+            try fm.createDirectory(at: hf, withIntermediateDirectories: true)
+            try Data(count: 21 * 1_024 * 1_024).write(to: hf.appendingPathComponent("weights"))
+            let whisper = home.appendingPathComponent(".cache/whisper")
+            try fm.createDirectory(at: whisper, withIntermediateDirectories: true)
+            try Data(count: 21 * 1_024 * 1_024).write(to: whisper.appendingPathComponent("base.pt"))
+            try Data(count: 1_024).write(to: whisper.appendingPathComponent("tiny.pt"))
+            let models = LocalModels.find(home: home)
+            let llama = models.first { $0.tool == "Ollama" }
+            check(llama?.name == "llama3:8b" && llama?.bytes == 4_000_001_700 && llama?.removal == .command("ollama rm llama3:8b"),
+                  "Ollama models are named and sized from their manifests")
+            check(models.contains { $0.name == "org/tiny" && $0.tool == "Hugging Face" && $0.removal == .trash }, "Hugging Face models are listed by name")
+            check(models.contains { $0.name == "base.pt" } && !models.contains { $0.name == "tiny.pt" }, "Small files are not counted as models")
+            var refusedOllama = false
+            if let llama { refusedOllama = (try? LocalModels.moveToTrash(llama, home: home)) == nil && fm.fileExists(atPath: manifest.path) }
+            check(refusedOllama, "Ollama models are never moved to the Trash, only removed with ollama rm")
+            let outside = LocalModel(url: home.appendingPathComponent(".ollama/models/manifests"), name: "x", tool: "x", bytes: 1, updated: nil, removal: .trash)
+            var refusedOutside = false
+            do { _ = try LocalModels.moveToTrash(outside, home: home) } catch { refusedOutside = true }
+            check(refusedOutside && fm.fileExists(atPath: outside.url.path), "Only folders inside a known model store can be moved to the Trash")
+
+            // Disk map: small items fold together so the map stays readable.
+            let many = (0..<20).map { DiskArea(id: "a\($0)", title: "a\($0)", kind: .files, bytes: Int64(100 - $0)) }
+            let folded = DiskMap.fold(many, id: "x", kind: .files)
+            check(folded.count == 13 && folded.reduce(0) { $0 + $1.bytes } == many.reduce(0) { $0 + $1.bytes }, "The disk map folds small items without losing their size")
+            check(DiskMap.capacity() != nil, "The disk map reads this disk's capacity")
+        } catch {
+            check(false, "Sleep, rules and models fixture failed: \(error)")
+        }
         // MCP: protocol shape and read-only tool surface, without scanning.
         let initialize = MCPServer.handle(["jsonrpc": "2.0", "id": 1, "method": "initialize", "params": ["protocolVersion": "2025-06-18"]])
         check((initialize?["result"] as? [String: Any])?["protocolVersion"] as? String == "2025-06-18", "MCP initialize echoes the requested protocol")
@@ -199,13 +291,66 @@ enum WorkspaceCheck {
             check(vsEntry?["type"] as? String == "stdio", "VS Code gets its servers key and stdio type")
             let gemini = tool("gemini")
             try fm.createDirectory(at: gemini.marker, withIntermediateDirectories: true)
-            let commented = Data("// my settings\n{\"a\": 1}".utf8)
-            try commented.write(to: gemini.config)
-            var refusedComments = false
-            do { try AgentConnections.connect(gemini, command: command) } catch { refusedComments = true }
-            check(refusedComments && (try? Data(contentsOf: gemini.config)) == commented, "Settings with comments are left untouched")
+            let broken = Data("{\"a\": [1, 2".utf8)
+            try broken.write(to: gemini.config)
+            var refusedBroken = false
+            do { try AgentConnections.connect(gemini, command: command) } catch { refusedBroken = true }
+            check(refusedBroken && (try? Data(contentsOf: gemini.config)) == broken, "Settings Cairn cannot read are left untouched")
             if case .unreadable = AgentConnections.state(gemini, command: command) { check(true, "Unparseable settings are reported, not edited") }
             else { check(false, "Unparseable settings are reported, not edited") }
+            // Cursor, Zed and opencode allow comments. They must survive a connect and a disconnect.
+            let commentedCursor = "// Cursor MCP servers\n{\n  \"mcpServers\": {\n    // the docs server\n    \"docs\": { \"command\": \"docs\" },\n  },\n}\n"
+            try Data(commentedCursor.utf8).write(to: cursor.config)
+            try AgentConnections.connect(cursor, command: command)
+            let cursorText = (try? String(contentsOf: cursor.config, encoding: .utf8)) ?? ""
+            check(cursorText.contains("// the docs server") && cursorText.contains("// Cursor MCP servers"), "Connecting Cursor keeps its comments")
+            check(AgentConnections.state(cursor, command: command) == .connected(current: true), "Cursor with comments reads as connected")
+            check((AgentConnections.readJSON(cursor.config)?["mcpServers"] as? [String: Any])?["docs"] != nil, "Cursor keeps its other servers")
+            try AgentConnections.connect(cursor, command: command)
+            check(((try? String(contentsOf: cursor.config, encoding: .utf8)) ?? "").components(separatedBy: "\"cairn\"").count == 2, "Connecting twice leaves one cairn entry")
+            try AgentConnections.disconnect(cursor)
+            let cursorAfter = (try? String(contentsOf: cursor.config, encoding: .utf8)) ?? ""
+            check(!cursorAfter.contains("cairn") && cursorAfter.contains("// the docs server") && AgentConnections.readJSON(cursor.config) != nil,
+                  "Disconnecting Cursor removes only Cairn and keeps the comments")
+            let zed = tool("zed")
+            try fm.createDirectory(at: zed.marker, withIntermediateDirectories: true)
+            let zedSettings = "// Zed settings\n//\n// For information on how to configure Zed, see the Zed docs.\n{\n  \"theme\": \"One Dark\",\n  \"buffer_font_size\": 15\n}\n"
+            try Data(zedSettings.utf8).write(to: zed.config)
+            check(AgentConnections.state(zed, command: command) == .available, "Zed with a commented settings file can be connected")
+            try AgentConnections.connect(zed, command: command)
+            let zedEntry = (AgentConnections.readJSON(zed.config)?["context_servers"] as? [String: Any])?["cairn"] as? [String: Any]
+            check(zedEntry?["command"] as? String == command && zedEntry?["args"] as? [String] == ["mcp"] && zedEntry?["env"] != nil,
+                  "Zed gets a context_servers entry")
+            check(((try? String(contentsOf: zed.config, encoding: .utf8)) ?? "").hasPrefix("// Zed settings"), "Zed keeps its comments")
+            try AgentConnections.disconnect(zed)
+            check(AgentConnections.readJSON(zed.config)?["theme"] as? String == "One Dark" && AgentConnections.state(zed, command: command) == .available,
+                  "Disconnecting Zed keeps its settings")
+            let opencode = tool("opencode")
+            try fm.createDirectory(at: opencode.marker, withIntermediateDirectories: true)
+            try AgentConnections.connect(opencode, command: command)
+            let openEntry = (AgentConnections.readJSON(opencode.config)?["mcp"] as? [String: Any])?["cairn"] as? [String: Any]
+            check(openEntry?["type"] as? String == "local" && openEntry?["command"] as? [String] == [command, "mcp"] && openEntry?["enabled"] as? Bool == true,
+                  "opencode gets a local mcp entry")
+            check(AgentConnections.state(opencode, command: command) == .connected(current: true), "opencode reads as connected")
+            let goose = tool("goose")
+            try fm.createDirectory(at: goose.marker, withIntermediateDirectories: true)
+            let gooseConfig = "GOOSE_PROVIDER: anthropic\n# my extensions\nextensions:\n  developer:\n    bundled: true\n    enabled: true\n    name: developer\n    timeout: 300\n    type: builtin\nGOOSE_MODE: smart_approve\n"
+            try Data(gooseConfig.utf8).write(to: goose.config)
+            check(AgentConnections.state(goose, command: command) == .available, "Goose can be connected")
+            try AgentConnections.connect(goose, command: command)
+            try AgentConnections.connect(goose, command: command)
+            let gooseText = (try? String(contentsOf: goose.config, encoding: .utf8)) ?? ""
+            check(gooseText.components(separatedBy: "  cairn:\n").count == 2 && gooseText.contains("  developer:\n") && gooseText.hasSuffix("GOOSE_MODE: smart_approve\n"),
+                  "Goose gets one cairn extension beside its others")
+            check(gooseText.contains("    cmd: \"\(command)\"\n") && gooseText.contains("    type: stdio\n"), "Goose's entry launches Cairn over stdio")
+            check(AgentConnections.state(goose, command: command) == .connected(current: true), "Goose reads as connected")
+            try AgentConnections.disconnect(goose)
+            check((try? String(contentsOf: goose.config, encoding: .utf8)) == gooseConfig, "Disconnecting Goose restores its settings exactly")
+            try Data("GOOSE_PROVIDER: openai\n".utf8).write(to: goose.config)
+            try AgentConnections.connect(goose, command: command)
+            check(AgentConnections.state(goose, command: command) == .connected(current: true), "Goose without extensions gets the section added")
+            try AgentConnections.disconnect(goose)
+            check((try? String(contentsOf: goose.config, encoding: .utf8)) == "GOOSE_PROVIDER: openai\nextensions: {}\n", "Goose is left with a valid empty extensions map")
             let codex = tool("codex")
             try fm.createDirectory(at: codex.marker, withIntermediateDirectories: true)
             let toml = "model = \"o4\"\n\n[mcp_servers.other]\ncommand = \"x\"\n"

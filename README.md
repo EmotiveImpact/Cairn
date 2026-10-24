@@ -20,7 +20,7 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 
 Cairn can link to AI coding tools that run on your Mac, so they can check your disk and tell you what can be freed. Connect them in one click from **Settings › AI tools**.
 
-Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code and Windsurf.**
+Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed, opencode and Goose**, plus Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.
 
 Out of the box, AI tools can only look. A pull request that is still open lets them also run a clean, but only if you turn that on, only for safe rebuildable items, and only from a list you can see. Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 
@@ -41,11 +41,11 @@ In rough order of priority:
 3. **Merge the open work**: the Night look and honest numbers (PR #5), AI tools that can clean (PR #7) and the website hero (PR #6).
 4. **Publish the Claude Code plugin and Gemini CLI extension** so others can install them.
 5. **Update the website screenshots** to the new look.
-6. **Projects:** put an idle project to sleep (clear its rebuildable files and keep a note to restore them) and show its git status.
-7. **AI models page** listing every local model and how big it is.
-8. **Disk map**: a picture of what is taking up space.
+6. **Projects:** put an idle project to sleep (clear its rebuildable files and keep a note to restore them) and show its git status. *Built, waiting to be merged.*
+7. **AI models page** listing every local model and how big it is. *Built, waiting to be merged.*
+8. **Disk map**: a picture of what is taking up space. *Built, waiting to be merged.*
 9. **More SSD moves**: Docker, simulators and Xcode's DerivedData.
-10. **Cleaning rules you approve once** and Cairn then runs on its own.
+10. **Cleaning rules you approve once** and Cairn then runs on its own. *Built, waiting to be merged.*
 
 ## For developers
 
