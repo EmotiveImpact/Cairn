@@ -23,6 +23,21 @@ struct SidebarSpaceField: View {
         }
     }
 
+    /// How far past the sidebar the field spills under the page, by the same
+    /// steps: small amounts stay in the sidebar, large ones reach into the page.
+    static func spill(for bytes: Int64) -> CGFloat {
+        let gb = Double(bytes) / 1_000_000_000
+        switch gb {
+        case ..<20:   return 0
+        case ..<50:   return 170
+        default:      return 320
+        }
+    }
+    /// The sidebar's width, where the field's slanted edge is measured from.
+    static let sidebarWidth: CGFloat = 200
+    /// The widest the field ever draws: the sidebar plus the largest spill.
+    static let fieldWidth: CGFloat = 540
+
     private static let dot = Color(red: 0x5d / 255, green: 0x9b / 255, blue: 0xff / 255)
     fileprivate static let spacing: CGFloat = 5
     /// Strongest dot at the very bottom, as in the mock (drawn at 2x).
@@ -51,7 +66,7 @@ struct SidebarSpaceField: View {
         TimelineView(.animation(minimumInterval: revealing ? 1.0 / 30 : 1.0 / 8, paused: still)) { timeline in
             let time = still ? 0 : timeline.date.timeIntervalSinceReferenceDate
             let sinceReveal = still ? .infinity : timeline.date.timeIntervalSince(revealStart)
-            let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost, reach = Self.reach(for: readyBytes)
+            let maxOpacity = self.maxOpacity, sizeBoost = self.sizeBoost, reach = Self.reach(for: readyBytes), spill = Self.spill(for: readyBytes)
             let sinkFrom = self.sinkFrom, settled = self.settled
             Canvas { context, size in
                 // After a clean the old field fades from the top down to the new, lower level
@@ -61,7 +76,7 @@ struct SidebarSpaceField: View {
                     let t = sinkReach(sinceReveal)
                     sink = t
                     let top = size.height * (1 - (sinkFrom - (sinkFrom - reach) * CGFloat(t)))
-                    for dot in sinkLayout.dots(size: size, reach: sinkFrom, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
+                    for dot in sinkLayout.dots(size: size, reach: sinkFrom, spill: spill, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
                         // Soft waterline: dots above it are gone, dots just below it fade.
                         let edge = min(1, max(0, Double((dot.rect.midY - top) / 24)))
                         var opacity = dot.opacity * edge * (1 - t * 0.5)
@@ -70,7 +85,7 @@ struct SidebarSpaceField: View {
                         context.fill(Path(ellipseIn: dot.rect), with: .color(Self.dot.opacity(opacity)))
                     }
                 }
-                for dot in layout.dots(size: size, reach: reach, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
+                for dot in layout.dots(size: size, reach: reach, spill: spill, maxOpacity: maxOpacity, sizeBoost: sizeBoost) {
                     if sink < 1 {
                         var opacity = dot.opacity * sink
                         if time != 0 { opacity *= 0.75 + 0.25 * sin(time * dot.speed + dot.phase) }
@@ -118,8 +133,8 @@ struct SidebarSpaceField: View {
         private var key: [Double] = []
         private var cached: [Dot] = []
 
-        func dots(size: CGSize, reach: CGFloat, maxOpacity: Double, sizeBoost: CGFloat) -> [Dot] {
-            let newKey: [Double] = [Double(size.width), Double(size.height), Double(reach), maxOpacity, Double(sizeBoost)]
+        func dots(size: CGSize, reach: CGFloat, spill: CGFloat, maxOpacity: Double, sizeBoost: CGFloat) -> [Dot] {
+            let newKey: [Double] = [Double(size.width), Double(size.height), Double(reach), Double(spill), maxOpacity, Double(sizeBoost)]
             if newKey == key { return cached }
             key = newKey
             cached = []
@@ -133,12 +148,12 @@ struct SidebarSpaceField: View {
                     // Fewer dots higher up, so the top edge breaks up softly.
                     guard noise(col, row) < 0.05 + 0.85 * fade else { continue }
                     let x = 3 + CGFloat(col) * SidebarSpaceField.spacing
-                    // The right side fades along a slant: near the page's edge at
-                    // the bottom, further in as the field rises, so it never ends
-                    // in a hard vertical line against the page.
-                    let rise = 1 - fade
-                    let edgeStart = 6 + 78 * CGFloat(rise)
-                    let edge = Double(min(1, max(0, (size.width - x - edgeStart) / 44)))
+                    // The right side fades along a slant: furthest right at the
+                    // bottom, pulling back as the field rises, so it never ends in
+                    // a hard vertical line. With more to free it spills under the page.
+                    let rise = CGFloat(1 - fade)
+                    let right = SidebarSpaceField.sidebarWidth + spill - 6 - (78 + spill) * rise
+                    let edge = Double(min(1, max(0, (right - x) / (44 + spill * 0.3))))
                     guard noise(col + 5, row + 89) < 0.1 + edge else { continue }
                     let opacity = min(maxOpacity, maxOpacity * fade * edge * (0.55 + 0.6 * noise(row, col + 97)))
                     guard opacity > 0.015 else { continue }

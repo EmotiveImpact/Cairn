@@ -154,12 +154,28 @@ struct AppShell: View {
                     runningStatus
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppBackground())
+                .background {
+                    // The dot field carries on under the page, a little softer,
+                    // lined up with the shell's field behind the sidebar.
+                    ZStack(alignment: .topLeading) {
+                        AppBackground()
+                        GeometryReader { card in
+                            SidebarSpaceField(readyBytes: store.recommendedBytes)
+                                .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
+                                .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
+                                .opacity(0.95)
+                        }
+                    }
+                }
                 // The page sits as a rounded card inside the sidebar's frame (Edem chose this, option C).
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
+            .background(alignment: .topLeading) {
+                SidebarSpaceField(readyBytes: store.recommendedBytes)
+                    .frame(width: SidebarSpaceField.fieldWidth, height: viewport.size.height)
+            }
         }
     }
 
@@ -613,12 +629,8 @@ struct NavSidebar: View {
                 .padding(.horizontal, 10).padding(.bottom, 10)
         }
         .frame(width: 200)
-        .background {
-            ZStack {
-                Brand.chrome
-                SidebarSpaceField(readyBytes: readyBytes)
-            }
-        }
+        // The shell draws the chrome and the dot field behind the sidebar, so
+        // the field can run on under the page.
     }
 
 }
