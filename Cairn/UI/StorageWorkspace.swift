@@ -62,7 +62,7 @@ struct StorageWorkspace: View {
                 }
             }
         }
-        .background(Brand.background)
+        // The page card paints the background, so the dot field shows through.
         .task { if !preview { await store.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await store.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await store.refresh() } } }

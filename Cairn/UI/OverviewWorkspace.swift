@@ -146,7 +146,9 @@ struct OverviewWorkspace: View {
             // keep the chart its size then, so nothing below it moves.
             guard !store.isScanning, !store.isCleaning else { return }
             chartHeight = min(240, max(110, height - 600))
-        }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
+        }
+        // The page card already paints this background and glow, with the dot field over it.
+        .foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task {
             guard !preview else { return }

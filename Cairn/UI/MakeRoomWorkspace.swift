@@ -211,8 +211,8 @@ struct MakeRoomWorkspace: View {
                 }.buttonStyle(ControlPanelButtonStyle(primary: true))
                     .disabled(preview || preparingReview || selectedActions.isEmpty || store.isScanning || store.isCleaning || goalState == .met || goalState == .impossible || goalState == .unavailable)
             }.font(.system(size: 12)).padding(.horizontal, 20).frame(height: 64)
-                .background(Brand.background)
-        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
+        // The page card paints the background, so the dot field shows through.
+        }.foregroundStyle(Brand.textPrimary)
             .task {
                 guard !preview else { return }
                 await control.refreshCapacity()
