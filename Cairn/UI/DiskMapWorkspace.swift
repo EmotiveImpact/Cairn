@@ -139,7 +139,7 @@ struct DiskMapWorkspace: View {
     // MARK: - Colour
 
     /// Blues only: each kind of space is its own clear step, so the bar and
-    /// the list match at a glance. Free space is a faint track.
+    /// the list match at a glance. Free space is lit, as on the website.
     static func tone(_ kind: DiskArea.Kind) -> Color {
         switch kind {
         case .macOS: return Color(light: 0x9FB3C8, dark: 0x3D5C80)
@@ -160,10 +160,16 @@ struct DiskMapWorkspace: View {
         base.opacity([1, 0.78, 0.6, 0.46, 0.34, 0.24, 0.18][min(index, 6)])
     }
 
+    /// Free space lights up pale ice with a soft glow, the same as the
+    /// website's disk bar once it is cleaned.
+    private static let freeFill = LinearGradient(colors: [Color(hex: 0xE8F3FF), Color(hex: 0xBCDCFF)], startPoint: .top, endPoint: .bottom)
+    private static let freeEdge = Color(hex: 0xE3F1FF)
+    private static let freeGlow = Color(hex: 0x8CC4FF)
+
     /// Text that reads on a bar segment: light on the two darker blues.
     private static func label(on kind: DiskArea.Kind) -> Color {
         switch kind {
-        case .free: return Brand.textMuted
+        case .free: return Color(hex: 0x2C4A68)
         case .macOS, .systemData: return Brand.textPrimary
         default: return Brand.onRoom
         }
@@ -186,19 +192,24 @@ struct DiskMapWorkspace: View {
                         // The open part (or the one under the pointer) stays full
                         // strength and the rest step back a little: no outline or glow.
                         let lead = hovered ?? opened?.id
+                        let lit = area.kind == .free && focus == nil
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            // Free is an empty track, matching the hollow dot in the list.
-                            .fill(area.kind == .free && focus == nil ? Color.clear : tone(area, index: index))
+                            .fill(lit ? AnyShapeStyle(Self.freeFill) : AnyShapeStyle(tone(area, index: index)))
                             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(area.kind == .free && focus == nil ? Brand.wash(0.14) : Color.clear, lineWidth: 1))
+                                .strokeBorder(lit ? Self.freeEdge : Color.clear, lineWidth: 1))
+                            .shadow(color: lit ? Self.freeGlow.opacity(0.85) : .clear, radius: 18)
+                            .shadow(color: lit ? Self.freeGlow.opacity(0.4) : .clear, radius: 8)
                             .opacity(lead == nil || lead == area.id || area.kind == .free ? 1 : 0.62)
                             .overlay(alignment: .leading) {
                                 // Label any segment its name fits in; hover names the rest.
-                                let name = area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title
+                                let name = area.title
                                 if width > CGFloat(name.count) * 7 + 16 {
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(name).font(.system(size: 11.5, weight: .medium))
-                                        if area.kind != .free && width > 90 {
+                                        if lit {
+                                            Text(Fmt.size(area.bytes)).font(.system(size: 11, weight: .semibold)).monospacedDigit()
+                                                .foregroundStyle(Color(hex: 0x0E1A26))
+                                        } else if area.kind != .free && width > 90 {
                                             Text(Fmt.size(area.bytes)).font(.system(size: 11)).monospacedDigit().opacity(0.75)
                                         }
                                     }
@@ -230,9 +241,9 @@ struct DiskMapWorkspace: View {
                 Button { open(area) } label: {
                     HStack(spacing: 12) {
                         Group {
-                            // Free is an empty ring, so it never reads as the darkest blue.
+                            // Free is lit, like its part of the bar.
                             if area.kind == .free && focus == nil {
-                                Circle().strokeBorder(Brand.wash(0.35), lineWidth: 1.2)
+                                Circle().fill(Color(hex: 0xCFE6FF)).shadow(color: Self.freeGlow, radius: 4)
                             } else {
                                 Circle().fill(tone(area, index: index))
                             }
