@@ -132,9 +132,16 @@ struct SidebarSpaceField: View {
                 for col in 0..<cols {
                     // Fewer dots higher up, so the top edge breaks up softly.
                     guard noise(col, row) < 0.05 + 0.85 * fade else { continue }
-                    let opacity = min(maxOpacity, maxOpacity * fade * (0.55 + 0.6 * noise(row, col + 97)))
-                    guard opacity > 0.015 else { continue }
                     let x = 3 + CGFloat(col) * SidebarSpaceField.spacing
+                    // The right side fades along a slant: near the page's edge at
+                    // the bottom, further in as the field rises, so it never ends
+                    // in a hard vertical line against the page.
+                    let rise = 1 - fade
+                    let edgeStart = 6 + 78 * CGFloat(rise)
+                    let edge = Double(min(1, max(0, (size.width - x - edgeStart) / 44)))
+                    guard noise(col + 5, row + 89) < 0.1 + edge else { continue }
+                    let opacity = min(maxOpacity, maxOpacity * fade * edge * (0.55 + 0.6 * noise(row, col + 97)))
+                    guard opacity > 0.015 else { continue }
                     let r: CGFloat = (noise(col + 31, row + 7) > 0.7 ? 1.25 : 0.85) * sizeBoost
                     cached.append(Dot(rect: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2),
                                       opacity: opacity,

@@ -210,6 +210,11 @@ struct ProjectsWorkspace: View {
                 }
                 asleepSection
             }
+            // Soften the last row into the footer instead of a hard cut.
+            .mask(VStack(spacing: 0) {
+                Color.black
+                LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 28)
+            })
         }
     }
 
@@ -331,7 +336,7 @@ struct ProjectsWorkspace: View {
     private func pill(_ project: ProjectSummary, state: SelectionState) -> NightPill {
         if state != .none { return NightPill(text: "Selected", tone: .ok) }
         if project.rebuildable.isEmpty { return NightPill(text: "Nothing to free") }
-        if (project.idleDays() ?? 0) < Self.idleDays { return NightPill(text: "Active") }
+        if (project.idleDays() ?? 0) < Self.idleDays { return NightPill(text: "Active", tone: .quiet) }
         // An old project with work that exists only on this Mac.
         if git[project.id]?.backedUp == false { return NightPill(text: "Not pushed", tone: .warn) }
         if git[project.id]?.backedUp == true { return NightPill(text: "Ready to sleep", tone: .ok) }

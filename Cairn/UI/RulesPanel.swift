@@ -117,12 +117,14 @@ struct RulesPanel: View {
                 chip(rule.kind.ageLabel.lowercased(), "\(rule.minAgeDays) days")
             }
             chip("up to", "\(rule.capGB) GB a run")
-            Text(lastLine(rule)).font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
             NightLink(title: runner.running == rule.kind ? "Running…" : "Run now") { Task { await runner.run(rule.kind) } }
                 .disabled(runner.running != nil || rule.paused || preview)
             NightLink(title: editing == rule.kind ? "Done" : "Change") { editing = editing == rule.kind ? nil : rule.kind }
         }
         .padding(.top, 6)
+        Text(lastLine(rule)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.top, 2)
         if editing == rule.kind {
             VStack(alignment: .leading, spacing: 10) {
                 settingsLine(rule)

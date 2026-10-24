@@ -134,13 +134,25 @@ struct AIModelsWorkspace: View {
 
     private func toolName(_ model: LocalModel) -> String { model.tool.components(separatedBy: " · ").first ?? model.tool }
 
+    /// A thin symbol per tool where there is no logo, so rows tell apart.
+    private func symbol(_ model: LocalModel) -> String {
+        switch toolName(model) {
+        case "Hugging Face": return "face.smiling"
+        case "LM Studio": return "cpu"
+        case "Whisper": return "waveform"
+        case "ComfyUI": return "square.stack.3d.up"
+        case "Draw Things", "DiffusionBee": return "paintbrush"
+        default: return "brain.head.profile"
+        }
+    }
+
     static func step(_ index: Int) -> Color { Brand.room.opacity([1, 0.62, 0.4, 0.24, 0.16][min(index, 4)]) }
 
     private func row(_ model: LocalModel) -> some View {
         let isChosen = selected == model.id
         return Button { selected = isChosen ? nil : model.id } label: {
             HStack(spacing: 16) {
-                NightName(logo: BrandLogo(name: toolName(model) == "Ollama" ? "ollama" : nil, fallback: "brain.head.profile", size: 25),
+                NightName(logo: BrandLogo(name: toolName(model) == "Ollama" ? "ollama" : nil, fallback: symbol(model), size: 25),
                           title: model.name, subtitle: model.tool)
                 NightMeter(share: Double(model.bytes) / Double(largest))
                 Text((model.partial ? "≥ " : "") + Fmt.size(model.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()

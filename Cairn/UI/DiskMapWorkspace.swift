@@ -90,7 +90,8 @@ struct DiskMapWorkspace: View {
             }
         } footer: {
             if let reading {
-                NightTotal(strong: Fmt.size(reading.free), rest: "free of \(Fmt.size(reading.total))")
+                Text("Sizes are read from the disk. ≥ means a folder hit a measuring limit.")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
                 Spacer()
                 Text(map.measuring ? map.status : "Measured " + reading.date.formatted(.relative(presentation: .named)))
                     .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
@@ -141,11 +142,11 @@ struct DiskMapWorkspace: View {
     /// the list match at a glance. Free space is a faint track.
     static func tone(_ kind: DiskArea.Kind) -> Color {
         switch kind {
-        case .macOS: return Color(light: 0x8DA4BD, dark: 0x3D5A7A)
-        case .systemData: return Brand.room
-        case .apps: return Color(light: 0x4F86C6, dark: 0x5D8FC4)
-        case .developer: return Color(light: 0x6E9FD9, dark: 0x7FB0E8)
-        case .files, .other: return Color(light: 0xA3C3E6, dark: 0xA9CDF4)
+        case .macOS: return Color(light: 0x9FB3C8, dark: 0x34506E)
+        case .systemData: return Color(light: 0x5F8FC6, dark: 0x4F7FB5)
+        case .apps: return Color(light: 0x3F78BC, dark: 0x6F9FD6)
+        case .developer: return Color(light: 0x2C66AD, dark: 0x9CC3EE)
+        case .files, .other: return Color(light: 0x1A56A0, dark: 0xCFE6FF)
         case .free: return Brand.wash(0.07)
         }
     }
@@ -163,7 +164,10 @@ struct DiskMapWorkspace: View {
 
     private var diskBar: some View {
         let areas = shown
-        let total = Double(max(1, areas.reduce(Int64(0)) { $0 + $1.bytes }))
+        let sum = areas.reduce(Int64(0)) { $0 + $1.bytes }
+        // The whole disk is the scale, so a reading whose parts fall short
+        // leaves an honest gap instead of stretching the parts.
+        let total = Double(max(1, focus == nil ? max(sum, reading?.total ?? 0) : sum))
         return VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geo in
                 let gaps = CGFloat(max(0, areas.count - 1)) * 3
@@ -174,12 +178,13 @@ struct DiskMapWorkspace: View {
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(tone(area, index: index))
                             .opacity(hovered == nil || hovered == area.id || area.kind == .free ? 1 : 0.8)
-                            .shadow(color: lit && area.kind != .free ? Brand.room.opacity(0.45) : .clear, radius: 9)
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(Brand.textPrimary.opacity(lit && area.kind != .free ? 0.9 : 0), lineWidth: 1.5))
                             .overlay(alignment: .leading) {
                                 if width > 74 {
                                     Text(area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title)
                                         .font(.system(size: 11.5, weight: .medium)).lineLimit(1)
-                                        .foregroundStyle(area.kind == .free ? Brand.textMuted : Brand.onRoom)
+                                        .foregroundStyle(area.kind == .free ? Brand.textMuted : area.kind == .macOS ? Brand.textPrimary : Brand.onRoom)
                                         .padding(.leading, 10)
                                 }
                             }
@@ -194,12 +199,6 @@ struct DiskMapWorkspace: View {
                 }
             }
             .frame(height: 44)
-            HStack {
-                Text("0")
-                Spacer()
-                Text(Fmt.size(Int64(total)))
-            }
-            .font(.system(size: 11)).foregroundStyle(Brand.textMuted).monospacedDigit()
         }
         .animation(.easeOut(duration: 0.15), value: hovered)
     }
@@ -240,15 +239,23 @@ struct DiskMapWorkspace: View {
     /// What is inside the opened part: its own small bar and list.
     @ViewBuilder private var inside: some View {
         if let area = opened {
-            let parts = area.children.sorted { $0.bytes > $1.bytes }
+            // Largest first; whatever could not be measured always sits last.
+            let parts = area.children.sorted { a, b in
+                (unmeasured(a) ? 0 : 1, a.bytes) > (unmeasured(b) ? 0 : 1, b.bytes)
+            }
             let total = Double(max(1, parts.reduce(Int64(0)) { $0 + $1.bytes }))
             VStack(alignment: .leading, spacing: 12) {
-                Text("Inside \(area.title) · \(Fmt.size(area.bytes))").nightEyebrow().lineLimit(1)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Inside \(area.title) · \(Fmt.size(area.bytes))").nightEyebrow().lineLimit(1)
+                    if !area.note.isEmpty {
+                        Text(area.note).font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(2)
+                    }
+                }
                 GeometryReader { geo in
                     let gaps = CGFloat(max(0, parts.count - 1)) * 2
                     HStack(spacing: 2) {
                         ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(Self.step(index))
+                            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(unmeasured(part) ? Brand.wash(0.12) : Self.step(index))
                                 .frame(width: max(3, (geo.size.width - gaps) * CGFloat(Double(part.bytes) / total)))
                         }
                     }
@@ -258,9 +265,16 @@ struct DiskMapWorkspace: View {
                     ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
                         Button { open(part) } label: {
                             HStack(spacing: 12) {
-                                Circle().fill(Self.step(index)).frame(width: 9, height: 9)
-                                Text(part.title).font(.system(size: 13)).lineLimit(1)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                Circle().fill(unmeasured(part) ? Brand.wash(0.16) : Self.step(index)).frame(width: 9, height: 9)
+                                HStack(spacing: 8) {
+                                    Text(part.title).font(.system(size: 13)).lineLimit(1)
+                                        .foregroundStyle(unmeasured(part) ? Brand.textMuted : Brand.textPrimary)
+                                    if unmeasured(part) {
+                                        Text("macOS keeps these folders private").font(.system(size: 12))
+                                            .foregroundStyle(Brand.textMuted).lineLimit(1)
+                                    }
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 Text((part.partial ? "≥ " : "") + Fmt.size(part.bytes))
                                     .font(.system(size: 13, weight: .medium)).monospacedDigit()
                             }
@@ -272,13 +286,11 @@ struct DiskMapWorkspace: View {
                         .help(part.note.isEmpty ? part.title : part.note)
                     }
                 }
-                if !area.note.isEmpty {
-                    Text(area.note).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
             }
         }
     }
+
+    private func unmeasured(_ area: DiskArea) -> Bool { area.title == "Not measured" }
 
     /// Choosing a part shows its insides; a part inside the opened one drills
     /// down when it has parts of its own, otherwise shows it in Finder.
@@ -304,18 +316,19 @@ struct DiskMapWorkspace: View {
         func a(_ id: String, _ title: String, _ kind: DiskArea.Kind, _ size: Int64, _ children: [DiskArea] = [], _ note: String = "") -> DiskArea {
             DiskArea(id: id, title: title, kind: kind, bytes: size * gb, children: children, note: note)
         }
-        let system = [a("sys/dev", "Xcode and simulators", .systemData, 38), a("sys/support", "App support data", .systemData, 21),
-                      a("sys/caches", "App caches", .systemData, 14), a("sys/containers", "App containers", .systemData, 11),
-                      a("sys/vm", "Swap and sleep image", .systemData, 6), a("sys/unseen", "Not measured", .systemData, 9)]
-        let files = [a("f/dl", "Downloads", .files, 42), a("f/docs", "Documents", .files, 30), a("f/pics", "Pictures", .files, 24),
-                     a("f/movies", "Movies", .files, 18), a("f/desk", "Desktop", .files, 6)]
-        let dev = [a("d/dev", "Developer", .developer, 64), a("d/hidden", "Hidden tool folders", .developer, 31)]
-        let apps = [a("a/xcode", "Xcode", .apps, 12), a("a/logic", "Logic Pro", .apps, 7), a("a/rest", "48 smaller items", .apps, 19)]
+        // Parts add up to the 582 GB used, as a real reading does.
+        let system = [a("sys/dev", "Xcode and simulators", .systemData, 52), a("sys/support", "App support data", .systemData, 31),
+                      a("sys/caches", "App caches", .systemData, 22), a("sys/containers", "App containers", .systemData, 17),
+                      a("sys/vm", "Swap and sleep image", .systemData, 8), a("sys/unseen", "Not measured", .systemData, 13)]
+        let files = [a("f/dl", "Downloads", .files, 92), a("f/docs", "Documents", .files, 60), a("f/pics", "Pictures", .files, 38),
+                     a("f/movies", "Movies", .files, 24), a("f/desk", "Desktop", .files, 6)]
+        let dev = [a("d/dev", "Developer", .developer, 104), a("d/hidden", "Hidden tool folders", .developer, 41)]
+        let apps = [a("a/xcode", "Xcode", .apps, 12), a("a/logic", "Logic Pro", .apps, 7), a("a/rest", "48 smaller items", .apps, 39)]
         return DiskMap.Reading(total: 994 * gb, free: 412 * gb, areas: [
             a("macos", "macOS", .macOS, 16, [], "macOS and the files it needs to start. Read-only."),
-            a("sys", "System Data", .systemData, 99, system, "What Finder calls System Data, broken into its parts."),
-            a("apps", "Apps", .apps, 38, apps), a("dev", "Coding", .developer, 95, dev),
-            a("files", "Your files", .files, 120, files), a("free", "Free", .free, 412),
+            a("sys", "System Data", .systemData, 143, system, "What Finder calls System Data, broken into its parts."),
+            a("apps", "Apps", .apps, 58, apps), a("dev", "Coding", .developer, 145, dev),
+            a("files", "Your files", .files, 220, files), a("free", "Free", .free, 412),
         ], date: Date())
     }()
 }
