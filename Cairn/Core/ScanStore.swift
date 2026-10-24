@@ -626,6 +626,26 @@ final class ScanStore {
         }
     }
 
+    /// An app that just went in the Bin: list what it left behind with the
+    /// other leftovers and select only those, so the normal review takes it
+    /// from here. Nothing else in the results changes.
+    func addLeftovers(_ items: [ScanItem]) {
+        guard !isScanning, !isCleaning, !items.isEmpty else { return }
+        if bucketIndex["orphaned"] == nil {
+            buckets.append(Bucket(info: OrphanedAppDataScanner().info))
+            bucketIndex["orphaned"] = buckets.count - 1
+        }
+        guard let index = bucketIndex["orphaned"] else { return }
+        clearSelection()
+        let paths = Set(items.map { $0.resolvedURL.standardizedFileURL.path })
+        buckets[index].removeItems { paths.contains($0.resolvedURL.standardizedFileURL.path) }
+        for item in items where !AppSettings.shared.isExcluded(item.resolvedURL) && !InUse.holdsCairn(item) {
+            buckets[index].append(item)
+        }
+        let ids = Set(items.map(\.id))
+        select { item, _ in ids.contains(item.id) }
+    }
+
     /// Safe, rebuildable findings: what "Clean recommended" removes.
     var recommendedItems: [ScanItem] {
         buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }

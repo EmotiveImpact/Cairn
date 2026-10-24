@@ -408,6 +408,31 @@ final class AppInventoryStore {
         return FileScan.children(of: macOS)?.first
     }
 
+    /// Every `~/Library` folder or file that belongs to one app: named by its
+    /// bundle id (as the Apps page matches them), or by the app's own name in
+    /// Application Support and Caches. Protected agent and session data is left out.
+    nonisolated static func associatedFiles(bundleID: String, appName: String) -> [(url: URL, isSupport: Bool)] {
+        let id = bundleID.lowercased()
+        let name = appName.lowercased()
+        guard !id.isEmpty, !id.hasPrefix("com.apple") else { return [] }
+        var found: [(url: URL, isSupport: Bool)] = []
+        for subtree in librarySubtrees {
+            guard let children = FileScan.children(of: subtree) else { continue }
+            let isSupport = supportSubtreeNames.contains(subtree.lastPathComponent)
+            let byName = ["Application Support", "Caches"].contains(subtree.lastPathComponent)
+            for child in children {
+                let candidate = normalize(child.lastPathComponent)
+                // The app's own id or a sub-id of it, never a vendor-wide folder
+                // that other apps from the same maker share.
+                let matches = candidate == id || candidate.hasPrefix(id + ".")
+                    || (byName && name.count >= 3 && child.lastPathComponent.lowercased() == name)
+                guard matches, SafePaths.protectedSessionReason(child) == nil else { continue }
+                found.append((url: child, isSupport: isSupport))
+            }
+        }
+        return found
+    }
+
     // MARK: - Bundle-id matching (mirrors OrphanedAppDataScanner, in reverse)
 
     private nonisolated static func normalize(_ name: String) -> String {
@@ -547,6 +572,7 @@ final class AppInventoryStore {
                 b.done.insert(app.id)
                 // Support data stays put; the next scan lists it for review.
                 RemovedAppLeftovers.record(app.associated, app: app.name)
+                AppLeftovers.noteRemovedByCairn(app.bundleID)
                 if !journalSaved {
                     b.summary.failed += 1
                     b.summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; uninstall stopped")

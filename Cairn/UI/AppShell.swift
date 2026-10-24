@@ -252,6 +252,8 @@ struct AppShell: View {
                 }
             }
             storageStore.load()
+            TrashWatch.shared.onLeftovers = { CairnMenuBar.shared.showLeftovers($0) }
+            TrashWatch.shared.start()
             appStore.onRemovals = { [store] in await store.appendRemovals($0) }
             dupStore.onRemovals = { [store] in await store.appendRemovals($0) }
             healthStore.onRemovals = { [store] in await store.appendRemovals($0) }
@@ -363,6 +365,10 @@ struct AppShell: View {
         case .results: section = .smartScan
         case .storage(let id): storageDriveID = id; section = .storage
         case .preferences(let tab): preferencesTab = tab; section = .settings
+        case .leftovers(let found):
+            guard !previewMode, !store.isScanning, !store.isCleaning else { section = .apps; return }
+            store.addLeftovers(AppLeftovers.items(found))
+            if store.selectedCount > 0 { showReview = true }
         case .scan:
             guard !previewMode, menuScanStatus.canStart else { return }
             section = .smartScan

@@ -33,6 +33,11 @@ final class AppSettings {
     } }
 
     var showSidebarFocus: Bool { didSet { d.set(showSidebarFocus, forKey: "cairn.showSidebarFocus") } }
+    /// When an app goes in the Bin from Finder, offer what it left behind.
+    var offerAppLeftovers: Bool { didSet {
+        d.set(offerAppLeftovers, forKey: "cairn.offerAppLeftovers")
+        if offerAppLeftovers { TrashWatch.shared.start() } else { TrashWatch.shared.stop() }
+    } }
     /// One soft chime when a clean finishes. Off unless the person turns it on.
     var finishSound: Bool { didSet { d.set(finishSound, forKey: "cairn.finishSound") } }
     /// Read-only capacity monitoring. This does not arm any cleanup rule.
@@ -95,6 +100,7 @@ final class AppSettings {
         openAtLogin = b("cairn.openAtLogin", false)
         showMenuBarItem = b("cairn.showMenuBarItem", true)
         showSidebarFocus = b("cairn.showSidebarFocus", false)
+        offerAppLeftovers = b("cairn.offerAppLeftovers", true)
         finishSound = b("cairn.finishSound", false)
         reserveEnabled = b("cairn.reserveEnabled", false)
         locationMonitoringEnabled = b("cairn.locationMonitoringEnabled.v1", false)

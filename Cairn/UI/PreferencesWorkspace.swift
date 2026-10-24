@@ -63,6 +63,7 @@ struct PreferencesWorkspace: View {
             option("Sidebar focus outline", "Show an outline around the sidebar control reached with the keyboard.", $settings.showSidebarFocus)
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
             option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)
+            option("Offer leftovers when an app goes in the Bin", "When you drag an app to the Bin, Cairn shows what it left behind from the menu bar. Needs the menu bar icon and Full Disk Access. Nothing is removed until you review it.", $settings.offerAppLeftovers)
             option("Scan notifications", "Notify when a scan completes. macOS permission is required.", $settings.scanNotifications)
             option("Play a sound when a clean finishes", "A single soft chime. Off by default.", $settings.finishSound)
         case "Cleaning":
