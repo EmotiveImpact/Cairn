@@ -183,9 +183,15 @@ struct DiskMapWorkspace: View {
                 HStack(spacing: 3) {
                     ForEach(Array(areas.enumerated()), id: \.element.id) { index, area in
                         let width = max(4, (geo.size.width - gaps) * CGFloat(Double(area.bytes) / total))
+                        // The open part (or the one under the pointer) stays full
+                        // strength and the rest step back a little: no outline or glow.
+                        let lead = hovered ?? opened?.id
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(tone(area, index: index))
-                            .opacity(hovered == nil || hovered == area.id || area.kind == .free ? 1 : 0.8)
+                            // Free is an empty track, matching the hollow dot in the list.
+                            .fill(area.kind == .free && focus == nil ? Color.clear : tone(area, index: index))
+                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .strokeBorder(area.kind == .free && focus == nil ? Brand.wash(0.14) : Color.clear, lineWidth: 1))
+                            .opacity(lead == nil || lead == area.id || area.kind == .free ? 1 : 0.62)
                             .overlay(alignment: .leading) {
                                 // Label any segment its name fits in; hover names the rest.
                                 let name = area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title

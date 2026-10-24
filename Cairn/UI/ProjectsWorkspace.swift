@@ -315,7 +315,9 @@ struct ProjectsWorkspace: View {
         else if status.ahead > 0 { parts.append("\(status.ahead) not pushed") }
         if status.changed > 0 { parts.append("\(status.changed) unsaved") }
         if status.untracked > 0 { parts.append("\(status.untracked) new file\(status.untracked == 1 ? "" : "s")") }
-        return head + Text(parts.joined(separator: " · ")).foregroundStyle(Brand.amber)
+        // Problems first, so a long branch name never hides them.
+        return Text(parts.joined(separator: " · ")).foregroundStyle(Brand.amber)
+            + Text(" · " + (status.branch ?? "detached")).foregroundStyle(Brand.textMuted)
     }
 
     private func itemRow(_ item: ScanItem, in project: ProjectSummary) -> some View {
