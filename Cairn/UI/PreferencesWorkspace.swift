@@ -28,7 +28,8 @@ struct PreferencesWorkspace: View {
         CairnWorkspace(eyebrow: preview ? "Settings · preview, changes off" : "Settings", title: tab, subtitle: tabLine) {
             VStack(alignment: .leading, spacing: 14) {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 18) {
+                    // Ten tabs: 14 pt gaps keep About & CLI inside the column.
+                    HStack(spacing: 14) {
                         ForEach(tabs, id: \.self) { item in
                             Button(item) { tab = item }
                                 .buttonStyle(.plain).font(.system(size: 12)).fixedSize()
