@@ -187,12 +187,13 @@ struct AppsWorkspace: View {
     }
 }
 
+/// Duplicates (dupes.png): the extra copies as one big number, each file with
+/// its copies underneath, the kept copy marked. Photos in a Photos library are
+/// left to Photos, which has its own Duplicates album.
 struct DuplicatesWorkspace: View {
     let store: DuplicateStore
     var search: String
     @Binding var inspectorVisible: Bool
-    @State private var expanded: Set<UUID> = []
-    @State private var focused: UUID?
     @State private var confirm = false
     @State private var message = ""
     @State private var resultHasFailures = false
@@ -200,153 +201,180 @@ struct DuplicatesWorkspace: View {
     @State private var samples = sampleGroups()
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private var groups: [DupGroup] { (preview ? samples : store.visibleGroups).filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) || $0.files.contains { $0.url.path.localizedCaseInsensitiveContains(search) } } }
-    private var inspected: DupGroup? { groups.first { $0.id == focused } ?? groups.first }
-    private var largest: Int64 { groups.map(\.reclaimableSize).max() ?? 1 }
     private var extraBytes: Int64 { groups.reduce(0) { $0 + $1.reclaimableSize } }
+    private var extraCopies: Int { groups.reduce(0) { $0 + $1.count - 1 } }
+    private var selectedCount: Int { preview ? samples.reduce(0) { $0 + $1.files.filter(\.selected).count } : store.selectedCopyCount }
+
     var body: some View {
-        CairnWorkspace(eyebrow: store.isScanning ? "Files · comparing" : "Files · \(groups.count) \(groups.count == 1 ? "group" : "groups") of copies",
-                       title: groups.isEmpty ? "Duplicates" : "\(Fmt.size(extraBytes)) in extra copies",
-                       subtitle: "Files with exactly the same contents. One copy always stays.",
-                       inspectorVisible: inspectorVisible, onCloseInspector: { inspectorVisible = false }) {
-            Button(store.isScanning ? "Stop scan" : "Rescan") {
-                if store.isScanning { store.cancel() } else { store.rescan() }
+        NightHeroPage(eyebrow: store.isScanning ? "Files · Duplicates · comparing" : "Files · Duplicates",
+                      lead: "Files that are byte-for-byte the same. One copy always stays, and Cairn checks every byte again before moving anything.") {
+            NightHeroNumber(number: groups.isEmpty ? "None" : Fmt.size(extraBytes), label: groups.isEmpty ? "found yet" : "in extra copies")
+        } trailing: {
+            Button { if store.isScanning { store.cancel() } else { store.rescan() } } label: {
+                Label(store.isScanning ? "Stop" : "Look again", systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
             .disabled(preview || store.isRemoving)
         } content: {
             VStack(alignment: .leading, spacing: 12) {
-                if store.isRemoving {
-                    NightEmpty(title: "Checking and moving the extra copies", message: "The copy you keep stays put. Each file is checked again first.", busy: true)
-                } else if !message.isEmpty {
-                    NightEmpty(title: resultHasFailures ? "Finished, with some copies skipped" : "Extra copies moved", message: message + ". Items in the Trash still use space until it is emptied.")
-                    if let receipt { CapacityReceiptView(changes: receipt.changes, estimatedBytes: receipt.bytes, recoveryCount: receipt.recoveries) }
-                }
-                if store.phase == .cancelled {
-                    NightEmpty(title: "Comparison stopped", message: "These results may be incomplete. Rescan before choosing copies.")
-                } else if store.wasLimited {
-                    NightEmpty(title: "Partly compared", message: store.progressText)
-                }
+                status
                 if groups.isEmpty {
                     if store.isScanning {
                         NightEmpty(title: "Comparing file contents", message: store.progressText, busy: true)
                     } else {
                         NightEmpty(title: search.isEmpty ? "No duplicates found" : "No matching duplicates",
-                                   message: !search.isEmpty ? "Try another search." : store.hasScanned ? "No identical files in Documents, Downloads, Desktop, Pictures or Movies." : "Press Rescan to look for identical files in Documents, Downloads, Desktop, Pictures and Movies.")
+                                   message: !search.isEmpty ? "Try another search." : store.hasScanned ? "No identical files in Documents, Downloads, Desktop, Pictures or Movies." : "Press Look again to find identical files in Documents, Downloads, Desktop, Pictures and Movies.")
                     }
+                    photosLine
                     Spacer(minLength: 0)
                 } else {
                     NightList {
                         ForEach(groups) { group in
-                            groupRow(group)
-                            if expanded.contains(group.id) { ForEach(group.files) { file in fileRow(file, in: group) } }
+                            groupHeader(group)
+                            ForEach(group.files) { file in fileRow(file, in: group) }
                         }
-                        if !preview && store.hasMoreGroups {
-                            Button("Show more") { store.showMoreGroups() }
-                                .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue).padding(.vertical, 12)
-                        }
+                        photosLine.padding(.top, 14)
                     }
                 }
             }
-        } detail: {
-            if let group = inspected {
-                HStack(spacing: 12) {
-                    if let url = group.representativeURL { FileIcon(url: url, size: 40) }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.name).font(.system(size: 15, weight: .medium)).lineLimit(2)
-                        Text("\(group.count) copies · \(Fmt.size(group.copySize)) each").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                    }
-                }
-                WorkspaceDetail(title: "Same contents", text: preview ? "Sample group for the preview." : "Every byte matched when compared. Cairn checks again before moving anything.")
-                ForEach(group.files.indices, id: \.self) { index in
-                    let file = group.files[index]
-                    WorkspaceDetail(title: file.isKeeper ? "Copy \(index + 1) · kept" : "Copy \(index + 1)", text: "\(file.url.path)\nChanged \(file.modified.formatted(date: .abbreviated, time: .shortened))")
-                }
-                WorkspaceDetail(title: "After", text: "The extra copies you choose go to the Trash. The kept copy stays where it is. A copy elsewhere is not a backup.")
-                if let url = group.representativeURL { Button("Show kept copy") { NSWorkspace.shared.activateFileViewerSelecting([url]) }.buttonStyle(ControlPanelButtonStyle()).disabled(preview) }
+        } footer: {
+            if !groups.isEmpty {
+                NightTotal(strong: Fmt.size(extraBytes),
+                           rest: "in \(extraCopies) extra \(extraCopies == 1 ? "copy" : "copies") across \(groups.count) \(groups.count == 1 ? "file" : "files")", large: true)
             }
-        } actions: {
-            NightTotal(strong: Fmt.size(store.selectedBytes),
-                       rest: store.selectedCopyCount == 0 ? "selected" : "selected from \(store.selectedCopyCount) \(store.selectedCopyCount == 1 ? "copy" : "copies")")
             Spacer()
-            if store.selectedCopyCount > 0 {
+            if !preview && store.hasMoreGroups {
+                Button("See all \(store.groups.count)") { store.showMoreGroups() }
+                    .buttonStyle(ControlPanelButtonStyle(size: .large))
+            }
+            if selectedCount == 0 {
+                Button("Select extra copies") { store.autoSelectRecommended() }
+                    .buttonStyle(ControlPanelButtonStyle(size: .large))
+                    .disabled(preview || store.isScanning || store.isRemoving || groups.isEmpty)
+            } else {
                 Button("Select none") { store.clearSelection() }
                     .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview || store.isRemoving)
-            } else {
-                Button("Select extra copies") { store.autoSelectRecommended() }
-                    .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview || store.isScanning || store.isRemoving || groups.isEmpty)
             }
-            Button("Review and move") { confirm = true }
+            Button(selectedCount == 0 ? "Move copies to the Bin" : "Move \(selectedCount) \(selectedCount == 1 ? "copy" : "copies") to the Bin") { confirm = true }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview || store.selectedCopyCount == 0 || store.isRemoving || store.isScanning)
+                .disabled(preview || selectedCount == 0 || store.isRemoving || store.isScanning)
         }
-        .sheet(isPresented: $confirm) { WorkspaceConfirmation(title: "Move the selected extra copies?", explanation: "The kept copies stay where they are. Cairn checks the contents again, then moves only the copies you selected to the Trash.", entries: store.groups.flatMap(\.files).filter(\.selected).map { $0.url.path }, actionTitle: "Check and move to Trash") { Task { let result = await store.removeSelected(); receipt = (result.capacityChanges, result.bytes, result.recordedRecoveries); resultHasFailures = result.failed > 0 || !result.errors.isEmpty; message = "\(result.trashed) moved · \(result.failed) skipped" + (result.errors.first.map { " · \($0)" } ?? "") } } }
+        .sheet(isPresented: $confirm) { WorkspaceConfirmation(title: "Move the selected extra copies?", explanation: "The kept copies stay where they are. Cairn checks the contents again, then moves only the copies you selected to the Bin.", entries: store.groups.flatMap(\.files).filter(\.selected).map { $0.url.path }, actionTitle: "Check and move to the Bin") { Task { let result = await store.removeSelected(); receipt = (result.capacityChanges, result.bytes, result.recordedRecoveries); resultHasFailures = result.failed > 0 || !result.errors.isEmpty; message = "\(result.trashed) moved · \(result.failed) skipped" + (result.errors.first.map { " · \($0)" } ?? "") } } }
     }
 
-    private func groupRow(_ group: DupGroup) -> some View {
-        let picked = group.files.filter(\.selected).count
-        return Button {
-            focused = group.id; inspectorVisible = true
-            expanded.formSymmetricDifference([group.id])
-        } label: {
-            HStack(spacing: 14) {
-                HStack(spacing: 10) {
-                    Group {
-                        if let url = group.representativeURL { FileIcon(url: url, size: 22).saturation(0).opacity(0.85) }
-                        else { Image(systemName: "doc.on.doc").font(.system(size: 14, weight: .light)).foregroundStyle(Brand.textSecondary) }
-                    }
-                    .frame(width: 22, height: 22)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(group.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
-                        Text("\(group.count) copies · \(Fmt.size(group.copySize)) each")
-                            .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                NightMeter(share: Double(group.reclaimableSize) / Double(max(1, largest)))
-                Text(Fmt.size(group.reclaimableSize)).font(.system(size: 13, weight: .medium)).monospacedDigit()
-                    .frame(width: 90, alignment: .trailing)
-                NightPill(text: picked > 0 ? "\(picked) selected" : "Keeps one", tone: picked > 0 ? .ok : .neutral)
-                    .frame(width: 120, alignment: .leading)
-            }
-            .nightRow()
-            .background(inspectorVisible && inspected?.id == group.id ? Brand.wash(0.035) : Color.clear)
+    @ViewBuilder private var status: some View {
+        if store.isRemoving {
+            NightEmpty(title: "Checking and moving the extra copies", message: "The copy you keep stays put. Each file is checked again first.", busy: true)
+        } else if !message.isEmpty {
+            NightEmpty(title: resultHasFailures ? "Finished, with some copies skipped" : "Extra copies moved", message: message + ". Items in the Bin still use space until it is emptied.")
+            if let receipt { CapacityReceiptView(changes: receipt.changes, estimatedBytes: receipt.bytes, recoveryCount: receipt.recoveries) }
         }
-        .buttonStyle(.plain)
+        if store.phase == .cancelled {
+            NightEmpty(title: "Comparison stopped", message: "These results may be incomplete. Look again before choosing copies.")
+        } else if store.wasLimited {
+            NightEmpty(title: "Partly compared", message: store.progressText)
+        }
+    }
+
+    /// Photos keeps its library to itself, and has its own Duplicates album.
+    private var photosLine: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .light))
+                .foregroundStyle(Brand.textMuted).frame(width: 22)
+            Text("Cairn leaves your Photos library alone. For copies inside it, open Photos and choose Duplicates in the sidebar, under Utilities, to merge them.")
+                .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Button("Open Photos ↗") { openPhotos() }
+                .buttonStyle(.plain).font(.system(size: 12.5)).foregroundStyle(Brand.textPrimary)
+                .disabled(preview)
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func openPhotos() {
+        guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Photos") else { return }
+        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+    }
+
+    // MARK: Rows
+
+    private func groupHeader(_ group: DupGroup) -> some View {
+        HStack(spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(LinearGradient(colors: [Brand.room.opacity(0.16), Brand.room.opacity(0.06)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                if let url = group.representativeURL {
+                    FileIcon(url: url, size: 18).saturation(0).opacity(0.8)
+                } else {
+                    Image(systemName: "doc.on.doc").font(.system(size: 14, weight: .light)).foregroundStyle(Brand.textMuted)
+                }
+            }
+            .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(group.name).font(.system(size: 13.5, weight: .medium)).lineLimit(1).truncationMode(.middle)
+                Text("\(group.count) copies · \(Fmt.size(group.copySize)) each").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.top, 14).padding(.bottom, 6).padding(.horizontal, 4)
+        .overlay(alignment: .top) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1) }
         .help("Extra copies' combined size. Copies can share disk blocks, so the space you get back may be less.")
     }
 
     private func fileRow(_ file: DupFile, in group: DupGroup) -> some View {
-        HStack(spacing: 14) {
-            if file.isKeeper {
-                Image(systemName: "lock").font(.system(size: 11)).foregroundStyle(Brand.textMuted).frame(width: 22, height: 22)
-            } else {
-                NightCheck(on: file.selected, enabled: !preview && !store.isRemoving) { store.toggle(file.id) }
-                    .accessibilityLabel("Select copy \(file.url.path)")
+        HStack(spacing: 16) {
+            NightCheck(on: file.selected, enabled: !file.isKeeper && !preview && !store.isRemoving) { store.toggle(file.id) }
+                .accessibilityLabel(file.isKeeper ? "Kept copy \(file.url.path)" : "Select copy \(file.url.path)")
+            Text((file.isKeeper ? file.url.deletingLastPathComponent().path : file.url.path).replacingOccurrences(of: NSHomeDirectory(), with: "~"))
+                .font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
+                .lineLimit(1).truncationMode(.middle)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            Group {
+                if file.isKeeper {
+                    Text("Keeping · \(keepReason(file, in: group))").foregroundStyle(Brand.room)
+                } else {
+                    Text(Fmt.size(file.size)).foregroundStyle(Brand.textMuted).monospacedDigit()
+                }
             }
-            VStack(alignment: .leading, spacing: 2) {
-                Text(file.url.path.replacingOccurrences(of: NSHomeDirectory(), with: "~"))
-                    .font(.system(size: 12.5)).foregroundStyle(Brand.textPrimary).lineLimit(1).truncationMode(.middle)
-                Text("Changed \(file.modified.formatted(date: .abbreviated, time: .shortened))")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            if file.isKeeper {
-                NightPill(text: "Kept", tone: .ok).frame(width: 120, alignment: .leading)
-            } else {
-                Button("Keep this one") { store.setKeeper(file.id, in: group.id) }
-                    .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
-                    .disabled(preview || store.isRemoving).frame(width: 120, alignment: .leading)
-            }
+            .font(.system(size: 12)).lineLimit(1)
+            .frame(width: 170, alignment: .leading)
         }
-        .padding(.leading, 36)
-        .nightRow()
-        .contextMenu { Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([file.url]) } }
+        .padding(.vertical, 8).padding(.leading, 50).padding(.trailing, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+        .overlay(alignment: .top) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1).padding(.leading, 50) }
+        .contextMenu {
+            if !file.isKeeper {
+                Button("Keep this copy instead") { store.setKeeper(file.id, in: group.id) }.disabled(preview || store.isRemoving)
+            }
+            Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([file.url]) }.disabled(preview)
+        }
+        .help(file.isKeeper ? "This copy stays. Right-click another copy to keep that one instead." : "Changed \(file.modified.formatted(date: .abbreviated, time: .shortened))")
+    }
+
+    /// Why this copy is the one that stays, in the words of the keeper rule.
+    private func keepReason(_ file: DupFile, in group: DupGroup) -> String {
+        if DuplicateStore.recommendedKeeperID(group.files) != file.id { return "your choice" }
+        let path = file.url.path
+        if path.contains("/Documents/") { return "in Documents" }
+        if path.contains("/Pictures/") { return "in Pictures" }
+        if path.contains("/Movies/") { return "in Movies" }
+        if path.contains("/Desktop/") { return "on the Desktop" }
+        return "the original"
     }
 
     private static func sampleGroups() -> [DupGroup] {
-        ["Design archive.zip", "Product walkthrough.mov", "Research notes.pdf"].enumerated().map { n, name in
-            let size = Int64(3 - n) * 240_000_000
-            return DupGroup(name: name, hash: "preview", files: ["Documents", "Downloads"].enumerated().map { i, folder in let url = URL(fileURLWithPath: "/Sample/\(folder)/\(name)"); return DupFile(url: url, resolvedURL: url, size: size, modified: Date(), isKeeper: i == 0) })
+        let items: [(name: String, mb: Int64, folders: [String])] = [
+            ("IMG_4821.HEIC", 24, ["Pictures", "Downloads", "Desktop/old phone"]),
+            ("Final cut v3 export.mov", 2_100, ["Movies/Exports", "Downloads"]),
+            ("Xcode_16.2.xip", 3_400, ["Downloads", "Documents/Installers"]),
+        ]
+        return items.map { item in
+            DupGroup(name: item.name, hash: "preview", files: item.folders.enumerated().map { index, folder in
+                let url = URL(fileURLWithPath: "/Sample/\(folder)/\(item.name)")
+                return DupFile(url: url, resolvedURL: url, size: item.mb * 1_000_000, modified: Date(), isKeeper: index == 0, selected: index > 0)
+            })
         }
     }
 }
