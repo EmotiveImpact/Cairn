@@ -35,6 +35,27 @@ jobs:
         run: |
           "$(swift build --show-bin-path)/Cairn" --workspacecheck
 
+      # A picture of the Make room page with sample data, to compare with the mock.
+      - name: Make room screenshot
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --preview-ui --component-showcase --capture-screen=makeRoom --section=makeRoom
+          # Also print it into the log, so it can be read where artifact downloads are blocked.
+          if [ -f artifacts/component-showcase/makeRoom.png ]; then
+            sips -s format jpeg -s formatOptions 80 artifacts/component-showcase/makeRoom.png --out "$RUNNER_TEMP/makeRoom.jpg" >/dev/null
+            echo "SHOT-BEGIN"; base64 -i "$RUNNER_TEMP/makeRoom.jpg" | tr -d '\n'; echo; echo "SHOT-END"
+          fi
+
+      - name: Upload screenshots
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: artifacts/component-showcase/
+          if-no-files-found: ignore
+
       - name: Evidence check
         run: |
           "$(swift build --show-bin-path)/Cairn" --evidencecheck
