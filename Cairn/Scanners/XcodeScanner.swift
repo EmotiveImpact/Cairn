@@ -114,6 +114,24 @@ struct XcodeScanner: CairnScanner {
             ctx.emit(item)
         }
 
+        // 4b) SwiftUI preview simulators. Xcode keeps a separate set of
+        //     simulators for previews and makes them again the next time a
+        //     preview opens.
+        if ctx.isCancelled() { return }
+        ctx.progress("SwiftUI previews")
+        if let item = makeItem(
+            at: xcode.appendingPathComponent("UserData/Previews"),
+            severity: .safe,
+            minSize: ctx.minSizeBytes,
+            isRegenerable: true,
+            requiresQuitBundleIDs: [xcodeBundleID, simulatorBundleID],
+            cleanMethod: .trash,
+            note: "SwiftUI preview simulators. Xcode makes them again the next time you open a preview",
+            selectedIfSafe: true
+        ) {
+            ctx.emit(item)
+        }
+
         // 5) CoreSimulator/Devices — advice only. Even an unavailable device can
         //    hold app data that is not safely reconstructable. Size the dir.
         if ctx.isCancelled() { return }

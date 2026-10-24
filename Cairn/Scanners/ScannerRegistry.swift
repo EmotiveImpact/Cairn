@@ -14,6 +14,7 @@ enum ScannerRegistry {
             DockerScanner(),            // graduated prune + Docker.raw advice
             GitMaintenanceScanner(),    // large .git (git gc) + abandoned-project detection
             AndroidSDKScanner(),        // system images, NDK, AVDs, build-tools
+            ToolDownloadsScanner(),     // Playwright / Cypress / Puppeteer browsers, Electron, Bazel, Unity, Watchman, gems, old SDKs
 
             // AI Models & Caches (the novel pillar)
             AICachesScanner(),          // Ollama / HF / LM Studio / SD / Whisper models + Claude/Windsurf caches

@@ -44,6 +44,10 @@ struct AppCachesScanner: CairnScanner {
         "ccache",
         "pypoetry",
         "uv",
+        // Test browsers and build downloads (ToolDownloadsScanner)
+        "ms-playwright",
+        "Cypress",
+        "electron",
         // System-managed caches — never surface from here. Every other Apple
         // cache is skipped too, by SafePaths.appleCacheReason.
         "com.apple.Spotlight",

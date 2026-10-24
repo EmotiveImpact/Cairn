@@ -62,12 +62,24 @@ struct CreativeCachesScanner: CairnScanner {
         scanLargeExports(ctx)
         if ctx.isCancelled() { return }
         scanFinalCutLibraries(ctx)
+        if ctx.isCancelled() { return }
+        scanLightroomPreviews(ctx)
+        if ctx.isCancelled() { return }
+        scanLogicSoundLibrary(ctx)
     }
 
     // MARK: - SAFE: regenerable app caches
 
     private func scanSafeCaches(_ ctx: ScanContext) {
         let home = FileScan.home
+
+        // Adobe caches grow until a limit is set in the app itself.
+        let mediaTip = "Set a size limit in Premiere Pro, Settings > Media Cache, so it stops growing"
+        let rawTip = "Set a size limit in Photoshop or Lightroom, Camera Raw preferences > Cache"
+        let tips: [String: String] = [
+            "Adobe media cache": mediaTip, "Adobe media cache files": mediaTip,
+            "Camera Raw cache": rawTip, "Camera Raw cache (older)": rawTip,
+        ]
 
         // Fixed-path SAFE caches: (relative path, label, owning bundle ids).
         let fixed: [(rel: String, label: String, quit: [String])] = [
@@ -89,6 +101,8 @@ struct CreativeCachesScanner: CairnScanner {
              "CapCut cache", Self.capcutBundleIDs),
             ("Library/Caches/Adobe Camera Raw 2",
              "Camera Raw cache", Self.photoshopBundleIDs),
+            ("Library/Caches/Adobe Camera Raw",
+             "Camera Raw cache (older)", Self.photoshopBundleIDs + Self.lightroomBundleIDs),
             ("Library/Caches/Adobe/Lightroom",
              "Lightroom cache", Self.lightroomBundleIDs),
             ("Library/Caches/Blender",
@@ -100,7 +114,7 @@ struct CreativeCachesScanner: CairnScanner {
         for entry in fixed {
             if ctx.isCancelled() { return }
             let url = home.appendingPathComponent(entry.rel)
-            emitSafeCache(at: url, label: entry.label, quit: entry.quit, ctx: ctx)
+            emitSafeCache(at: url, label: entry.label, quit: entry.quit, ctx: ctx, tip: tips[entry.label])
         }
 
         // After Effects: children of ~/Library/Caches/Adobe whose name contains
@@ -148,7 +162,7 @@ struct CreativeCachesScanner: CairnScanner {
     }
 
     /// Emit a SAFE, regenerable, pre-selectable cache item.
-    private func emitSafeCache(at url: URL, label: String, quit: [String], ctx: ScanContext) {
+    private func emitSafeCache(at url: URL, label: String, quit: [String], ctx: ScanContext, tip: String? = nil) {
         guard FileScan.exists(url) else { return }
         ctx.progress(label)
         if let item = makeItem(
@@ -158,7 +172,7 @@ struct CreativeCachesScanner: CairnScanner {
             isRegenerable: true,
             requiresQuitBundleIDs: quit,
             cleanMethod: .trash,
-            note: "\(label) — regenerates",
+            note: tip.map { "\(label). The app makes it again. \($0)" } ?? "\(label) — regenerates",
             selectedIfSafe: true,
             maxFiles: Self.maxCacheFiles
         ) {
@@ -324,6 +338,80 @@ struct CreativeCachesScanner: CairnScanner {
             selected: false
         )
         ctx.emit(item)
+    }
+
+    // MARK: - Lightroom Classic previews
+
+    /// Each Lightroom Classic catalog keeps "<name> Previews.lrdata" beside it.
+    /// Lightroom builds standard previews again as you browse, so they are safe,
+    /// but not ticked after a scan: rebuilding a big catalog's previews is slow.
+    /// Smart Previews let you edit while the originals are offline, so they are
+    /// sized as advice only.
+    private func scanLightroomPreviews(_ ctx: ScanContext) {
+        let pictures = FileScan.home.appendingPathComponent("Pictures")
+        guard FileScan.exists(pictures) else { return }
+        var folders = [pictures]
+        folders += directorySubdirs(of: pictures).filter {
+            !$0.lastPathComponent.hasSuffix(".photoslibrary") && !$0.lastPathComponent.hasSuffix(".lrlibrary")
+        }
+        for folder in folders {
+            if ctx.isCancelled() { return }
+            for child in directorySubdirs(of: folder) where child.lastPathComponent.hasSuffix(".lrdata") {
+                let name = child.lastPathComponent
+                if name.hasSuffix(" Smart Previews.lrdata") {
+                    ctx.progress("Lightroom Smart Previews")
+                    let stats = FileScan.measure(child, maxFiles: Self.maxCacheFiles)
+                    guard stats.allocatedSize >= ctx.minSizeBytes else { continue }
+                    ctx.emit(ScanItem(
+                        url: child, allocatedSize: stats.allocatedSize, itemCount: stats.fileCount,
+                        latestModified: stats.latestModified, categoryID: info.id, severity: .review,
+                        isRegenerable: false, cleanMethod: .adviceOnly,
+                        note: "Lightroom Smart Previews let you edit while your photos are offline. Remove them in Lightroom Classic, Library > Previews > Discard Smart Previews",
+                        permissionDenied: stats.permissionDenied, volumeURL: FileScan.volumeURL(of: child), selected: false))
+                } else if name.hasSuffix(" Previews.lrdata") {
+                    ctx.progress("Lightroom previews")
+                    let catalog = String(name.dropLast(" Previews.lrdata".count))
+                    if let item = makeItem(
+                        at: child,
+                        severity: .safe,
+                        minSize: ctx.minSizeBytes,
+                        isRegenerable: true,
+                        requiresQuitBundleIDs: Self.lightroomBundleIDs,
+                        cleanMethod: .trash,
+                        note: "Lightroom previews for \(catalog). Lightroom builds them again as you browse, which takes a while for a big catalog. Catalog Settings > File Handling can discard 1:1 previews on its own",
+                        selectedIfSafe: false,
+                        maxFiles: Self.maxCacheFiles
+                    ) {
+                        ctx.emit(item)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Logic and GarageBand sound library
+
+    /// The sound library sits in /Library, which only Logic itself should move.
+    /// Sized as advice, pointing to Logic's own Relocate Sound Library.
+    private func scanLogicSoundLibrary(_ ctx: ScanContext) {
+        let parts = ["/Library/Application Support/Logic", "/Library/Audio/Apple Loops/Apple",
+                     "/Library/Application Support/GarageBand"].map { URL(fileURLWithPath: $0) }.filter(FileScan.exists)
+        guard !parts.isEmpty else { return }
+        ctx.progress("Logic sound library")
+        var total: Int64 = 0
+        var files = 0
+        for part in parts {
+            if ctx.isCancelled() { return }
+            let stats = FileScan.measure(part, maxFiles: Self.maxCacheFiles, maxDuration: 3)
+            total += stats.allocatedSize
+            files += stats.fileCount
+        }
+        guard total >= ctx.minSizeBytes else { return }
+        ctx.emit(ScanItem(
+            url: parts[0], allocatedSize: total, itemCount: files, categoryID: info.id, severity: .review,
+            isRegenerable: false, cleanMethod: .adviceOnly,
+            note: "Logic and GarageBand sound library, loops and instruments. To free this space, move it to an external drive with Logic Pro > Sound Library > Relocate Sound Library, so Logic keeps working",
+            volumeURL: FileScan.volumeURL(of: parts[0]), selected: false))
     }
 
     // MARK: - Helpers

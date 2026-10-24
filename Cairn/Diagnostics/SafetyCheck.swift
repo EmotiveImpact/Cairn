@@ -296,6 +296,16 @@ enum SafetyCheck {
         """
         let old = XcodeScanner.supersededRuntimes(XcodeScanner.parseRuntimes(runtimesJSON)).map(\.identifier)
         rule(old == ["A"], "only superseded, deletable simulator runtimes are offered")
+        let playwright = ToolDownloadsScanner.olderVersions(
+            ["chromium-1091", "chromium-1148", "firefox-1466", "webkit-2104", "webkit-1990", ".links", "ffmpeg-1010"],
+            key: ToolDownloadsScanner.dashKey)
+        rule(playwright.old == ["chromium-1091", "webkit-1990"]
+             && playwright.newest == ["chromium-1148", "firefox-1466", "webkit-2104", "ffmpeg-1010"],
+             "older test browser downloads are offered and the newest of each stays")
+        let gems = ToolDownloadsScanner.olderVersions(
+            ["rails-7.0.8", "rails-7.1.3", "nokogiri-1.15.0-arm64-darwin", "nokogiri-1.16.2-arm64-darwin", "rake-13.1.0"],
+            key: ToolDownloadsScanner.gemKey)
+        rule(gems.old == ["rails-7.0.8", "nokogiri-1.15.0-arm64-darwin"], "only older gem versions are counted")
 
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
