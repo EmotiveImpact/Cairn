@@ -154,7 +154,7 @@ struct MakeRoomWorkspace: View {
     let receiptRunID: UUID?
     var onBack: () -> Void
     var onScan: () -> Void
-    var onReview: (ReviewedSpacePlan) -> Void
+    var onReview: () -> Void
     var onOpen: (NavSection) -> Void
     @State private var drives = StorageTransferStore()
     @State private var choices: [String: MakeRoomWay] = [:]
@@ -458,26 +458,12 @@ struct MakeRoomWorkspace: View {
         for row in rows { touched.insert(row.id); choices[row.id] = nil }
     }
 
+    /// Bin choices go through the normal review, scoped to just these items.
+    /// (A space-target plan would be refused: Make room sets no target.)
     private func prepareReview(_ chosen: [ScanItem]) {
-        guard let scanStarted = store.scanStartedAt else { message = "Rescan before putting things in the Bin."; return }
-        let settings = AppSettings.shared
-        let exclusions = settings.excludedPaths, fda = store.fdaGranted
-        let developer = settings.includeDeveloperCaches, simulators = settings.includeSimulators
-        let binBytes = chosen.reduce(Int64(0)) { $0 + $1.allocatedSize }
-        Task {
-            await control.refreshCapacity(force: true)
-            guard let capacity = control.current else { message = "Available space could not be checked."; return }
-            let target = min(capacity.total, max(1, capacity.available + binBytes))
-            let plan = await Task.detached(priority: .utility) {
-                ReviewedSpacePlan.capture(items: chosen, capacity: capacity, target: target, scanStarted: scanStarted,
-                    exclusions: exclusions, fullDiskAccess: fda, developerCaches: developer, simulators: simulators)
-            }.value
-            guard let plan, store.comparisonScopeStable, store.scanStartedAt == scanStarted else {
-                message = "The scan changed since these were found. Rescan and try again."
-                return
-            }
-            onReview(plan)
-        }
+        guard store.scanStartedAt != nil, store.comparisonScopeStable else { message = "Rescan before putting things in the Bin."; return }
+        store.beginScopedReview(Set(chosen.map(\.id)))
+        onReview()
     }
 
     private static let sampleMessages: MakeRoomRow = {
