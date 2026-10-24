@@ -142,7 +142,7 @@ struct DiskMapWorkspace: View {
     /// the list match at a glance. Free space is a faint track.
     static func tone(_ kind: DiskArea.Kind) -> Color {
         switch kind {
-        case .macOS: return Color(light: 0x9FB3C8, dark: 0x34506E)
+        case .macOS: return Color(light: 0x9FB3C8, dark: 0x3D5C80)
         case .systemData: return Color(light: 0x5F8FC6, dark: 0x4F7FB5)
         case .apps: return Color(light: 0x3F78BC, dark: 0x6F9FD6)
         case .developer: return Color(light: 0x2C66AD, dark: 0x9CC3EE)
@@ -156,8 +156,17 @@ struct DiskMapWorkspace: View {
     }
 
     /// Steps of ice for the parts inside one area, largest first.
-    static func step(_ index: Int) -> Color {
-        Brand.room.opacity([1, 0.78, 0.6, 0.46, 0.34, 0.24, 0.18][min(index, 6)])
+    static func step(_ index: Int, of base: Color = Brand.room) -> Color {
+        base.opacity([1, 0.78, 0.6, 0.46, 0.34, 0.24, 0.18][min(index, 6)])
+    }
+
+    /// Text that reads on a bar segment: light on the two darker blues.
+    private static func label(on kind: DiskArea.Kind) -> Color {
+        switch kind {
+        case .free: return Brand.textMuted
+        case .macOS, .systemData: return Brand.textPrimary
+        default: return Brand.onRoom
+        }
     }
 
     // MARK: - Bar
@@ -181,11 +190,18 @@ struct DiskMapWorkspace: View {
                             .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
                                 .strokeBorder(Brand.textPrimary.opacity(lit && area.kind != .free ? 0.9 : 0), lineWidth: 1.5))
                             .overlay(alignment: .leading) {
-                                if width > 74 {
-                                    Text(area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title)
-                                        .font(.system(size: 11.5, weight: .medium)).lineLimit(1)
-                                        .foregroundStyle(area.kind == .free ? Brand.textMuted : area.kind == .macOS ? Brand.textPrimary : Brand.onRoom)
-                                        .padding(.leading, 10)
+                                // Label any segment its name fits in; hover names the rest.
+                                let name = area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title
+                                if width > CGFloat(name.count) * 7 + 16 {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(name).font(.system(size: 11.5, weight: .medium))
+                                        if area.kind != .free && width > 90 {
+                                            Text(Fmt.size(area.bytes)).font(.system(size: 11)).monospacedDigit().opacity(0.75)
+                                        }
+                                    }
+                                    .lineLimit(1)
+                                    .foregroundStyle(Self.label(on: area.kind))
+                                    .padding(.leading, 9)
                                 }
                             }
                             .frame(width: width)
@@ -198,7 +214,7 @@ struct DiskMapWorkspace: View {
                     }
                 }
             }
-            .frame(height: 44)
+            .frame(height: 60)
         }
         .animation(.easeOut(duration: 0.15), value: hovered)
     }
@@ -210,8 +226,15 @@ struct DiskMapWorkspace: View {
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, area in
                 Button { open(area) } label: {
                     HStack(spacing: 12) {
-                        Circle().fill(area.kind == .free && focus == nil ? Brand.wash(0.14) : tone(area, index: index))
-                            .frame(width: 9, height: 9)
+                        Group {
+                            // Free is an empty ring, so it never reads as the darkest blue.
+                            if area.kind == .free && focus == nil {
+                                Circle().strokeBorder(Brand.wash(0.35), lineWidth: 1.2)
+                            } else {
+                                Circle().fill(tone(area, index: index))
+                            }
+                        }
+                        .frame(width: 9, height: 9)
                         Text(area.title).font(.system(size: 13.5, weight: .medium)).lineLimit(1)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         Text((area.partial ? "≥ " : "") + Fmt.size(area.bytes))
@@ -244,6 +267,8 @@ struct DiskMapWorkspace: View {
                 (unmeasured(a) ? 0 : 1, a.bytes) > (unmeasured(b) ? 0 : 1, b.bytes)
             }
             let total = Double(max(1, parts.reduce(Int64(0)) { $0 + $1.bytes }))
+            // Shades of the opened part's own blue, so it reads as the same part.
+            let base = focus == nil ? Self.tone(area.kind) : Brand.room
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Inside \(area.title) · \(Fmt.size(area.bytes))").nightEyebrow().lineLimit(1)
@@ -255,7 +280,7 @@ struct DiskMapWorkspace: View {
                     let gaps = CGFloat(max(0, parts.count - 1)) * 2
                     HStack(spacing: 2) {
                         ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
-                            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(unmeasured(part) ? Brand.wash(0.12) : Self.step(index))
+                            RoundedRectangle(cornerRadius: 3, style: .continuous).fill(unmeasured(part) ? Brand.wash(0.12) : Self.step(index, of: base))
                                 .frame(width: max(3, (geo.size.width - gaps) * CGFloat(Double(part.bytes) / total)))
                         }
                     }
@@ -265,7 +290,7 @@ struct DiskMapWorkspace: View {
                     ForEach(Array(parts.enumerated()), id: \.element.id) { index, part in
                         Button { open(part) } label: {
                             HStack(spacing: 12) {
-                                Circle().fill(unmeasured(part) ? Brand.wash(0.16) : Self.step(index)).frame(width: 9, height: 9)
+                                Circle().fill(unmeasured(part) ? Brand.wash(0.16) : Self.step(index, of: base)).frame(width: 9, height: 9)
                                 HStack(spacing: 8) {
                                     Text(part.title).font(.system(size: 13)).lineLimit(1)
                                         .foregroundStyle(unmeasured(part) ? Brand.textMuted : Brand.textPrimary)

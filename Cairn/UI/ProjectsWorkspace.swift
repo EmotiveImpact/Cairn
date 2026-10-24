@@ -312,9 +312,9 @@ struct ProjectsWorkspace: View {
         }
         var parts: [String] = []
         if status.upstream == nil { parts.append("never pushed") }
-        else if status.ahead > 0 { parts.append("\(status.ahead) commit\(status.ahead == 1 ? "" : "s") not pushed") }
+        else if status.ahead > 0 { parts.append("\(status.ahead) not pushed") }
         if status.changed > 0 { parts.append("\(status.changed) unsaved") }
-        if status.untracked > 0 { parts.append("\(status.untracked) new file\(status.untracked == 1 ? "" : "s") not in git") }
+        if status.untracked > 0 { parts.append("\(status.untracked) new file\(status.untracked == 1 ? "" : "s")") }
         return head + Text(parts.joined(separator: " · ")).foregroundStyle(Brand.amber)
     }
 

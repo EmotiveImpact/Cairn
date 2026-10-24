@@ -55,9 +55,9 @@ struct AIModelsWorkspace: View {
                         .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                         .help("Ollama models share files, so Ollama's own command frees exactly the right ones. Paste it into Terminal.")
                 case .trash:
-                    Button("Move to Trash") { confirmTrash = model }
+                    // Sample data never reaches the Trash, but the button looks as it really does.
+                    Button("Move to Trash") { if !preview { confirmTrash = model } }
                         .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                        .disabled(preview)
                 }
             } else {
                 NightTotal(strong: "\(models.count)", rest: models.count == 1 ? "model on this Mac" : "models on this Mac")
@@ -159,13 +159,11 @@ struct AIModelsWorkspace: View {
                     .frame(width: 70, alignment: .trailing)
                 Text(updated(model)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     .lineLimit(1).frame(width: 120, alignment: .leading)
-                HStack(spacing: 6) {
-                    Image(systemName: model.removal == .trash ? "trash" : "doc.on.doc").font(.system(size: 11))
-                    Text(model.removal == .trash ? "Move to Trash" : "Copy ollama rm")
-                }
-                .font(.system(size: 12)).foregroundStyle(Brand.room)
-                .opacity(isChosen ? 1 : 0)
-                .frame(width: 128, alignment: .trailing)
+                // The action itself lives in the footer; the row only shows it is chosen.
+                Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Brand.room)
+                    .opacity(isChosen ? 1 : 0)
+                    .frame(width: 24, alignment: .trailing)
             }
             .padding(.horizontal, 6)
         }

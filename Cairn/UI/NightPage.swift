@@ -156,7 +156,7 @@ struct NightPill: View {
             .foregroundStyle(color)
             .padding(.horizontal, 9).padding(.vertical, 3)
             .background(Capsule().fill(tone == .neutral || tone == .quiet ? Color.clear : color.opacity(0.06)))
-            .overlay(Capsule().strokeBorder(tone == .quiet ? Color.clear : tone == .neutral ? Brand.wash(0.10) : color.opacity(0.3), lineWidth: 1))
+            .overlay(Capsule().strokeBorder(tone == .quiet ? Brand.wash(0.06) : tone == .neutral ? Brand.wash(0.10) : color.opacity(0.3), lineWidth: 1))
     }
 }
 
