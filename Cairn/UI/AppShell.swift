@@ -68,11 +68,14 @@ enum NavSection: String, CaseIterable, Identifiable {
     /// Sections that open an existing sheet rather than routing content.
     var opensSheet: Bool { false }
 
+    /// Findings that have a page of their own rather than a list section.
+    static let ownPages: Set<String> = ["games", "chat-apps"]
+
     @MainActor
     func buckets(_ store: ScanStore) -> [ScanStore.Bucket] {
         switch self {
-        case .smartScan: return store.buckets
-        case .general: return store.generalBuckets.filter { $0.id != "browser-caches" }
+        case .smartScan: return store.buckets.filter { !Self.ownPages.contains($0.id) }
+        case .general: return store.generalBuckets.filter { $0.id != "browser-caches" && !Self.ownPages.contains($0.id) }
         case .browsers: return store.buckets.filter { $0.id == "browser-caches" }
         case .developer: return store.developerBuckets
         case .ai: return store.aiBuckets

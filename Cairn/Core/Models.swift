@@ -153,6 +153,9 @@ struct ScanItem: Identifiable {
     let sourceIdentity: SourceIdentity?
     /// Set by ScanStore from the reviewed RemovalMode just before execution.
     var deleteImmediately = false
+    /// Page-specific facts a scanner knows (a game's launcher and last play,
+    /// a chat app's name). Shown only; never used to decide what is removed.
+    var detail: [String: String] = [:]
 
     init(
         url: URL,
@@ -196,6 +199,15 @@ struct ScanItem: Identifiable {
     }
 
     var isActionable: Bool { cleanMethod.isActionable }
+
+    /// A game or app folder its store can install again. It is never
+    /// rebuilt on its own, so it is not "rebuildable", but its folder is full
+    /// of save databases and caches that the contents check would otherwise
+    /// read as personal records.
+    var isReinstallable: Bool {
+        guard case .trash = cleanMethod, severity != .risky else { return false }
+        return categoryID == "games"
+    }
 
     /// Contents a reinstall or rebuild restores: verified-regenerable caches and
     /// build output, plus any node_modules (dependencies, never personal data).

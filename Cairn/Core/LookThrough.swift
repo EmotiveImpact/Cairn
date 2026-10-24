@@ -41,6 +41,7 @@ enum LookThrough {
     static func inGroupTick(_ item: ScanItem) -> Bool {
         if item.categoryID == "dev-projects" && !item.isRegenerable { return false }
         if item.categoryID == "ai-models" { return false }
+        if item.categoryID == "games" { return false }
         if item.categoryID == "android" && !item.note.lowercased().contains("old") { return false }
         return true
     }
