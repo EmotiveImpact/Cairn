@@ -83,6 +83,7 @@ extension ToolIcon {
         case "orphaned":     return ToolIcon(systemImage: "folder.badge.questionmark", tint: Brand.amber, size: size)
         case "large-old":    return ToolIcon(systemImage: "doc.fill", tint: Brand.blue, size: size)
         case "tm-snapshots": return ToolIcon(systemImage: "clock.arrow.circlepath", tint: Brand.blue, size: size)
+        case "messages-attachments": return ToolIcon(systemImage: "message.fill", tint: Brand.blue, size: size)
         default:             return ToolIcon(systemImage: "shippingbox.fill", tint: Brand.blue, size: size)
         }
     }

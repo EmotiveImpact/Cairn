@@ -45,6 +45,8 @@ struct MakeRoomRow: Identifiable {
         case move(RelocationTarget)
         case phone(PhoneBackup)
         case online(CloudFolder)
+        /// Freed in System Settings, never by Cairn: no Bin, SSD or Cloud.
+        case messages(MessagesAttachments)
     }
     let id: String
     let symbol: String
@@ -68,7 +70,7 @@ enum MakeRoomPlan {
 
     static func rows(scan: [ScanItem], targets: [RelocationTarget], measured: [String: Int64], offloaded: Set<String>,
                      backups: [PhoneBackup], clouds: [CloudFolder], driveReady: Bool, cloudReady: Bool,
-                     home: URL = FileScan.home) -> [MakeRoomRow] {
+                     messages: MessagesAttachments? = nil, home: URL = FileScan.home) -> [MakeRoomRow] {
         var rows: [MakeRoomRow] = []
         var used = Set<String>()
         for target in targets where !offloaded.contains(target.id) && !target.id.hasPrefix("own:") && !target.id.hasPrefix("iphone-backup:") {
@@ -100,6 +102,12 @@ enum MakeRoomPlan {
                 line: "Copies already safe in \(cloud.name) · not opened in 3 months",
                 peek: cloud.candidates.prefix(3).map { $0.url.deletingPathExtension().lastPathComponent },
                 folder: cloud.url, bytes: cloud.candidateBytes, ways: [.cloud], suggested: .cloud, kind: .online(cloud)))
+        }
+        if let messages, messages.bytes >= minimum {
+            rows.append(MakeRoomRow(
+                id: "messages", symbol: "message", title: "Messages attachments", line: messages.line,
+                note: "\(messages.breakdown) · Cairn never removes these. Review them in Storage so chats stay intact.",
+                folder: messages.url, bytes: messages.bytes, ways: [], suggested: nil, kind: .messages(messages)))
         }
         for item in scan where !used.contains(item.resolvedURL.standardizedFileURL.path) && item.allocatedSize >= minimum {
             let own = RelocationTarget.own(item.resolvedURL, home: home) != nil && !item.isRegenerable
@@ -153,6 +161,7 @@ struct MakeRoomWorkspace: View {
     @State private var touched = Set<String>()
     @State private var backups: [PhoneBackup] = []
     @State private var clouds: [CloudFolder] = []
+    @State private var messages: MessagesAttachments?
     @State private var loading = true
     @State private var confirming = false
     @State private var message = ""
@@ -173,7 +182,8 @@ struct MakeRoomWorkspace: View {
         let measured = moves.states.compactMapValues(\.bytes)
         let offloaded = Set(moves.records.filter { $0.status == .offloaded }.map(\.targetID))
         return MakeRoomPlan.rows(scan: scan, targets: moves.targets, measured: measured, offloaded: offloaded,
-                                 backups: backups, clouds: clouds, driveReady: drive != nil, cloudReady: cloudTarget != nil)
+                                 backups: backups, clouds: clouds, driveReady: drive != nil, cloudReady: cloudTarget != nil,
+                                 messages: messages)
     }
     private func choice(_ row: MakeRoomRow) -> MakeRoomWay? {
         touched.contains(row.id) ? choices[row.id] : row.suggested
@@ -194,7 +204,7 @@ struct MakeRoomWorkspace: View {
 
     var body: some View {
         let rows = rows
-        let free = rows.reduce(Int64(0)) { $0 + $1.bytes }
+        let free = rows.filter { !$0.ways.isEmpty }.reduce(Int64(0)) { $0 + $1.bytes }
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 8) {
                 HStack(spacing: 0) {
@@ -296,10 +306,17 @@ struct MakeRoomWorkspace: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 8) {
                 Text(Fmt.size(row.bytes)).font(.system(size: 14, weight: .medium)).monospacedDigit()
-                HStack(spacing: 0) {
-                    ForEach(MakeRoomWay.allCases, id: \.self) { way in wayButton(way, row) }
+                if case .messages = row.kind {
+                    Button("Review in Storage") { NSWorkspace.shared.open(MessagesAttachments.reviewURL) }
+                        .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.deepBlue)
+                        .padding(.vertical, 3)
+                        .help("Opens System Settings › General › Storage. Choose Messages to see the largest attachments.")
+                } else {
+                    HStack(spacing: 0) {
+                        ForEach(MakeRoomWay.allCases, id: \.self) { way in wayButton(way, row) }
+                    }
+                    .padding(.trailing, -8)
                 }
-                .padding(.trailing, -8)
             }
             .frame(width: 230, alignment: .trailing)
         }
@@ -388,12 +405,12 @@ struct MakeRoomWorkspace: View {
         loading = true
         await drives.refresh()
         await moves.refresh()
-        let found = await Task.detached(priority: .utility) { () -> ([PhoneBackup], [CloudFolder]) in
+        let found = await Task.detached(priority: .utility) { () -> ([PhoneBackup], [CloudFolder], MessagesAttachments?) in
             let backups = PhoneBackups.list().backups
             let clouds = CloudSpace.folders().map { CloudSpace.measure($0.0, $0.1, $0.2) }
-            return (backups, clouds)
+            return (backups, clouds, MessagesAttachments.measure())
         }.value
-        backups = found.0; clouds = found.1
+        backups = found.0; clouds = found.1; messages = found.2
         cloudTarget = found.1.first.map { (id: $0.id, name: $0.name, url: $0.url) }
         loading = false
     }
@@ -413,7 +430,7 @@ struct MakeRoomWorkspace: View {
                 case .move(let target): moves.move(target, to: drive)
                 case .phone(let backup): moves.move(backup.target, to: drive)
                 case .scan(let item): if let target = RelocationTarget.own(item.resolvedURL) { moves.move(target, to: drive) }
-                case .online: break
+                case .online, .messages: break
                 }
             }
         }
@@ -463,6 +480,15 @@ struct MakeRoomWorkspace: View {
         }
     }
 
+    private static let sampleMessages: MakeRoomRow = {
+        var messages = MessagesAttachments(url: URL(fileURLWithPath: "/Sample/messages"))
+        messages.videos = 3_100_000_000; messages.photos = 1_200_000_000; messages.bytes = 4_300_000_000
+        messages.count = 2_841; messages.oldBytes = 2_900_000_000
+        return MakeRoomRow(id: "messages", symbol: "message", title: "Messages attachments", line: messages.line,
+                           note: "\(messages.breakdown) · Cairn never removes these. Review them in Storage so chats stay intact.",
+                           folder: messages.url, bytes: messages.bytes, ways: [], suggested: nil, kind: .messages(messages))
+    }()
+
     /// The approved picture, row for row. Preview only; never acted on.
     private static let sampleRows: [MakeRoomRow] = {
         func row(_ id: String, _ symbol: String, _ title: String, _ line: String, peek: [String] = [], note: String = "",
@@ -488,6 +514,7 @@ struct MakeRoomWorkspace: View {
                 peek: ["12 projects"], 7.2, [.bin, .ssd], .bin),
             row("gdrive", "cloud", "Google Drive downloads", "Copies already safe in Google Drive · not opened in 3 months",
                 peek: ["Brand assets", "Client videos", "Old exports"], 6.2, [.cloud], .cloud),
+            sampleMessages,
         ]
     }()
 }

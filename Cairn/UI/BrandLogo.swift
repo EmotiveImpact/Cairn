@@ -76,6 +76,7 @@ struct BrandLogo: View {
         case "orphaned": symbol = "folder.badge.questionmark"
         case "large-old": symbol = "doc"
         case "tm-snapshots": symbol = "clock.arrow.circlepath"
+        case "messages-attachments": symbol = "message"
         case "simulators": symbol = "iphone"
         default: symbol = "shippingbox"
         }
