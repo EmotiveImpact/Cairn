@@ -164,8 +164,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Restore once, outside SwiftUI layout. Preview never overwrites the live frame.
             let restored = !preview && window.setFrameUsingName("CairnMainWindow.v2")
             if !restored {
-                let target = NSSize(width: minimumPreview ? 1024 : widePreview ? 1280 : 1120,
-                                    height: minimumPreview ? 680 : widePreview ? 800 : 740)
+                // `--preview-window=1244x800` sets an exact size for website screenshots.
+                let custom = CommandLine.arguments.first { $0.hasPrefix("--preview-window=") }
+                    .map { $0.dropFirst("--preview-window=".count).split(separator: "x").compactMap { Double($0) } }
+                    .flatMap { $0.count == 2 && preview ? NSSize(width: $0[0], height: $0[1]) : nil }
+                let target = custom ?? NSSize(width: minimumPreview ? 1024 : widePreview ? 1280 : 1120,
+                                              height: minimumPreview ? 680 : widePreview ? 800 : 740)
                 window.setContentSize(NSSize(width: min(target.width, visible?.width ?? target.width),
                                              height: min(target.height, visible?.height ?? target.height)))
                 window.center()

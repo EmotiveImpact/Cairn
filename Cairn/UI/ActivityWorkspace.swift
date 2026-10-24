@@ -32,8 +32,8 @@ struct RecoveryWorkspace: View {
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let inset: CGFloat = 40
 
-    /// The reference result screen's clean, for the design preview.
-    private static var sampleSummary: ScanStore.CleanSummary {
+    /// The reference result screen's clean, for the design preview and the showcase's Done screen.
+    static var sampleSummary: ScanStore.CleanSummary {
         var result = ScanStore.CleanSummary(failed: 1, errors: ["Xcode build files · Xcode was open"])
         for bytes in [8_200_000_000, 5_100_000_000, 3_400_000_000, 1_900_000_000, 1_000_000_000] as [Int64] {
             result.accounting.record(.init(bytesAffected: bytes, usedTool: false))
@@ -43,6 +43,20 @@ struct RecoveryWorkspace: View {
         result.capacityChanges = [.init(id: "sample",
                                         before: .init(volumeID: "sample", name: "Macintosh HD", available: 9_900_000_000),
                                         after: .init(volumeID: "sample", name: "Macintosh HD", available: 31_900_000_000))]
+        return result
+    }
+    /// The showcase's Done screen: the 38.6 GB from Home and the review sheet,
+    /// freed straight away, with free space rising from 42.6 to 81.2 GB.
+    static var showcaseSummary: ScanStore.CleanSummary {
+        var result = ScanStore.CleanSummary(failed: 0, errors: [])
+        for bytes in [14_200_000_000, 5_200_000_000, 2_500_000_000, 1_800_000_000, 5_100_000_000] as [Int64] {
+            result.accounting.record(.init(bytesAffected: bytes, usedTool: false, deleted: true))
+        }
+        result.accounting.record(.init(bytesAffected: 9_800_000_000, usedTool: true, deleted: true))
+        let before = PreviewStorageScenario.availableBytes
+        result.capacityChanges = [.init(id: "sample",
+                                        before: .init(volumeID: "sample", name: "Macintosh HD", available: before),
+                                        after: .init(volumeID: "sample", name: "Macintosh HD", available: before + 38_600_000_000))]
         return result
     }
     private static let sampleEntries: [ScanStore.RemovalLogEntry] = {
@@ -92,9 +106,7 @@ struct RecoveryWorkspace: View {
     }
     /// Cleans that released space, for the dots on the chart.
     private var freeSpaceCleans: [FreeSpaceCard.Clean] {
-        if preview, let last = PreviewStorageScenario.capacityHistory.last {
-            return [.init(date: last.date, freed: 6_400_000_000)]
-        }
+        if preview { return PreviewStorageScenario.cleans.map { .init(date: $0.date, freed: $0.freed) } }
         return store.cleanupRuns.compactMap { run in
             let freed = Self.freed(run.summary)
             return freed > 0 ? FreeSpaceCard.Clean(date: run.finished ?? run.started, freed: freed) : nil
@@ -392,9 +404,9 @@ struct RecoveryWorkspace: View {
 
     private var runLines: [RunLine] {
         if preview {
-            let day: TimeInterval = 86_400
-            return [RunLine(id: UUID(), title: "Xcode, Docker and npm", date: Date().addingTimeInterval(-11 * day), amount: "Freed 14.0 GB", pill: "Checked", tone: .ok),
-                    RunLine(id: UUID(), title: "Developer caches and simulators", date: Date().addingTimeInterval(-21 * day), amount: "Freed 17.1 GB", pill: "Checked", tone: .ok)]
+            let cleans = PreviewStorageScenario.cleans
+            return [RunLine(id: UUID(), title: "Xcode, Docker and npm", date: cleans[1].date, amount: "Freed 14.0 GB", pill: "Checked", tone: .ok),
+                    RunLine(id: UUID(), title: "Developer caches and simulators", date: cleans[0].date, amount: "Freed 17.1 GB", pill: "Checked", tone: .ok)]
         }
         return store.cleanupRuns.map { run in
             let freed = Self.freed(run.summary)
@@ -511,7 +523,7 @@ struct RecoveryWorkspace: View {
             Text("Recorded size is an estimate, not space freed. History does not expire automatically; Trash contents can still disappear outside Cairn.")
                 .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                 .fixedSize(horizontal: false, vertical: true).padding(.top, 18)
-            if preview { sampleFootnote }
+            if preview && !Showcase.active { sampleFootnote }
         }
     }
 
@@ -538,7 +550,7 @@ struct RecoveryWorkspace: View {
                                message: restoreMessage, compact: true).padding(.top, 16)
             }
             if hasSafetyNotices { safetyNotices.padding(.top, 16) }
-            if preview { sampleFootnote }
+            if preview && !Showcase.active { sampleFootnote }
         }
     }
 

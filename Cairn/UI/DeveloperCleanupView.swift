@@ -55,7 +55,7 @@ struct DeveloperCleanupView: View {
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
             .keyboardShortcut("r", modifiers: .command)
-            .disabled(previewMode || store.isCleaning)
+            .disabled((previewMode && !Showcase.active) || store.isCleaning)
         } content: {
             if visibleBuckets.isEmpty {
                 emptyState
@@ -84,9 +84,16 @@ struct DeveloperCleanupView: View {
                 Button("Select none") { clearPageSelection() }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
             }
-            Button(store.selectedCount == 0 ? "Review and free" : "Review and free \(Fmt.size(store.selectedTotal))") { onReview() }
-                .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(previewMode || store.selectedCount == 0 || store.isScanning)
+            if Showcase.active {
+                // The sample ticks live on this page, not in the store.
+                Button("Review and free \(Fmt.size(pageSelectedBytes))") { onReview() }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .disabled(pageSelected.isEmpty)
+            } else {
+                Button(store.selectedCount == 0 ? "Review and free" : "Review and free \(Fmt.size(store.selectedTotal))") { onReview() }
+                    .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+                    .disabled(previewMode || store.selectedCount == 0 || store.isScanning)
+            }
         }
         .onAppear { if previewMode && section != .developer { previewBuckets = PreviewLibrary.buckets(section) } }
         .onChange(of: section) { _, value in
@@ -107,6 +114,7 @@ struct DeveloperCleanupView: View {
     // MARK: Header
 
     private var eyebrow: String {
+        if Showcase.active { return "Clean · scanned \(Showcase.scanDate.formatted(.relative(presentation: .named)))" }
         if previewMode { return "Clean · sample results" }
         if store.isScanning { return "Clean · scanning" }
         if store.phase == .cancelled { return "Clean · scan stopped early" }
@@ -321,44 +329,50 @@ struct DeveloperCleanupView: View {
             for item in items { bucket.append(item) }
             return bucket
         }
+        // The same 38.6 GB as Home and the review sheet: Xcode, Docker,
+        // node_modules and npm are ready and ticked; the rest need a decision.
         return [
             group("xcode", "Xcode build output", "DerivedData for two projects", "hammer.fill", [
-                example("Library/Developer/Xcode/DerivedData/MyApp", 4 * gib + gib / 10,
+                example("Library/Developer/Xcode/DerivedData/MyApp", 9 * gib + gib / 10,
                         "xcode", "Rebuilds during the next Xcode build", selected: true,
                         quit: ["com.apple.dt.Xcode"]),
-                example("Library/Developer/Xcode/DerivedData/DataTools", 2 * gib + 3 * gib / 10,
+                example("Library/Developer/Xcode/DerivedData/DataTools", 5 * gib + gib / 10,
                         "xcode", "Rebuilds during the next Xcode build", selected: true,
                         quit: ["com.apple.dt.Xcode"]),
+            ]),
+            group("docker", "Docker build cache", "Cleaned with Docker's own command", "shippingbox.fill", [
+                example("Library/Containers/com.docker.docker/Data/build-cache", 9 * gib + 8 * gib / 10,
+                        "docker", "Docker builds it again when needed; Docker.raw is never touched",
+                        method: .tool(ToolCommand(tool: "docker", arguments: ["builder", "prune", "-f"], display: "docker builder prune -f")),
+                        selected: true),
+            ]),
+            group("dev-projects", "Project build artifacts", "node_modules in three idle projects", "folder.fill", [
+                example("Developer/storefront-web/node_modules", 5 * gib + 2 * gib / 10,
+                        "dev-projects", "Installed again by npm install", selected: true),
+                example("Developer/design-system/node_modules", 2 * gib + 5 * gib / 10,
+                        "dev-projects", "Installed again by npm install", selected: true),
+                example("Developer/marketing-site/node_modules", gib + 8 * gib / 10,
+                        "dev-projects", "Installed again by npm install", selected: true),
             ]),
             group("npm", "npm cache", "Downloaded packages and metadata", "shippingbox.fill", [
-                example(".npm/_cacache", 2 * gib + gib / 10, "npm",
-                        "Verify npm's configured cache and active installs before maintenance", severity: .review, method: .adviceOnly),
-            ]),
-            group("dev-projects", "Project build artifacts", "Dependencies and generated output", "folder.fill", [
-                example("Projects/MyApp/node_modules", 8 * gib + 6 * gib / 10,
-                        "dev-projects", "Dependencies may need to be installed again",
-                        severity: .review),
-            ]),
-            group("docker", "Docker build cache", "Managed by Docker", "shippingbox.fill", [
-                example("Library/Containers/com.docker.docker/Data", 3 * gib + 2 * gib / 10,
-                        "docker", "Use Docker's own prune command; never delete Docker.raw",
-                        severity: .review, method: .adviceOnly),
+                example(".npm/_cacache", 5 * gib + gib / 10, "npm",
+                        "npm downloads packages again when needed", selected: true),
             ]),
             group("android", "Android system images", "Review before removing", "candybarphone", [
                 example("Library/Android/sdk/system-images", 4 * gib + 8 * gib / 10,
                         "android", "SDK Manager owns installed system images",
                         severity: .review, method: .adviceOnly),
             ]),
+            group("git-bloat", "Git maintenance", "Repository objects", "arrow.triangle.branch", [
+                example("Developer/storefront-web/.git", gib + 6 * gib / 10,
+                        "git-bloat", "Use Git maintenance; do not remove .git",
+                        severity: .review,
+                        method: .adviceOnly),
+            ]),
             group("ide-caches", "Editor caches", "Close the editor first", "chevron.left.forwardslash.chevron.right", [
                 example("Library/Application Support/Code/Cache", gib + 3 * gib / 10,
                         "ide-caches", "Editor cache; close the app first",
                         quit: ["com.microsoft.VSCode"]),
-            ]),
-            group("git-bloat", "Git maintenance", "Repository objects", "arrow.triangle.branch", [
-                example("Projects/MyApp/.git", gib + 6 * gib / 10,
-                        "git-bloat", "Use Git maintenance; do not remove .git",
-                        severity: .review,
-                        method: .adviceOnly),
             ]),
         ]
     }
