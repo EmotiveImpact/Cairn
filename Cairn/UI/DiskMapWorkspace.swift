@@ -183,12 +183,9 @@ struct DiskMapWorkspace: View {
                 HStack(spacing: 3) {
                     ForEach(Array(areas.enumerated()), id: \.element.id) { index, area in
                         let width = max(4, (geo.size.width - gaps) * CGFloat(Double(area.bytes) / total))
-                        let lit = opened?.id == area.id || hovered == area.id
                         RoundedRectangle(cornerRadius: 6, style: .continuous)
                             .fill(tone(area, index: index))
                             .opacity(hovered == nil || hovered == area.id || area.kind == .free ? 1 : 0.8)
-                            .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                .strokeBorder(Brand.textPrimary.opacity(lit && area.kind != .free ? 0.9 : 0), lineWidth: 1.5))
                             .overlay(alignment: .leading) {
                                 // Label any segment its name fits in; hover names the rest.
                                 let name = area.kind == .free ? "Free · " + Fmt.size(area.bytes) : area.title
