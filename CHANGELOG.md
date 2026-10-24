@@ -24,6 +24,16 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **Cleaning rules updates (off for now).** Cairn can take new cache folders to look in from a list signed with Cairn's key, without a new version. It stays off until the key ships. A rule can only name one app's cache folder, and everything still goes through review and the Bin.
 - **Send a report.** Settings › About shows the whole report first, to change or add to. It holds no file names, folder names or account name. Copy works now; Email appears once a support address is set.
 
+### Apple Intelligence off switch (pull request after that)
+
+Built on top of the research features. It goes up as its own pull request once they are merged.
+
+- **Apple Intelligence page** under Clean. macOS 27 downloads 12 to 30 GB of Apple Intelligence models and has no single off switch. Cairn measures each set of models (main models, image models, Xcode code completion, Photos Clean Up, Spatial Photos), lets you tick which go, and lists what stops working before anything changes. Xcode code completion stays on by default when Xcode is installed.
+- **How it turns off.** Cairn never deletes a file in `/System`. It makes a profile that System Settings asks you to approve; the profile switches the features off and stops their models downloading again. Then Cairn asks macOS to remove the models itself.
+- **Undo.** One button opens System Settings to remove the profile, and everything comes back on. macOS downloads the models again the first time a feature needs them.
+- **Removing Cairn.** If Cairn goes in the Bin while the profile is still on, it offers to open System Settings so Apple Intelligence can be turned back on first.
+- Removing the models uses a part of macOS Apple doesn't publish, so a macOS update can stop it working. If it does, Cairn says so and removes nothing.
+
 ### Other open pull requests
 
 - **Clean-up and hardening before the signed download (PR #11).** About 1,100 unused lines removed, deleting made harder to trick, the tools Cairn runs pinned to system paths, the AI tool cleaning setting sealed so it can't be switched on from outside, a stricter check of the app's own signature, the £35.99 price, and the site address moving to cairnmac.com.

@@ -387,6 +387,60 @@ enum SafetyCheck {
         rule(!RuleUpdates.enabled || RuleUpdates.publicKey.flatMap { Data(base64Encoded: $0) }?.count == 32,
              "rules updates stay off unless a real public key ships")
 
+        // Apple Intelligence goes only through a profile the person approves and
+        // macOS's own asset service. Only what the chosen models need turns off,
+        // downloads point at a port that never answers, the profile can always
+        // be removed, and an empty or unknown reset is never sent.
+        typealias AI = AppleIntelligence
+        let everyFeature = AI.features
+        rule(AI.setsToRemove(chosen: [AI.foundation], among: everyFeature) == [AI.foundation, AI.visual]
+             && AI.setsToRemove(chosen: [AI.visual], among: everyFeature) == [AI.visual]
+             && AI.setsToRemove(chosen: [], among: everyFeature).isEmpty
+             && AI.featuresOff(removing: [AI.code], among: everyFeature).map(\.id) == ["xcode-completion"]
+             && !AI.featuresOff(removing: [AI.visual], among: everyFeature).contains { $0.id == "writing-tools" },
+             "Apple Intelligence turns off only what the chosen models need")
+        func profile(_ chosen: Set<String>) -> [String: Any]? {
+            guard let data = try? AI.Profile.data(removing: chosen, among: everyFeature) else { return nil }
+            return try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        }
+        func forced(_ plist: [String: Any]?, _ domain: String) -> [String: Any] {
+            let payloads = plist?["PayloadContent"] as? [[String: Any]] ?? []
+            for payload in payloads {
+                if let content = payload["PayloadContent"] as? [String: Any], let entry = content[domain] as? [String: Any],
+                   let list = entry["Forced"] as? [[String: Any]], let settings = list.first?["mcx_preference_settings"] as? [String: Any] {
+                    return settings
+                }
+            }
+            return [:]
+        }
+        let main = profile([AI.foundation])
+        let restrictions = (main?["PayloadContent"] as? [[String: Any]])?.first { $0["PayloadType"] as? String == "com.apple.applicationaccess" } ?? [:]
+        let downloads = forced(main, AI.Profile.downloadDomain)
+        let generative = AI.Profile.downloadKeyPrefix + "com.apple.MobileAsset.UAF.FM.GenerativeModels"
+        rule(main?["PayloadRemovalDisallowed"] as? Bool == false
+             && restrictions["allowWritingTools"] as? Bool == false
+             && !restrictions.contains { $0.key.hasPrefix("allow") && $0.value as? Bool != false }
+             && (downloads[generative] as? String)?.hasPrefix("https://127.0.0.1:9/") == true
+             && downloads[AI.Profile.downloadKeyPrefix + AI.code] == nil
+             && forced(main, AI.Profile.identifier)["sets"] as? String == "\(AI.foundation),\(AI.visual)"
+             && (try? AI.Profile.data(removing: [AI.foundation], among: everyFeature)) == (try? AI.Profile.data(removing: [AI.foundation], among: everyFeature))
+             && profile([]) == nil,
+             "the Apple Intelligence profile only switches things off, blocks their downloads and can be removed")
+        rule(AI.AssetService.requestable([]).isEmpty
+             && AI.AssetService.requestable(["com.apple.MobileAsset.SomethingElse", ""]).isEmpty
+             && AI.AssetService.requestable([AI.code]) == [AI.code],
+             "Cairn never asks macOS to reset an empty or unknown list of models")
+        func asset(_ present: Bool, _ type: String, _ key: String, _ size: Any) -> [String: Any] {
+            ["isPresentOnDevice": present, "metadata": ["AssetType": type, key: size] as [String: Any]]
+        }
+        let assets: [[String: Any]] = [
+            asset(true, AI.visual, "_UnarchivedSize", 3_000_000_000),
+            asset(true, AI.visual, "com.apple.UnifiedAssetFramework.UnarchivedSize", "100"),
+            asset(false, AI.code, "_UnarchivedSize", 9_000_000_000),
+        ]
+        let inventory = AI.AssetService.parseInventory(["SystemAssets": assets])
+        rule(inventory == [AI.visual: 3_000_000_100], "Apple Intelligence sizes count only models on this Mac")
+
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
         if LicenseConfig.devProUnlock {
