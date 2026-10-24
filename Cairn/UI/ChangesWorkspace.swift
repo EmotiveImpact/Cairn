@@ -121,7 +121,7 @@ struct ChangesWorkspace: View {
                     .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     .fixedSize(horizontal: false, vertical: true).padding(.top, 18)
             }.padding(30).frame(maxWidth: .infinity, alignment: .leading)
-        }.background(Brand.background).foregroundStyle(Brand.textPrimary)
+        }.foregroundStyle(Brand.textPrimary)
             .onChange(of: period) { _, _ in selectedDate = nil }
             .task {
                 if !preview {

@@ -146,7 +146,9 @@ struct OverviewWorkspace: View {
             // keep the chart its size then, so nothing below it moves.
             guard !store.isScanning, !store.isCleaning else { return }
             chartHeight = min(240, max(110, height - 600))
-        }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
+        }
+        // The page card already paints this background and glow, with the dot field over it.
+        .foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task {
             guard !preview else { return }
@@ -179,7 +181,14 @@ struct OverviewWorkspace: View {
     private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
 
     /// The headline action: what a scan found that can be freed in one go.
-    private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    private var recommendedBytes: Int64 { preview ? Self.previewReadyBytes : store.recommendedBytes }
+    /// `--preview-ui` sample for the headline and the sidebar dots: 18.4 GB, or
+    /// `--preview-ready-gb=<n>` to capture another dot level.
+    static let previewReadyBytes: Int64 = {
+        let flag = "--preview-ready-gb="
+        let gb = CommandLine.arguments.first { $0.hasPrefix(flag) }.flatMap { Double($0.dropFirst(flag.count)) }
+        return Int64((gb ?? 18.4) * 1_000_000_000)
+    }()
     /// Everything else the scan found: real space, but only the person can decide on it.
     private var toReviewBytes: Int64 { preview ? 21_300_000_000 : max(0, store.grandTotal - store.recommendedBytes) }
     /// Keeps the bigger number in view without competing with the headline.
@@ -580,6 +589,8 @@ struct OverviewWorkspace: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        // A capture opens with keyboard focus on the first control; keep its ring off sample shots.
+        .focusEffectDisabled(preview)
         .help("Move large folders to \(drive.name)")
     }
     private var header: some View {
