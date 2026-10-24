@@ -286,6 +286,32 @@ enum WorkspaceCheck {
             check(MakeRoomPlan.summary([.ssd: 47_900_000_000, .bin: 16_300_000_000, .cloud: 6_200_000_000], drive: "Studio SSD")?.rest
                   == "chosen · 47.9 GB to Studio SSD, 16.3 GB to the Bin, 6.2 GB online only" && MakeRoomPlan.summary([:], drive: "x") == nil,
                   "The Make room total names where everything goes")
+            // Messages attachments: measured and sent to Storage, never offered to the Bin.
+            let chats = root.appendingPathComponent("Messages/Attachments/ab/01")
+            try fm.createDirectory(at: chats, withIntermediateDirectories: true)
+            try Data(repeating: 2, count: 300_000).write(to: chats.appendingPathComponent("clip.MOV"))
+            try Data(repeating: 3, count: 100_000).write(to: chats.appendingPathComponent("photo.heic"))
+            try Data(repeating: 4, count: 20_000).write(to: chats.appendingPathComponent("notes.pdf"))
+            try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -400 * 86_400)], ofItemAtPath: chats.appendingPathComponent("clip.MOV").path)
+            let chatFolder = root.appendingPathComponent("Messages/Attachments")
+            if let measured = MessagesAttachments.measure(chatFolder) {
+                check(measured.count == 3 && measured.videos > measured.photos && measured.photos > measured.other
+                      && measured.bytes == measured.videos + measured.photos + measured.other
+                      && measured.oldBytes == measured.videos && measured.breakdown.hasPrefix("Videos "),
+                      "Messages attachments are measured by kind and age")
+            } else {
+                check(false, "Messages attachments are measured by kind and age")
+            }
+            check(MessagesAttachments.measure(root.appendingPathComponent("Messages/None")) == nil, "No Messages folder means no row")
+            var bigChats = MessagesAttachments(url: chatFolder)
+            bigChats.bytes = 4_300_000_000; bigChats.videos = 4_300_000_000; bigChats.count = 12
+            let chatRows = MakeRoomPlan.rows(scan: [], targets: [], measured: [:], offloaded: [], backups: [], clouds: [],
+                                             driveReady: true, cloudReady: true, messages: bigChats)
+            check(chatRows.count == 1 && chatRows[0].ways.isEmpty && chatRows[0].suggested == nil,
+                  "Messages attachments are shown in Make room but never offered to the Bin, SSD or Cloud")
+            let realChats = SafePaths.home.appendingPathComponent("Library/Messages")
+            check(!SafePaths.evaluate(realChats.appendingPathComponent("Attachments/ab/01/clip.MOV"), allowedRoots: [realChats]).isAllowed,
+                  "Messages stays protected from removal")
             let gone = root.appendingPathComponent("Volumes/Studio SSD/Cairn Offload/models").path
             func moved(_ id: String, _ title: String, _ status: RelocationRecord.Status, _ mode: Relocation.Mode, _ destination: String) -> RelocationRecord {
                 RelocationRecord(targetID: id, source: "/x/\(id)", destination: destination, volumeID: "V", volumeName: "Studio SSD",

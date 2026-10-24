@@ -25,6 +25,7 @@ enum ScannerRegistry {
             AppCachesScanner(),
             BrowserCachesScanner(),
             CommunicationCachesScanner(), // Zoom / Teams / Spotify / Figma app caches
+            MessagesAttachmentsScanner(), // size only; reviewed in System Settings
             LogsScanner(),
             InstallersScanner(),
             LargeOldFilesScanner(),
