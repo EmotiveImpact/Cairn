@@ -6,13 +6,15 @@ import Foundation
 /// leaves a receipt in Activity like any other clean.
 @MainActor @Observable final class RuleRunner {
     static let shared = RuleRunner()
-    private(set) var rules: [CleaningRule] = CleaningRules.load()
+    private(set) var rules: [CleaningRule] = RuleRunner.previewMode ? RuleRunner.sample : CleaningRules.load()
+    private static let previewMode = CommandLine.arguments.contains("--preview-ui")
     private(set) var running: CleaningRule.Kind?
     @ObservationIgnored private weak var store: ScanStore?
     @ObservationIgnored private var proEnabled: () -> Bool = { false }
     @ObservationIgnored private var loop: Task<Void, Never>?
 
     func attach(store: ScanStore, proEnabled: @escaping () -> Bool) {
+        guard !Self.previewMode else { return }
         self.store = store
         self.proEnabled = proEnabled
         guard loop == nil else { return }
@@ -31,11 +33,39 @@ import Foundation
         if next.approved && next.approvedAt == nil { next.approvedAt = Date() }
         if !next.approved { next.approvedAt = nil }
         rules = rules.map { $0.kind == next.kind ? next : $0 }
-        CleaningRules.save(rules)
+        if !Self.previewMode { CleaningRules.save(rules) }
+    }
+
+    /// `--preview-ui`: two approved rules with receipts. Never saved, never run.
+    private static var sample: [CleaningRule] {
+        CleaningRule.Kind.allCases.map { kind in
+            var rule = CleaningRule(kind: kind)
+            switch kind {
+            case .xcodeBuild:
+                rule.approved = true
+                rule.approvedAt = Date().addingTimeInterval(-30 * 86_400)
+                rule.lastRun = Date().addingTimeInterval(-2 * 86_400)
+                rule.lastRunBytes = 6_200_000_000
+                rule.lastRunItems = 4
+                rule.lastResult = "Cleared 6.2 GB"
+            case .packageCaches:
+                rule.approved = true
+                rule.schedule = .daily
+                rule.capGB = 10
+                rule.approvedAt = Date().addingTimeInterval(-12 * 86_400)
+                rule.lastRun = Date().addingTimeInterval(-5 * 3_600)
+                rule.lastRunBytes = 1_400_000_000
+                rule.lastRunItems = 3
+                rule.lastResult = "Cleared 1.4 GB"
+            default: break
+            }
+            return rule
+        }
     }
 
     /// What the rule would clear now. Measures, changes nothing.
     func preview(_ rule: CleaningRule) async -> [ScanItem]? {
+        guard !Self.previewMode else { return [] }
         guard await ScanGate.shared.acquire(.scan) else { return nil }
         defer { ScanGate.shared.release() }
         let found = await AgentBridge.gather(category: rule.kind.category)

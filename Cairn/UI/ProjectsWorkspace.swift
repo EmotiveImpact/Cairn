@@ -14,7 +14,8 @@ struct ProjectsWorkspace: View {
 
     @State private var projects: [ProjectSummary] = []
     @State private var indexing = false
-    @State private var expanded: Set<String> = []
+    @State private var expanded: Set<String> = CommandLine.arguments.contains("--preview-ui")
+        ? [FileScan.home.appendingPathComponent("Developer/storefront-web").path] : []
     @State private var git: [String: GitStatus] = [:]
     @State private var sleeping: [SleepingProject] = []
     @State private var copied: String?
@@ -42,7 +43,7 @@ struct ProjectsWorkspace: View {
         projects.filter { ($0.idleDays() ?? 0) >= Self.idleDays && !$0.rebuildable.isEmpty }
     }
     private var idleBytes: Int64 { idle.flatMap(\.rebuildable).reduce(0) { $0 + $1.allocatedSize } }
-    private var asleep: [SleepingProject] { sleeping.filter { ProjectSleep.isAsleep($0) } }
+    private var asleep: [SleepingProject] { preview ? sleeping : sleeping.filter { ProjectSleep.isAsleep($0) } }
     private var selectedProjectBytes: Int64 {
         let selected = Set(store.selectedItems().map(\.id))
         return projects.flatMap(\.rebuildable).filter { selected.contains($0.id) }.reduce(0) { $0 + $1.allocatedSize }
@@ -69,7 +70,10 @@ struct ProjectsWorkspace: View {
                   subtitle: projects.isEmpty
                       ? "Your coding projects, how long since you worked on them, and what can be rebuilt."
                       : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.") {
-            Button { if store.isScanning { store.cancel() } else { store.rescan() } } label: {
+            Button {
+                guard !preview else { return }
+                if store.isScanning { store.cancel() } else { store.rescan() }
+            } label: {
                 Label(store.isScanning ? "Stop scan" : "Rescan", systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
@@ -318,7 +322,13 @@ struct ProjectsWorkspace: View {
     // MARK: - Indexing
 
     private func reindex() async {
-        if !preview {
+        if preview {
+            projects = Self.sampleProjects
+            git = Self.sampleGit
+            sleeping = Self.sampleSleeping
+            return
+        }
+        do {
             let notes = await Task.detached(priority: .utility) { () -> [SleepingProject] in
                 let loaded = ProjectSleep.load()
                 let kept = ProjectSleep.reconcile(loaded)
@@ -348,6 +358,64 @@ struct ProjectsWorkspace: View {
         guard !Task.isCancelled else { return }
         git = statuses
     }
+
+    // MARK: - Preview
+
+    /// Fixed display data for `--preview-ui`: 21.7 GB across eight projects,
+    /// five of them idle. The paths are never read and nothing here can be cleaned.
+    private static let sampleProjects: [ProjectSummary] = {
+        let root = FileScan.home.appendingPathComponent("Developer")
+        let gb: Double = 1_000_000_000
+        func project(_ name: String, idle days: Int, repository: Bool = true, _ output: [(String, Double)]) -> ProjectSummary {
+            let url = root.appendingPathComponent(name)
+            let items = output.map { path, size in
+                ScanItem(url: url.appendingPathComponent(path), allocatedSize: Int64(size * gb),
+                         categoryID: ProjectIndex.categoryID, severity: .safe,
+                         note: path.hasSuffix("node_modules") || path == "Pods" || path == ".venv"
+                             ? "Dependencies, installed again when needed" : "Build output, made again on the next build")
+            }
+            return ProjectSummary(url: url, items: items, isRepository: repository,
+                                  lastActivity: Date().addingTimeInterval(-Double(days) * 86_400))
+        }
+        return [
+            project("storefront-web", idle: 94, [("node_modules", 3.9), (".next", 1.3)]),
+            project("ios-banking", idle: 2, [("build", 2.6), ("Pods", 1.6)]),
+            project("ml-experiments", idle: 121, [(".venv", 3.4)]),
+            project("design-system", idle: 45, [("node_modules", 2.1), ("storybook-static", 0.4)]),
+            project("api-gateway", idle: 0, [("target", 2.3)]),
+            project("marketing-site", idle: 210, [("node_modules", 1.6), ("dist", 0.2)]),
+            project("android-companion", idle: 61, repository: false, [("build", 1.4), (".gradle", 0.3)]),
+            project("cli-tools", idle: 5, [("target", 0.6)]),
+        ]
+    }()
+
+    /// What git says about the sample projects: two old ones hold work that
+    /// exists only on this Mac.
+    private static let sampleGit: [String: GitStatus] = {
+        let root = FileScan.home.appendingPathComponent("Developer")
+        func path(_ name: String) -> String { root.appendingPathComponent(name).path }
+        return [
+            path("storefront-web"): GitStatus(branch: "checkout-redesign", upstream: "origin/checkout-redesign", ahead: 3, changed: 2),
+            path("ios-banking"): GitStatus(branch: "main", upstream: "origin/main"),
+            path("ml-experiments"): GitStatus(branch: "main", untracked: 4),
+            path("design-system"): GitStatus(branch: "main", upstream: "origin/main"),
+            path("api-gateway"): GitStatus(branch: "develop", upstream: "origin/develop", changed: 1),
+            path("marketing-site"): GitStatus(branch: "main", upstream: "origin/main"),
+            path("cli-tools"): GitStatus(branch: "main", upstream: "origin/main", ahead: 1),
+        ]
+    }()
+
+    private static let sampleSleeping: [SleepingProject] = {
+        let root = FileScan.home.appendingPathComponent("Developer")
+        return [
+            SleepingProject(path: root.appendingPathComponent("old-portfolio").path, name: "old-portfolio",
+                            asleepSince: Date().addingTimeInterval(-41 * 86_400), bytes: 2_800_000_000,
+                            cleared: [], wakeCommand: "cd ~/Developer/old-portfolio && npm install"),
+            SleepingProject(path: root.appendingPathComponent("rust-game").path, name: "rust-game",
+                            asleepSince: Date().addingTimeInterval(-18 * 86_400), bytes: 4_100_000_000,
+                            cleared: [], wakeCommand: "cd ~/Developer/rust-game && cargo build"),
+        ]
+    }()
 
     // MARK: - Formatting
 

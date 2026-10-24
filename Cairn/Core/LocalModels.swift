@@ -77,7 +77,10 @@ enum LocalModels {
         guard let enumerator = FileManager.default.enumerator(at: manifests, includingPropertiesForKeys: [.isRegularFileKey, .contentModificationDateKey]) else { return [] }
         var models: [LocalModel] = []
         for case let file as URL in enumerator {
-            let parts = file.path.dropFirst(manifests.path.count + 1).split(separator: "/").map(String.init)
+            // The enumerator can hand back /private/var for /var, so count
+            // levels rather than trimming the root's spelling off the path.
+            guard enumerator.level == 4 else { continue }
+            let parts = Array(file.pathComponents.suffix(4))
             guard parts.count == 4,
                   (try? file.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true,
                   let data = try? Data(contentsOf: file), data.count < 1_000_000,

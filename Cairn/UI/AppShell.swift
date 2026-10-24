@@ -88,7 +88,9 @@ enum NavSection: String, CaseIterable, Identifiable {
 
 struct AppShell: View {
     @Environment(\.openWindow) private var openWindow
-    @State private var preferencesTab = "General"
+    /// `--preferences-tab=Rules` opens Settings on that tab, for screenshots.
+    @State private var preferencesTab = CommandLine.arguments.first { $0.hasPrefix("--preferences-tab=") }
+        .map { String($0.dropFirst("--preferences-tab=".count)) } ?? "General"
     @State private var storageDriveID: String?
     @State private var store = ScanStore()
     // Per-page stores are owned HERE (not inside their views) so results persist

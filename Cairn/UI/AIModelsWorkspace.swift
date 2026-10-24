@@ -148,6 +148,7 @@ struct AIModelsWorkspace: View {
         guard !preview else {
             models = Self.sample
             total = models.reduce(0) { $0 + $1.bytes }
+            selected = models.dropFirst().first?.id
             loaded = true
             return
         }
