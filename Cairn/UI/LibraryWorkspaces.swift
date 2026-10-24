@@ -21,6 +21,7 @@ struct AppsWorkspace: View {
     private var apps: [AppEntry] { allApps.filter { app in
         (search.isEmpty || (app.name + app.bundleID).localizedCaseInsensitiveContains(search))
         && (filter != "Not used lately" || app.isUnused) && (filter != "Large" || app.isLarge)
+        && (filter != "Intel only" || app.isIntel)
     }.sorted { total($0) > total($1) } }
     private var selected: [AppEntry] { allApps.filter { $0.selected && $0.isRemovable } }
     private var inspected: AppEntry? { apps.first { $0.id == focused } ?? apps.first }
@@ -40,7 +41,7 @@ struct AppsWorkspace: View {
         } content: {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 18) {
-                    ForEach(["All", "Not used lately", "Large"], id: \.self) { option in
+                    ForEach(["All", "Not used lately", "Large"] + (allApps.contains(where: \.isIntel) ? ["Intel only"] : []), id: \.self) { option in
                         Button(option) { filter = option }
                             .buttonStyle(.plain).font(.system(size: 12))
                             .foregroundStyle(filter == option ? Brand.textPrimary : Brand.textMuted)
@@ -101,8 +102,8 @@ struct AppsWorkspace: View {
                         FileIcon(url: app.url, size: 22).saturation(0).opacity(0.85)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(app.name).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary).lineLimit(1)
-                            Text("\(Fmt.size(app.size)) app · \(Fmt.size(app.componentsSize)) settings and data")
-                                .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
+                            Text(facts(app))
+                                .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1).truncationMode(.middle)
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -112,10 +113,11 @@ struct AppsWorkspace: View {
                     Group {
                         if !app.isRemovable { NightPill(text: "Protected") }
                         else if app.selected { NightPill(text: "Selected", tone: .ok) }
+                        else if app.isIntel { NightPill(text: "Stops working in macOS 28", tone: .warn) }
                         else if app.isUnused { NightPill(text: "Not used lately") }
                         else { Color.clear.frame(height: 1) }
                     }
-                    .frame(width: 120, alignment: .leading)
+                    .frame(width: 170, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
@@ -123,6 +125,13 @@ struct AppsWorkspace: View {
         }
         .nightRow()
         .background(inspectorVisible && inspected?.id == app.id ? Brand.wash(0.035) : Color.clear)
+    }
+
+    /// "Google LLC · Downloaded · opened 3 weeks ago": who made it, where it
+    /// came from and when it was last opened, whichever the Mac records.
+    private func facts(_ app: AppEntry) -> String {
+        let opened = app.lastOpened.map { "opened " + Fmt.relative($0) } ?? "never opened"
+        return [app.developer == "—" ? "" : app.developer, app.source, opened].filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
     @ViewBuilder private func detail(_ app: AppEntry) -> some View {
@@ -136,6 +145,12 @@ struct AppsWorkspace: View {
         WorkspaceDetail(title: "The app", text: Fmt.size(app.size))
         WorkspaceDetail(title: "Its settings and data", text: "\(Fmt.size(app.componentsSize)). These stay on your Mac when the app is removed.")
         WorkspaceDetail(title: "Last opened", text: app.lastOpened.map { Fmt.relative($0) } ?? "macOS has not recorded this, so it may still be in use.")
+        if !app.source.isEmpty {
+            WorkspaceDetail(title: "Came from", text: app.source == "Homebrew" ? "Homebrew. Removing it with brew uninstall --cask also tidies Homebrew's record." : app.source)
+        }
+        if app.isIntel {
+            WorkspaceDetail(title: "Stops working in macOS 28", text: "This app is built for Intel Macs and runs through Rosetta, which Apple is removing in macOS 28. Look for an Apple silicon version, or plan to replace it.")
+        }
         WorkspaceDetail(title: "Removing it", text: app.isRemovable ? "Only the app moves to the Trash. Close it first." : "This app is part of macOS or protected, so Cairn will not remove it.")
         if !app.associated.isEmpty {
             DisclosureGroup("Where its data lives · \(app.associated.count)") {

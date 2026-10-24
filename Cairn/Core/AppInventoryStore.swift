@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Security
 import Observation
 
 /// A tiny thread-safe cancellation flag shared between the @MainActor store and
@@ -29,6 +30,9 @@ struct AppEntry: Identifiable {
     var leftoverSize: Int64           // Caches / Preferences / Logs / Saved State / HTTPStorages / WebKit
     var associated: [URL]             // every associated ~/Library path (support + leftover)
     var lastOpened: Date?
+    /// Where it came from: "App Store", "Homebrew", "Downloaded",
+    /// "Came with macOS", or empty when the Mac doesn't record it.
+    var source: String = ""
     var isApple: Bool
     var isIntel: Bool
     var isSystem: Bool                // /System/Applications — shown, never removable
@@ -192,6 +196,7 @@ final class AppInventoryStore {
         }
 
         // 3) Build an entry per app.
+        let casks = homebrewApps()
         for raw in raws {
             if isCancelled() { break }
             guard let info = readInfo(raw.url) else { continue }
@@ -216,7 +221,7 @@ final class AppInventoryStore {
 
             entries.append(AppEntry(
                 name: info.name,
-                developer: developer(for: info.name, bundleID: bundleID),
+                developer: signer(raw.url) ?? developer(for: info.name, bundleID: bundleID),
                 bundleID: info.bundleID,
                 version: info.version,
                 url: raw.url,
@@ -226,6 +231,7 @@ final class AppInventoryStore {
                 leftoverSize: leftover,
                 associated: associated,
                 lastOpened: lastOpened(raw.url),
+                source: source(raw.url, isSystem: raw.isSystem, casks: casks),
                 isApple: bundleID.hasPrefix("com.apple"),
                 isIntel: machIsIntelOnly(raw.url),
                 isSystem: raw.isSystem
@@ -278,9 +284,74 @@ final class AppInventoryStore {
         return "—"
     }
 
-    /// `kMDItemLastUsedDate` is the most accurate "last opened"; we approximate it
-    /// with the content-access date (and fall back to modification date).
+    /// The name on the app's signing certificate: "Developer ID Application:
+    /// Google LLC (EQHXZ8M8AV)" gives "Google LLC". App Store and Apple
+    /// signatures carry no maker's name, so those fall back to the bundle id.
+    private nonisolated static func signer(_ app: URL) -> String? {
+        var code: SecStaticCode?
+        guard SecStaticCodeCreateWithPath(app as CFURL, [], &code) == errSecSuccess, let code else { return nil }
+        var info: CFDictionary?
+        guard SecCodeCopySigningInformation(code, SecCSFlags(rawValue: kSecCSSigningInformation), &info) == errSecSuccess,
+              let dict = info as? [String: Any],
+              let certificates = dict[kSecCodeInfoCertificates as String] as? [SecCertificate],
+              let leaf = certificates.first,
+              let summary = SecCertificateCopySubjectSummary(leaf) as String? else { return nil }
+        return signerName(summary)
+    }
+
+    nonisolated static func signerName(_ summary: String) -> String? {
+        let prefixes = ["Developer ID Application: ", "Apple Distribution: ", "Apple Development: ",
+                        "3rd Party Mac Developer Application: ", "Mac Developer: "]
+        guard let prefix = prefixes.first(where: { summary.hasPrefix($0) }) else { return nil }
+        var name = String(summary.dropFirst(prefix.count))
+        if let team = name.range(of: " (", options: .backwards) { name = String(name[..<team.lowerBound]) }
+        name = name.trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? nil : name
+    }
+
+    /// App Store apps carry a receipt, Homebrew keeps each cask's recipe, and a
+    /// download keeps the quarantine mark macOS adds. Anything else: unknown.
+    private nonisolated static func source(_ app: URL, isSystem: Bool, casks: Set<String>) -> String {
+        if isSystem { return "Came with macOS" }
+        if FileScan.exists(app.appendingPathComponent("Contents/_MASReceipt/receipt")) { return "App Store" }
+        if casks.contains(app.lastPathComponent) { return "Homebrew" }
+        if getxattr(app.path, "com.apple.quarantine", nil, 0, 0, 0) > 0 { return "Downloaded" }
+        return ""
+    }
+
+    /// App names Homebrew installed, read from each cask's saved recipe in
+    /// Caskroom/<cask>/.metadata/<version>/<time>/Casks/<cask>.json or .rb.
+    private nonisolated static func homebrewApps() -> Set<String> {
+        var names = Set<String>()
+        for room in ["/opt/homebrew/Caskroom", "/usr/local/Caskroom"] {
+            for cask in FileScan.children(of: URL(fileURLWithPath: room)) ?? [] {
+                for version in FileScan.children(of: cask.appendingPathComponent(".metadata")) ?? [] {
+                    for stamp in FileScan.children(of: version) ?? [] {
+                        for recipe in FileScan.children(of: stamp.appendingPathComponent("Casks")) ?? [] {
+                            guard let text = try? String(contentsOf: recipe, encoding: .utf8) else { continue }
+                            names.formUnion(caskAppNames(text))
+                        }
+                    }
+                }
+            }
+        }
+        return names
+    }
+
+    /// Quoted names ending in .app with no folder in them: `app "Firefox.app"`
+    /// in a recipe, `"app":["Google Chrome.app"]` in its JSON.
+    nonisolated static func caskAppNames(_ text: String) -> Set<String> {
+        var names = Set<String>()
+        for part in text.components(separatedBy: "\"").dropFirst() where part.hasSuffix(".app") && !part.contains("/") && part.count > 4 {
+            names.insert(part)
+        }
+        return names
+    }
+
+    /// Spotlight's `kMDItemLastUsedDate` is the real "last opened". Without it,
+    /// the content-access date stands in (then the modification date).
     private nonisolated static func lastOpened(_ app: URL) -> Date? {
+        if let used = NSMetadataItem(url: app)?.value(forAttribute: "kMDItemLastUsedDate") as? Date { return used }
         let keys: Set<URLResourceKey> = [.contentAccessDateKey, .contentModificationDateKey]
         guard let v = try? app.resourceValues(forKeys: keys) else { return nil }
         return v.contentAccessDate ?? v.contentModificationDate

@@ -333,6 +333,12 @@ enum SafetyCheck {
         let without = TargetPlan.plan(planGroups, goal: 18_000_000_000, left: [planGroups[1].id])
         rule(without.chosen.map(\.categoryID) == ["app-caches", "installers", "docker"],
              "leaving a row out plans again around it")
+        rule(AppInventoryStore.signerName("Developer ID Application: Google LLC (EQHXZ8M8AV)") == "Google LLC"
+             && AppInventoryStore.signerName("Apple Mac OS Application Signing") == nil,
+             "an app's maker is read from its signing certificate")
+        rule(AppInventoryStore.caskAppNames("app \"Firefox.app\"\nzap trash: \"~/Library/Saved Application State/Firefox.app\"") == ["Firefox.app"]
+             && AppInventoryStore.caskAppNames("{\"artifacts\":[{\"app\":[\"Google Chrome.app\"]}]}") == ["Google Chrome.app"],
+             "Homebrew apps are found from each cask's recipe")
 
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
