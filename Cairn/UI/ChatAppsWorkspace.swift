@@ -87,7 +87,7 @@ struct ChatAppsWorkspace: View {
             }
             .buttonStyle(.plain)
             NightMeter(share: share, width: 140)
-            Text(row.advice?.permissionDenied == true && row.bytes == 0 ? "—" : Fmt.size(row.bytes))
+            Text(row.advice?.permissionDenied == true && row.bytes == 0 ? "–" : Fmt.size(row.bytes))
                 .font(.system(size: 13.5, weight: .medium)).monospacedDigit()
                 .frame(width: 70, alignment: .trailing)
             action(row).frame(width: 170, alignment: .trailing)
@@ -143,7 +143,7 @@ struct ChatAppsWorkspace: View {
         guard !preview, let app = ChatAppsScanner.apps.first(where: { $0.name == row.name }) else { return }
         explained = row.id
         if let url = ChatAppsScanner.installedApp(app) {
-            NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+            NSWorkspace.shared.open(url)
         } else if let folder = row.advice?.resolvedURL {
             NSWorkspace.shared.activateFileViewerSelecting([folder])
         }

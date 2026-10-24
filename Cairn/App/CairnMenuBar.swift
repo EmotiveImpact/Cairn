@@ -216,8 +216,6 @@ enum MenuAvailableSpace {
         #endif
     }
 
-    /// Sample-only inspection of the actual NSMenu, inside the preview window.
-    /// This also works when macOS hides status items behind a display notch.
     private var leftoversPopover: NSPopover?
     private var leftoversTimeout: Task<Void, Never>?
 
@@ -254,6 +252,8 @@ enum MenuAvailableSpace {
         leftoversPopover = nil
     }
 
+    /// Sample-only inspection of the actual NSMenu, inside the preview window.
+    /// This also works when macOS hides status items behind a display notch.
     func presentPreviewMenu() {
         guard preview, let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }), let view = window.contentView else { return }
         let top = view.isFlipped ? CGFloat(50) : view.bounds.height - 50

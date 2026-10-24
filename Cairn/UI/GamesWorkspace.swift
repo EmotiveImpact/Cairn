@@ -145,7 +145,7 @@ struct GamesWorkspace: View {
             Button("Remove in Apps") { onOpen(.apps) }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
         } else if let app = Self.launcherApp(launcher) {
-            Button("Open \(launcher)") { NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration()) }
+            Button("Open \(launcher)") { NSWorkspace.shared.open(app) }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                 .disabled(preview)
         }

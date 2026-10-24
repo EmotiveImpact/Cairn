@@ -294,7 +294,7 @@ struct DuplicatesWorkspace: View {
 
     private func openPhotos() {
         guard let app = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.apple.Photos") else { return }
-        NSWorkspace.shared.openApplication(at: app, configuration: NSWorkspace.OpenConfiguration())
+        NSWorkspace.shared.open(app)
     }
 
     // MARK: Rows
