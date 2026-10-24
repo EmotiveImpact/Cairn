@@ -6,15 +6,25 @@ struct AgentConnectionsPanel: View {
     @State private var states: [String: AgentConnections.State] = [:]
     @State private var message = ""
     @State private var working: String?
+    @Bindable private var settings = AppSettings.shared
     private let tools = AgentTool.all()
     private let preview = CommandLine.arguments.contains("--preview-ui")
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Let your AI coding tools ask Cairn what is using space. They can measure and list projects, but only you can remove anything, here in Cairn.")
+            Text("Let your AI coding tools ask Cairn what is using space, plan a cleanup and, if you allow it, free the space for you.")
                 .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 18)
+            VStack(alignment: .leading, spacing: 10) {
+                Text("When an AI tool wants to clean").font(.system(size: 13, weight: .medium))
+                CairnSegmentedControl(label: "AI tool cleaning", selection: $settings.agentCleaning,
+                                      options: AgentCleaningMode.allCases.map { ($0.title, $0) })
+                    .frame(width: 460)
+                Text(settings.agentCleaning.detail + " Only caches and build files that rebuild themselves qualify. Your files, AI chats and the Trash are never touched.")
+                    .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }.padding(.bottom, 18)
             Rectangle().fill(Brand.separator).frame(height: 0.5)
             ForEach(tools) { tool in row(tool) }
             HStack(spacing: 12) {

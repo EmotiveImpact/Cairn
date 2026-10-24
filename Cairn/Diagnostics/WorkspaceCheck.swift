@@ -45,8 +45,12 @@ enum WorkspaceCheck {
         check(MCPServer.handle(["jsonrpc": "2.0", "method": "notifications/initialized"]) == nil, "MCP notifications get no response")
         let listed = ((MCPServer.handle(["jsonrpc": "2.0", "id": 2, "method": "tools/list"])?["result"] as? [String: Any])?["tools"] as? [[String: Any]]) ?? []
         let names = Set(listed.compactMap { $0["name"] as? String })
-        check(names == ["storage_status", "list_projects", "find_reclaimable", "list_categories", "open_cairn"], "MCP lists only measuring and opening tools")
-        check(!names.contains { $0.contains("clean") || $0.contains("delete") || $0.contains("remove") }, "MCP exposes no removal tool")
+        check(names == ["storage_status", "list_projects", "find_reclaimable", "list_categories", "plan_cleanup", "run_cleanup", "recent_cleanups", "open_cairn"], "MCP lists measuring, planning, cleaning and opening tools")
+        let runTool = listed.first { $0["name"] as? String == "run_cleanup" }
+        check((runTool?["annotations"] as? [String: Any])?["destructiveHint"] as? Bool == true, "MCP marks run_cleanup as destructive so the agent asks first")
+        check(!names.contains { $0.contains("trash") || $0.contains("delete") || $0.contains("remove") }, "MCP offers no Trash, delete or remove tool")
+        let missingPlan = MCPServer.handle(["jsonrpc": "2.0", "id": 6, "method": "tools/call", "params": ["name": "run_cleanup", "arguments": [String: Any]()] as [String: Any]])?["result"] as? [String: Any]
+        check(missingPlan?["isError"] as? Bool == true, "run_cleanup needs a plan from plan_cleanup")
         let unknownTool = MCPServer.handle(["jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": ["name": "empty_trash"]])?["result"] as? [String: Any]
         check(unknownTool?["isError"] as? Bool == true, "MCP refuses tools it does not offer")
         let badCategory = MCPServer.handle(["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": ["name": "find_reclaimable", "arguments": ["category": "__no_such_category__"]] as [String: Any]])?["result"] as? [String: Any]
@@ -299,6 +303,72 @@ enum WorkspaceCheck {
                   "Menu names the drive to plug in")
         } catch {
             check(false, "Phone and cloud fixture failed: \(error)")
+        }
+        // AI tool cleaning: only safe, rebuildable findings; plans are exact, single-use and short-lived.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("ca\(UUID().uuidString.prefix(6))").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            let repo = root.appendingPathComponent("repo")
+            try fm.createDirectory(at: repo.appendingPathComponent(".git"), withIntermediateDirectories: true)
+            try Data("ref".utf8).write(to: repo.appendingPathComponent(".git/HEAD"))
+            try fm.setAttributes([.modificationDate: Date().addingTimeInterval(-200 * 86_400)], ofItemAtPath: repo.appendingPathComponent(".git/HEAD").path)
+            let modules = ScanItem(url: repo.appendingPathComponent("node_modules"), allocatedSize: 900, categoryID: ProjectIndex.categoryID, severity: .safe)
+            let venv = ScanItem(url: repo.appendingPathComponent(".venv"), allocatedSize: 400, categoryID: ProjectIndex.categoryID, severity: .review)
+            let cache = ScanItem(url: root.appendingPathComponent("cache"), allocatedSize: 700, categoryID: "dev-caches", severity: .safe)
+            let small = ScanItem(url: root.appendingPathComponent("small"), allocatedSize: 100, categoryID: "dev-caches", severity: .safe)
+            let trash = ScanItem(url: root.appendingPathComponent(".Trash"), allocatedSize: 5_000, categoryID: "trash", severity: .safe, cleanMethod: .emptyTrash)
+            let advice = ScanItem(url: root.appendingPathComponent("Docker.raw"), allocatedSize: 5_000, categoryID: "docker", severity: .safe, cleanMethod: .adviceOnly)
+            let personal = ScanItem(url: root.appendingPathComponent("photos"), allocatedSize: 5_000, categoryID: "large", severity: .safe, isRegenerable: false)
+            let volumes = ScanItem(url: root.appendingPathComponent("volumes"), allocatedSize: 5_000, categoryID: "docker", severity: .safe,
+                                   cleanMethod: .tool(ToolCommand(tool: "docker", arguments: ["system", "prune", "--volumes"], display: "docker system prune --volumes", destroysData: true)))
+            let found = [modules, venv, cache, small, trash, advice, personal, volumes]
+            check(AgentCleanup.eligible(modules) && AgentCleanup.eligible(cache), "AI tools may clean safe, rebuildable findings")
+            check(![venv, trash, advice, personal, volumes].contains(where: AgentCleanup.eligible), "AI tools may not clean review items, the Trash, advice, personal files or data-destroying tools")
+            let everything = AgentCleanup.select(found, request: .init(), home: root)
+            check(everything.items.map(\.allocatedSize) == [900, 700, 100], "A recommended plan holds only eligible items, largest first")
+            let targeted = AgentCleanup.select(found, request: .init(targetBytes: 1_000), home: root)
+            check(targeted.items.map(\.allocatedSize) == [900, 700], "A target stops the plan once it is covered")
+            let idle = AgentCleanup.select(found, request: .init(scope: .projects, minIdleDays: 90), home: root)
+            check(idle.items.map(\.id) == [modules.id] && idle.heldBack.map(\.id) == [venv.id], "Project plans use idle time and hold back items that need review")
+            let busy = AgentCleanup.select(found, request: .init(scope: .projects, minIdleDays: 365), home: root)
+            check(busy.items.isEmpty, "Recently used projects stay out of idle plans")
+            let plan = AgentCleanup.Plan(id: "p", client: "Claude Code", created: Date(), items: everything.items, heldBack: [])
+            check(AgentCleanup.refusal(plan: plan, mode: .off) != nil, "Cleaning by AI tools is refused while it is off")
+            check(AgentCleanup.refusal(plan: plan, mode: .ask) == nil && AgentCleanup.refusal(plan: plan, mode: .allow) == nil, "A fresh plan can run when the user allows it")
+            check(AgentCleanup.refusal(plan: nil, mode: .allow) != nil, "An unknown or used plan cannot run")
+            let stale = AgentCleanup.Plan(id: "s", client: "x", created: Date().addingTimeInterval(-AgentCleanup.planLifetime - 1), items: everything.items, heldBack: [])
+            check(AgentCleanup.refusal(plan: stale, mode: .allow) != nil, "A plan older than 15 minutes cannot run")
+            let tampered = AgentCleanup.Plan(id: "t", client: "x", created: Date(), items: [personal], heldBack: [])
+            check(AgentCleanup.refusal(plan: tampered, mode: .allow) != nil, "A plan holding ineligible items cannot run")
+            check(AgentCleanup.displayName("claude-code") == "Claude Code" && AgentCleanup.displayName(nil) == "An AI tool", "Receipts name the AI tool that asked")
+            let chosen = UserDefaults.standard.object(forKey: AgentCleaningMode.key) != nil
+            check(chosen || AgentCleaningMode.current == .off, "AI tool cleaning is off until the user turns it on")
+            // The socket between Cairn mcp and the app.
+            let socketURL = root.appendingPathComponent("s")
+            let server = AgentBridgeServer(url: socketURL) { request in
+                request["op"] as? String == "fail" ? ["ok": false, "error": "declined"] as [String: Any] : ["ok": true, "echo": request["value"] as? String ?? ""] as [String: Any]
+            }
+            try server.start()
+            defer { server.stop() }
+            let echoed = try AgentSocket.request(["op": "echo", "value": "hello"], at: socketURL, timeout: 10)
+            check(echoed["ok"] as? Bool == true && echoed["echo"] as? String == "hello", "Cairn mcp reaches the app over its private socket")
+            var info = stat()
+            check(lstat(socketURL.path, &info) == 0 && info.st_mode & 0o777 == 0o600, "The agent socket is private to this user")
+            let previous = MCPServer.bridgeURL
+            MCPServer.bridgeURL = socketURL
+            defer { MCPServer.bridgeURL = previous }
+            if case .failure(let error) = MCPServer.bridge(["op": "fail"], timeout: 10) { check(error.message == "declined", "The app's refusal reaches the agent") }
+            else { check(false, "The app's refusal reaches the agent") }
+            if case .success(let reply) = MCPServer.bridge(["op": "echo", "value": "x"], timeout: 10) { check(reply["ok"] == nil && reply["echo"] as? String == "x", "The app's answer reaches the agent") }
+            else { check(false, "The app's answer reaches the agent") }
+            let blocker = root.appendingPathComponent("b")
+            try Data("keep".utf8).write(to: blocker)
+            var refusedFile = false
+            do { try AgentBridgeServer(url: blocker) { _ in [:] }.start() } catch { refusedFile = true }
+            check(refusedFile && (try? Data(contentsOf: blocker)) == Data("keep".utf8), "The bridge never removes a file that is not its socket")
+        } catch {
+            check(false, "AI tool cleaning fixture failed: \(error)")
         }
         // AI tool connections: only the cairn entry changes, and unreadable files are left alone.
         do {

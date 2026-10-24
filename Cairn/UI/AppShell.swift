@@ -151,6 +151,9 @@ struct AppShell: View {
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
                 .background(AppBackground())
+                // The page sits as a rounded card inside the sidebar's frame (Edem chose this, option C).
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
         }
@@ -278,6 +281,11 @@ struct AppShell: View {
                 parts.append("dupGroups=\(dupStore.groups.count)")
                 return parts.joined(separator: "  ")
             }
+        }
+        // AI tools reach the running app through this bridge to plan and run cleanups.
+        .task {
+            guard !previewMode else { return }
+            AgentBridge.shared.attach(store: store, proEnabled: { license.isUnlocked })
         }
         .task {
             guard !previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--scan-memory-report=") }) else { return }
@@ -551,8 +559,7 @@ struct AppShell: View {
 }
 
 /// The single dark surface inside Cairn's graphite window surround.
-/// Full-bleed content area, as in the approved Make room mock: no inset card,
-/// with the soft blue glow near the top left.
+/// The page's background inside its rounded card, with the soft blue glow near the top left.
 struct AppBackground: View {
     var body: some View {
         ZStack { Brand.background; Brand.glow }
@@ -602,8 +609,6 @@ struct NavSidebar: View {
                 SidebarSpaceField(readyBytes: readyBytes)
             }
         }
-        // A hairline where the sidebar meets the content, as in the mock.
-        .overlay(alignment: .trailing) { Rectangle().fill(Brand.wash(0.06)).frame(width: 1) }
     }
 
 }

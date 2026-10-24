@@ -6,6 +6,55 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 ---
 
+## Where things stand, 23 October 2026
+
+A plain summary of what is wrong now, what has been fixed but not merged, and what is still to build. The detailed log from earlier passes follows underneath.
+
+### Open bugs
+
+| | Problem | What it means | Next step |
+| --- | --- | --- | --- |
+| 🟠 | **Freed space was over-reported.** The old lifetime counter said 90 GB freed; the receipts only show about 2.6 GB, and that went to the Trash rather than being freed. | Any "you have freed X" figure on `master` cannot be trusted. | Fixed (PR #5, merged): figures come from receipts and Trash is called Trash. The old counter is still stored and should be removed. |
+| 🟡 | **The command line refused to run while the app was open.** | AI tools and scripts could not even read the status. | Fixed in PR #5 for `status`, `scan`, `categories` and `help`. `clean` still needs the app closed, on purpose. |
+| 🟡 | **Claude Code and Codex point at a test build** in `~/imagetemp` on Edem's Mac. | They stop working if that folder is cleared. | PR #5 makes Connect prefer `/Applications/Cairn.app`. Cairn is not installed there yet, so this needs an installed build and then Reconnect in Settings › AI tools. |
+| 🟡 | **The AI tool link was slow** (7.5 minutes for a full answer on a busy Mac). | AI tools time out or give up. | Fixed in PR #5 with a 10-minute scan memory and answers from the last scan. The first scan is still slow (about 5.5 minutes). |
+| 🟡 | **Most of the scan total is "Large & old files"** (33 of 53 GB), which Cairn only shows for review. | The headline number looked far bigger than what one click frees. | Fixed in PR #5: "Ready to free" is shown separately from "Needs you". |
+| 🟡 | **Weekly auto-scan on launch did not run** on a test build. | The menu bar and Home can show old numbers. | Not investigated yet. |
+| 🟡 | **Whole-disk search and sizing large folders is slow** (BUG-014). | Long waits on big disks. | Reduced, not solved. |
+| ⚪ | **GitHub's automatic build checks sometimes do not start** on this repository. | Pull requests can show red for reasons outside the change. | Builds are checked on the Mac instead when this happens. |
+
+### Open issues (not bugs, but blocking a release)
+
+- **No signed, notarised download and no automatic updates.** `build_release.sh` can sign and notarise, but no build has been published and there is no update feed yet.
+- **Nothing is installed in `/Applications`** on the test Mac, so every check so far has used test builds.
+- **Screen Recording permission is needed** before Claude can take screenshots on the Mac, so the built app cannot yet be compared side by side with the mockups automatically.
+- **The built app does not always match the mockups.** Spacing, type sizes and busy screens have been the repeated complaint. Every screen needs a side-by-side check against its approved mockup.
+- **The Claude Code plugin and Gemini extension are published** from the public `Emotive-Impact-Studios/cairn-plugins` repository, but they only work once PR #7 (AI tools cleaning) is merged and released in the app.
+- **Website screenshots are out of date.** They show the old look, and some show items as cleanable that Cairn now treats differently.
+- **Pro is on hold.** The licence screen exists, but what Pro unlocks has not been decided.
+- **Some large caches are still refused** by the safety walk (over 100,000 files, or folders containing database files, such as some `node_modules` and DerivedData). Loosening this needs a decision.
+
+### Fixed recently
+
+| Date | Fix | Where |
+| --- | --- | --- |
+| 23 Oct | A ready clean removed a running test build's `.build` folder and the review didn't say caches are deleted outright. Cleaning now needs a click, the review says what can't be put back, and Cairn skips its own app, folders in use and fresh builds. | PR #5 (merged 23 Oct) |
+| 23 Oct | Items found by two scanners were counted twice (about 1 GB on the test Mac). | PR #5 (merged 23 Oct) |
+| 23 Oct | Home's scan number counted everything found, then dropped to the ready amount at the end. It now counts only ready space, with "to look through" shown separately. | PR #5 (merged 23 Oct) |
+| 22 Oct | Freed space is read from receipts; Trash is no longer counted as freed; scan age shown correctly; "0 KB" instead of "Zero KB". | PR #5 (merged 23 Oct) |
+| 22 Oct | Read-only commands run beside the app; scan splits Ready from Needs you; AI tool answers cached. | PR #5 (merged 23 Oct) |
+| 22 Oct | Pages no longer slide when switching; numbers count cleanly instead of rolling digits. | PR #5 (merged 23 Oct) |
+| 21 Oct | Cairn now actually frees space: deletes rebuildable caches, empties the Trash and runs each tool's own clean. Before this it only moved things to the Trash. | PR #1 (merged) |
+| 21 Oct | Rebuildable caches, build output and `node_modules` are no longer refused, while AI chats, personal files, iCloud, Mail, Keychains, `.git` and `.ssh` stay protected. | PR #1 (merged) |
+| 21 Oct | Fixed CI workflow quoting; relocation records now change only inside their own task. | PR #2 (merged) |
+| 21 Oct | About 3,300 lines of unreachable old screens removed. | PR #2 (merged) |
+
+### Still to build
+
+See the roadmap in [README.md](README.md#whats-next).
+
+---
+
 ## Resolved — 2026-07-01 lag/crash hunt (reported: "keeps lagging or crashing in some modes")
 
 ### 🔴 BUG-029 — Idle CPU/memory blowout: 1.3 GB + 86% CPU doing nothing

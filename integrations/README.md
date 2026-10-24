@@ -1,0 +1,13 @@
+# Cairn for AI coding tools
+
+Every integration starts the same local server, `/Applications/Cairn.app/Contents/MacOS/Cairn mcp`. Cairn's own Settings › AI tools can connect each tool in one click; these packages add commands and guidance on top.
+
+| Tool | Package | Install |
+| --- | --- | --- |
+| Claude Code | [`claude-code`](claude-code) plugin with `/cairn:status`, `/cairn:free-space`, `/cairn:projects` and a disk-space skill | `/plugin marketplace add Emotive-Impact-Studios/cairn-plugins` then `/plugin install cairn@cairn` |
+| Gemini CLI | [`gemini-extension`](gemini-extension) with the same three commands | `gemini extensions install https://github.com/Emotive-Impact-Studios/cairn-plugins` |
+| Cursor | Install link | [Add to Cursor](cursor://anysphere.cursor-deeplink/mcp/install?name=cairn&config=eyJjb21tYW5kIjoiL0FwcGxpY2F0aW9ucy9DYWlybi5hcHAvQ29udGVudHMvTWFjT1MvQ2Fpcm4iLCJhcmdzIjpbIm1jcCJdfQ%3D%3D) |
+| VS Code | Install link | [Add to VS Code](vscode:mcp/install?%7B%22name%22%3A%22cairn%22%2C%22command%22%3A%22%2FApplications%2FCairn.app%2FContents%2FMacOS%2FCairn%22%2C%22args%22%3A%5B%22mcp%22%5D%7D) |
+| Codex, Claude Desktop, Windsurf | Connect from Cairn › Settings › AI tools | |
+
+Both packages are published together in the public repository `Emotive-Impact-Studios/cairn-plugins`, which Claude Code and Gemini CLI install from. This repository stays the source: edit here, then run `sh integrations/publish.sh <cairn-plugins checkout>` and push that checkout.

@@ -1,0 +1,12 @@
+{
+  "name": "cairn",
+  "version": "1.0.0",
+  "description": "Disk space for developers. Finds build output, caches and idle projects, plans a safe cleanup and runs it through the Cairn Mac app with a receipt.",
+  "mcpServers": {
+    "cairn": {
+      "command": "/Applications/Cairn.app/Contents/MacOS/Cairn",
+      "args": ["mcp"]
+    }
+  },
+  "contextFileName": "GEMINI.md"
+}

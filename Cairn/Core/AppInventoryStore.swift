@@ -410,8 +410,9 @@ final class AppInventoryStore {
     }
 
     /// Require selected apps to be closed, then trash only bundles that have
-    /// actually exited. Associated `~/Library` files stay untouched. The path
-    /// guard permits only known app-bundle locations.
+    /// actually exited. Associated `~/Library` files stay untouched, but are
+    /// recorded so the next scan lists them for review. The path guard permits
+    /// only known app-bundle locations.
     @discardableResult
     func uninstall(_ entries: [AppEntry]) async -> UninstallSummary {
         guard await prepareRemoval() else { return UninstallSummary(failed: entries.count, errors: ["Recovery history is unavailable. No application was removed."]) }
@@ -473,6 +474,8 @@ final class AppInventoryStore {
                 b.summary.trashedApps += 1
                 b.summary.bytes += bundleBytes
                 b.done.insert(app.id)
+                // Support data stays put; the next scan lists it for review.
+                RemovedAppLeftovers.record(app.associated, app: app.name)
                 if !journalSaved {
                     b.summary.failed += 1
                     b.summary.errors.append(ActionJournal.shared.error ?? "Action outcome could not be recorded; uninstall stopped")
