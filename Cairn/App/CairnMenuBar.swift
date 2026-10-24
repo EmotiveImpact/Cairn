@@ -52,6 +52,16 @@ enum MenuGuardian {
         guard let suggestion else { return nil }
         return "\(suggestion.change.after.root.title) grew \(Fmt.size(suggestion.change.delta))"
     }
+
+    /// One quiet line for things moved to a drive that is not plugged in,
+    /// e.g. "Studio SSD holds Ollama models and 2 more".
+    static func awayTitle(_ away: [(title: String, drive: String)]) -> String? {
+        guard let first = away.first else { return nil }
+        let drives = Set(away.map(\.drive))
+        let holder = drives.count == 1 ? first.drive : "Unplugged drives"
+        let more = away.count > 1 ? " and \(away.count - 1) more" : ""
+        return "\(holder) \(drives.count == 1 ? "holds" : "hold") \(first.title)\(more)"
+    }
 }
 
 enum MenuStorageSummary {
@@ -107,6 +117,8 @@ enum MenuAvailableSpace {
     private var drivesRow: NSMenuItem?
     private var projectsRow: NSMenuItem?
     private var idleProjectsTitle: String?
+    private var awayRow: NSMenuItem?
+    private var awayTitle: String?
     private var preview: Bool { CommandLine.arguments.contains("--preview-ui") }
 
     private struct Drive: Sendable {
@@ -120,6 +132,7 @@ enum MenuAvailableSpace {
         var change: String
         var drives: [Drive]
         var idleProjects: String?
+        var away: String?
     }
 
     func setVisible(_ visible: Bool) {
@@ -216,6 +229,8 @@ enum MenuAvailableSpace {
         let generation = visibilityGeneration
         let history = StorageControl.shared.latestCapacity
         let projectItems = scanStatus().projectItems
+        RelocationStore.shared.load()
+        let moves = RelocationStore.shared.records
         // Only volume metadata and Cairn's small saved history; no directory walks
         // or diskutil processes. One in-flight task even after repeated menu opens.
         refreshTask = Task {
@@ -232,13 +247,15 @@ enum MenuAvailableSpace {
                                  available: values.volumeAvailableCapacityForImportantUsage, readOnly: values.volumeIsReadOnly != false)
                 }.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
                 let idle = projectItems.isEmpty ? nil : MenuGuardian.idleProjectsTitle(ProjectIndex.build(from: projectItems))
-                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: internalCapacity?.volumeID, readings: history), drives: drives, idleProjects: idle)
+                let away = MenuGuardian.awayTitle(RelocationStore.away(moves))
+                return Reading(available: free, change: MenuStorageSummary.change(current: free, volumeID: internalCapacity?.volumeID, readings: history), drives: drives, idleProjects: idle, away: away)
             }.value
             guard !Task.isCancelled, generation == visibilityGeneration, statusItem != nil else { return }
             available = reading.available
             change = reading.change
             drives = reading.drives
             idleProjectsTitle = reading.idleProjects
+            awayTitle = reading.away
             drivesRead = true
             readAt = Date()
             updateStorageRows()
@@ -295,6 +312,12 @@ enum MenuAvailableSpace {
         drivesRow = NSMenuItem(title: "External drives", action: nil, keyEquivalent: "")
         drivesRow?.image = symbol("externaldrive")
         if let drivesRow { menu.addItem(drivesRow) }
+        awayRow = NSMenuItem(title: "", action: #selector(performAction(_:)), keyEquivalent: "")
+        awayRow?.target = self
+        awayRow?.representedObject = RouteBox(.makeRoom)
+        awayRow?.image = symbol("externaldrive.badge.exclamationmark")
+        awayRow?.toolTip = "Plug the drive in to use them."
+        if let awayRow { menu.addItem(awayRow) }
         let protection = NSMenuItem(title: "Protected locations", action: nil, keyEquivalent: "")
         protection.image = symbol("shield")
         let protected = NSMenu()
@@ -339,6 +362,11 @@ enum MenuAvailableSpace {
             let title = preview ? "3 idle projects · 6.2 GB rebuildable" : idleProjectsTitle
             projectsRow.title = title ?? "Projects"
             projectsRow.isHidden = title == nil
+        }
+        if let awayRow {
+            let title = preview ? "Studio SSD holds Ollama models and 2 more" : awayTitle
+            awayRow.title = title ?? ""
+            awayRow.isHidden = title == nil || (preview && !drives.isEmpty)
         }
         if let reserveRow {
             let settings = AppSettings.shared

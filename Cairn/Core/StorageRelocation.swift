@@ -3,31 +3,93 @@ import AppKit
 import Observation
 import Darwin
 
-/// A folder Cairn knows how to move to an external drive and link back.
-/// Each target is a self-contained data folder whose owning app follows a
-/// symbolic link. Anything else (repositories, sessions, Docker's disk image,
-/// cloud folders) stays out: a generic folder mover is not offered.
-struct RelocationTarget: Identifiable, Sendable {
+/// Something Cairn knows how to move to a drive. App data is linked back so
+/// the app keeps working while the drive is plugged in; your own files are
+/// moved as they are and brought back with one click; rebuildable build files
+/// are not copied at all, only pointed at the drive from now on.
+struct RelocationTarget: Identifiable, Sendable, Hashable {
     let id: String
     let title: String
-    let relativePath: String
-    let bundleIDs: [String]
-    let processNames: [String]
-    /// What the user loses while the drive is disconnected.
-    let whileDisconnected: String
-    var url: URL { FileScan.home.appendingPathComponent(relativePath) }
+    let url: URL
+    let mode: Relocation.Mode
+    /// The app to close first, in plain words, or empty when none.
+    var closeFirst: String = ""
+    var bundleIDs: [String] = []
+    var processNames: [String] = []
+    /// What the person loses while the drive is unplugged.
+    var whileDisconnected: String = ""
+    /// Private files need a drive locked with a password.
+    var privateFiles = false
+    /// A command that safely stops the owner before the move (simulators).
+    var prepare: [String] = []
+    /// Where it goes inside the drive's "Cairn Offload" folder.
+    var driveFolder: String
 
-    static let all: [RelocationTarget] = [
-        RelocationTarget(id: "ollama-models", title: "Ollama models", relativePath: ".ollama/models",
-                         bundleIDs: ["com.electron.ollama"], processNames: ["ollama", "Ollama"],
-                         whileDisconnected: "Ollama cannot load or pull models until the drive is back."),
-        RelocationTarget(id: "lmstudio-models", title: "LM Studio models", relativePath: ".lmstudio/models",
-                         bundleIDs: ["ai.elementlabs.lmstudio"], processNames: ["LM Studio"],
-                         whileDisconnected: "LM Studio shows no downloaded models until the drive is back."),
-        RelocationTarget(id: "xcode-archives", title: "Xcode archives", relativePath: "Library/Developer/Xcode/Archives",
-                         bundleIDs: ["com.apple.dt.Xcode"], processNames: [],
-                         whileDisconnected: "Xcode Organizer shows no archives until the drive is back."),
+    static let driveRoot = "Cairn Offload"
+    static let ownFolder = "From this Mac"
+
+    private static func home(_ relative: String) -> URL { FileScan.home.appendingPathComponent(relative) }
+
+    static let all: [RelocationTarget] = appTargets + (DockerMove.installed ? [docker] : [])
+
+    /// Docker quits itself and is pointed at the drive through its own setting,
+    /// so there is no link and nothing for the person to close by hand.
+    static let docker = RelocationTarget(id: "docker-desktop", title: "Docker's disk", url: DockerMove.currentDataFolder(), mode: .archive,
+                                         whileDisconnected: "Docker will not start until the drive is back.", driveFolder: "docker-desktop")
+
+    static let appTargets: [RelocationTarget] = [
+        RelocationTarget(id: "ollama-models", title: "Ollama models", url: home(".ollama/models"), mode: .linkBack,
+                         closeFirst: "Ollama", bundleIDs: ["com.electron.ollama"], processNames: ["ollama", "Ollama"],
+                         whileDisconnected: "Ollama cannot load or pull models until the drive is back.", driveFolder: "ollama-models"),
+        RelocationTarget(id: "lmstudio-models", title: "LM Studio models", url: home(".lmstudio/models"), mode: .linkBack,
+                         closeFirst: "LM Studio", bundleIDs: ["ai.elementlabs.lmstudio"], processNames: ["LM Studio"],
+                         whileDisconnected: "LM Studio shows no downloaded models until the drive is back.", driveFolder: "lmstudio-models"),
+        RelocationTarget(id: "huggingface-hub", title: "Hugging Face models", url: home(".cache/huggingface/hub"), mode: .linkBack,
+                         closeFirst: "any Python work using these models", processNames: [],
+                         whileDisconnected: "Models are downloaded again if a program asks for them.", driveFolder: "huggingface-hub"),
+        RelocationTarget(id: "xcode-archives", title: "Xcode archives", url: home("Library/Developer/Xcode/Archives"), mode: .linkBack,
+                         closeFirst: "Xcode", bundleIDs: ["com.apple.dt.Xcode"],
+                         whileDisconnected: "Xcode Organizer shows no archives until the drive is back.", driveFolder: "xcode-archives"),
+        RelocationTarget(id: "ios-simulators", title: "iPhone simulators", url: home("Library/Developer/CoreSimulator/Devices"), mode: .linkBack,
+                         closeFirst: "Xcode and Simulator", bundleIDs: ["com.apple.dt.Xcode", "com.apple.iphonesimulator"],
+                         processNames: ["Simulator", "launchd_sim"],
+                         whileDisconnected: "Xcode shows no simulators until the drive is back.",
+                         prepare: ["/usr/bin/xcrun", "simctl", "shutdown", "all"], driveFolder: "ios-simulators"),
+        RelocationTarget(id: "android-sdk", title: "Android SDK and NDK", url: home("Library/Android/sdk"), mode: .linkBack,
+                         closeFirst: "Android Studio and any emulator", bundleIDs: ["com.google.android.studio"],
+                         processNames: ["qemu-system-aarch64", "qemu-system-x86_64", "emulator", "adb"],
+                         whileDisconnected: "Android builds stop until the drive is back.", driveFolder: "android-sdk"),
+        RelocationTarget(id: "android-emulators", title: "Android emulators", url: home(".android/avd"), mode: .linkBack,
+                         closeFirst: "Android Studio and any emulator", bundleIDs: ["com.google.android.studio"],
+                         processNames: ["qemu-system-aarch64", "qemu-system-x86_64", "emulator"],
+                         whileDisconnected: "Android emulators do not start until the drive is back.", driveFolder: "android-emulators"),
+        RelocationTarget(id: "xcode-derived-data", title: "Xcode build files", url: home("Library/Developer/Xcode/DerivedData"), mode: .freshOnDrive,
+                         closeFirst: "Xcode", bundleIDs: ["com.apple.dt.Xcode"],
+                         whileDisconnected: "Xcode builds on this Mac until the drive is back.", driveFolder: "xcode-derived-data"),
     ]
+
+    /// Your own file or folder, moved as it is under "From this Mac" with the
+    /// same folder layout. Nil when it is not something Cairn should move.
+    static func own(_ url: URL, home: URL = FileScan.home) -> RelocationTarget? {
+        let path = url.standardizedFileURL.path
+        let homePath = home.standardizedFileURL.path
+        guard SafePaths.isUnder(path, homePath), path != homePath else { return nil }
+        let relative = String(path.dropFirst(homePath.count + 1))
+        let lowered = relative.lowercased()
+        let refused = ["library/", ".", "applications/"]
+        guard !refused.contains(where: { lowered.hasPrefix($0) || lowered + "/" == $0 }),
+              !lowered.contains("/."), !lowered.hasSuffix(".app"),
+              !lowered.hasSuffix(".photoslibrary"), !lowered.hasSuffix(".musiclibrary"),
+              !lowered.contains(".photoslibrary/"), !lowered.contains(".musiclibrary/"),
+              SafePaths.protectedSessionReason(url) == nil,
+              Relocation.isRealDirectory(url) || Relocation.isRegularFile(url) else { return nil }
+        return RelocationTarget(id: "own:" + relative, title: url.lastPathComponent, url: url, mode: .archive,
+                                whileDisconnected: "Plug the drive in to open it.", privateFiles: true,
+                                driveFolder: ownFolder + "/" + relative)
+    }
+
+    static func == (a: RelocationTarget, b: RelocationTarget) -> Bool { a.id == b.id }
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
 }
 
 struct RelocationRecord: Codable, Identifiable, Sendable {
@@ -43,219 +105,91 @@ struct RelocationRecord: Codable, Identifiable, Sendable {
     var files: Int = 0
     var status: Status
     var detail: String
+    // Added with verified moves; older history decodes these as missing.
+    var mode: Relocation.Mode?
+    var title: String?
+    /// The destination inside its drive, so a drive mounted under a new name
+    /// can be found again by its ID.
+    var volumePath: String?
+    var privateFiles: Bool?
+
+    var resolvedMode: Relocation.Mode { mode ?? .linkBack }
 }
 
-/// The filesystem steps. Nothing here touches the UI, so the diagnostics can
-/// drive it against disposable folders.
-enum Relocation {
-    struct Failure: LocalizedError {
-        let message: String
-        var errorDescription: String? { message }
-    }
-    static let movingSuffix = ".cairn-moving"
-    static let restoringSuffix = ".cairn-restoring"
-    static let partialSuffix = ".partial"
-
-    struct Inventory: Sendable {
-        var directories: [String] = []
-        var files: [String] = []
-        var bytes: Int64 = 0
-    }
-
-    private static func fileType(_ path: String) -> mode_t? {
-        var info = stat()
-        guard lstat(path, &info) == 0 else { return nil }
-        return info.st_mode & S_IFMT
-    }
-    static func isRealDirectory(_ url: URL) -> Bool { fileType(url.path) == S_IFDIR }
-    static func isLink(_ url: URL) -> Bool { fileType(url.path) == S_IFLNK }
-    static func exists(_ url: URL) -> Bool { fileType(url.path) != nil }
-    static func linkDestination(_ url: URL) -> String? {
-        guard isLink(url) else { return nil }
-        return try? FileManager.default.destinationOfSymbolicLink(atPath: url.path)
-    }
-
-    /// Every entry must be an ordinary local file or folder. A link, socket or
-    /// cloud placeholder means the folder is not a plain data store, so stop.
-    static func inventory(_ root: URL, cancel: CancelBox) throws -> Inventory {
-        guard isRealDirectory(root) else { throw Failure(message: "\(root.path) is not an ordinary folder.") }
-        var result = Inventory()
-        var stack: [String] = [""]
-        while let relative = stack.popLast() {
-            if cancel.isCancelled { throw Failure(message: "Cancelled. Nothing was moved.") }
-            let folder = relative.isEmpty ? root : root.appendingPathComponent(relative)
-            let names = try FileManager.default.contentsOfDirectory(atPath: folder.path).sorted()
-            for name in names {
-                let child = relative.isEmpty ? name : relative + "/" + name
-                let url = root.appendingPathComponent(child)
-                var info = stat()
-                guard lstat(url.path, &info) == 0 else { throw Failure(message: "Could not read \(url.path).") }
-                switch info.st_mode & S_IFMT {
-                case S_IFDIR: result.directories.append(child); stack.append(child)
-                case S_IFREG:
-                    if (try? url.resourceValues(forKeys: [.isUbiquitousItemKey]))?.isUbiquitousItem == true {
-                        throw Failure(message: "\(url.path) is a cloud file. Nothing was moved.")
-                    }
-                    result.files.append(child); result.bytes += Int64(info.st_size)
-                default: throw Failure(message: "\(url.path) is a link or special file. Cairn only moves plain data folders.")
-                }
-            }
-        }
-        return result
-    }
-
-    /// Copies into a fresh `.partial` folder, verifies every file by SHA-256,
-    /// then promotes it without replacing anything already there.
-    static func copyTree(from source: URL, to destination: URL, cancel: CancelBox,
-                         destinationValid: () -> Bool, progress: (Int64) -> Void = { _ in }) throws -> Inventory {
-        let plan = try inventory(source, cancel: cancel)
-        guard !exists(destination) else { throw Failure(message: "\(destination.path) already exists. Nothing was replaced.") }
-        let partial = URL(fileURLWithPath: destination.path + partialSuffix)
-        guard !exists(partial) else { throw Failure(message: "An unfinished copy is at \(partial.path). Remove it or choose another drive.") }
-        guard destinationValid() else { throw Failure(message: "The drive is no longer available.") }
-        try FileManager.default.createDirectory(at: partial, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
-        for folder in plan.directories {
-            try FileManager.default.createDirectory(at: partial.appendingPathComponent(folder), withIntermediateDirectories: false)
-        }
-        var copied: Int64 = 0
-        for file in plan.files {
-            guard !cancel.isCancelled, destinationValid() else {
-                throw Failure(message: "Copy interrupted. The original is untouched; an unfinished copy is at \(partial.path).")
-            }
-            let from = source.appendingPathComponent(file)
-            let to = partial.appendingPathComponent(file)
-            guard let before = DupHash.fingerprint(from, shouldCancel: { cancel.isCancelled }) else {
-                throw Failure(message: "Could not read \(from.path). The original is untouched.")
-            }
-            try copyFile(from, to)
-            guard DupHash.unchanged(from, since: before),
-                  let after = DupHash.fingerprint(to, shouldCancel: { cancel.isCancelled }),
-                  after.digest == before.digest, after.identity.size == before.identity.size else {
-                throw Failure(message: "\(file) changed or did not verify. Close the app that owns it and try again. The original is untouched.")
-            }
-            copied += before.identity.size
-            progress(copied)
-        }
-        guard destinationValid(), renamex_np(partial.path, destination.path, UInt32(RENAME_EXCL)) == 0 else {
-            throw Failure(message: "The verified copy could not be finished. The original is untouched.")
-        }
-        return plan
-    }
-
-    private static func copyFile(_ from: URL, _ to: URL) throws {
-        let input = open(from.path, O_RDONLY | O_NOFOLLOW)
-        guard input >= 0 else { throw Failure(message: "Could not open \(from.path).") }
-        let reader = FileHandle(fileDescriptor: input, closeOnDealloc: true)
-        let output = open(to.path, O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0o600)
-        guard output >= 0 else { throw Failure(message: "Could not create \(to.path).") }
-        let writer = FileHandle(fileDescriptor: output, closeOnDealloc: true)
-        defer { try? reader.close(); try? writer.close() }
-        while true {
-            let more = try autoreleasepool { () -> Bool in
-                guard let data = try reader.read(upToCount: DupHash.chunk), !data.isEmpty else { return false }
-                try writer.write(contentsOf: data)
-                return true
-            }
-            if !more { break }
-        }
-        try writer.synchronize()
-    }
-
-    /// Copy, verify, swap the folder for a link, check the link, then remove
-    /// the original. Every failure before the last step leaves the original in
-    /// place under its own name.
-    static func offload(source: URL, destination: URL, cancel: CancelBox,
-                        destinationValid: () -> Bool, progress: (Int64) -> Void = { _ in }) throws -> Inventory {
-        guard isRealDirectory(source) else { throw Failure(message: "\(source.path) is not an ordinary folder. It may already be offloaded.") }
-        let moving = URL(fileURLWithPath: source.path + movingSuffix)
-        guard !exists(moving) else { throw Failure(message: "A previous move did not finish at \(moving.path). Review it first.") }
-        let copied = try copyTree(from: source, to: destination, cancel: cancel, destinationValid: destinationValid, progress: progress)
-        let current = try inventory(source, cancel: cancel)
-        guard current.files == copied.files, current.bytes == copied.bytes else {
-            throw Failure(message: "The folder changed while it was being copied. The original is untouched; the copy stays at \(destination.path).")
-        }
-        guard renamex_np(source.path, moving.path, UInt32(RENAME_EXCL)) == 0 else {
-            throw Failure(message: "Could not set the original aside. It is untouched.")
-        }
-        func putBack(_ reason: String) -> Failure {
-            if isLink(source) { unlink(source.path) }
-            let restored = renamex_np(moving.path, source.path, UInt32(RENAME_EXCL)) == 0
-            return Failure(message: reason + (restored ? " The original was put back." : " The original is at \(moving.path)."))
-        }
-        guard symlink(destination.path, source.path) == 0 else { throw putBack("Could not create the link.") }
-        guard linkDestination(source) == destination.path, destinationValid(),
-              let linked = try? inventory(destination, cancel: cancel),
-              linked.files == copied.files, linked.bytes == copied.bytes else {
-            throw putBack("The link did not check out.")
-        }
-        try FileManager.default.removeItem(at: moving)
-        return copied
-    }
-
-    /// Copies the data back beside the link, verifies it, then swaps the link
-    /// for the folder. The drive copy is kept so nothing is lost if this fails.
-    static func restore(source: URL, destination: URL, cancel: CancelBox,
-                        destinationValid: () -> Bool, progress: (Int64) -> Void = { _ in }) throws -> Inventory {
-        guard linkDestination(source) == destination.path else {
-            throw Failure(message: "\(source.path) is no longer Cairn's link to \(destination.path). Nothing was changed.")
-        }
-        let incoming = URL(fileURLWithPath: source.path + restoringSuffix)
-        guard !exists(incoming) else { throw Failure(message: "A previous restore did not finish at \(incoming.path). Review it first.") }
-        let copied = try copyTree(from: destination, to: incoming, cancel: cancel, destinationValid: destinationValid, progress: progress)
-        guard linkDestination(source) == destination.path, unlink(source.path) == 0 else {
-            throw Failure(message: "The link changed during the restore. The restored copy is at \(incoming.path).")
-        }
-        guard renamex_np(incoming.path, source.path, UInt32(RENAME_EXCL)) == 0 else {
-            _ = symlink(destination.path, source.path)
-            throw Failure(message: "Could not move the restored folder into place. The link was recreated; the restored copy is at \(incoming.path).")
-        }
-        return copied
-    }
-
-    /// After a crash: if the original was set aside but no link exists, put it
-    /// back. If both exist, leave them for the user to review.
-    static func reconcile(source: URL) -> RelocationRecord.Status? {
-        let moving = URL(fileURLWithPath: source.path + movingSuffix)
-        guard exists(moving) else { return nil }
-        if !exists(source), renamex_np(moving.path, source.path, UInt32(RENAME_EXCL)) == 0 { return .interrupted }
-        return .needsReview
-    }
-
-    static func ownerRunning(_ target: RelocationTarget) -> Bool {
-        if target.bundleIDs.contains(where: { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }) { return true }
-        return target.processNames.contains { name in
-            (try? ToolRunner.runExecutable("/usr/bin/pgrep", ["-x", name], timeout: 3))?.ok == true
-        }
-    }
-}
-
-/// Offload state for the Storage page. One operation at a time, journalled in
-/// its own file so transfer history is never rewritten by this feature.
+/// Move state for every page that offers SSD. One move at a time, the rest
+/// queued; journalled in its own file so it is never mixed with other history.
 @MainActor @Observable final class RelocationStore {
     static let shared = RelocationStore()
-    private static let maxJournalBytes = 1 << 20
+    private static let maxJournalBytes = 4 << 20
 
     struct TargetState: Sendable {
         var bytes: Int64?
         var linkedTo: String?
         var driveConnected = false
+        /// The record says it is on a drive, but an app made a fresh folder in
+        /// its place. Both are kept until the person picks one.
+        var conflict = false
     }
     private(set) var records: [RelocationRecord] = []
     private(set) var states: [String: TargetState] = [:]
     private(set) var busyTarget: String?
+    private(set) var queued: [String] = []
     private(set) var copied: Int64 = 0
+    private(set) var total: Int64 = 0
+    private(set) var startedAt: Date?
     private(set) var message = ""
     private var loaded = false
     private var journalBroken = false
     private var cancellation: CancelBox?
+    private var queue: [(RelocationTarget, StorageDrive)] = []
     private let journal: URL
 
     init(journal: URL = FileScan.home.appendingPathComponent("Library/Application Support/Cairn/relocations.json")) {
         self.journal = journal
     }
 
+    /// The app targets plus every own file or folder that has a history.
+    var targets: [RelocationTarget] {
+        var seen = Set(RelocationTarget.all.map(\.id))
+        var result = RelocationTarget.all
+        // Own files and iPhone backups are found again from their history.
+        for record in records where !seen.contains(record.targetID)
+            && (record.targetID.hasPrefix("own:") || record.targetID.hasPrefix("iphone-backup:")) {
+            seen.insert(record.targetID)
+            let folder = (record.volumePath ?? "").replacingOccurrences(of: RelocationTarget.driveRoot + "/", with: "")
+            result.append(RelocationTarget(id: record.targetID, title: record.title ?? URL(fileURLWithPath: record.source).lastPathComponent,
+                                           url: URL(fileURLWithPath: record.source), mode: .archive,
+                                           whileDisconnected: "Plug the drive in to open it.", privateFiles: record.privateFiles ?? true,
+                                           driveFolder: folder))
+        }
+        return result
+    }
+
+    /// App data linked to a drive that is not here, newest first. Only
+    /// linked items are counted: an archive is not missed by any app.
+    nonisolated static func away(_ records: [RelocationRecord]) -> [(title: String, drive: String)] {
+        var seen = Set<String>()
+        var result: [(title: String, drive: String)] = []
+        for record in records where seen.insert(record.targetID).inserted {
+            guard record.status == .offloaded, record.resolvedMode != .archive,
+                  !Relocation.exists(URL(fileURLWithPath: record.destination)) else { continue }
+            let title = record.title ?? RelocationTarget.appTargets.first { $0.id == record.targetID }?.title
+                ?? URL(fileURLWithPath: record.source).lastPathComponent
+            result.append((title, record.volumeName))
+        }
+        return result
+    }
+
     func latest(_ target: RelocationTarget) -> RelocationRecord? {
         records.first { $0.targetID == target.id }
+    }
+
+    /// Seconds left, from the pace so far. Nil until there is a pace.
+    var secondsLeft: TimeInterval? {
+        guard let startedAt, copied > 0, total > copied else { return nil }
+        let elapsed = Date().timeIntervalSince(startedAt)
+        guard elapsed > 3 else { return nil }
+        return elapsed / Double(copied) * Double(total - copied)
     }
 
     func load() {
@@ -266,19 +200,35 @@ enum Relocation {
                   let data = try? Data(contentsOf: journal), data.count <= Self.maxJournalBytes,
                   let decoded = try? JSONDecoder().decode([RelocationRecord].self, from: data) else {
                 journalBroken = true
-                message = "Offload history could not be read; it will not be overwritten. Moves are disabled until it is fixed."
+                message = "Cairn's move history could not be read, so moves are paused rather than risk overwriting it."
                 return
             }
             records = decoded
         }
         var changed = false
         for index in records.indices where records[index].status == .moving || records[index].status == .restoring {
-            let source = URL(fileURLWithPath: records[index].source)
-            let outcome = Relocation.reconcile(source: source)
-            records[index].status = outcome ?? .needsReview
-            records[index].detail = outcome == .interrupted
-                ? "The previous move stopped early. The original folder was put back."
-                : "The previous operation stopped early. Check \(records[index].source) and the drive copy before trying again."
+            let record = records[index]
+            let outcome = Relocation.reconcile(source: URL(fileURLWithPath: record.source),
+                                               destination: URL(fileURLWithPath: record.destination), mode: record.resolvedMode)
+            switch outcome {
+            case .offloaded?:
+                records[index].status = .offloaded
+                records[index].detail = record.status == .moving
+                    ? "The move finished after Cairn restarted. The drive copy was checked again first."
+                    : "The bring-back stopped early. It is still on \(record.volumeName)."
+            case .interrupted?:
+                records[index].status = .interrupted
+                records[index].detail = "The last move stopped early. Everything is back where it was."
+            case nil where record.status == .restoring:
+                records[index].status = Relocation.exists(URL(fileURLWithPath: record.source)) && !Relocation.isLink(URL(fileURLWithPath: record.source)) ? .restored : .offloaded
+                records[index].detail = records[index].status == .restored ? "Back on this Mac." : "Still on \(record.volumeName)."
+            case nil:
+                records[index].status = .interrupted
+                records[index].detail = "The last move stopped before anything changed."
+            default:
+                records[index].status = .needsReview
+                records[index].detail = "The last move stopped part way. Cairn kept both \(record.source) and the drive copy for you to check."
+            }
             changed = true
         }
         if changed { persist() }
@@ -286,108 +236,244 @@ enum Relocation {
 
     func refresh() async {
         load()
-        let targets = RelocationTarget.all
-        let snapshot = await Task.detached(priority: .utility) { () -> [String: TargetState] in
+        let targets = targets
+        let records = records
+        let snapshot = await Task.detached(priority: .utility) { () -> ([String: TargetState], [UUID: String]) in
             var result: [String: TargetState] = [:]
+            var repointed: [UUID: String] = [:]
+            let mounted = Volumes.mountedExternalVolumes().compactMap { url -> (String, URL)? in
+                guard let id = try? url.resourceValues(forKeys: [.volumeUUIDStringKey]).volumeUUIDString else { return nil }
+                return (id, url)
+            }
             for target in targets {
                 var state = TargetState()
-                if let destination = Relocation.linkDestination(target.url) {
+                let record = records.first { $0.targetID == target.id }
+                // A drive that came back under a new name: find it by its ID.
+                if let record, record.status == .offloaded, !Relocation.exists(URL(fileURLWithPath: record.destination)),
+                   let inside = record.volumePath,
+                   let volume = mounted.first(where: { $0.0 == record.volumeID })?.1 {
+                    let moved = volume.appendingPathComponent(inside)
+                    if Relocation.exists(moved), Self.repoint(target, from: record.destination, to: moved.path, mode: record.resolvedMode) {
+                        repointed[record.id] = moved.path
+                    }
+                }
+                let destination = repointed[record?.id ?? UUID()] ?? record?.destination
+                if let link = Relocation.linkDestination(target.url) {
+                    state.linkedTo = link
+                    state.driveConnected = Relocation.exists(URL(fileURLWithPath: link))
+                } else if record?.status == .offloaded, record?.resolvedMode == .archive, let destination {
                     state.linkedTo = destination
-                    state.driveConnected = Relocation.isRealDirectory(URL(fileURLWithPath: destination))
-                } else if Relocation.isRealDirectory(target.url) {
-                    let stats = FileScan.measure(target.url)
-                    state.bytes = stats.allocatedSize
+                    state.driveConnected = Relocation.exists(URL(fileURLWithPath: destination))
+                } else if Relocation.isRealDirectory(target.url) || Relocation.isRegularFile(target.url) {
+                    state.bytes = FileScan.measure(target.url).allocatedSize
+                    state.conflict = record?.status == .offloaded && record?.resolvedMode != .archive
+                }
+                // Tidy unfinished copies Cairn left on a drive that is here now.
+                if let record, record.status == .interrupted, let destination {
+                    let copy = URL(fileURLWithPath: destination)
+                    Relocation.discardPartial(for: copy)
+                    let original = URL(fileURLWithPath: record.source)
+                    if (Relocation.isRealDirectory(original) || Relocation.isRegularFile(original)),
+                       destination.contains("/\(RelocationTarget.driveRoot)/"), Relocation.exists(copy), !Relocation.isLink(copy) {
+                        try? FileManager.default.removeItem(at: copy)
+                    }
                 }
                 result[target.id] = state
             }
-            return result
+            return (result, repointed)
         }.value
-        states = snapshot
+        states = snapshot.0
+        if !snapshot.1.isEmpty {
+            for (id, path) in snapshot.1 {
+                if let index = self.records.firstIndex(where: { $0.id == id }) { self.records[index].destination = path }
+            }
+            persist()
+        }
     }
 
-    func cancel() { cancellation?.cancel() }
+    /// Swaps a link to point at the drive's new mount path in one step, so the
+    /// app never sees a missing link. Only Cairn's own link is touched.
+    nonisolated private static func repoint(_ target: RelocationTarget, from old: String, to new: String, mode: Relocation.Mode) -> Bool {
+        guard mode != .archive else { return true }
+        guard Relocation.linkDestination(target.url) == old else { return false }
+        let temporary = target.url.path + ".cairn-link"
+        unlink(temporary)
+        guard symlink(new, temporary) == 0 else { return false }
+        guard rename(temporary, target.url.path) == 0 else { unlink(temporary); return false }
+        return true
+    }
 
-    func offload(_ target: RelocationTarget, to drive: StorageDrive) {
+    func cancel() {
+        queue.removeAll(); queued.removeAll()
+        cancellation?.cancel()
+    }
+
+    /// Moves one item, or queues it behind the one already moving.
+    func move(_ target: RelocationTarget, to drive: StorageDrive) {
         load()
-        guard busyTarget == nil, !journalBroken else { return }
-        guard drive.acceptsCopy else { message = drive.exportStatus; return }
-        guard !Relocation.ownerRunning(target) else { message = "Quit \(target.title.components(separatedBy: " ").first ?? "the app") first, then try again."; return }
-        let destination = drive.url.appendingPathComponent("Cairn Offload", isDirectory: true).appendingPathComponent(target.id)
+        guard !journalBroken else { return }
+        guard drive.acceptsMove(privateFiles: target.privateFiles) else { message = drive.moveStatus(privateFiles: target.privateFiles); return }
+        if busyTarget != nil {
+            guard busyTarget != target.id, !queued.contains(target.id) else { return }
+            queue.append((target, drive)); queued.append(target.id)
+            return
+        }
+        guard !Self.ownerRunning(target) else {
+            message = "Close \(target.closeFirst.isEmpty ? "the app using it" : target.closeFirst) first, then try again."
+            runNext(); return
+        }
+        let inside = RelocationTarget.driveRoot + "/" + target.driveFolder
+        let destination = drive.url.appendingPathComponent(inside)
         var record = RelocationRecord(targetID: target.id, source: target.url.path, destination: destination.path,
                                       volumeID: drive.uuid, volumeName: drive.name, status: .moving,
-                                      detail: "Copying and verifying. The original stays in place until the copy checks out.")
-        run(target, record: &record, gate: .copy) { cancel, publish in
-            guard let fresh = StorageDrive.read(drive.url), fresh.uuid == drive.uuid, fresh.acceptsCopy, fresh.hasUniqueMountedIdentity() else {
-                throw Relocation.Failure(message: "The drive's identity or encryption could not be confirmed. Nothing was moved.")
-            }
-            let size = try Relocation.inventory(target.url, cancel: cancel).bytes
-            guard fresh.available > size + 1_000_000_000 else {
-                throw Relocation.Failure(message: "\(fresh.name) needs \(Fmt.size(size + 1_000_000_000)) free. Nothing was moved.")
+                                      detail: target.mode == .freshOnDrive ? "Pointing future build files at \(drive.name)."
+                                          : "Copying and checking. The original stays put until the copy matches.",
+                                      mode: target.mode, title: target.title, volumePath: inside, privateFiles: target.privateFiles)
+        run(target, record: &record) { cancel, publish, setTotal in
+            guard let fresh = StorageDrive.read(drive.url), fresh.uuid == drive.uuid,
+                  fresh.acceptsMove(privateFiles: target.privateFiles), fresh.hasUniqueMountedIdentity() else {
+                throw Relocation.Failure(message: "Cairn could not confirm this is the same drive. Nothing was moved.")
             }
             try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-            return try Relocation.offload(source: target.url, destination: destination, cancel: cancel,
+            if target.mode == .freshOnDrive {
+                try Relocation.redirect(source: target.url, destination: destination, destinationValid: { drive.stillMounted() })
+                return Relocation.Inventory()
+            }
+            let size = try Relocation.inventory(target.url, cancel: cancel).bytes
+            setTotal(size)
+            guard fresh.available > size + 2_000_000_000 else {
+                throw Relocation.Failure(message: "\(fresh.name) needs \(Fmt.size(size + 2_000_000_000)) free for this. Nothing was moved.")
+            }
+            if target.id == RelocationTarget.docker.id {
+                return try DockerMove.move(from: target.url, to: destination, cancel: cancel,
+                                           destinationValid: { drive.stillMounted() }, progress: publish)
+            }
+            return try Relocation.offload(source: target.url, destination: destination, mode: target.mode, cancel: cancel,
                                           destinationValid: { drive.stillMounted() }, progress: publish)
         } finish: { record, inventory in
             record.status = .offloaded
             record.bytes = inventory.bytes; record.files = inventory.files.count
-            record.detail = "Moved \(Fmt.size(inventory.bytes)) to \(drive.name) and linked it back. \(target.whileDisconnected)"
+            switch target.mode {
+            case .linkBack: record.detail = "Moved \(Fmt.size(inventory.bytes)) to \(drive.name) and linked it back. \(target.whileDisconnected)"
+            case .archive: record.detail = "Moved \(Fmt.size(inventory.bytes)) to \(drive.name). Bring it back any time."
+            case .freshOnDrive: record.detail = "Old build files removed. New ones go to \(drive.name)."
+            }
         }
     }
 
-    func restore(_ target: RelocationTarget) {
+    /// `keepDriveCopy` leaves the drive copy as a spare, renamed so it is
+    /// never mistaken for the live copy; otherwise it is removed once this
+    /// Mac's copy checks out. Xcode build files are always removed.
+    func bringBack(_ target: RelocationTarget, keepDriveCopy: Bool = false) {
         load()
         guard busyTarget == nil, !journalBroken, let previous = latest(target), previous.status == .offloaded else { return }
-        guard !Relocation.ownerRunning(target) else { message = "Quit \(target.title.components(separatedBy: " ").first ?? "the app") first, then try again."; return }
+        guard !Self.ownerRunning(target) else {
+            message = "Close \(target.closeFirst.isEmpty ? "the app using it" : target.closeFirst) first, then try again."; return
+        }
         let destination = URL(fileURLWithPath: previous.destination)
-        guard Relocation.isRealDirectory(destination) else { message = "Connect \(previous.volumeName) to bring \(target.title) back."; return }
+        guard Relocation.exists(destination) else { message = "Plug in \(previous.volumeName) to bring \(target.title) back."; return }
         var record = previous
         record.id = UUID(); record.date = Date(); record.status = .restoring
-        record.detail = "Copying back and verifying. The drive copy is kept."
-        run(target, record: &record, gate: .copy) { cancel, publish in
+        record.detail = "Copying back and checking. The drive copy stays until this Mac's copy matches."
+        let mode = previous.resolvedMode
+        let keep = keepDriveCopy && mode != .freshOnDrive
+        let spare = Relocation.spareName(for: destination)
+        run(target, record: &record) { cancel, publish, setTotal in
+            if mode == .freshOnDrive {
+                try Relocation.unredirect(source: target.url, destination: destination, destinationValid: { Relocation.exists(destination) })
+                return Relocation.Inventory()
+            }
+            setTotal(previous.bytes)
             guard Volumes.homeFree() > previous.bytes + 2_000_000_000 else {
                 throw Relocation.Failure(message: "This Mac needs \(Fmt.size(previous.bytes + 2_000_000_000)) free to bring it back. Nothing was changed.")
             }
-            return try Relocation.restore(source: target.url, destination: destination, cancel: cancel,
-                                          destinationValid: { Relocation.isRealDirectory(destination) }, progress: publish)
+            if target.id == RelocationTarget.docker.id {
+                let copied = try DockerMove.bringBack(to: target.url, from: destination, keepDriveCopy: keep, cancel: cancel,
+                                                      destinationValid: { Relocation.exists(destination) }, progress: publish)
+                if keep { _ = Relocation.keepAsSpare(destination, at: spare) }
+                return copied
+            }
+            let copied = try Relocation.restore(source: target.url, destination: destination, mode: mode, removeDriveCopy: !keep, cancel: cancel,
+                                                destinationValid: { Relocation.exists(destination) }, progress: publish)
+            if keep { _ = Relocation.keepAsSpare(destination, at: spare) }
+            return copied
         } finish: { record, inventory in
             record.status = .restored
             record.bytes = inventory.bytes; record.files = inventory.files.count
-            record.detail = "Back on this Mac. The copy on \(previous.volumeName) was kept at \(previous.destination); delete it there when you no longer need it."
+            if keep {
+                if Relocation.exists(spare) { record.destination = spare.path }
+                record.detail = "Back on this Mac. A spare copy stays on \(previous.volumeName) as \(URL(fileURLWithPath: record.destination).lastPathComponent)."
+            } else {
+                record.detail = mode == .freshOnDrive ? "Xcode builds on this Mac again." : "Back on this Mac, and removed from \(previous.volumeName)."
+            }
         }
     }
 
-    private func run(_ target: RelocationTarget, record: inout RelocationRecord, gate: ScanGate.Operation,
-                     work: @escaping @Sendable (CancelBox, @escaping @Sendable (Int64) -> Void) throws -> Relocation.Inventory,
+    private func runNext() {
+        guard busyTarget == nil, !queue.isEmpty else { return }
+        let (target, drive) = queue.removeFirst()
+        queued.removeAll { $0 == target.id }
+        move(target, to: drive)
+    }
+
+    private func run(_ target: RelocationTarget, record: inout RelocationRecord,
+                     work: @escaping @Sendable (CancelBox, @escaping @Sendable (Int64) -> Void, @escaping @Sendable (Int64) -> Void) throws -> Relocation.Inventory,
                      finish: @escaping (inout RelocationRecord, Relocation.Inventory) -> Void) {
         records.insert(record, at: 0)
         guard persist() else { records.removeFirst(); return }
         let cancel = CancelBox()
         cancellation = cancel
         busyTarget = target.id
-        copied = 0
+        copied = 0; total = 0; startedAt = Date()
         message = record.detail
         let initial = record
         Task {
             var current = initial
-            defer { busyTarget = nil; cancellation = nil }
-            guard await ScanGate.shared.acquire(gate) else {
-                current.status = .interrupted; current.detail = "Cancelled before starting. Nothing was changed."
+            defer { busyTarget = nil; cancellation = nil; startedAt = nil; runNext() }
+            guard await ScanGate.shared.acquire(.copy) else {
+                current.status = .interrupted; current.detail = "Stopped before starting. Nothing was changed."
                 save(current); return
             }
             defer { ScanGate.shared.release() }
+            if !target.prepare.isEmpty {
+                let command = target.prepare
+                _ = await Task.detached(priority: .utility) {
+                    try? ToolRunner.runExecutable(command[0], Array(command.dropFirst()), timeout: 60)
+                }.value
+            }
+            if Self.ownerRunning(target) {
+                current.status = .interrupted
+                current.detail = "\(target.closeFirst.isEmpty ? "The app using it" : target.closeFirst) is still open. Nothing was changed."
+                save(current); return
+            }
+            // Keep the Mac awake: a sleeping Mac would stall the copy.
+            let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .idleSystemSleepDisabled],
+                                                                 reason: "Cairn is moving files to a drive")
+            defer { ProcessInfo.processInfo.endActivity(activity) }
             let throttle = ProgressThrottle()
             let outcome = await Task.detached(priority: .utility) { () -> Result<Relocation.Inventory, Error> in
-                Result {
-                    try work(cancel) { bytes in
-                        if throttle.shouldPublish() { Task { @MainActor in RelocationStore.shared.copied = bytes } }
-                    }
+                let counter = ByteCounter()
+                return Result {
+                    try work(cancel, { bytes in
+                        counter.set(bytes)
+                        if throttle.shouldPublish() { Task { @MainActor in RelocationStore.shared.copied = counter.value } }
+                    }, { size in
+                        Task { @MainActor in RelocationStore.shared.total = size }
+                    })
                 }
             }.value
             switch outcome {
             case .success(let inventory): finish(&current, inventory)
             case .failure(let error):
-                current.status = Relocation.reconcile(source: target.url) == .needsReview ? .needsReview : .interrupted
-                current.detail = error.localizedDescription
+                let mode = current.resolvedMode
+                let settled = Relocation.reconcile(source: target.url, destination: URL(fileURLWithPath: current.destination), mode: mode)
+                if current.status == .restoring {
+                    current.status = settled == .needsReview ? .needsReview : .offloaded
+                    current.detail = error.localizedDescription + " It is still on \(current.volumeName)."
+                } else {
+                    current.status = settled == .needsReview ? .needsReview : (settled == .offloaded ? .offloaded : .interrupted)
+                    current.detail = error.localizedDescription
+                }
             }
             save(current)
             await refresh()
@@ -397,19 +483,34 @@ enum Relocation {
     private func save(_ record: RelocationRecord) {
         if let index = records.firstIndex(where: { $0.id == record.id }) { records[index] = record }
         message = record.detail
-        if !persist() { message += " Offload history could not be saved." }
+        if !persist() { message += " Cairn could not save its move history." }
     }
 
     @discardableResult private func persist() -> Bool {
         guard !journalBroken else { return false }
         do {
             try FileManager.default.createDirectory(at: journal.deletingLastPathComponent(), withIntermediateDirectories: true)
-            let data = try JSONEncoder().encode(Array(records.prefix(500)))
+            let data = try JSONEncoder().encode(Array(records.prefix(1_000)))
             try data.write(to: journal, options: .atomic)
             return true
         } catch {
-            message = "Offload history could not be saved: \(error.localizedDescription)"
+            message = "Cairn could not save its move history: \(error.localizedDescription)"
             return false
         }
     }
+
+    nonisolated static func ownerRunning(_ target: RelocationTarget) -> Bool {
+        if target.bundleIDs.contains(where: { !NSRunningApplication.runningApplications(withBundleIdentifier: $0).isEmpty }) { return true }
+        return target.processNames.contains { name in
+            (try? ToolRunner.runExecutable("/usr/bin/pgrep", ["-x", name], timeout: 3))?.ok == true
+        }
+    }
+}
+
+/// Bytes copied so far, shared between the copy and the progress line.
+private final class ByteCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var bytes: Int64 = 0
+    var value: Int64 { lock.lock(); defer { lock.unlock() }; return bytes }
+    func set(_ value: Int64) { lock.lock(); bytes = value; lock.unlock() }
 }

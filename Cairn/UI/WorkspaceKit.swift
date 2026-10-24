@@ -137,6 +137,9 @@ struct WorkspaceConfirmation: View {
     var explanation: String
     var entries: [String]
     var actionTitle: String
+    /// An optional second choice, shown beside the main one.
+    var secondaryTitle: String? = nil
+    var secondary: (() -> Void)? = nil
     var action: () -> Void
     @Environment(\.dismiss) private var dismiss
     var body: some View {
@@ -149,6 +152,9 @@ struct WorkspaceConfirmation: View {
             }
         } actions: {
             Button("Cancel") { dismiss() }.buttonStyle(ControlPanelButtonStyle()).keyboardShortcut(.cancelAction)
+            if let secondaryTitle, let secondary {
+                Button(secondaryTitle) { dismiss(); secondary() }.buttonStyle(ControlPanelButtonStyle())
+            }
             Button(actionTitle) { dismiss(); action() }.buttonStyle(ControlPanelButtonStyle(primary: true))
         }
     }
