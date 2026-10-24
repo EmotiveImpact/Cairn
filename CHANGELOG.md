@@ -15,6 +15,24 @@ These are finished or nearly finished in open pull requests. None of it is on `m
 - **Ollama models** can only be removed whole or with `ollama rm`. Ollama shares files between models, so removing part of its store could break another model.
 - The same rules are checked again just before anything is removed, not only when the list is built.
 
+### Everything from the research (not yet in a pull request)
+
+Built on top of the safety fix above. It goes up as its own pull request once that one is merged.
+
+- **More junk found.** Test browsers from Playwright, Puppeteer and Cypress, Electron and Bazel downloads, Unity caches, Watchman state, older Ruby gem versions, old Command Line Tools and SDKs, SwiftUI preview simulators and Lightroom previews. The Logic sound library is sized as advice, and Adobe caches say where to set a size limit.
+- **Games page.** Steam, Epic and CrossOver games and games from the App Store, with when each was last played. Folders a launcher has forgotten are marked "Left behind" and can go in the Bin; everything else is uninstalled in its own launcher.
+- **Chat apps page.** How much WhatsApp and Telegram keep in photos and videos, with a button to open each app's own storage screen. Cairn never deletes chats.
+- **"I need X GB".** Type the space you need, or pick macOS update, Xcode or Premiere, and Cairn picks the safest set that gets there, caches first, stopping once there is enough. Untick a row and it plans again.
+- **Apps page.** Who made each app (from its signature), where it came from (App Store, Homebrew, downloaded or part of macOS), when it was last opened, and an "Intel only" filter for apps that stop working in macOS 28.
+- **Leftovers when an app goes in the Bin.** Drag an app to the Bin in Finder and Cairn's menu bar shows what it left behind, to review. Can be turned off in Settings › General.
+- **Faster Duplicates.** Hard links are no longer counted as copies, files are compared by their first part before a full read, and fingerprints are remembered between scans. The page now matches the approved design, suggests which copy to keep, and points to Apple's own Duplicates album for photos.
+- **Share your clean.** The Done screen has a Share button with a picture of the space freed, the three biggest kinds of thing cleared (can be hidden) and the site address, to copy, save or share. It never shows file or folder names.
+- **Held-back space explained.** When Cairn deleted more than free space rose by, the Done screen says how much has not shown up yet, and that macOS lets it go from snapshots or purgeable space on its own.
+- **Docker's real size.** Docker's disk shows what it really uses next to the maximum Finder shows.
+- **What Cairn looks for.** Settings › Scanning lists every place Cairn checks, written from the app itself, and `cairn rules` prints it as Markdown. The published copy is [docs/WHAT-CAIRN-LOOKS-FOR.md](docs/WHAT-CAIRN-LOOKS-FOR.md).
+- **Cleaning rules updates (off for now).** Cairn can take new cache folders to look in from a list signed with Cairn's key, without a new version. It stays off until the key ships. A rule can only name one app's cache folder, and everything still goes through review and the Bin.
+- **Send a report.** Settings › About shows the whole report first, to change or add to. It holds no file names, folder names or account name. Copy works now; Email appears once a support address is set.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.

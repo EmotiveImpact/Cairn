@@ -137,11 +137,15 @@ struct ComponentShowcase: View {
         let app = NSApplication.shared
         app.setActivationPolicy(.regular)
         let screen = CommandLine.arguments.first(where: { $0.hasPrefix("--capture-screen=") }).map { String($0.dropFirst("--capture-screen=".count)) }.flatMap { value in NavSection(rawValue: value) != nil || value == "dialog" ? value : nil }
+        // --capture-light takes the same picture in Light, to check both looks.
+        let light = CommandLine.arguments.contains("--capture-light")
+        let scheme: ColorScheme = light ? .light : .dark
+        NSApp.appearance = NSAppearance(named: light ? .aqua : .darkAqua)
         let root: AnyView
         if screen == "dialog" {
-            root = AnyView(WorkspaceConfirmation(title: "Move 2 items to Trash?", explanation: "Review the exact locations. Files in Trash still occupy disk space, and can be put back while they remain available.", entries: ["/Sample/Downloads/Design archive.zip", "/Sample/Downloads/Old installer.dmg"], actionTitle: "Move to Trash", action: {}).frame(width: 1100, height: 740).background(Brand.chrome).preferredColorScheme(.dark))
+            root = AnyView(WorkspaceConfirmation(title: "Move 2 items to Trash?", explanation: "Review the exact locations. Files in Trash still occupy disk space, and can be put back while they remain available.", entries: ["/Sample/Downloads/Design archive.zip", "/Sample/Downloads/Old installer.dmg"], actionTitle: "Move to Trash", action: {}).frame(width: 1100, height: 740).background(Brand.chrome).preferredColorScheme(scheme))
         }
-        else if screen != nil { root = AnyView(AppShell().frame(width: 1100, height: 740).preferredColorScheme(.dark)) }
+        else if screen != nil { root = AnyView(AppShell().frame(width: 1100, height: 740).preferredColorScheme(scheme)) }
         else { root = AnyView(ComponentShowcase()) }
         let host = NSHostingView(rootView: root)
         host.sizingOptions = []
@@ -157,7 +161,7 @@ struct ComponentShowcase: View {
             if let bitmap = host.bitmapImageRepForCachingDisplay(in: host.bounds) {
                 host.cacheDisplay(in: host.bounds, to: bitmap)
                 if let data = bitmap.representation(using: .png, properties: [:]) {
-                    let output = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("artifacts/component-showcase/\(screen ?? "preview").png")
+                    let output = URL(fileURLWithPath: FileManager.default.currentDirectoryPath).appendingPathComponent("artifacts/component-showcase/\(screen ?? "preview")\(light ? "-light" : "").png")
                     do { try FileManager.default.createDirectory(at: output.deletingLastPathComponent(), withIntermediateDirectories: true); try data.write(to: output) }
                     catch { fputs("Preview export failed: \(error)\n", stderr) }
                 }

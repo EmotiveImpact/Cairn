@@ -234,7 +234,7 @@ private struct ShareSwitchStyle: ToggleStyle {
             .fill(configuration.isOn ? Brand.room : Brand.wash(0.12))
             .frame(width: 30, height: 18)
             .overlay(alignment: configuration.isOn ? .trailing : .leading) {
-                Circle().fill(configuration.isOn ? Brand.onRoom : Color(hex: 0xC8D0D8))
+                Circle().fill(configuration.isOn ? Brand.onRoom : Color(light: 0xFFFFFF, dark: 0xC8D0D8))
                     .frame(width: 14, height: 14).padding(2)
             }
             .animation(.easeOut(duration: 0.15), value: configuration.isOn)
