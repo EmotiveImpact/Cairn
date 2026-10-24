@@ -46,7 +46,7 @@ struct PreferencesWorkspace: View {
         } detail: {
             EmptyView()
         } actions: {
-            Text(message.isEmpty ? "Changes take effect straight away" : message)
+            Text(!message.isEmpty ? message : preview ? "Changes are off in this preview" : "Changes take effect straight away")
                 .font(.system(size: 13)).foregroundStyle(Brand.textMuted).lineLimit(2)
             Spacer()
             Button("macOS privacy settings") { FullDiskAccess.openSettings() }

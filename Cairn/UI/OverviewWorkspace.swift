@@ -589,6 +589,8 @@ struct OverviewWorkspace: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        // A capture opens with keyboard focus on the first control; keep its ring off sample shots.
+        .focusEffectDisabled(preview)
         .help("Move large folders to \(drive.name)")
     }
     private var header: some View {
