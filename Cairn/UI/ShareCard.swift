@@ -91,7 +91,7 @@ struct ShareCardView: View {
                         + Text(" \(kind.kind)")
                     }
                     Spacer(minLength: 0)
-                    Text(LicenseConfig.purchaseURL.host() ?? "getcairn.app")
+                    Text(LicenseConfig.purchaseURL.host() ?? "cairnmac.com")
                 }
                 .font(.system(size: 12)).foregroundStyle(Color(hex: 0x7F8C99)).lineLimit(1)
                 .padding(.top, 18)

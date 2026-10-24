@@ -31,7 +31,7 @@ enum RuleUpdates {
     /// The publisher's Ed25519 public key, base64. Nil keeps updates off.
     static let publicKey: String? = nil
     /// The list and its detached signature (the same address plus ".sig").
-    static let feed = URL(string: "https://getcairn.app/rules/v1/rules.json")!
+    static let feed = URL(string: "https://\(LicenseConfig.purchaseURL.host() ?? "cairnmac.com")/rules/v1/rules.json")!
     static var enabled: Bool { publicKey != nil }
     /// Built-in rules are version 0; anything installed must be newer.
     static let builtInVersion = 0
