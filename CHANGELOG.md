@@ -8,6 +8,14 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
+### Review numbers that match, and no item that always fails (PR #12)
+
+- The review now shows the same total as the button you pressed. A mix of caches and your own files reads "Clean 1.31 GB", with a line saying how much is freed straight away and how much goes to the Trash. Before, it showed only the part freed straight away ("Free 188.5 MB"), which looked like most of the selection had been dropped.
+- Cairn no longer lists anything its own safety guard will refuse, such as a build folder inside `~/.cursor`. That item could be ticked and counted, then failed on every clean.
+- Large Files reviews only the files picked on that screen, and its button shows their size.
+- The Clean pages' total includes picks on other pages, matching the button.
+- If the review's button can't be pressed (a scan or another clean is running), the sheet says why.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
