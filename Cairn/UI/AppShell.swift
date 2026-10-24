@@ -323,6 +323,8 @@ struct AppShell: View {
             guard previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--capture-workspaces=") }) else { return }
             let folder = URL(fileURLWithPath: String(argument.dropFirst("--capture-workspaces=".count)))
             do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch { return }
+            // Let launch animations settle first: the sidebar dots take about 4 s to rise.
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             for route in NavSection.allCases {
                 section = route
                 try? await Task.sleep(nanoseconds: 900_000_000)
