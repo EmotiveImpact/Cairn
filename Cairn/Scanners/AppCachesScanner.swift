@@ -44,7 +44,8 @@ struct AppCachesScanner: CairnScanner {
         "ccache",
         "pypoetry",
         "uv",
-        // System-managed caches — never surface from here
+        // System-managed caches — never surface from here. Every other Apple
+        // cache is skipped too, by SafePaths.appleCacheReason.
         "com.apple.Spotlight",
         "com.apple.HomeKit",
         "com.apple.iCloud",
@@ -77,6 +78,8 @@ struct AppCachesScanner: CairnScanner {
 
             let name = child.lastPathComponent
             if SafePaths.protectedSessionReason(child) != nil { continue }
+            // Apple's own caches can hold state macOS needs (see SafePaths).
+            if SafePaths.appleCacheReason(child) != nil { continue }
             if isExcluded(name) { continue }
 
             ctx.progress(name)

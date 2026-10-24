@@ -41,6 +41,8 @@ extension CairnScanner {
         // Never inspect or advertise conversation stores as cleanup candidates,
         // even when a broad cache scanner enumerates their parent directory.
         guard SafePaths.protectedSessionReason(url) == nil else { return nil }
+        // Apple's own caches and parts of a shared model store are never listed.
+        guard SafePaths.appleCacheReason(url) == nil, SafePaths.sharedModelStoreReason(url) == nil else { return nil }
         guard FileScan.exists(url) else { return nil }
         let stats = FileScan.measure(url, maxFiles: maxFiles)
         if stats.allocatedSize < minSize && !cleanMethod.isPaid { return nil }
