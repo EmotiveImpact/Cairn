@@ -25,7 +25,7 @@ enum ShareCard {
         "android": "Android", "creative": "Creative caches", "installers": "Installers", "large-old": "Old files",
         "logs": "Logs", "orphaned": "App leftovers", "runtimes": "Old runtimes", "tm-snapshots": "Snapshots",
         "tool-downloads": "Test browsers", "trash": "The Bin", "chat-apps": "Chat apps", "games": "Games",
-        "git-bloat": "Git history",
+        "git-bloat": "Git history", "rule-spots": "App caches",
     ]
 
     /// The three biggest kinds, so the line under the number stays one line.

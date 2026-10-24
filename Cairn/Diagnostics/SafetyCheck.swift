@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// `Cairn --safetycheck` — a release gate. Asserts the SafePaths chokepoint still
 /// refuses every irreplaceable location (AI agent conversation history, iCloud
@@ -353,6 +354,38 @@ enum SafetyCheck {
         rule(ReceiptLine.share(freed: 38_600_000_000) == "back on my Mac. That's about 10 films' worth."
              && ReceiptLine.share(freed: 600_000_000) == "back on my Mac. That's about 200 photos' worth.",
              "the share card's line reads naturally")
+
+        // A cleaning rules update must be signed by Cairn, and can only add one
+        // app's cache folder: never a whole cache root, a personal folder or a path out.
+        func spot(_ path: String) -> RuleUpdates.Spot { .init(id: path, title: path, path: path, note: "") }
+        rule(RuleUpdates.allowed(spot("Library/Caches/com.example.app"))
+             && RuleUpdates.allowed(spot("Library/Application Support/Example/Cache"))
+             && RuleUpdates.allowed(spot(".cache/example"))
+             && !RuleUpdates.allowed(spot("Library/Caches"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Cache"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Example"))
+             && !RuleUpdates.allowed(spot("Documents/Cache"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Claude/Cache"))
+             && !RuleUpdates.allowed(spot("../Shared/Cache"))
+             && !RuleUpdates.allowed(spot("/Library/Caches/example"))
+             && !RuleUpdates.allowed(spot("Library/Caches/com.apple.geod")),
+             "a rules update can only name one app's cache folder")
+        let signer = Curve25519.Signing.PrivateKey()
+        let publisher = signer.publicKey.rawRepresentation.base64EncodedString()
+        let listed = RuleUpdates.Book(version: 3, spots: [spot("Library/Caches/com.example.app"), spot("Documents/Cache")])
+        if let data = try? JSONEncoder().encode(listed), let signature = try? signer.signature(for: data) {
+            var tampered = data
+            tampered.append(contentsOf: Array(" ".utf8))
+            rule(RuleUpdates.book(data, signature: signature, key: publisher)?.spots.map(\.path) == ["Library/Caches/com.example.app"]
+                 && RuleUpdates.book(tampered, signature: signature, key: publisher) == nil
+                 && RuleUpdates.book(data, signature: signature, key: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()) == nil
+                 && RuleUpdates.book(data, signature: signature, key: nil) == nil,
+                 "a rules update is used only when Cairn signed exactly that list")
+        } else {
+            rule(false, "a rules update is used only when Cairn signed exactly that list")
+        }
+        rule(!RuleUpdates.enabled || RuleUpdates.publicKey.flatMap { Data(base64Encoded: $0) }?.count == 32,
+             "rules updates stay off unless a real public key ships")
 
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.

@@ -32,6 +32,7 @@ enum ScannerRegistry {
             InstallersScanner(),
             LargeOldFilesScanner(),
             OrphanedAppDataScanner(),
+            RuleSpotsScanner(),         // cache folders from a signed rules update; empty until one is installed
             TimeMachineSnapshotsScanner(),
             TrashScanner(),
         ]

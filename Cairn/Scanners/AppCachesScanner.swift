@@ -10,7 +10,7 @@ struct AppCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "app-caches",
         title: "Application Caches",
-        subtitle: "Per-app caches in ~/Library/Caches — apps recreate these",
+        subtitle: "Per-app caches in ~/Library/Caches, which apps make again",
         systemImage: "app.badge.fill",
         group: .general,
         requiresFDA: true
