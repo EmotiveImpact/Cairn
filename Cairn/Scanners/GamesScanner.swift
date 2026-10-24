@@ -23,6 +23,7 @@ struct GamesScanner: CairnScanner {
         static let launcher = "launcher"        // "Steam", "Epic Games", "CrossOver", "App Store", "Download"
         static let lastPlayed = "lastPlayed"    // seconds since 1970, when known
         static let launcherGone = "launcherGone" // "1" when the launcher app is no longer installed
+        static let leftBehind = "leftBehind"    // "1" when the launcher is here but no longer lists the game
         static let uninstallURL = "uninstallURL" // a launcher link that uninstalls the game
         static let name = "name"
     }
@@ -110,7 +111,7 @@ struct GamesScanner: CairnScanner {
             // A folder no manifest lists is left over from an uninstall Steam did not finish.
             for folder in Self.subdirectories(of: common) where !listed.contains(folder.lastPathComponent) {
                 if ctx.isCancelled() { return }
-                emitGame(at: folder, name: folder.lastPathComponent, launcher: "Steam", gone: true,
+                emitGame(at: folder, name: folder.lastPathComponent, launcher: "Steam", gone: gone, leftBehind: !gone,
                          lastPlayed: nil, uninstallURL: nil, ctx: ctx)
             }
         }
@@ -138,7 +139,7 @@ struct GamesScanner: CairnScanner {
             if ctx.isCancelled() { return }
             // The launcher's own files sit beside the games.
             if folder.lastPathComponent.hasPrefix("Launcher") || folder.lastPathComponent.hasPrefix("Epic") { continue }
-            emitGame(at: folder, name: folder.lastPathComponent, launcher: "Epic Games", gone: true,
+            emitGame(at: folder, name: folder.lastPathComponent, launcher: "Epic Games", gone: gone, leftBehind: !gone,
                      lastPlayed: nil, uninstallURL: nil, ctx: ctx)
         }
     }
@@ -188,8 +189,8 @@ struct GamesScanner: CairnScanner {
 
     // MARK: - Emitting
 
-    private func emitGame(at folder: URL, name: String, launcher: String, gone: Bool, lastPlayed: Date?,
-                          uninstallURL: String?, ctx: ScanContext, bottle: Bool = false) {
+    private func emitGame(at folder: URL, name: String, launcher: String, gone: Bool, leftBehind: Bool = false,
+                          lastPlayed: Date?, uninstallURL: String?, ctx: ScanContext, bottle: Bool = false) {
         guard FileScan.exists(folder), SafePaths.protectedSessionReason(folder) == nil else { return }
         let stats = FileScan.measure(folder, maxFiles: Self.maxFiles, maxDuration: 3)
         guard stats.allocatedSize >= ctx.minSizeBytes else { return }
@@ -197,6 +198,8 @@ struct GamesScanner: CairnScanner {
         let note: String
         if gone {
             note = "\(what). \(launcher) is no longer on this Mac, so this was left behind. You can download it again if you reinstall \(launcher)"
+        } else if leftBehind {
+            note = "\(what). \(launcher) no longer lists this game, so an uninstall left this folder behind"
         } else if bottle {
             note = "\(what). Remove it in CrossOver, Bottle > Delete Bottle"
         } else {
@@ -205,11 +208,12 @@ struct GamesScanner: CairnScanner {
         var item = ScanItem(
             url: folder, allocatedSize: stats.allocatedSize, itemCount: stats.fileCount,
             latestModified: stats.latestModified, categoryID: info.id, severity: .review,
-            isRegenerable: false, cleanMethod: gone ? .trash : .adviceOnly, note: note,
+            isRegenerable: false, cleanMethod: gone || leftBehind ? .trash : .adviceOnly, note: note,
             permissionDenied: stats.permissionDenied, volumeURL: FileScan.volumeURL(of: folder), selected: false)
         item.detail = [Key.name: name, Key.launcher: launcher]
         if gone { item.detail[Key.launcherGone] = "1" }
-        if let uninstallURL, !gone { item.detail[Key.uninstallURL] = uninstallURL }
+        if leftBehind { item.detail[Key.leftBehind] = "1" }
+        if let uninstallURL, !gone, !leftBehind { item.detail[Key.uninstallURL] = uninstallURL }
         if let played = lastPlayed ?? Self.lastUsed(folder) {
             item.detail[Key.lastPlayed] = String(Int(played.timeIntervalSince1970))
         }

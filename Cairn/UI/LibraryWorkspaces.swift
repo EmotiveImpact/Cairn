@@ -5,6 +5,8 @@ struct AppsWorkspace: View {
     let store: AppInventoryStore
     var search: String
     @Binding var inspectorVisible: Bool
+    /// Games live on their own page, reached from here.
+    var onOpenGames: (() -> Void)? = nil
     @State private var focused: UUID?
     @State private var filter = "All"
     @State private var confirm = false
@@ -42,6 +44,11 @@ struct AppsWorkspace: View {
                         Button(option) { filter = option }
                             .buttonStyle(.plain).font(.system(size: 12))
                             .foregroundStyle(filter == option ? Brand.textPrimary : Brand.textMuted)
+                    }
+                    if let onOpenGames {
+                        Button("Games ›") { onOpenGames() }
+                            .buttonStyle(.plain).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                            .help("Steam, Epic and CrossOver games, which live outside Applications")
                     }
                 }
                 if busy {

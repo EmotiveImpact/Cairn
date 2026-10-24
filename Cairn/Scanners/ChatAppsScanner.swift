@@ -1,4 +1,5 @@
 import Foundation
+import AppKit
 
 /// WhatsApp and Telegram keep a local copy of every photo and video you have
 /// been sent, and on a Mac nothing trims it. Their folders also hold the chats
@@ -55,11 +56,13 @@ struct ChatAppsScanner: CairnScanner {
             if ctx.isCancelled() { return }
             var parts = app.plain.map { home.appendingPathComponent($0) }
             var unmeasured = false
+            let installed = Self.installedApp(app) != nil
             for rel in app.containers {
                 let url = home.appendingPathComponent(rel)
                 // Without Full Disk Access, reading another app's container
-                // makes macOS ask the person mid-scan. Skip it and say so.
-                if ctx.fdaGranted { parts.append(url) } else { unmeasured = true }
+                // makes macOS ask the person mid-scan. Skip it and say so,
+                // but only for an app that is actually on this Mac.
+                if ctx.fdaGranted { parts.append(url) } else if installed { unmeasured = true }
             }
             let found = parts.filter(FileScan.exists)
             guard !found.isEmpty || unmeasured else { continue }
@@ -89,6 +92,12 @@ struct ChatAppsScanner: CairnScanner {
             item.detail = [Key.app: app.name, Key.bundleIDs: app.bundleIDs.joined(separator: ","), Key.howTo: app.howTo]
             ctx.emit(item)
         }
+    }
+
+    /// The app itself, when it is installed. Looked up by bundle ID, which
+    /// reads nothing inside the app's own folders.
+    static func installedApp(_ app: ChatApp) -> URL? {
+        app.bundleIDs.lazy.compactMap { NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }.first
     }
 
     /// Which chat app a finding from any scanner belongs to, by its path.

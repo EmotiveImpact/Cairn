@@ -307,6 +307,33 @@ enum SafetyCheck {
             key: ToolDownloadsScanner.gemKey)
         rule(gems.old == ["rails-7.0.8", "nokogiri-1.15.0-arm64-darwin"], "only older gem versions are counted")
 
+        // "I need X GB" never plans your own files, games, chat apps, advice or
+        // anything risky; caches come first and it stops once the goal is met.
+        func planned(_ id: String, _ group: CategoryGroup, _ gb: Double, _ severity: Severity = .safe,
+                     regenerable: Bool = true, method: CleanMethod = .trash) -> (info: CategoryInfo, items: [ScanItem]) {
+            (info: CategoryInfo(id: id, title: id, subtitle: "", systemImage: "folder", group: group, requiresFDA: false),
+             items: [ScanItem(url: home.appendingPathComponent("plan/\(id)"), allocatedSize: Int64(gb * 1e9), categoryID: id,
+                              severity: severity, isRegenerable: regenerable, cleanMethod: method)])
+        }
+        let planGroups = TargetPlan.groups([
+            planned("docker", .developer, 9, .review),
+            planned("installers", .general, 2),
+            planned("xcode", .developer, 7),
+            planned("app-caches", .general, 10),
+            planned("large-old", .general, 50, .review, regenerable: false),
+            planned("games", .general, 60, .review, regenerable: false),
+            planned("chat-apps", .general, 20, .review, regenerable: false, method: .adviceOnly),
+            planned("ai-models", .ai, 30, .risky),
+        ])
+        rule(planGroups.map(\.bucketID) == ["app-caches", "xcode", "installers", "docker"],
+             "the space planner takes caches first and never plans your files, games, chat apps or risky items")
+        let plan = TargetPlan.plan(planGroups, goal: 18_000_000_000)
+        rule(plan.reached && plan.chosen.map(\.categoryID) == ["app-caches", "xcode", "installers"],
+             "the space planner stops as soon as the goal is reached")
+        let without = TargetPlan.plan(planGroups, goal: 18_000_000_000, left: [planGroups[1].id])
+        rule(without.chosen.map(\.categoryID) == ["app-caches", "installers", "docker"],
+             "leaving a row out plans again around it")
+
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.
         if LicenseConfig.devProUnlock {

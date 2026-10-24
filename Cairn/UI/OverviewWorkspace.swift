@@ -597,6 +597,9 @@ struct OverviewWorkspace: View {
                 Button("Make room") { onOpen(.makeRoom) }
                     .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .help("Choose an available-space target and review your options")
+                Button("I need space") { onOpen(.target) }
+                    .buttonStyle(ControlPanelButtonStyle(size: .small))
+                    .help("Type how much space you need and Cairn picks the safest set that gets you there")
                 Button("History") { showHistory = true }
                     .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .help("Available space over the last week or month")
@@ -684,6 +687,8 @@ struct OverviewWorkspace: View {
     }
     private func route(_ category: CandidateReading.Category) -> NavSection {
         if category.id == "browser-caches" { return .browsers }
+        if category.id == "games" { return .games }
+        if category.id == "chat-apps" { return .chatApps }
         if ["large-old", "installers"].contains(category.id) { return .largeFiles }
         switch category.group { case .developer: return .developer; case .ai: return .ai; case .creative: return .creative; case .general: return .general }
     }
