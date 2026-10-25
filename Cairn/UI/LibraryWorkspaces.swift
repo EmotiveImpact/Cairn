@@ -252,12 +252,12 @@ struct DuplicatesWorkspace: View {
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
                     .disabled(preview || store.isScanning || store.isRemoving || groups.isEmpty)
             } else {
-                Button("Select none") { store.clearSelection() }
-                    .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview || store.isRemoving)
+                Button("Select none") { if !preview { store.clearSelection() } }
+                    .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(!preview && store.isRemoving)
             }
-            Button(selectedCount == 0 ? "Move copies to the Bin" : "Move \(selectedCount) \(selectedCount == 1 ? "copy" : "copies") to the Bin") { confirm = true }
+            Button(selectedCount == 0 ? "Move copies to the Bin" : "Move \(selectedCount) \(selectedCount == 1 ? "copy" : "copies") to the Bin") { if !preview { confirm = true } }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview || selectedCount == 0 || store.isRemoving || store.isScanning)
+                .disabled(selectedCount == 0 || (!preview && (store.isRemoving || store.isScanning)))
         }
         .sheet(isPresented: $confirm) { WorkspaceConfirmation(title: "Move the selected extra copies?", explanation: "The kept copies stay where they are. Cairn checks the contents again, then moves only the copies you selected to the Bin.", entries: store.groups.flatMap(\.files).filter(\.selected).map { $0.url.path }, actionTitle: "Check and move to the Bin") { Task { let result = await store.removeSelected(); receipt = (result.capacityChanges, result.bytes, result.recordedRecoveries); resultHasFailures = result.failed > 0 || !result.errors.isEmpty; message = "\(result.trashed) moved · \(result.failed) skipped" + (result.errors.first.map { " · \($0)" } ?? "") } } }
     }
@@ -324,7 +324,7 @@ struct DuplicatesWorkspace: View {
 
     private func fileRow(_ file: DupFile, in group: DupGroup) -> some View {
         HStack(spacing: 16) {
-            NightCheck(on: file.selected, enabled: !file.isKeeper && !preview && !store.isRemoving) { store.toggle(file.id) }
+            NightCheck(on: file.selected, enabled: !file.isKeeper && (preview || !store.isRemoving)) { if !preview { store.toggle(file.id) } }
                 .accessibilityLabel(file.isKeeper ? "Kept copy \(file.url.path)" : "Select copy \(file.url.path)")
             Text((file.isKeeper ? file.url.deletingLastPathComponent().path : file.url.path).replacingOccurrences(of: NSHomeDirectory(), with: "~"))
                 .font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary)
@@ -372,7 +372,7 @@ struct DuplicatesWorkspace: View {
         ]
         return items.map { item in
             DupGroup(name: item.name, hash: "preview", files: item.folders.enumerated().map { index, folder in
-                let url = URL(fileURLWithPath: "/Sample/\(folder)/\(item.name)")
+                let url = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("\(folder)/\(item.name)")
                 return DupFile(url: url, resolvedURL: url, size: item.mb * 1_000_000, modified: Date(), isKeeper: index == 0, selected: index > 0)
             })
         }

@@ -51,9 +51,8 @@ struct GamesWorkspace: View {
             }
             Spacer()
             if let focus {
-                Button("Show in Finder") { NSWorkspace.shared.activateFileViewerSelecting([focus.resolvedURL]) }
+                Button("Show in Finder") { if !preview { NSWorkspace.shared.activateFileViewerSelecting([focus.resolvedURL]) } }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
-                    .disabled(preview)
                 primary(focus)
             }
         }
@@ -136,18 +135,16 @@ struct GamesWorkspace: View {
         if canBin(game) {
             Button("Move \(name) to the Bin") { review(game) }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview || store.isScanning || store.isCleaning)
+                .disabled(!preview && (store.isScanning || store.isCleaning))
         } else if let link = game.detail[Key.uninstallURL], let url = URL(string: link) {
-            Button("Uninstall in \(launcher)") { NSWorkspace.shared.open(url) }
+            Button("Uninstall in \(launcher)") { if !preview { NSWorkspace.shared.open(url) } }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview)
         } else if launcher == "App Store" || launcher == "Download" {
             Button("Remove in Apps") { onOpen(.apps) }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
         } else if let app = Self.launcherApp(launcher) {
-            Button("Open \(launcher)") { NSWorkspace.shared.open(app) }
+            Button("Open \(launcher)") { if !preview { NSWorkspace.shared.open(app) } }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview)
         }
     }
 
@@ -180,7 +177,7 @@ struct GamesWorkspace: View {
     /// The approved picture's numbers. Preview only; never acted on.
     private static let sample: [ScanItem] = {
         func game(_ name: String, _ launcher: String, _ daysAgo: Double, _ gb: Double, gone: Bool = false) -> ScanItem {
-            var item = ScanItem(url: URL(fileURLWithPath: "/Sample/steamapps/common/" + name), allocatedSize: Int64(gb * 1_000_000_000),
+            var item = ScanItem(url: FileScan.home.appendingPathComponent("Library/Application Support/Steam/steamapps/common/" + name), allocatedSize: Int64(gb * 1_000_000_000),
                                 categoryID: "games", severity: .review, isRegenerable: false, cleanMethod: gone ? .trash : .adviceOnly)
             item.detail = [Key.name: name, Key.launcher: launcher,
                            Key.lastPlayed: String(Int(Date().timeIntervalSince1970 - daysAgo * 86_400))]

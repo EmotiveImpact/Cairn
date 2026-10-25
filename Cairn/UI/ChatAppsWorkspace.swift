@@ -71,7 +71,7 @@ struct ChatAppsWorkspace: View {
             Spacer()
             Button(ready > 0 ? "Review \(Fmt.size(ready))" : "Review") { review(rows) }
                 .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                .disabled(preview || ready == 0 || store.isScanning || store.isCleaning)
+                .disabled(ready == 0 || (!preview && (store.isScanning || store.isCleaning)))
         }
     }
 
@@ -151,6 +151,7 @@ struct ChatAppsWorkspace: View {
 
     /// The ready caches on this page only, then the normal review.
     private func review(_ rows: [AppRow]) {
+        guard !preview else { return }
         let ids = Set(rows.flatMap(\.ready).map(\.id))
         store.clearSelection()
         store.select { item, _ in ids.contains(item.id) }

@@ -40,13 +40,13 @@ struct ChatAppsScanner: CairnScanner {
                 containers: ["Library/Group Containers/group.net.whatsapp.WhatsApp.shared",
                              "Library/Containers/net.whatsapp.WhatsApp"],
                 plain: ["Library/Application Support/WhatsApp"],
-                howTo: "In WhatsApp, Settings > Storage and data > Manage storage shows your biggest chats and lets you clear their photos and videos.",
+                howTo: "In WhatsApp, Settings › Storage and data › Manage storage shows your biggest chats and lets you clear their photos and videos.",
                 line: "Every photo and video you've been sent"),
         ChatApp(name: "Telegram", bundleIDs: ["ru.keepcoder.Telegram", "com.tdesktop.Telegram"],
                 containers: ["Library/Group Containers/6N38VWS5BX.ru.keepcoder.Telegram",
                              "Library/Containers/ru.keepcoder.Telegram"],
                 plain: ["Library/Application Support/Telegram Desktop"],
-                howTo: "In Telegram, Settings > Data and Storage > Storage Usage clears the media cache and sets a size limit, so it stops growing.",
+                howTo: "In Telegram, Settings › Data and Storage › Storage Usage clears the media cache and sets a size limit, so it stops growing.",
                 line: "Media cache, kept with no limit unless you set one"),
     ]
 

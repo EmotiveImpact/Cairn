@@ -130,7 +130,7 @@ struct TargetWorkspace: View {
     private func row(for row: TargetPlan.Row, plan: TargetPlan.Result) -> some View {
         let dim = !row.included && !left.contains(row.id)
         return HStack(spacing: 16) {
-            NightCheck(on: row.included, enabled: !preview) { toggle(row) }
+            NightCheck(on: row.included) { toggle(row) }
                 .accessibilityLabel(row.included ? "Leave out \(row.group.title)" : "Add \(row.group.title)")
             NightName(logo: nil, title: row.group.title, subtitle: line(row, plan: plan), titleSize: 13.5)
             Text(Fmt.size(row.included ? row.bytes : row.group.bytes))
@@ -148,11 +148,12 @@ struct TargetWorkspace: View {
         if left.contains(row.id) { return "Left out by you" }
         if !row.included { return plan.reached ? "Not needed: target already reached" : "Not needed" }
         let all = row.group.items.count
-        let count = row.chosen.count < all ? "\(row.chosen.count) of \(all) items" : all == 1 ? "1 item" : "\(all) items"
+        let partial = row.chosen.count < all
+        let count = partial ? "\(row.chosen.count) of \(all) items" : all == 1 ? "1 item" : "\(all) items"
         switch row.group.tier {
-        case .madeAgain: return "\(count) · made again on their own"
+        case .madeAgain: return partial ? "\(count) · made again on their own" : "Made again on their own"
         case .alreadyInstalled: return "\(count) for apps you've already installed · you choose"
-        case .downloadedAgain: return "\(count) · downloaded again when needed · worth a look"
+        case .downloadedAgain: return partial ? "\(count) · downloaded again when needed · worth a look" : "Downloaded again when needed · worth a look"
         case .youChoose: return row.group.bucketID == "trash" ? "Already in the Bin, gone for good · you choose" : "\(count) · you choose"
         }
     }
@@ -173,22 +174,25 @@ struct TargetWorkspace: View {
     private func reach(_ plan: TargetPlan.Result) -> some View {
         let segments = plan.rows.filter(\.included)
         let scale = Double(max(plan.goal, plan.total)) * 1.18
-        return VStack(alignment: .leading, spacing: 9) {
+        // The bar is 6 points tall and the goal mark 16, centred on it, all inside the
+        // reader's frame so nothing spills onto the line below.
+        return VStack(alignment: .leading, spacing: 5) {
             GeometryReader { geo in
                 let width = geo.size.width
                 ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 4).fill(Brand.wash(0.07))
+                    RoundedRectangle(cornerRadius: 3).fill(Brand.wash(0.07)).frame(height: 6)
                     HStack(spacing: 2) {
                         ForEach(Array(segments.enumerated()), id: \.element.id) { index, row in
                             RoundedRectangle(cornerRadius: 3).fill(Brand.room.opacity(Self.shade(index)))
-                                .frame(width: max(2, width * CGFloat(Double(row.bytes) / scale) - 2))
+                                .frame(width: max(2, width * CGFloat(Double(row.bytes) / scale) - 2), height: 6)
                         }
                     }
-                    Rectangle().fill(Brand.textPrimary).frame(width: 1.5, height: 24)
+                    Rectangle().fill(Brand.textPrimary).frame(width: 1.5, height: 16)
                         .offset(x: width * CGFloat(Double(plan.goal) / scale))
                 }
+                .frame(width: width, height: geo.size.height, alignment: .leading)
             }
-            .frame(height: 8)
+            .frame(height: 16)
             .accessibilityHidden(true)
             HStack {
                 (Text(Fmt.size(plan.total)).fontWeight(.medium).foregroundStyle(Brand.room)
@@ -219,7 +223,7 @@ struct TargetWorkspace: View {
         }
         Button(plan.total > 0 ? "Review and free \(Fmt.size(plan.total))" : "Review and free") { review(plan) }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-            .disabled(preview || plan.chosen.isEmpty || store.isScanning || store.isCleaning)
+            .disabled(plan.chosen.isEmpty || (!preview && (store.isScanning || store.isCleaning)))
     }
 
     private func footNote(_ plan: TargetPlan.Result) -> String {
