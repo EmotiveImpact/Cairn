@@ -31,6 +31,10 @@ enum SafePaths {
         "/System", "/Library", "/usr", "/bin", "/sbin", "/private/var/db",
         "/nix",            // Nix store — advice only, never user-rm-safe
         "/Applications",   // never delete app bundles in v1
+        // A macOS update in progress. Removing it too early can leave the Mac
+        // unable to start, so it is never cleanable, whatever its size.
+        "/macOS Install Data",
+        "/System/Volumes/Data/macOS Install Data",
     ]
 
     /// Home-relative subtrees that are never deletable (state / secrets / the
@@ -98,6 +102,64 @@ enum SafePaths {
         return nil
     }
 
+    /// Apple's own caches under ~/Library/Caches. A folder there can hold state
+    /// macOS needs even though its name says cache: the Neural Engine keeps its
+    /// compiled models in com.apple.e5rt.e5bundlecache, and clearing that broke
+    /// text recognition for another cleaner's users until they restarted. Every
+    /// Apple cache is off limits unless it is one of these app caches that the
+    /// app rebuilds by itself (folder names, compared lowercased).
+    static let knownSafeAppleCaches: Set<String> = [
+        "com.apple.safari",                     // Safari's web cache (browser scanner)
+        "com.apple.finalcut", "com.apple.motionapp", "com.apple.compressor", "com.apple.logic10",
+        "com.apple.dt.xcode",
+    ]
+
+    /// Apple services that keep caches under names without the com.apple. prefix.
+    static let appleCacheNames: Set<String> = [
+        "cloudkit", "geoservices", "familycircle", "familycircled", "passkit", "metadata",
+        "storeassetd", "akd", "siritts", "amsdatamigratortool", "apple", "applespell",
+    ]
+
+    /// Why `url` is one of Apple's own caches, or nil when it is not. Checked on
+    /// both the shown path and its symlink target, at scan time and again in the
+    /// executor, so an Apple cache can never be listed or removed.
+    static func appleCacheReason(_ url: URL) -> String? {
+        let roots = Set([home.appendingPathComponent("Library/Caches").path,
+                         FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent("Library/Caches").standardizedFileURL.path])
+        let paths = [url.standardizedFileURL.path, url.resolvingSymlinksInPath().standardizedFileURL.path]
+        for path in paths {
+            // The Neural Engine cache can also sit in the per-user temp folders.
+            if path.split(separator: "/").contains(where: { $0.lowercased().hasPrefix("com.apple.e5rt") }) {
+                return "Apple's Neural Engine model cache, which macOS needs"
+            }
+            for root in roots where path != root && isUnder(path, root) {
+                let first = path.dropFirst(root.count + 1).split(separator: "/").first.map { $0.lowercased() } ?? ""
+                if knownSafeAppleCaches.contains(first) { continue }
+                if first.hasPrefix("com.apple.") || appleCacheNames.contains(first) {
+                    return "Apple's own cache, which macOS manages"
+                }
+            }
+        }
+        return nil
+    }
+
+    /// Ollama stores models as shared, hash-named blocks: one block can belong to
+    /// several models, so removing part of the store can break another model.
+    /// Only the whole models folder may go; a single model is removed with `ollama rm`.
+    static func sharedModelStoreReason(_ url: URL) -> String? {
+        let stores = Set([home.appendingPathComponent(".ollama/models").path,
+                          FileManager.default.homeDirectoryForCurrentUser
+                            .appendingPathComponent(".ollama/models").standardizedFileURL.path])
+        let paths = [url.standardizedFileURL.path, url.resolvingSymlinksInPath().standardizedFileURL.path]
+        for path in paths {
+            for store in stores where path != store && isUnder(path, store) {
+                return "Ollama models share files, so part of one cannot go on its own; use ollama rm"
+            }
+        }
+        return nil
+    }
+
     /// A path containing any of these components is rejected (e.g. Photos library).
     static let denyComponents: [String] = [
         ".photoslibrary", ".photolibrary", ".aplibrary",
@@ -157,6 +219,7 @@ enum SafePaths {
         for prefix in denyAbsolutePrefixes where isUnder(path, prefix) {
             return .reject("protected system location (\(prefix))")
         }
+        if let reason = appleCacheReason(url) ?? sharedModelStoreReason(url) { return .reject(reason) }
         for comp in denyComponents where resolved.pathComponents.contains(where: { $0.hasSuffix(comp) }) {
             return .reject("protected library bundle (\(comp))")
         }
@@ -221,7 +284,7 @@ enum SafePaths {
             }
             count += 1
             if count > 100_000 { return .reject("directory is too large to verify safely") }
-            if let reason = protectedSessionReason(child) { return .reject(reason) }
+            if let reason = protectedSessionReason(child) ?? appleCacheReason(child) { return .reject(reason) }
             // Removing a parent must not bypass an exclusion on its child.
             let resolved = child.resolvingSymlinksInPath().standardizedFileURL.path
             for excluded in excludedRoots {

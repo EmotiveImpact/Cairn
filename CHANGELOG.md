@@ -8,6 +8,13 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 These are finished or nearly finished in open pull requests. None of it is on `master` yet. Make room (moving files to an SSD or the cloud) is in PR #9.
 
+### Never touch Apple's own caches (safety)
+
+- Cairn no longer lists or removes **Apple's own caches** in `~/Library/Caches`. A folder there can look like junk but hold something macOS needs: the Neural Engine keeps its compiled models in one, and clearing it breaks text recognition until a restart. Only Apple app caches the app rebuilds itself stay cleanable (Safari, Final Cut, Motion, Compressor, Logic, Xcode).
+- **macOS Install Data** (an update in progress) is off limits, whatever its size.
+- **Ollama models** can only be removed whole or with `ollama rm`. Ollama shares files between models, so removing part of its store could break another model.
+- The same rules are checked again just before anything is removed, not only when the list is built.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
