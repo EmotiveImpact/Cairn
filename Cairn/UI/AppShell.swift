@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, appleIntelligence, creative, chatApps, lookThrough, largeFiles, duplicates, apps, games, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, appleIntelligence, creative, chatApps, lookThrough, largeFiles, diskMap, duplicates, apps, games, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -23,6 +23,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .chatApps: return "Chat apps"
         case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
+        case .diskMap: return "Disk map"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
         case .games: return "Games"
@@ -51,6 +52,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .chatApps: return "bubble.left"
         case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
+        case .diskMap: return "chart.pie"
         case .duplicates: return "doc.on.doc"
         case .apps: return "square.grid.2x2"
         case .games: return "gamecontroller"
@@ -94,7 +96,9 @@ enum NavSection: String, CaseIterable, Identifiable {
 
 struct AppShell: View {
     @Environment(\.openWindow) private var openWindow
-    @State private var preferencesTab = "General"
+    /// `--preferences-tab=Rules` opens Settings on that tab, for screenshots.
+    @State private var preferencesTab = CommandLine.arguments.first { $0.hasPrefix("--preferences-tab=") }
+        .map { String($0.dropFirst("--preferences-tab=".count)) } ?? "General"
     @State private var storageDriveID: String?
     @State private var store = ScanStore()
     // Per-page stores are owned HERE (not inside their views) so results persist
@@ -130,6 +134,8 @@ struct AppShell: View {
     @State private var showResultFilter = false
     @State private var scanActivityIndex = 0
     private let previewMode = CommandLine.arguments.contains("--preview-ui")
+    /// The dots follow Home's number, sample included.
+    private var sidebarReadyBytes: Int64 { previewMode ? OverviewWorkspace.previewReadyBytes : store.recommendedBytes }
 
     private var proEnabled: Bool { license.isUnlocked }
     private var showFDABanner: Bool {
@@ -158,12 +164,30 @@ struct AppShell: View {
                     runningStatus
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppBackground())
+                .background {
+                    // The dot field carries on under the page, much softer than in the
+                    // sidebar so the page stays a calm surface with a clear edge.
+                    ZStack(alignment: .topLeading) {
+                        AppBackground()
+                        GeometryReader { card in
+                            SidebarSpaceField(readyBytes: sidebarReadyBytes)
+                                .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
+                                .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
+                                .opacity(0.38)
+                        }
+                    }
+                }
                 // The page sits as a rounded card inside the sidebar's frame (Edem chose this, option C).
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // A hairline keeps the card's edge clear when the dots run past it.
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Brand.wash(0.07), lineWidth: 1))
                 .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
+            .background(alignment: .topLeading) {
+                SidebarSpaceField(readyBytes: sidebarReadyBytes)
+                    .frame(width: SidebarSpaceField.fieldWidth, height: viewport.size.height)
+            }
         }
     }
 
@@ -300,6 +324,8 @@ struct AppShell: View {
         .task {
             guard !previewMode else { return }
             AgentBridge.shared.attach(store: store, proEnabled: { license.isUnlocked })
+            // Cleaning rules the person approved in Settings › Rules.
+            RuleRunner.shared.attach(store: store, proEnabled: { license.isUnlocked })
         }
         .task {
             guard !previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--scan-memory-report=") }) else { return }
@@ -314,6 +340,8 @@ struct AppShell: View {
             guard previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--capture-workspaces=") }) else { return }
             let folder = URL(fileURLWithPath: String(argument.dropFirst("--capture-workspaces=".count)))
             do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch { return }
+            // Let launch animations settle first: the sidebar dots take about 4 s to rise.
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
             // The showcase waits for the big number to count and the chart to draw.
             let settle: UInt64 = Showcase.active ? 1_800_000_000 : 900_000_000
             for route in NavSection.allCases {
@@ -391,7 +419,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .appleIntelligence, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .appleIntelligence, .storage, .diskMap, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -552,12 +580,16 @@ struct AppShell: View {
             AppleIntelligenceWorkspace()
         case .games:
             GamesWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
-        case .smartScan, .general, .browsers, .developer, .ai, .creative:
+        case .ai:
+            AIModelsWorkspace(search: developerSearch)
+        case .smartScan, .general, .browsers, .developer, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
         case .lookThrough:
             LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
+        case .diskMap:
+            DiskMapWorkspace()
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
@@ -599,7 +631,7 @@ struct NavSidebar: View {
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
     private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .appleIntelligence, .creative, .chatApps, .bugs]
-    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
+    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .diskMap, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -627,12 +659,8 @@ struct NavSidebar: View {
                 .padding(.horizontal, 10).padding(.bottom, 10)
         }
         .frame(width: 200)
-        .background {
-            ZStack {
-                Brand.chrome
-                SidebarSpaceField(readyBytes: readyBytes)
-            }
-        }
+        // The shell draws the chrome and the dot field behind the sidebar, so
+        // the field can run on under the page.
     }
 
 }

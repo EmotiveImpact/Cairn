@@ -328,7 +328,7 @@ struct RecoveryWorkspace: View {
                 }
             }
         }
-        .background(Brand.background)
+        // The page card paints the background, so the dot field shows through.
         .foregroundStyle(Brand.textPrimary)
         .task {
             await refresh()

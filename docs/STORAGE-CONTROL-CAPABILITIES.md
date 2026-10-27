@@ -21,6 +21,10 @@ Read the [PRD](CAIRN-STORAGE-CONTROL-PRD.md) for requirements and the
 | CLI clean | Preview-only; --yes and -y rejected before scanning | Exact-item review in the native app is required; no CLI mutation route |
 | Old autoClean / SmartTriggers | Compatibility declarations only | Inert, regardless of persisted clean-on-quit preference; no observers or collectors remain |
 | Reserve monitoring | Explicit opt-in; default off | Alert/observation only. No link to autoClean or SmartTriggers |
+| Cleaning rules (Settings › Rules) | RuleRunner, every 30 minutes while the app is open; only rules the person approved after seeing a measured preview; fresh gather per run under ScanGate | Fixed list of six kinds; items must pass AgentCleanup.eligible; per-run byte cap; ScanStore.clean with the same guards, journal and receipt (run kind "Rule · …"); pause and off stop it at once. Not connected to the old autoClean or SmartTriggers |
+| Projects sleep | Explicit "Put to sleep"; git status read with `--no-optional-locks` | Selection → ReviewSheet → ScanStore.clean; a note in sleeping-projects.json records cleared folders and a wake-up command that Cairn never runs |
+| AI Models | LocalModels reads manifests and folder sizes on opening the page | Read-only list; Trash for a single confirmed model inside a known store, through SafePaths.evaluate; Ollama only via a copied `ollama rm` command |
+| Disk map | DiskMap on request: APFS volume counters plus bounded walks, two-minute limit | Read-only |
 | Growth suggestions | Explicit opt-in, selected known folders and threshold; recent comparable location readings | Inspect-only suggestions in Overview and Changes. No cleanup permission or unattended executor route |
 
 Heavy traversals and data operations share ScanGate. The new location worker keeps its lease

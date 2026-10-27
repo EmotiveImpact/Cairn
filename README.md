@@ -22,7 +22,7 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 
 Cairn can link to AI coding tools that run on your Mac, so they can check your disk and tell you what can be freed. Connect them in one click from **Settings › AI tools**.
 
-Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.** Zed, opencode and Goose are in an open pull request (#14).
+Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed, opencode and Goose**, plus Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.
 
 Out of the box, AI tools can only look. You can also let them clean in **Settings › AI tools**: Off (the default), Ask me each time, or Let them clean safe junk. Only safe, rebuildable items qualify, and every plan lists each item, expires after 15 minutes and can be used once.
 

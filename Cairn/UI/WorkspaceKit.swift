@@ -58,7 +58,8 @@ struct CairnWorkspace<Trailing: View, Content: View, Detail: View, Actions: View
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Brand.background).foregroundStyle(Brand.textPrimary)
+        // No fill of its own: the shell's page card paints the background and the dot field.
+        .foregroundStyle(Brand.textPrimary)
     }
 }
 

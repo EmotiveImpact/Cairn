@@ -149,12 +149,13 @@ struct NightMeter: View {
 
 /// Outline pill: neutral grey, ice for ready, amber when something needs closing first.
 struct NightPill: View {
-    enum Tone { case neutral, ok, warn }
+    enum Tone { case neutral, quiet, ok, warn }
     var text: String
     var tone: Tone = .neutral
     private var color: Color {
         switch tone {
         case .neutral: return Brand.textSecondary
+        case .quiet: return Brand.textMuted
         case .ok: return Brand.room
         case .warn: return Brand.amber
         }
@@ -163,8 +164,8 @@ struct NightPill: View {
         Text(text).font(.system(size: 11.5)).lineLimit(1).fixedSize()
             .foregroundStyle(color)
             .padding(.horizontal, 9).padding(.vertical, 3)
-            .background(Capsule().fill(tone == .neutral ? Color.clear : color.opacity(0.06)))
-            .overlay(Capsule().strokeBorder(tone == .neutral ? Brand.wash(0.10) : color.opacity(0.3), lineWidth: 1))
+            .background(Capsule().fill(tone == .neutral || tone == .quiet ? Color.clear : color.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(tone == .quiet ? Brand.wash(0.06) : tone == .neutral ? Brand.wash(0.10) : color.opacity(0.3), lineWidth: 1))
     }
 }
 
