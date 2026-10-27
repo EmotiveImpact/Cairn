@@ -28,6 +28,7 @@ enum ScannerRegistry {
             CommunicationCachesScanner(), // Zoom / Teams / Spotify / Figma app caches
             ChatAppsScanner(),          // WhatsApp / Telegram sizes, cleared in each app (advice)
             GamesScanner(),             // Steam / Epic / CrossOver games, and Mac games
+            MessagesAttachmentsScanner(), // size only; reviewed in System Settings
             LogsScanner(),
             InstallersScanner(),
             LargeOldFilesScanner(),

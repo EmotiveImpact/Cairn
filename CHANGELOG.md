@@ -42,6 +42,12 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - The no-trial and licence seal changes from PR #6 ship here too, with Pro at £35.99.
 - [docs/SECURITY.md](docs/SECURITY.md) explains what is protected, what is realistic, the Polar settings to change, and how to set up signed Sparkle updates.
 
+### Messages attachments
+
+- Cairn now shows how much space **Messages attachments** take, split into videos, photos and other files, with how much is over a year old. It shows them in the scan and on Make room.
+- Cairn never removes them itself, because deleting the files by hand leaves gaps in chats. A **Review in Storage** button opens System Settings, where Messages lists the largest attachments and deletes them properly. Messages stays on the protected list.
+- Measuring them needs Full Disk Access. Without it, the row is simply left out.
+
 ### Website beam options (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
@@ -89,6 +95,19 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **Bring back** asks whether to remove the drive copy or keep it as a dated spare. Drives are known by their ID, and the menu bar names the drive to plug in when moved app data is away. Drives without a password get a warning before your own files go to them.
 - **iPhone backups** can move to a drive or go to the Bin, never while a backup is running.
 - **Cloud:** keep uploaded files online only, clear cloud caches and old sync folders, or move your own files to the cloud. Cairn waits for the upload and only then sends the original to the Bin, if it hasn't changed.
+
+## 24 October 2026
+
+### Make room (PR #9)
+
+- **One Make room page.** Every big item gets one choice: Bin, SSD or Cloud. Cairn suggests one, the footer shows the total and where it goes, and nothing happens until you confirm.
+- **Moving to an SSD really frees space now.** Each file is copied, checked against the original and read back from the drive before the Mac's copy is removed. App data gets a link back so apps still find it while the drive is plugged in. If Cairn stops halfway, it finishes the move or puts the original back.
+- **More can move:** Hugging Face, iOS simulators, Android SDK and emulators, Xcode build files, Docker (Cairn closes it, moves it and checks it starts again), your own files and folders, and iPhone backups.
+- **Bring back** asks whether to remove the drive copy or keep it as a dated spare.
+- **Drives without a password** get a warning before your own files or iPhone backups go to them, but you can carry on.
+- **iPhone backups** show the device, date and whether the backup has a password. They can move to a drive or go to the Bin, but never while a backup is running.
+- **Cloud:** keep files online only once they are uploaded (pinned files are left alone), see cloud caches and old sync folders, and move your own files to the cloud. Cairn waits for the upload and only bins the original if it hasn't changed.
+- The menu bar names the drive to plug in when moved app data is away.
 
 ## 23 October 2026
 

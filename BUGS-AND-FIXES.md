@@ -16,7 +16,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 | --- | --- | --- | --- |
 | 🟠 | **Freed space was over-reported.** The old lifetime counter said 90 GB freed; the receipts only show about 2.6 GB, and that went to the Trash rather than being freed. | Any "you have freed X" figure on `master` cannot be trusted. | Fixed (PR #5, merged): figures come from receipts and Trash is called Trash. The old counter is still stored and should be removed. |
 | 🟡 | **The command line refused to run while the app was open.** | AI tools and scripts could not even read the status. | Fixed in PR #5 for `status`, `scan`, `categories` and `help`. `clean` still needs the app closed, on purpose. |
-| 🟡 | **Claude Code and Codex point at a test build** in `~/imagetemp` on Edem's Mac. | They stop working if that folder is cleared. | PR #5 makes Connect prefer `/Applications/Cairn.app`. Cairn is not installed there yet, so this needs an installed build and then Reconnect in Settings › AI tools. |
+| 🟡 | **Claude Code, Claude Desktop and Codex point at a deleted test build** on Edem's Mac (a test copy opened on 23 Oct rewrote the link when AI tools were connected from it). | The Cairn link in those tools is broken until it points at a real build. | PR #5 makes Connect prefer `/Applications/Cairn.app`. Cairn is not installed there yet, so this needs an installed build and then Reconnect in Settings › AI tools. |
 | 🟡 | **The AI tool link was slow** (7.5 minutes for a full answer on a busy Mac). | AI tools time out or give up. | Fixed in PR #5 with a 10-minute scan memory and answers from the last scan. The first scan is still slow (about 5.5 minutes). |
 | 🟡 | **Most of the scan total is "Large & old files"** (33 of 53 GB), which Cairn only shows for review. | The headline number looked far bigger than what one click frees. | Fixed in PR #5: "Ready to free" is shown separately from "Needs you". |
 | 🟡 | **Weekly auto-scan on launch did not run** on a test build. | The menu bar and Home can show old numbers. | Not investigated yet. |
@@ -40,6 +40,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 | Date | Fix | Where |
 | --- | --- | --- |
 | 24 Oct | Apple's own caches in `~/Library/Caches` were listed as junk, and clearing one (the Neural Engine's compiled models) breaks text recognition until a restart. They are now off limits, as are macOS Install Data and partial removal of Ollama's shared store. | PR #16 (merged 25 Oct) |
+| 24 Oct | "Move to SSD" only copied, so it freed nothing, and the Library and Applications folders themselves could be picked as your own files. Moves are now checked and remove the Mac's copy, and those folders are refused. | PR #9 (merged 24 Oct) |
 | 23 Oct | A ready clean removed a running test build's `.build` folder and the review didn't say caches are deleted outright. Cleaning now needs a click, the review says what can't be put back, and Cairn skips its own app, folders in use and fresh builds. | PR #5 (merged 23 Oct) |
 | 23 Oct | Items found by two scanners were counted twice (about 1 GB on the test Mac). | PR #5 (merged 23 Oct) |
 | 23 Oct | Home's scan number counted everything found, then dropped to the ready amount at the end. It now counts only ready space, with "to look through" shown separately. | PR #5 (merged 23 Oct) |

@@ -539,12 +539,8 @@ struct AppShell: View {
             MakeRoomWorkspace(store: store, control: control, receiptRunID: goalReceiptRunID,
                 onBack: { section = .dashboard },
                 onScan: { store.startScan(includeExternalVolumes: false) },
-                onReview: { plan in
-                    reviewedGoalPlan = plan
-                    store.clearSelection()
-                    store.select { item, _ in plan.itemIDs.contains(item.id) }
-                    if store.selectedCount > 0 { goalReviewPending = true; showReview = true }
-                }, onOpen: { section = $0 })
+                onReview: { if !previewMode, store.selectedCount > 0 { showReview = true } else { store.endScopedReview() } },
+                onOpen: { section = $0 })
         case .target:
             TargetWorkspace(store: store, freeNow: control.current?.available,
                             onScan: { store.startScan(includeExternalVolumes: false) },
