@@ -172,7 +172,7 @@ enum PreviewLibrary {
         default: rows = [("app-caches", "Application caches", "Library/Caches", 2.8), ("logs", "Diagnostic logs", "Library/Logs", 0.4), ("installers", "Downloaded installers", "Downloads/Installer.dmg", 1.2)]
         }
         return rows.map { id, name, path, gb in
-            var bucket = ScanStore.Bucket(info: CategoryInfo(id: id, title: name, subtitle: "Sample results · not a measurement", systemImage: section.icon, group: .general, requiresFDA: false))
+            var bucket = ScanStore.Bucket(info: CategoryInfo(id: id, title: name, subtitle: Showcase.active ? "~/" + path : "Sample results · not a measurement", systemImage: section.icon, group: .general, requiresFDA: false))
             bucket.append(ScanItem(url: FileScan.home.appendingPathComponent(path), allocatedSize: Int64(gb * 1_073_741_824), categoryID: id, severity: .review, cleanMethod: .adviceOnly, note: "Sample data for the interface preview. A live scan determines whether this specific path is actionable.", selected: false))
             return bucket
         }

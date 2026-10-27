@@ -38,7 +38,7 @@ struct ChangesWorkspace: View {
         return "\(selected.date.formatted(date: .abbreviated, time: .shortened)) · \(Fmt.size(selected.available)) available"
     }
     private var scopeMessage: String {
-        if preview { return "Sample readings · two compatible scans" }
+        if preview { return Showcase.active ? "Two scans compared · \(Showcase.scanDate.formatted(date: .abbreviated, time: .shortened))" : "Sample readings · two compatible scans" }
         if store.isScanning { return "A scan is in progress. Its measurements will appear when complete." }
         if let latest = control.candidates.last {
             let covered = latest.categories.filter(\.complete).count
@@ -319,7 +319,7 @@ struct ChangesWorkspace: View {
                     }
                 }.font(.system(size: 11)).padding(.top, 8)
             }.font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-            if preview {
+            if preview && !Showcase.active {
                 Text("Sample data · no disk actions")
                     .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
             }

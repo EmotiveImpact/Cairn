@@ -9,11 +9,13 @@ struct CleanupAccounting: Codable, Sendable {
     private(set) var toolBytes: Int64 = 0
     /// Optional so receipts written before deletion existed still decode.
     private var deletedStored: Int64?
+    /// Files deleted outright: gone, so never waiting for a Put Back record.
+    private var deletedCountStored: Int?
     /// Space released now: deleted files, emptied Trash and tool cleans.
     var freedBytes: Int64 { deletedStored ?? 0 }
     var completedCount: Int { trashCount + toolCount }
     var estimatedAffectedBytes: Int64 { trashBytes + toolBytes }
-    var missingRecoveryCount: Int { trashCount - recordedRecoveryCount }
+    var missingRecoveryCount: Int { max(0, trashCount - recordedRecoveryCount - (deletedCountStored ?? 0)) }
 
     mutating func record(_ outcome: Cleaner.Outcome, recoveryRecorded: Bool = false) {
         guard outcome.ok else { return }
@@ -22,6 +24,7 @@ struct CleanupAccounting: Codable, Sendable {
         if outcome.usedTool { toolCount += 1; toolBytes += bytes }
         else {
             trashCount += 1; trashBytes += bytes
+            if outcome.deleted { deletedCountStored = (deletedCountStored ?? 0) + 1 }
             if outcome.movedToTrashURL != nil && recoveryRecorded { recordedRecoveryCount += 1 }
         }
     }

@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="base.css"><style>
+.hero{max-width:1260px;margin:0 auto;padding:80px 32px 0;text-align:center}
+h1{font-size:62px;max-width:1000px;margin:16px auto 0}
+p.lead{margin:22px auto 0;font-size:19px;color:#aab6c0;max-width:560px;line-height:1.55}
+.actions{display:flex;gap:14px;justify-content:center;margin-top:30px}
+.disk{margin:64px auto 0;max-width:1180px;text-align:left}
+.head{display:flex;justify-content:space-between;font-size:13px;color:var(--muted);margin-bottom:12px}
+.head b{color:#fff;font-weight:500}
+.blocks{display:grid;grid-template-columns:3.2fr 1.6fr 1.42fr 1fr .98fr .8fr 1.1fr .5fr;gap:6px;height:150px}
+.blocks div{border-radius:10px;background:rgba(255,255,255,.05);border:1px solid var(--line);padding:14px;font-size:13px;color:var(--muted);display:flex;flex-direction:column;justify-content:space-between}
+.blocks div b{display:block;font-size:20px;font-weight:400;color:#c9d4dd;letter-spacing:-.02em}
+.blocks .junk{background:linear-gradient(180deg,rgba(140,196,255,.28),rgba(47,127,224,.12));border-color:rgba(160,210,255,.55);color:#dbeaff;box-shadow:0 0 40px -6px rgba(90,160,240,.55),inset 0 1px 0 rgba(255,255,255,.3)}
+.blocks .junk b{color:#fff}
+.blocks .safe{border-style:dashed}
+.legend{display:flex;gap:26px;margin-top:16px;font-size:13px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:-1px;background:rgba(255,255,255,.12)}
+.legend .j i{background:#cfe6ff;box-shadow:0 0 8px #8cc4ff}
+.foot{display:flex;justify-content:center;margin-top:46px}
+</style></head><body><header><div class="brand"><img src="../../assets/cairn-stones-transparent.png" alt="">Cairn</div><nav><span>Why Cairn</span><span>How it works</span><span>Features</span><span>Docs</span><a class="btn primary">Get early access</a></nav></header>
+<div class="hero">
+<p class="label" style="color:var(--glow)">A Mac cleaner for developers</p>
+<h1>Cairn finds the junk in your coding projects, <span>and works with your AI coding tools.</span></h1>
+<p class="lead">See your whole disk at a glance. The parts your tools can rebuild light up. Everything else stays put.</p>
+<div class="actions"><a class="btn primary">Get early access</a><a class="btn">See how it works</a></div>
+<div class="disk"><div class="head"><span>Macintosh HD · <b>494 GB</b></span><span><b>38.6 GB</b> ready to free</span></div>
+<div class="blocks">
+<div class="safe">Your projects<b>142 GB</b></div>
+<div class="junk">Xcode build files<b>14.2 GB</b></div>
+<div class="junk">Docker build cache<b>9.8 GB</b></div>
+<div>Photos<b>61 GB</b></div>
+<div class="junk">node_modules<b>9.5 GB</b></div>
+<div class="safe">AI conversations<b>3.1 GB</b></div>
+<div>Apps<b>48 GB</b></div>
+<div class="junk">npm<b>5.1</b></div>
+</div>
+<div class="legend"><span class="j"><i></i>Ready to free</span><span><i></i>Left alone</span><span><i style="background:none;border:1px dashed #8b98a4"></i>Protected</span></div>
+</div>
+<div class="foot"><div class="logos"><span><img src="../assets/tool-icons/claude.svg">Claude Code</span><span><img src="../assets/tool-icons/codex.svg">Codex</span><span><img src="../assets/tool-icons/cursor.svg">Cursor</span><span><img src="../assets/tool-icons/xcode.svg">Xcode</span><span><img src="../assets/tool-icons/docker.svg">Docker</span><span><img src="../assets/tool-icons/npm.svg">npm</span></div></div>
+</div></body></html>

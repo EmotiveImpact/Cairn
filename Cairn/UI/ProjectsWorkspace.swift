@@ -13,6 +13,7 @@ struct ProjectsWorkspace: View {
     @State private var projects: [ProjectSummary] = []
     @State private var indexing = false
     @State private var expanded: Set<String> = []
+    private let preview = CommandLine.arguments.contains("--preview-ui")
 
     /// A project counts as idle after a month without commits or manifest changes.
     private static let idleDays = 30
@@ -62,7 +63,10 @@ struct ProjectsWorkspace: View {
                   subtitle: projects.isEmpty
                       ? "Your coding projects, how long since you worked on them, and what can be rebuilt."
                       : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.") {
-            Button { if store.isScanning { store.cancel() } else { store.rescan() } } label: {
+            Button {
+                guard !preview else { return }
+                if store.isScanning { store.cancel() } else { store.rescan() }
+            } label: {
                 Label(store.isScanning ? "Stop scan" : "Rescan", systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
@@ -216,6 +220,7 @@ struct ProjectsWorkspace: View {
     // MARK: - Indexing
 
     private func reindex() async {
+        if preview { projects = Self.sampleProjects; return }
         let items = bucketItems
         guard !items.isEmpty else { projects = []; return }
         indexing = true
@@ -224,6 +229,34 @@ struct ProjectsWorkspace: View {
         projects = built
         indexing = false
     }
+
+    /// Fixed display data for `--preview-ui`: 21.7 GB across eight projects,
+    /// five of them idle. The paths are never read and nothing here can be cleaned.
+    private static let sampleProjects: [ProjectSummary] = {
+        let root = FileScan.home.appendingPathComponent("Developer")
+        let gb: Double = 1_000_000_000
+        func project(_ name: String, idle days: Int, repository: Bool = true, _ output: [(String, Double)]) -> ProjectSummary {
+            let url = root.appendingPathComponent(name)
+            let items = output.map { path, size in
+                ScanItem(url: url.appendingPathComponent(path), allocatedSize: Int64(size * gb),
+                         categoryID: ProjectIndex.categoryID, severity: .safe,
+                         note: path.hasSuffix("node_modules") || path == "Pods" || path == ".venv"
+                             ? "Dependencies, installed again when needed" : "Build output, made again on the next build")
+            }
+            return ProjectSummary(url: url, items: items, isRepository: repository,
+                                  lastActivity: Date().addingTimeInterval(-Double(days) * 86_400))
+        }
+        return [
+            project("storefront-web", idle: 94, [("node_modules", 3.9), (".next", 1.3)]),
+            project("ios-banking", idle: 2, [("build", 2.6), ("Pods", 1.6)]),
+            project("ml-experiments", idle: 121, [(".venv", 3.4)]),
+            project("design-system", idle: 45, [("node_modules", 2.1), ("storybook-static", 0.4)]),
+            project("api-gateway", idle: 0, [("target", 2.3)]),
+            project("marketing-site", idle: 210, [("node_modules", 1.6), ("dist", 0.2)]),
+            project("android-companion", idle: 61, repository: false, [("build", 1.4), (".gradle", 0.3)]),
+            project("cli-tools", idle: 5, [("target", 0.6)]),
+        ]
+    }()
 
     // MARK: - Formatting
 
