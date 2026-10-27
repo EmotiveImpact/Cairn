@@ -178,7 +178,7 @@ struct AppleIntelligenceWorkspace: View {
         guard !preview, supported else { return }
         if chosen == nil { chosen = AppleIntelligence.defaultChoice(among: features) }
         measuring = true
-        sizes = await Task.detached(priority: .utility) { AppleIntelligence.AssetService.inventory() }.value
+        sizes = await Task.detached(priority: .utility) { AppleIntelligence.AssetService.measure() }.value
         installed = AppleIntelligence.Profile.installed()
         measuring = false
     }

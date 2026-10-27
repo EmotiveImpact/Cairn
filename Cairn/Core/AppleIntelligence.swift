@@ -255,9 +255,27 @@ enum AppleIntelligence {
             return type as? String
         }
 
-        /// Bytes on disk by asset type, from the service's own inventory. macOS
-        /// won't list some of these folders even to an admin, so this is the
-        /// only measure. Nil when the service doesn't answer.
+        /// Bytes on disk by asset type. macOS won't list some of these folders
+        /// even to an admin, so the service is the only measure. Its inventory
+        /// comes first, since a set's own status can say 0 for a set that is
+        /// there; the status is asked only when the inventory can't be read.
+        /// Nil when neither answers.
+        static func measure() -> [String: Int64]? {
+            if let found = inventory() { return found }
+            var bytes: [String: Int64] = [:]
+            for set in sets {
+                if let n = downloadedBytes(set.id), n >= 0 { bytes[set.assetType] = n }
+            }
+            return bytes.isEmpty ? nil : bytes
+        }
+
+        private static func downloadedBytes(_ set: String) -> Int64? {
+            guard let status = runtime("UAFAutoAssetManager")?.latestStatus?(forClients: set, error: nil) ?? nil else { return nil }
+            return unsafeBitCast(status, to: UAFRuntime.self).downloadedFilesystemBytes?()
+        }
+
+        /// The service's own inventory of what is on this Mac, or nil when it
+        /// doesn't answer or answers in a shape Cairn can't read.
         static func inventory() -> [String: Int64]? {
             guard let manager = runtime("UAFAssetSetManager") else { return nil }
             var error: NSError?
@@ -417,6 +435,8 @@ enum AppleIntelligence {
     @objc(getAssetSet:) optional func getAssetSet(_ name: String) -> AnyObject?
     @objc(autoAssetType) optional func autoAssetType() -> AnyObject?
     @objc(generateInformationWithError:) optional func generateInformation(_ error: NSErrorPointer) -> AnyObject?
+    @objc(latestStatusForClients:error:) optional func latestStatus(forClients name: String, error: NSErrorPointer) -> AnyObject?
+    @objc(downloadedFilesystemBytes) optional func downloadedFilesystemBytes() -> Int64
     @objc(defaultInterface) optional func defaultInterface() -> NSXPCInterface?
 }
 

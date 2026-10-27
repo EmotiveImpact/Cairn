@@ -15,6 +15,7 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **Undo.** One button opens System Settings to remove the profile, and everything comes back on. macOS downloads the models again the first time a feature needs them.
 - **Removing Cairn.** If Cairn goes in the Bin while the profile is still on, it offers to open System Settings so Apple Intelligence can be turned back on first.
 - Removing the models uses a part of macOS Apple doesn't publish, so a macOS update can stop it working. If it does, Cairn says so and removes nothing.
+- **Measuring.** Cairn reads the sizes from macOS's own list of models. If that list comes back in a form it can't read, it asks each set for its size instead, and shows a dash when neither answers.
 
 ### Other open pull requests
 
