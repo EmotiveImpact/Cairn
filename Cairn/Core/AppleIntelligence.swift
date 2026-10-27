@@ -336,10 +336,10 @@ enum AppleIntelligence {
             connection.remoteObjectInterface = interface
             connection.resume()
             return await withCheckedContinuation { continuation in
-                let once = Once()
+                let once = Once(connection)
                 let finish: @Sendable (Outcome) -> Void = { outcome in
                     guard once.claim() else { return }
-                    connection.invalidate()
+                    once.connection.invalidate()
                     continuation.resume(returning: outcome)
                 }
                 let proxy = connection.remoteObjectProxyWithErrorHandler { finish(AssetService.outcome(of: $0 as NSError)) }
@@ -356,9 +356,13 @@ enum AppleIntelligence {
             return .failed(error.localizedDescription)
         }
 
+        /// The first answer wins; it also carries the connection to close, which
+        /// is only touched by whichever answer wins.
         private final class Once: @unchecked Sendable {
             private let lock = NSLock()
             private var done = false
+            let connection: NSXPCConnection
+            init(_ connection: NSXPCConnection) { self.connection = connection }
             func claim() -> Bool {
                 lock.lock(); defer { lock.unlock() }
                 if done { return false }

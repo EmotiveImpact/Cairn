@@ -87,7 +87,7 @@ struct AppleIntelligenceWorkspace: View {
         let follows = goes && !installed.on && !choice.contains(set.id)
         return HStack(spacing: 16) {
             if !installed.on {
-                NightCheck(on: goes, enabled: !follows && !busy && !preview) { toggle(set.id) }
+                NightCheck(on: goes, enabled: !follows && !busy) { toggle(set.id) }
             }
             NightName(logo: nil, title: set.title, subtitle: set.line, symbol: "sparkle", titleSize: 13.5)
             NightMeter(share: Double(size ?? 0) / Double(largest), width: 140)
@@ -124,7 +124,7 @@ struct AppleIntelligenceWorkspace: View {
         } else if !removing.isEmpty {
             let off = AppleIntelligence.featuresOff(removing: Set(removing), among: features).map(\.title)
             NightExplain(strong: "Stops working: ",
-                         rest: Self.list(off) + ". Cairn never deletes files in /System; macOS removes the models itself, and Undo brings everything back.")
+                         rest: Self.list(off) + ". Cairn never deletes files in /\u{2060}System; macOS removes the models itself, and Undo brings everything back.")
         }
     }
 
@@ -165,9 +165,9 @@ struct AppleIntelligenceWorkspace: View {
                 let count = AppleIntelligence.featuresOff(removing: Set(removing), among: features).count
                 NightTotal(strong: going.map(Fmt.size) ?? "–", rest: "comes back · \(count) \(count == 1 ? "feature turns" : "features turn") off", large: true)
                 Spacer()
-                Button((going ?? 0) > 0 ? "Turn off and free \(Fmt.size(going ?? 0))" : "Turn off") { confirming = true }
+                Button((going ?? 0) > 0 ? "Turn off and free \(Fmt.size(going ?? 0))" : "Turn off") { if !preview { confirming = true } }
                     .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                    .disabled(preview || removing.isEmpty || measuring)
+                    .disabled(removing.isEmpty || (!preview && measuring))
             }
         }
     }
@@ -309,7 +309,7 @@ private struct TurnOffSheet: View {
 
     static let steps = [
         "System Settings asks you to approve Cairn's profile. It turns these features off and stops their models downloading again.",
-        "Cairn asks macOS to remove the models. Cairn itself never deletes a file in /System.",
+        "Cairn asks macOS to remove the models. Cairn itself never deletes a file in /\u{2060}System.",
         "Undo on this page, or removing the profile in System Settings, turns everything back on. macOS downloads the models again when a feature needs them.",
     ]
 }

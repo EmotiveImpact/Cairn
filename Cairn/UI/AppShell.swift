@@ -688,6 +688,7 @@ private struct SidebarDisclosure: View {
                                   item == .developer ? "Developer" :
                                   item == .creative ? "Creative" :
                                   item == .bugs ? "Mac health" :
+                                  item == .appleIntelligence ? "Apple AI" :
                                   item == .storage ? "External storage" : nil)
                 }
             }
