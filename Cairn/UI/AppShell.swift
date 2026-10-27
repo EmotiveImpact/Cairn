@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, appleIntelligence, creative, chatApps, lookThrough, largeFiles, duplicates, apps, games, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, appleIntelligence, creative, chatApps, lookThrough, largeFiles, diskMap, duplicates, apps, games, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -23,6 +23,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .chatApps: return "Chat apps"
         case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
+        case .diskMap: return "Disk map"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
         case .games: return "Games"
@@ -51,6 +52,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .chatApps: return "bubble.left"
         case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
+        case .diskMap: return "chart.pie"
         case .duplicates: return "doc.on.doc"
         case .apps: return "square.grid.2x2"
         case .games: return "gamecontroller"
@@ -73,9 +75,6 @@ enum NavSection: String, CaseIterable, Identifiable {
         }
     }
 
-    /// Sections that open an existing sheet rather than routing content.
-    var opensSheet: Bool { false }
-
     /// Findings that have a page of their own rather than a list section.
     static let ownPages: Set<String> = ["games", "chat-apps"]
 
@@ -97,7 +96,9 @@ enum NavSection: String, CaseIterable, Identifiable {
 
 struct AppShell: View {
     @Environment(\.openWindow) private var openWindow
-    @State private var preferencesTab = "General"
+    /// `--preferences-tab=Rules` opens Settings on that tab, for screenshots.
+    @State private var preferencesTab = CommandLine.arguments.first { $0.hasPrefix("--preferences-tab=") }
+        .map { String($0.dropFirst("--preferences-tab=".count)) } ?? "General"
     @State private var storageDriveID: String?
     @State private var store = ScanStore()
     // Per-page stores are owned HERE (not inside their views) so results persist
@@ -117,7 +118,6 @@ struct AppShell: View {
         else { return .dashboard }
         return s
     }()
-    @Environment(\.accessibilityReduceMotion) private var shellReduceMotion
     @State private var showReview = false
     @State private var reviewedGoalPlan: ReviewedSpacePlan?
     @State private var goalReviewPending = false
@@ -126,6 +126,7 @@ struct AppShell: View {
     @State private var celebration: CompletionPresentation?
     @State private var pendingSummary: ScanStore.CleanSummary?
     @State private var showStatePreview = false
+    @State private var showcaseReview = false
     @State private var fdaBannerDismissed = false
     @State private var developerSearch = ""
     @FocusState private var searchFocused: Bool
@@ -133,6 +134,8 @@ struct AppShell: View {
     @State private var showResultFilter = false
     @State private var scanActivityIndex = 0
     private let previewMode = CommandLine.arguments.contains("--preview-ui")
+    /// The dots follow Home's number, sample included.
+    private var sidebarReadyBytes: Int64 { previewMode ? OverviewWorkspace.previewReadyBytes : store.recommendedBytes }
 
     private var proEnabled: Bool { license.isUnlocked }
     private var showFDABanner: Bool {
@@ -161,12 +164,30 @@ struct AppShell: View {
                     runningStatus
                 }
                 .frame(minWidth: 790, maxWidth: .infinity, maxHeight: .infinity)
-                .background(AppBackground())
+                .background {
+                    // The dot field carries on under the page, much softer than in the
+                    // sidebar so the page stays a calm surface with a clear edge.
+                    ZStack(alignment: .topLeading) {
+                        AppBackground()
+                        GeometryReader { card in
+                            SidebarSpaceField(readyBytes: sidebarReadyBytes)
+                                .frame(width: SidebarSpaceField.fieldWidth, height: card.size.height + 16)
+                                .offset(x: -(SidebarSpaceField.sidebarWidth + 8), y: -8)
+                                .opacity(0.38)
+                        }
+                    }
+                }
                 // The page sits as a rounded card inside the sidebar's frame (Edem chose this, option C).
                 .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                // A hairline keeps the card's edge clear when the dots run past it.
+                .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Brand.wash(0.07), lineWidth: 1))
                 .padding(8)
             }
             .frame(width: viewport.size.width, height: viewport.size.height, alignment: .topLeading)
+            .background(alignment: .topLeading) {
+                SidebarSpaceField(readyBytes: sidebarReadyBytes)
+                    .frame(width: SidebarSpaceField.fieldWidth, height: viewport.size.height)
+            }
         }
     }
 
@@ -189,6 +210,7 @@ struct AppShell: View {
                         })
         }
         .sheet(isPresented: $showStatePreview) { DialogStatePreview() }
+        .sheet(isPresented: $showcaseReview) { ReviewSheet(store: store, proEnabled: proEnabled, sample: .showcase, onDone: { _ in }) }
         .task { if previewMode && CommandLine.arguments.contains("--preview-states") { showStatePreview = true } }
         // A slow scan can legitimately spend time in one category. Rotate only
         // categories the scanner has actually started; the footer remains calm
@@ -207,6 +229,8 @@ struct AppShell: View {
 
     var body: some View {
         shellWithSheets
+        // Website screenshots: no focus ring on whichever control has keyboard focus.
+        .focusEffectDisabled(Showcase.active)
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
         // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
@@ -300,6 +324,8 @@ struct AppShell: View {
         .task {
             guard !previewMode else { return }
             AgentBridge.shared.attach(store: store, proEnabled: { license.isUnlocked })
+            // Cleaning rules the person approved in Settings › Rules.
+            RuleRunner.shared.attach(store: store, proEnabled: { license.isUnlocked })
         }
         .task {
             guard !previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--scan-memory-report=") }) else { return }
@@ -309,24 +335,33 @@ struct AppShell: View {
         }
         // Deterministic screenshots of the actual NSHostingView, with fixtures
         // and no disk actions. This is also a navigation/layout regression pass.
+        // With --showcase it also takes the Done screen and the review sheet.
         .task {
             guard previewMode, let argument = CommandLine.arguments.first(where: { $0.hasPrefix("--capture-workspaces=") }) else { return }
             let folder = URL(fileURLWithPath: String(argument.dropFirst("--capture-workspaces=".count)))
             do { try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true) } catch { return }
+            // Let launch animations settle first: the sidebar dots take about 4 s to rise.
+            try? await Task.sleep(nanoseconds: 5_000_000_000)
+            // The showcase waits for the big number to count and the chart to draw.
+            let settle: UInt64 = Showcase.active ? 1_800_000_000 : 900_000_000
             for route in NavSection.allCases {
                 section = route
-                try? await Task.sleep(nanoseconds: 900_000_000)
-                guard !Task.isCancelled, let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) }), let contentView = window.contentView else { return }
-                let view = contentView.superview ?? contentView
-                view.layoutSubtreeIfNeeded()
-                guard let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { continue }
-                view.cacheDisplay(in: view.bounds, to: bitmap)
-                if let data = bitmap.representation(using: .png, properties: [:]) {
-                    let destination = folder.appendingPathComponent(route.rawValue + ".png")
-                    await Task.detached(priority: .utility) {
-                        try? data.write(to: destination)
-                    }.value
-                }
+                try? await Task.sleep(nanoseconds: settle)
+                guard !Task.isCancelled else { return }
+                await WindowCapture.save(route.rawValue, to: folder)
+            }
+            if Showcase.active {
+                section = .dashboard
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                celebration = CompletionPresentation(summary: RecoveryWorkspace.showcaseSummary)
+                try? await Task.sleep(nanoseconds: settle)
+                await WindowCapture.save("result", to: folder)
+                celebration = nil
+                try? await Task.sleep(nanoseconds: settle)
+                showcaseReview = true
+                try? await Task.sleep(nanoseconds: settle)
+                await WindowCapture.save("review", to: folder)
+                showcaseReview = false
             }
             section = .developer
         }
@@ -384,7 +419,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .appleIntelligence, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .appleIntelligence, .storage, .diskMap, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -407,15 +442,6 @@ struct AppShell: View {
         developerSearch = ""
         searchFocused = false
         showResultFilter = false
-    }
-
-    private var currentScanning: Bool {
-        switch section {
-        case .apps: return appStore.isScanning
-        case .duplicates: return dupStore.isScanning
-        case .bugs: return healthStore.isScanning
-        default: return store.isScanning
-        }
     }
 
     private func rescanCurrentSection() {
@@ -541,12 +567,8 @@ struct AppShell: View {
             MakeRoomWorkspace(store: store, control: control, receiptRunID: goalReceiptRunID,
                 onBack: { section = .dashboard },
                 onScan: { store.startScan(includeExternalVolumes: false) },
-                onReview: { plan in
-                    reviewedGoalPlan = plan
-                    store.clearSelection()
-                    store.select { item, _ in plan.itemIDs.contains(item.id) }
-                    if store.selectedCount > 0 { goalReviewPending = true; showReview = true }
-                }, onOpen: { section = $0 })
+                onReview: { if !previewMode, store.selectedCount > 0 { showReview = true } else { store.endScopedReview() } },
+                onOpen: { section = $0 })
         case .target:
             TargetWorkspace(store: store, freeNow: control.current?.available,
                             onScan: { store.startScan(includeExternalVolumes: false) },
@@ -558,12 +580,16 @@ struct AppShell: View {
             AppleIntelligenceWorkspace()
         case .games:
             GamesWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
-        case .smartScan, .general, .browsers, .developer, .ai, .creative:
+        case .ai:
+            AIModelsWorkspace(search: developerSearch)
+        case .smartScan, .general, .browsers, .developer, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
                                  onReview: { if !previewMode { showReview = true } })
         case .lookThrough:
             LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
+        case .diskMap:
+            DiskMapWorkspace()
         case .largeFiles:
             LargeFilesWorkspace(store: store, search: developerSearch,
                                 inspectorVisible: $showDeveloperInspector,
@@ -605,7 +631,7 @@ struct NavSidebar: View {
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
     private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .appleIntelligence, .creative, .chatApps, .bugs]
-    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
+    private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .diskMap, .duplicates, .storage]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -633,12 +659,8 @@ struct NavSidebar: View {
                 .padding(.horizontal, 10).padding(.bottom, 10)
         }
         .frame(width: 200)
-        .background {
-            ZStack {
-                Brand.chrome
-                SidebarSpaceField(readyBytes: readyBytes)
-            }
-        }
+        // The shell draws the chrome and the dot field behind the sidebar, so
+        // the field can run on under the page.
     }
 
 }
@@ -674,7 +696,7 @@ private struct SidebarDisclosure: View {
                 .background {
                     if hovering { RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04)) }
                 }
-                .onHover { hovering = $0 }
+                .onHover { hovering = $0 && !Showcase.active }
                 .contentShape(Rectangle())
             }
             .buttonStyle(SidebarButtonStyle())
@@ -771,7 +793,7 @@ private struct NavRow: View {
                     RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04))
                 }
             }
-            .onHover { hovering = $0 }
+            .onHover { hovering = $0 && !Showcase.active }
             .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
         }
@@ -798,88 +820,70 @@ private enum SidebarNavigation {
     }
 }
 
-private struct TopbarButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .foregroundStyle(Brand.textSecondary)
-            .padding(.horizontal, 10).frame(height: 31)
-            .background(RoundedRectangle(cornerRadius: 7)
-                .fill(configuration.isPressed ? Brand.surfaceSubtle : Brand.surfaceElevated.opacity(0.75)))
-            .overlay(RoundedRectangle(cornerRadius: 7).stroke(Brand.inputBorder.opacity(0.65)))
-    }
-}
+/// Writes the main window, and any sheet open on it, to a PNG. Pixels follow
+/// the display unless `--capture-scale=2` asks for Retina sharpness on any screen.
+@MainActor
+enum WindowCapture {
+    private static let scale: CGFloat? = CommandLine.arguments
+        .first { $0.hasPrefix("--capture-scale=") }
+        .flatMap { Double($0.dropFirst("--capture-scale=".count)) }
+        .map { CGFloat(max(1, min(3, $0))) }
 
-struct DeviceCard: View {
-    let store: ScanStore
-
-    // CRITICAL: never read live disk values from this body.
-    //
-    // These used to call `DeviceInfo.available` / `.usedFraction` directly, and the
-    // storage bar's width (inside a GeometryReader) therefore depended on free
-    // space. Free space fluctuates constantly — especially on a nearly-full disk —
-    // so layout read the disk, got a different number, re-laid out, read again…
-    // an infinite layout-feedback loop that pinned the main thread at 100% CPU and
-    // froze navigation across the entire app. The values are snapshotted into
-    // @State and refreshed on a slow timer instead.
-    @State private var freeBytes: Int64 = 0
-    @State private var usedFraction: Double = 0
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 10) {
-                deviceImage.frame(width: 40, height: 30)
-                Text(DeviceInfo.name).font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Brand.textPrimary).lineLimit(1)
-            }
-            Text(DeviceInfo.specLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-            Text(DeviceInfo.storageLine).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-
-            // Storage bar — driven by the snapshot, never a live read.
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(Brand.border)
-                    Capsule().fill(Brand.brand)
-                        .frame(width: max(0, geo.size.width * usedFraction))
-                }
-            }
-            .frame(height: 6)
-            .padding(.top, 2)
-
-            Text("\(Fmt.size(freeBytes)) available")
-                .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
+    static func save(_ name: String, to folder: URL) async {
+        guard let window = NSApp.windows.first(where: { $0.styleMask.contains(.titled) && $0.sheetParent == nil && $0.isVisible }),
+              let frameView = window.contentView?.superview ?? window.contentView,
+              let page = bitmap(frameView, scale: scale ?? window.backingScaleFactor) else { return }
+        var output = page
+        if let sheet = window.attachedSheet, let sheetView = sheet.contentView,
+           let card = bitmap(sheetView, scale: scale ?? window.backingScaleFactor) {
+            // Where the sheet sits on the window, in points from the bottom left.
+            let origin = NSPoint(x: sheet.frame.minX - window.frame.minX, y: sheet.frame.minY - window.frame.minY)
+            output = composite(page, card, at: origin, size: frameView.bounds.size) ?? page
         }
-        .cairnCard(14)
-        .task(id: "deviceStats") {
-            while !Task.isCancelled {
-                let free = DeviceInfo.available
-                let frac = DeviceInfo.usedFraction
-                // Only publish a real change, so tiny fluctuations don't redraw.
-                if abs(frac - usedFraction) > 0.001 || abs(free - freeBytes) > 50_000_000 {
-                    freeBytes = free
-                    usedFraction = frac
-                }
-                try? await Task.sleep(nanoseconds: 5_000_000_000)   // 5s
-            }
-        }
+        guard let data = output.representation(using: .png, properties: [:]) else { return }
+        let destination = folder.appendingPathComponent(name + ".png")
+        await Task.detached(priority: .utility) { try? data.write(to: destination) }.value
     }
 
-    /// A render for THIS Mac's model if we ship one (`mac-macmini.png`,
-    /// `mac-laptopcomputer.png`, …), else nil. Keyed off the model-matched symbol
-    /// name so a MacBook never shows a Mac mini — falling back to Apple's own
-    /// per-model SF Symbol, which is always correct for the hardware.
-    static let macImage: NSImage? = {
-        Bundle.main.url(forResource: "mac-\(DeviceInfo.deviceSymbol)", withExtension: "png")
-            .flatMap { NSImage(contentsOf: $0) }
-    }()
+    private static func bitmap(_ view: NSView, scale: CGFloat) -> NSBitmapImageRep? {
+        view.layoutSubtreeIfNeeded()
+        let bounds = view.bounds
+        guard bounds.width > 0, bounds.height > 0,
+              let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: Int(bounds.width * scale), pixelsHigh: Int(bounds.height * scale),
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = bounds.size
+        view.cacheDisplay(in: bounds, to: rep)
+        return rep
+    }
 
-    @ViewBuilder private var deviceImage: some View {
-        if let img = DeviceCard.macImage {
-            Image(nsImage: img).resizable().aspectRatio(contentMode: .fit)
-        } else {
-            Image(systemName: DeviceInfo.deviceSymbol)
-                .font(.system(size: 27, weight: .regular))
-                .foregroundStyle(Brand.textPrimary)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
+    /// The sheet drawn over the window with rounded corners and a soft shadow, as macOS shows it.
+    private static func composite(_ page: NSBitmapImageRep, _ card: NSBitmapImageRep, at origin: NSPoint, size: NSSize) -> NSBitmapImageRep? {
+        guard let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: page.pixelsWide, pixelsHigh: page.pixelsHigh,
+                                         bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return nil }
+        rep.size = size
+        guard let context = NSGraphicsContext(bitmapImageRep: rep) else { return nil }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        page.draw(in: NSRect(origin: .zero, size: size))
+        let frame = NSRect(origin: origin, size: card.size)
+        let shape = NSBezierPath(roundedRect: frame, xRadius: 12, yRadius: 12)
+        let shadow = NSShadow()
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.55)
+        shadow.shadowBlurRadius = 40
+        shadow.shadowOffset = NSSize(width: 0, height: -12)
+        NSGraphicsContext.saveGraphicsState()
+        shadow.set()
+        NSColor.black.setFill()
+        shape.fill()
+        NSGraphicsContext.restoreGraphicsState()
+        shape.addClip()
+        card.draw(in: frame)
+        NSColor.white.withAlphaComponent(0.08).setStroke()
+        shape.lineWidth = 1
+        shape.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
     }
 }

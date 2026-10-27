@@ -58,7 +58,8 @@ struct CairnWorkspace<Trailing: View, Content: View, Detail: View, Actions: View
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Brand.background).foregroundStyle(Brand.textPrimary)
+        // No fill of its own: the shell's page card paints the background and the dot field.
+        .foregroundStyle(Brand.textPrimary)
     }
 }
 
@@ -74,24 +75,6 @@ extension CairnWorkspace where Trailing == EmptyView {
     }
 }
 
-struct WorkspaceHeading: View {
-    var title: String
-    var subtitle: String
-    var icon: String
-    var value: String = ""
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 38)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                    Text(title).font(.system(size: 16, weight: .medium))
-                }
-            }
-            if !value.isEmpty { Text(value).font(.system(size: 30, weight: .light)).tracking(-0.8).monospacedDigit() }
-        }.padding(.top, 14)
-    }
-}
 struct WorkspaceDetail: View {
     var title: String
     var text: String
@@ -138,15 +121,6 @@ struct WorkspaceRow: View {
             .background(focused ? Brand.wash(0.035) : Color.clear)
         }
         .buttonStyle(.plain)
-    }
-}
-struct WorkspaceColumns: View {
-    var leading: String
-    var trailing: String
-    var body: some View {
-        HStack { Text(leading); Spacer(); Text(trailing) }
-            .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-            .padding(.horizontal, 20).frame(height: 36).background(Brand.background)
     }
 }
 /// Plain words for an empty page, aligned with the rows. No icon box.
@@ -199,7 +173,7 @@ enum PreviewLibrary {
         default: rows = [("app-caches", "Application caches", "Library/Caches", 2.8), ("logs", "Diagnostic logs", "Library/Logs", 0.4), ("installers", "Downloaded installers", "Downloads/Installer.dmg", 1.2)]
         }
         return rows.map { id, name, path, gb in
-            var bucket = ScanStore.Bucket(info: CategoryInfo(id: id, title: name, subtitle: "Sample results · not a measurement", systemImage: section.icon, group: .general, requiresFDA: false))
+            var bucket = ScanStore.Bucket(info: CategoryInfo(id: id, title: name, subtitle: Showcase.active ? "~/" + path : "Sample results · not a measurement", systemImage: section.icon, group: .general, requiresFDA: false))
             bucket.append(ScanItem(url: FileScan.home.appendingPathComponent(path), allocatedSize: Int64(gb * 1_073_741_824), categoryID: id, severity: .review, cleanMethod: .adviceOnly, note: "Sample data for the interface preview. A live scan determines whether this specific path is actionable.", selected: false))
             return bucket
         }

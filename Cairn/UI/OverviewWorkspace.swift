@@ -26,10 +26,6 @@ struct OverviewWorkspace: View {
         return "\(sample.date.formatted(date: .abbreviated, time: .shortened)) · \(Fmt.size(sample.available)) available"
     }
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private var canOpenScanResults: Bool {
-        if preview { return CommandLine.arguments.contains("--preview-overview-results") }
-        return store.hasLiveResults && (store.phase == .finished || store.buckets.contains { !$0.items.isEmpty })
-    }
     private var history: [CapacityReading] {
         if preview && !CommandLine.arguments.contains("--preview-empty-overview") { return Self.sampleHistory }
         return preview ? [] : control.latestCapacity
@@ -107,13 +103,6 @@ struct OverviewWorkspace: View {
         if preview { return PreviewStorageScenario.reserveBytes }
         return AppSettings.shared.reserveEnabled ? control.reserveBytes : nil
     }
-    private var lowSpace: Bool {
-        displayedCapacity.map { $0.total > 0 && Double($0.available) / Double($0.total) < 0.05 } ?? false
-    }
-    private var storageHeadline: String {
-        guard displayedCapacity != nil else { return "Checking available storage." }
-        return lowSpace ? "Your Mac is running low on space" : "This Mac"
-    }
     /// Height the chart can take so Home fits the window without scrolling.
     /// Everything else on the page is about 600 pt tall at the default size.
     @State private var chartHeight: CGFloat = 150
@@ -146,7 +135,9 @@ struct OverviewWorkspace: View {
             // keep the chart its size then, so nothing below it moves.
             guard !store.isScanning, !store.isCleaning else { return }
             chartHeight = min(240, max(110, height - 600))
-        }.background(Brand.glow.ignoresSafeArea()).background(Brand.background).foregroundStyle(Brand.textPrimary)
+        }
+        // The page card already paints this background and glow, with the dot field over it.
+        .foregroundStyle(Brand.textPrimary)
         .font(.system(size: 13, weight: .regular))
         .task {
             guard !preview else { return }
@@ -178,8 +169,21 @@ struct OverviewWorkspace: View {
     }
     private var divider: some View { Rectangle().fill(Brand.separator).frame(height: 0.5) }
 
+    /// When the shown results were scanned. The showcase gives its sample scan a time.
+    private var scannedAt: Date? {
+        if Showcase.active { return Showcase.scanDate }
+        return preview ? nil : store.lastScanDate
+    }
     /// The headline action: what a scan found that can be freed in one go.
-    private var recommendedBytes: Int64 { preview ? 18_400_000_000 : store.recommendedBytes }
+    private var recommendedBytes: Int64 { preview ? Self.previewReadyBytes : store.recommendedBytes }
+    /// `--preview-ui` sample for the headline and the sidebar dots: 18.4 GB (the
+    /// website's 38.6 GB with `--showcase`), or `--preview-ready-gb=<n>` to
+    /// capture another dot level.
+    static let previewReadyBytes: Int64 = {
+        let flag = "--preview-ready-gb="
+        let gb = CommandLine.arguments.first { $0.hasPrefix(flag) }.flatMap { Double($0.dropFirst(flag.count)) }
+        return Int64((gb ?? (Showcase.active ? 38.6 : 18.4)) * 1_000_000_000)
+    }()
     /// Everything else the scan found: real space, but only the person can decide on it.
     private var toReviewBytes: Int64 { preview ? 21_300_000_000 : max(0, store.grandTotal - store.recommendedBytes) }
     /// Keeps the bigger number in view without competing with the headline.
@@ -249,7 +253,7 @@ struct OverviewWorkspace: View {
                             Text("Review and free \(Fmt.size(recommendedBytes))").frame(minWidth: 170)
                         }
                         .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
-                        .disabled(preview || store.isCleaning)
+                        .disabled((preview && !Showcase.active) || store.isCleaning)
                         .help("Check the list once, then free the space")
                         Button("See everything") { onOpen(.smartScan) }
                             .buttonStyle(ControlPanelButtonStyle(size: .large))
@@ -348,7 +352,7 @@ struct OverviewWorkspace: View {
                     if ready > 0 { legend(Brand.room, "Ready to free") }
                     legend(Brand.track, "Free now")
                     Spacer()
-                    if let date = store.lastScanDate, !preview {
+                    if let date = scannedAt {
                         Text(store.phase == .cancelled ? "Scan stopped · results may be incomplete" : "Scanned \(date.formatted(.relative(presentation: .named)))")
                             .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
                     }
@@ -445,7 +449,9 @@ struct OverviewWorkspace: View {
         }
     }
     private var lastCleanTile: some View {
-        if preview { return tile("Last clean", "3 October · 23.4 GB freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) } }
+        if preview, let last = PreviewStorageScenario.cleans.last {
+            return tile("Last clean", "\(last.date.formatted(.dateTime.day().month(.wide))) · \(Fmt.size(last.freed)) freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) }
+        }
         if let run = store.cleanupRuns.first(where: { $0.finished != nil && $0.summary.accounting.completedCount > 0 }) {
             let gains = run.summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
             let freed = max(run.summary.accounting.freedBytes, gains)
@@ -554,7 +560,7 @@ struct OverviewWorkspace: View {
     private var cleanMarks: [CleanMark] {
         guard let first = points.first?.date else { return [] }
         let runs: [Date] = preview
-            ? [first.addingTimeInterval(Double(period) * 86_400 * 0.35)]
+            ? PreviewStorageScenario.cleans.map { $0.date }
             : store.cleanupRuns.filter { RecoveryWorkspace.freed($0.summary) > 0 }.map { $0.finished ?? $0.started }
         return runs.filter { $0 >= first }.compactMap { date in
             guard let reading = points.first(where: { $0.date >= date }) ?? points.last else { return nil }
@@ -580,6 +586,8 @@ struct OverviewWorkspace: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        // A capture opens with keyboard focus on the first control; keep its ring off sample shots.
+        .focusEffectDisabled(preview)
         .help("Move large folders to \(drive.name)")
     }
     private var header: some View {
@@ -588,11 +596,11 @@ struct OverviewWorkspace: View {
             if let drive = externalDrive { drivePill(drive).padding(.leading, 14) }
             Spacer()
             HStack(spacing: 8) {
-                Button { scan() } label: {
+                Button { if !preview { scan() } } label: {
                     Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
                 }.buttonStyle(ControlPanelButtonStyle(size: .small))
                     .keyboardShortcut("r", modifiers: .command)
-                    .disabled(preview || store.isCleaning)
+                    .disabled((preview && !Showcase.active) || store.isCleaning)
                     .help(preview ? "Scanning is disabled in this sample preview." : "Scan this Mac (⌘R)")
                 Button("Make room") { onOpen(.makeRoom) }
                     .buttonStyle(ControlPanelButtonStyle(size: .small))

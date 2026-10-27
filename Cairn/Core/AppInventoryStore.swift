@@ -61,8 +61,6 @@ struct AppEntry: Identifiable {
     /// Large = bundle bigger than 1 GB.
     var isLarge: Bool { size > 1_000_000_000 }
 
-    /// Has associated data to disclose in the inspector; it is not removed.
-    var hasLeftovers: Bool { !associated.isEmpty }
 }
 
 /// On-demand inventory of installed Mac apps + their associated files. Built to
@@ -483,14 +481,7 @@ final class AppInventoryStore {
 
     var selectedApps: [AppEntry] { apps.filter { $0.selected && $0.isRemovable } }
     var selectedCount: Int { selectedApps.count }
-    var selectedReclaimable: Int64 { selectedApps.reduce(0) { $0 + $1.totalSize } }
 
-    /// Sum of reclaimable space across apps that look unused (the headline metric).
-    var unusedReclaimable: Int64 {
-        apps.filter { $0.isRemovable && $0.isUnused }.reduce(0) { $0 + $1.totalSize }
-    }
-    var unusedCount: Int { apps.filter { $0.isRemovable && $0.isUnused }.count }
-    var removableCount: Int { apps.filter { $0.isRemovable }.count }
 
     // MARK: - Uninstall (only app bundles move to Trash)
 

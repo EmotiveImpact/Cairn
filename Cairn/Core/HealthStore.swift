@@ -54,10 +54,6 @@ final class HealthStore {
     var onRemovals: (([ScanStore.RemovalLogEntry]) async -> Bool)?
     var prepareRemoval: () async -> Bool = { false }
 
-    /// Number of distinct system-health checks Cairn runs (launch agents, orphaned
-    /// app data, broken login items, corrupted preferences, permission issues).
-    static let checkCount = 5
-
     enum Phase: Equatable { case idle, scanning, finished }
 
     private(set) var phase: Phase = .idle
@@ -95,10 +91,6 @@ final class HealthStore {
         groups.filter { !$0.items.isEmpty }
             .sorted { (Self.order.firstIndex(of: $0.id) ?? 99) < (Self.order.firstIndex(of: $1.id) ?? 99) }
     }
-    var totalIssues: Int { groups.reduce(0) { $0 + $1.count } }
-    var isHealthy: Bool { hasScanned && totalIssues == 0 }
-    /// Every safely-fixable issue across all actionable groups (drives "Fix All").
-    var allFixable: [HealthIssue] { groups.flatMap { $0.fixableItems } }
 
     // MARK: - Scan lifecycle
 

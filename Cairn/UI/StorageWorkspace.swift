@@ -62,7 +62,7 @@ struct StorageWorkspace: View {
                 }
             }
         }
-        .background(Brand.background)
+        // The page card paints the background, so the dot field shows through.
         .task { if !preview { await store.refresh() } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didMountNotification)) { _ in if !preview { Task { await store.refresh() } } }
         .onReceive(NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didUnmountNotification)) { _ in if !preview { Task { await store.refresh() } } }
@@ -322,16 +322,6 @@ struct StorageWorkspace: View {
             let status = await Task.detached(priority: .utility) { NpmCacheInspection.inspect() }.value
             npmCacheStatus = status
             inspectingNpm = false
-        }
-    }
-    private func guideSummary(_ guide: String) -> String {
-        switch guide {
-        case "npm cache": return "Use npm’s cache configuration"
-        case "Xcode build output": return "Set Derived Data in Xcode Locations"
-        case "Docker disk image": return "Move through Docker Desktop settings"
-        case "Archives & media": return "Copy finished exports and verify content"
-        case "Cloud & remote machines": return "Offload files or run work remotely"
-        default: return "Application-aware handling; no blanket relocation"
         }
     }
     private func guideDetail(_ guide: String) -> String {

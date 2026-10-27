@@ -25,6 +25,16 @@ struct AgentConnectionsPanel: View {
                     .font(.system(size: 11.5)).foregroundStyle(Brand.textMuted)
                     .fixedSize(horizontal: false, vertical: true)
             }.padding(.bottom, 18)
+            .task(id: settings.agentCleaning) {
+                // Show what really applies: a value changed outside Cairn, or one
+                // the Keychain could not seal, counts as off.
+                guard !preview else { return }
+                let verified = await AgentCleaningMode.verified()
+                if verified != settings.agentCleaning {
+                    settings.agentCleaning = verified
+                    message = "AI tool cleaning was set from outside Cairn, or the Keychain was unavailable, so it is off. Choose again here to turn it on."
+                }
+            }
             Rectangle().fill(Brand.separator).frame(height: 0.5)
             ForEach(tools) { tool in row(tool) }
             HStack(spacing: 12) {

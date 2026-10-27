@@ -45,15 +45,3 @@ struct CairnControlSurface<Label: View>: View {
     }
 }
 
-/// Native menu pickers retain their keyboard and accessibility behaviour.
-struct CairnFilterSurface: ViewModifier {
-    func body(content: Content) -> some View {
-        content.pickerStyle(.menu).buttonStyle(.plain).controlSize(.regular)
-            .padding(.leading, 8).padding(.trailing, 22).frame(minHeight: 32)
-            .background(Brand.wash(0.045), in: RoundedRectangle(cornerRadius: 7))
-            .overlay(alignment: .trailing) { Image(systemName: "chevron.down").font(.system(size: 9, weight: .medium)).foregroundStyle(Brand.textMuted).padding(.trailing, 9).allowsHitTesting(false).accessibilityHidden(true) }
-    }
-}
-extension View {
-    func cairnFilterSurface() -> some View { modifier(CairnFilterSurface()) }
-}

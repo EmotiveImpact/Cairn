@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#090b0d" />
+    <title>Cairn: a Mac cleaner for developers</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..700&amp;display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="../assets/favicon.png" />
+    <link rel="stylesheet" href="night-refined.css?v=20260930-2" />
+    <link rel="stylesheet" href="ui/interactions.css?v=1" />
+    <script src="assets/cairn-interactions.js?v=20260930-1" defer></script>
+    <link rel="stylesheet" href="footer-matrix.css?v=1" />
+    <script src="footer-matrix.js?v=2" defer></script>
+    <link rel="stylesheet" href="beam-hero.css?v=7" />
+    <link rel="stylesheet" href="story.css?v=43" />
+    <script src="beam-hero.js?v=7" defer></script>
+    <script src="story.js?v=43" defer></script>
+  </head>
+  <body class="story-page">
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header" id="top">
+      <div class="shell header-inner">
+        <a class="brand" href="#top" aria-label="Cairn, back to top"><span class="brand-mark" aria-hidden="true"><img src="../assets/cairn-stones-transparent.png" width="44" height="44" alt="" /></span><span>Cairn</span></a>
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-navigation" hidden>Menu</button>
+        <nav class="main-nav" id="main-navigation" aria-label="Main navigation">
+          <a href="#number">Why Cairn</a><a href="#disk">How it works</a><a href="#ask">AI tools</a><a href="#app">The app</a><a href="docs-preview/index.html">Docs</a>
+        </nav>
+        <span class="header-status">In development</span>
+        <a class="button button-light header-action" href="#close"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download app</span></a>
+      </div>
+    </header>
+
+    <main id="main">
+      <div class="stage-track"><div class="stage">
+      <section class="chapter story-open look-photo" id="open" data-photo="desk" aria-labelledby="open-title">
+        <img class="open-photo" src="assets/hero/cairn-hero-desk.jpg" alt="" aria-hidden="true" />
+        <div class="photo-switch" role="group" aria-label="Try another picture"><button type="button" data-photo="desk" aria-pressed="true">Desk</button><button type="button" data-photo="profile" aria-pressed="false">Profile</button><button type="button" data-photo="window" aria-pressed="false">Window</button><button type="button" data-photo="valley" aria-pressed="false">Valley</button></div>
+        <div class="shell open-inner">
+          <div class="open-main">
+            <div class="open-words">
+              <h1 id="open-title" class="reveal"><b>Cairn</b> <span>finds the junk in your coding projects.</span></h1>
+              <p class="open-lead reveal">And works with your AI coding tools. Build files and caches go. Your code and AI conversations are never touched.</p>
+            </div>
+            <a class="open-cta reveal" href="#close">Download for Mac</a>
+          </div>
+          <div class="open-foot reveal">
+            <dl class="open-stats">
+              <div><dt>38.6 GB</dt><dd>found on a typical developer Mac</dd></div>
+              <div><dt>3 AI tools</dt><dd>Claude Code, Codex and Cursor</dd></div>
+              <div><dt>0 files</dt><dd>of your code ever touched</dd></div>
+            </dl>
+            <div class="open-more">
+              <p>Build files, caches and old installs pile up quietly while you work. Cairn shows you what each one is and clears only what your tools can make again.</p>
+              <p>Ask for it from Claude Code, Codex or Cursor. Your code and AI conversations are never touched.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter story-number" id="number" data-hall="original" aria-labelledby="number-title">
+        <div class="dive-tunnel" aria-hidden="true"><canvas id="tunnel"></canvas></div>
+        <div class="photo-switch hall-switch" role="group" aria-label="Try another hallway"><button type="button" data-hall="original" aria-pressed="true">Original</button><button type="button" data-hall="darker" aria-pressed="false">Darker</button></div>
+        <div class="shell dive-words">
+          <p class="label reveal">On a typical developer Mac</p>
+          <p class="big-num reveal" aria-label="38.6 gigabytes"><span id="count">0.0</span><small>GB</small></p>
+          <h2 id="number-title" class="reveal">That’s what your tools left behind. <span>Build files and caches, made again when needed.</span></h2>
+          <ul class="parts" aria-label="What makes up 38.6 GB">
+            <li style="--i:0"><img src="assets/tool-icons/xcode.svg" alt="" /><span>Xcode build files</span><b data-gb="14.2"><span>14.2 GB</span></b></li>
+            <li style="--i:1"><img src="assets/tool-icons/docker.svg" alt="" /><span>Docker build cache</span><b data-gb="9.8"><span>9.8 GB</span></b></li>
+            <li style="--i:2"><img src="assets/tool-icons/npm.svg" alt="" /><span>node_modules</span><b data-gb="9.5"><span>9.5 GB</span></b></li>
+            <li style="--i:3"><img src="assets/tool-icons/npm.svg" alt="" /><span>npm cache</span><b data-gb="5.1"><span>5.1 GB</span></b></li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="chapter story-disk" id="disk" data-stops="2" aria-labelledby="disk-title">
+        <div class="shell">
+          <div class="centre"><p class="label reveal">See it at a glance</p>
+          <h2 id="disk-title" class="reveal">Your whole disk, in one picture. <span>The junk lights up. Your work stays put.</span></h2></div>
+          <div class="disk-graphic">
+            <div class="head"><span>Macintosh HD · <b>494 GB</b></span><span class="ready"><b>38.6 GB</b> <em class="ready-a">ready to free</em><em class="ready-b">cleaned up</em></span></div>
+            <div class="disk-bar" role="img" aria-label="Macintosh HD, 494 GB: your projects 142 GB and AI conversations 3.1 GB are protected; Xcode build files 14.2 GB, Docker build cache 9.8 GB, node_modules 9.5 GB and npm 5.1 GB are ready to free; photos 61 GB, apps 48 GB and system 160 GB are left alone. After cleaning, free space grows from 42.6 GB to 81.2 GB.">
+              <div class="seg safe" style="--g:142;--i:0"><span>Your projects</span><b>142 GB</b></div>
+              <div class="seg" style="--g:61;--i:1"><span>Photos</span><b>61 GB</b></div>
+              <div class="seg junk" style="--g:24;--i:2;--k:0"><span>Xcode</span><b>14.2</b></div>
+              <div class="seg" style="--g:48;--i:3"><span>Apps</span><b>48 GB</b></div>
+              <div class="seg junk" style="--g:20;--i:4;--k:1"><span>Docker</span><b>9.8</b></div>
+              <div class="seg safe" style="--g:14;--i:5"><span>AI chats</span><b>3.1</b></div>
+              <div class="seg junk" style="--g:20;--i:6;--k:2"><span>node_modules</span><b>9.5</b></div>
+              <div class="seg" style="--g:70;--i:7"><span>System</span><b>160 GB</b></div>
+              <div class="seg junk" style="--g:14;--i:8;--k:3"><span>npm</span><b>5.1</b></div>
+              <div class="seg free" style="--g:34;--i:9"><span>Free</span><b><span id="free-gb">42.6</span> GB</b></div>
+            </div>
+            <div class="legend"><span class="j"><i></i>Ready to free</span><span><i></i>Left alone</span><span class="p"><i></i>Protected, never touched</span><span class="f"><i></i>Free space</span></div>
+            <p class="disk-next">Scroll to clean it up</p>
+            <p class="disk-done"><b>38.6 GB back.</b> Your projects, photos and AI chats didn’t move.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="chapter story-ask" id="ask" aria-labelledby="ask-title">
+        <div class="shell">
+          <div>
+            <p class="label reveal">Works with your AI coding tools</p>
+            <h2 id="ask-title" class="reveal">Just ask. <span>In the tools you already use.</span></h2>
+            <p class="lead reveal">Ask Claude Code, Codex or Cursor what’s filling your Mac. Cairn answers with real sizes.</p>
+            <ul class="promises reveal">
+              <li><b>Real sizes, measured on your Mac.</b> No guesses, no scary warnings.</li>
+              <li><b>Nothing moves until you say so.</b> Every clean is reviewed first.</li>
+              <li><b>Your code and conversations are never included.</b></li>
+            </ul>
+          </div>
+          <div class="chat-wrap reveal"><div class="chat-tabs" role="group" aria-label="Choose your AI tool"><button type="button" aria-pressed="true" data-icon="assets/tool-icons/claude.svg">Claude Code</button><button type="button" aria-pressed="false" data-icon="assets/tool-icons/codex.svg">Codex</button><button type="button" aria-pressed="false" data-icon="assets/tool-icons/cursor.svg">Cursor</button></div><div class="chat" role="img" aria-label="Claude Code chat: asked what is taking up space, Cairn lists Xcode build files 14.2 GB, Docker build cache 9.8 GB and node_modules 9.5 GB, 38.6 GB in total.">
+            <div class="chat-bar"><i></i><i></i><i></i><span class="who"><img src="assets/tool-icons/claude.svg" alt="" /><span>Claude Code · ~/Developer</span></span></div>
+            <div class="chat-body">
+              <div class="me"><span id="typed"></span><span class="caret"></span></div>
+              <div class="tool step">● cairn · scan</div>
+              <div class="ans step">Cairn found build files and caches your tools can rebuild on their own:</div>
+              <div class="rows">
+                <div class="step"><span><b>Xcode build files</b><small>DerivedData · 41 projects</small></span><b>14.2 GB</b></div>
+                <div class="step"><span><b>Docker build cache</b><small>Unused images and layers</small></span><b>9.8 GB</b></div>
+                <div class="step"><span><b>node_modules</b><small>6 projects idle for 90 days</small></span><b>9.5 GB</b></div>
+              </div>
+              <div class="got step">38.6 GB<span>you can get back</span></div>
+              <div class="ask-btns step"><span class="p">Review in Cairn</span><span>Not now</span></div>
+            </div>
+          </div></div>
+        </div>
+      </section>
+
+      <section class="chapter story-app beam-hero" id="app" data-stops="3" data-option="beam" data-bg="shore-night" aria-labelledby="app-title">
+        <div class="app-photo" aria-hidden="true"><img src="assets/app-bg/shore-night.jpg" width="2560" height="1440" alt="" /></div>
+        <div class="shell hero-layout">
+          <div class="hero-copy">
+            <p class="section-label">The app</p>
+            <h2 id="app-title">Then review it and free it, <span>in one calm place.</span></h2>
+          </div>
+          <figure class="product-composition" id="product">
+            <a class="product-screen night-window" href="assets/app-shot-home.webp" data-preview="overview" aria-haspopup="dialog" aria-label="View the Cairn home screen">
+              <img src="assets/app-shot-home.webp" width="2488" height="1600" alt="Cairn home screen: 38.6 GB you can get back, free space over the last 30 days, what grew recently, the last clean and your AI coding tools" />
+            </a>
+            <figcaption class="app-steps" role="tablist" aria-label="Inside Cairn">
+              <button type="button" role="tab" aria-selected="true" data-shot="home" data-key="overview" data-alt="Cairn home screen: 38.6 GB you can get back, free space over the last 30 days, what grew recently, the last clean and your AI coding tools"><b>See where your space goes</b><span>Free space and how it changed, with your next step ready.</span></button>
+              <button type="button" role="tab" aria-selected="false" data-shot="projects" data-key="developer" data-alt="Cairn Projects screen: 21.7 GB of build output across 8 projects, with 14.6 GB in projects left alone for 30 days or more"><b>Review before you remove</b><span>Exact paths and sizes. Folders you work in stay protected.</span></button>
+              <button type="button" role="tab" aria-selected="false" data-shot="activity" data-key="activity" data-alt="Cairn Activity screen: 31.1 GB freed this past month, with a receipt for every clean"><b>See what happened</b><span>Every clean is recorded, with the way back for each one.</span></button>
+            </figcaption>
+            <p class="app-sample">Real Cairn screens, example numbers</p>
+          </figure>
+        </div>
+      </section>
+
+      <section class="chapter story-more" id="features" aria-labelledby="features-title">
+        <div class="shell">
+          <div class="more-intro">
+            <p class="label reveal">The rest of your Mac</p>
+            <h2 id="features-title" class="reveal">Built for more <span>than a clean build.</span></h2>
+            <p class="more-lead reveal">Cairn looks after the apps around your code too, with the same care.</p>
+          </div>
+          <ul class="more-list" aria-label="What else Cairn looks after">
+            <li style="--i:0"><div><h3>Browsers</h3><p>Web caches that pile up as you browse. Each browser makes them again as needed.</p></div><span class="logos"><img src="assets/app-logos/safari.svg" width="22" height="22" alt="Safari" /><img src="assets/app-logos/chrome.svg" width="22" height="22" alt="Chrome" /><img src="assets/app-logos/arc.svg" width="22" height="22" alt="Arc" /><img src="assets/app-logos/firefox.svg" width="22" height="22" alt="Firefox" /><img src="assets/app-logos/brave.svg" width="22" height="22" alt="Brave" /></span></li>
+            <li style="--i:1"><div><h3>Creative apps</h3><p>Render and preview files from Final Cut, Logic, Lightroom and more.</p></div><span class="logos"><img src="assets/app-logos/davinci-resolve.svg" width="22" height="22" alt="DaVinci Resolve" /><img src="assets/app-logos/blender.svg" width="22" height="22" alt="Blender" /></span></li>
+            <li style="--i:2"><div><h3>Everyday apps</h3><p>Update downloads and caches from Zoom, Teams, Spotify and others.</p></div><span class="logos"><img src="assets/app-logos/spotify.svg" width="22" height="22" alt="Spotify" /><img src="assets/app-logos/figma.svg" width="22" height="22" alt="Figma" /><img src="assets/app-logos/dropbox.svg" width="22" height="22" alt="Dropbox" /></span></li>
+            <li style="--i:3"><div><h3>Chat and notes</h3><p>Caches from Slack, Discord and Notion. Each app makes them again the next time it opens.</p></div><span class="logos"><img src="assets/app-logos/discord.svg" width="22" height="22" alt="Discord" /><img src="assets/app-logos/notion.svg" width="22" height="22" alt="Notion" /></span></li>
+            <li style="--i:4"><div><h3>Local AI models</h3><p>Downloaded models, often gigabytes each. Your AI conversations are never touched.</p></div><span class="logos"><img src="assets/app-logos/ollama.svg" width="22" height="22" alt="Ollama" /><img src="assets/app-logos/hugging-face.svg" width="22" height="22" alt="Hugging Face" /><img src="assets/app-logos/lm-studio.svg" width="22" height="22" alt="LM Studio" /><img src="assets/app-logos/pytorch.svg" width="22" height="22" alt="PyTorch" /></span></li>
+          </ul>
+          <p class="more-also" style="--i:5">Plus big forgotten files, duplicates, leftovers from apps you have removed, and copies to an external drive with your originals kept.</p>
+        </div>
+      </section>
+      <div class="morph" aria-hidden="true"></div>
+      <div class="morph morph-app" aria-hidden="true"></div>
+
+      </div></div>
+
+      <section class="touches" id="touches" aria-labelledby="touches-title">
+        <div class="shell">
+          <div class="touches-head">
+            <p class="section-label">What Cairn touches</p>
+            <h2 id="touches-title">Where Cairn cleans, <span>and where it never goes.</span></h2>
+            <p>You see every item before anything goes, and nothing moves until you click Clean.</p>
+          </div>
+          <div class="touches-cols">
+            <div class="touches-col cleared">
+              <h3><i aria-hidden="true"></i>Cleared straight away</h3>
+              <p class="touches-note">Caches and build files your apps and tools make again when they need them, so the space is free at once.</p>
+              <ul>
+                <li>Build folders in your projects, such as node_modules, target, .venv and DerivedData</li>
+                <li>Package caches for npm, Yarn, pnpm, pip, Cargo, Go, Gradle and Homebrew</li>
+                <li>Xcode build data, old device support, and simulators for versions you no longer have</li>
+                <li>Docker, OrbStack and Colima space, cleared with Docker’s own commands</li>
+                <li>App, browser and creative app caches, and old logs</li>
+                <li>Spare Git storage in big repositories, tidied by Git itself. Your history stays.</li>
+                <li>Time Machine snapshots kept on this Mac, removed with macOS’s own tool. Your backup drive is not touched.</li>
+              </ul>
+            </div>
+            <div class="touches-col trashed">
+              <h3><i aria-hidden="true"></i>Moved to the Trash</h3>
+              <p class="touches-note">Your own files, only when you pick them. Put them back from Cairn’s Activity page or the Trash.</p>
+              <ul>
+                <li>Large old files in Downloads, Desktop and Movies</li>
+                <li>Installers for apps you already have</li>
+                <li>Duplicate copies, with the copy you choose kept</li>
+                <li>Apps you remove, and leftovers from apps already gone</li>
+                <li>Downloaded AI models you no longer use</li>
+              </ul>
+            </div>
+            <div class="touches-col never">
+              <h3><i aria-hidden="true"></i>Never touched</h3>
+              <p class="touches-note">Blocked inside Cairn itself, whatever a scan finds.</p>
+              <ul>
+                <li>Your source code and Git history</li>
+                <li>AI coding chats and history from Claude Code, Codex, Cursor and ChatGPT</li>
+                <li>Your Photos library</li>
+                <li>iCloud Drive, Dropbox and OneDrive folders</li>
+                <li>Your emails and Messages history</li>
+                <li>Keychains, SSH keys, .env files and databases</li>
+                <li>Xcode Archives, which you need to read crash reports</li>
+                <li>macOS system files</li>
+              </ul>
+            </div>
+          </div>
+          <p class="touches-foot">Folders in use, or built in the last 15 minutes, are skipped. Prefer everything to go to the Trash? Choose Move to Trash in Settings.</p>
+        </div>
+      </section>
+
+    </main>
+    <div id="close"></div>
+    <footer class="site-footer">
+      <div class="shell footer-hero" aria-labelledby="closing-title"><p class="section-label">For the work ahead</p><h2 id="closing-title">More room.<br />Keep your momentum.</h2><p>Your next idea needs room. Your current work needs care.<br /> Cairn looks after both.</p>
+        <div class="footer-actions"><a class="button button-light" href="#download"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download for Mac</span></a><a class="button button-ghost" href="#buy">Buy Cairn Pro · £35.99</a></div>
+        <p class="footer-price">Pay once and your licence never runs out. Cairn 1 gets free updates for every new macOS for at least two years after you buy. Cairn 2, when it comes, will be a small upgrade fee, and Cairn 1 keeps working if you skip it.</p>
+        <p class="footer-availability">For macOS 14 Sonoma or later, on Apple silicon and Intel Macs.</p></div>
+      <div class="shell footer-main">
+        <div class="footer-about"><a class="brand" href="#top" aria-label="Cairn, back to top"><span class="brand-mark" aria-hidden="true"><img src="../assets/cairn-stones-transparent.png" width="44" height="44" alt="" /></span><span>Cairn</span></a><p>Mac cleaning built around<br />the work behind every build.</p></div>
+        <nav class="footer-links" aria-label="Footer navigation">
+          <div><h2>Product</h2><a href="#disk">How it works</a><a href="#ask">AI tools</a><a href="#app">The app</a><a href="#features">Everything it cleans</a><a href="#touches">What Cairn touches</a></div>
+          <div><h2>Cairn</h2><details class="footer-name" id="name"><summary>Why “Cairn”?</summary><p>A cairn is a stack of stones that marks a path. The idea behind our name: a clearer next step when your Mac is full.</p></details><a href="docs-preview/index.html">Documentation</a><a href="#top">Back to top</a></div>
+        </nav>
+      </div>
+      <div class="shell footer-bottom"><span>© 2026 Cairn</span><span>Your code and AI conversations are never touched.</span></div>
+    </footer>
+
+    <dialog class="app-preview" aria-labelledby="preview-title" aria-describedby="preview-note">
+      <div class="preview-heading"><div><span>Inside Cairn</span><h2 id="preview-title">Overview</h2></div><button class="preview-close" type="button" autofocus>Close</button></div>
+      <div class="preview-choices" role="group" aria-label="Choose an app screen">
+        <button type="button" data-screen="overview" data-src="assets/app-shot-home.webp" data-alt="Cairn home screen with 38.6 GB you can get back and free space over 30 days" aria-pressed="true">Home</button>
+        <button type="button" data-screen="changes" data-src="assets/app-shot-clean.webp" data-alt="Cairn Clean screen: Xcode, Docker, project build files and npm ticked, 38.6 GB selected" aria-pressed="false">Clean</button>
+        <button type="button" data-screen="make-room" data-src="assets/app-shot-review.webp" data-alt="Cairn review card: check once, then free 38.6 GB from Xcode, Docker, node_modules and npm" aria-pressed="false">Review</button>
+        <button type="button" data-screen="developer" data-src="assets/app-shot-projects.webp" data-alt="Cairn Projects screen with 21.7 GB of build output across 8 coding projects" aria-pressed="false">Projects</button>
+        <button type="button" data-screen="result" data-src="assets/app-shot-result.webp" data-alt="Cairn Done screen: 38.6 GB freed, free space up from 42.6 GB to 81.2 GB" aria-pressed="false">Result</button>
+        <button type="button" data-screen="activity" data-src="assets/app-shot-activity.webp" data-alt="Cairn Activity screen: 31.1 GB freed this past month, with a receipt for every clean" aria-pressed="false">Activity</button>
+      </div>
+      <div class="preview-toolbar"><button class="preview-zoom" type="button" aria-pressed="false" aria-controls="preview-canvas">Actual size</button><a class="preview-original" href="assets/app-shot-home.webp" target="_blank" rel="noopener">Open image</a><span class="preview-hint" aria-live="polite">Choose Actual size to read the details.</span></div>
+      <div class="preview-image-wrap" id="preview-canvas" role="region" aria-label="App screenshot; scroll to inspect when viewing at actual size" tabindex="0"><img class="preview-image" width="2488" height="1600" alt="" /></div>
+      <p id="preview-note">Screens from the Cairn app, with example numbers.</p>
+    </dialog>
+
+  </body>
+</html>

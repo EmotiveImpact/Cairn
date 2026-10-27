@@ -4,7 +4,7 @@
 
 Cairn is a Mac app that shows you what is filling your disk and frees space safely. It is built for people who write code: it knows which caches, build folders and downloaded packages can be rebuilt, which projects you have not touched in weeks, and which things are yours and must never be touched.
 
-> **Status: not released yet.** There is no public download. Cairn is being tested on one Mac, and some of what is described below is still waiting in open pull requests. See [CHANGELOG.md](CHANGELOG.md) for what has changed and [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md) for known problems.
+> **Status: not released yet.** There is no public download. Cairn is being tested on one Mac. See [CHANGELOG.md](CHANGELOG.md) for what has changed and [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md) for known problems.
 
 ## What Cairn does
 
@@ -16,13 +16,18 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 - **Makes room three ways.** The Make room page gives each big item one choice: the Bin, an external SSD or the cloud. Moves to a drive check every file before the original goes, and app data keeps a link so the app still finds it. iPhone backups, simulators, Docker, AI models and your own folders can all move, and come back later.
 - **Plans the space you need.** Type how much room you need, or pick a macOS update, Xcode or Premiere, and Cairn picks the safest set that gets there, caches first.
 - **Knows games and chat apps.** A Games page finds Steam, Epic and CrossOver games and the ones a launcher left behind. A Chat apps page measures WhatsApp and Telegram and opens their own storage screens; Cairn never deletes chats.
-- **Also covers the rest of your Mac**: large and old files, duplicates, apps (who made each one, when it was last opened, and what it leaves behind when it goes in the Bin) and general Mac health.
+- **Puts idle projects to sleep.** Projects shows each repository's git state and warns about work that exists only on this Mac. Put a project to sleep and Cairn clears what it can rebuild and keeps a note of the command that brings it back.
+- **Lists your local AI models.** Ollama, LM Studio, Hugging Face, Whisper, ComfyUI and more, with their sizes, and nothing picked for you.
+- **Turns Apple Intelligence off, reversibly.** macOS 27 downloads 12 to 30 GB of Apple Intelligence models with no off switch. Cairn measures them, lets you choose which go, lists what stops working, and turns them off through a profile you approve in System Settings. One Undo brings everything back.
+- **Maps the whole disk.** One bar shows macOS, System Data, apps, coding, your files and free space, with System Data broken down.
+- **Runs cleaning rules you approve once**, such as old Xcode build files or package caches, on a schedule with a size limit, each run leaving a receipt.
+- **Also covers the rest of your Mac**: large and old files, duplicates, apps (who made each one, when it was last opened, and what it leaves behind when it goes in the Bin) and general Mac health. Messages attachments are measured and reviewed in Apple's own Storage screen; Cairn never deletes them.
 
 ## Works with your AI coding tools
 
 Cairn can link to AI coding tools that run on your Mac, so they can check your disk and tell you what can be freed. Connect them in one click from **Settings › AI tools**.
 
-Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.** Zed, opencode and Goose are in an open pull request (#14).
+Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Zed, opencode and Goose**, plus Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.
 
 Out of the box, AI tools can only look. You can also let them clean in **Settings › AI tools**: Off (the default), Ask me each time, or Let them clean safe junk. Only safe, rebuildable items qualify, and every plan lists each item, expires after 15 minutes and can be used once.
 
@@ -44,24 +49,16 @@ Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 - **Nothing harmful runs.** Commands that would destroy data, such as removing Docker volumes, are never used.
 - **Files are checked again** just before each action, in case anything changed since the scan.
 
-## Coming in open pull requests
-
-- **Apple Intelligence off switch (PR #18):** macOS 27 downloads 12 to 30 GB of Apple Intelligence models with no off switch. Cairn measures them, lets you choose which go, lists what stops working, and turns them off through a profile you approve in System Settings. One Undo brings everything back.
-- **Sleeping projects, AI models, disk map and cleaning rules (PR #14).**
-- **Hardening before the signed download (PR #11)**, **review totals that match the button (PR #12)** and **Messages attachments (PR #15)**.
-
-See [CHANGELOG.md](CHANGELOG.md) for the details of each.
-
 ## What's next
 
 In rough order of priority:
 
-1. **Merge the open work** above, safety fixes first.
-2. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
-3. **Buying a licence** on the website at cairnmac.com.
+1. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
+2. **Buying a licence** on the website at cairnmac.com.
+3. **Test the Apple Intelligence switch** on a Mac that has Apple Intelligence (macOS 15.1 or later).
 4. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
 5. **Update the website screenshots** to the new look.
-6. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive, once PR #14 is in.
+6. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive.
 7. **Larger text.** Cairn uses fixed text sizes, so the macOS text size setting doesn't change it yet.
 
 ## For developers

@@ -7,6 +7,8 @@ struct ReviewSheet: View {
     let store: ScanStore
     let proEnabled: Bool
     var goalPlan: ReviewedSpacePlan? = nil
+    /// Fixed items for the showcase screenshot. Nothing in a sample is ever cleaned.
+    var sample: ReviewSample? = nil
     var onDone: (ScanStore.CleanSummary) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -14,6 +16,10 @@ struct ReviewSheet: View {
     @State private var items: [ScanItem] = []
     @State private var expanded: Set<String> = []
     @State private var mode: RemovalMode = .smart
+    /// The list's own height, so the sheet is only as tall as what it holds.
+    @State private var listHeight: CGFloat?
+    /// The most the list takes before it scrolls: the old fixed sheet was 600 points.
+    private static let listRoom: CGFloat = 340
 
     private var runnable: [ScanItem] { items.filter { $0.isActionable && $0.severity != .risky } }
     private var skipped: [ScanItem] { items.filter { !$0.isActionable || $0.severity == .risky } }
@@ -35,18 +41,28 @@ struct ReviewSheet: View {
         }
     }
 
-    /// What the sheet offers: space freed now, or bytes that only move to the Trash.
+    /// The same total the button on the page showed, so the number never shrinks
+    /// on the way in. The note underneath says which part is freed now and which
+    /// part waits in the Trash.
     private var title: String {
+        if freedNow > 0 && toTrash > 0 { return "Clean \(Fmt.size(freedNow + toTrash))" }
         if freedNow > 0 { return "Free \(Fmt.size(freedNow))" }
         if toTrash > 0 { return "Move \(Fmt.size(toTrash)) to the Trash" }
         return "Nothing to free"
     }
     /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
-        guard freedNow > 0 else { return nil }
-        let removed = "Caches and build files are removed straight away and can't be put back. They rebuild on their own when needed."
-        guard toTrash > 0 else { return removed }
-        return removed + " Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back."
+        if freedNow > 0 && toTrash > 0 {
+            return "\(Fmt.size(freedNow)) of caches and build files is freed straight away. They rebuild on their own when needed. "
+                + "Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back. Empty the Trash to free that space too."
+        }
+        if freedNow > 0 {
+            return "Caches and build files are removed straight away and can't be put back. They rebuild on their own when needed."
+        }
+        if toTrash > 0 {
+            return "Your own files go to the Trash, where you can put them back. The space comes back when the Trash is emptied."
+        }
+        return nil
     }
 
     /// The review sheet from the reference (night-screens-v2.html, s2): eyebrow,
@@ -65,24 +81,26 @@ struct ReviewSheet: View {
                 LazyVStack(alignment: .leading, spacing: 0) {
                     ForEach(groups, id: \.id) { groupRow($0) }
                 }
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { if $0 > 0 { listHeight = $0 } }
             }
-            .frame(maxHeight: .infinity)
+            // A short list leaves no empty band above the buttons; a long one scrolls.
+            .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             notes
             footer
         }
         .padding(.vertical, 26).padding(.horizontal, 30)
-        .frame(width: 760, height: 600)
+        .frame(width: 760)
         .foregroundStyle(Brand.textPrimary)
         .background(Brand.surfaceElevated)
         .interactiveDismissDisabled(cleaning)
-        .task { mode = AppSettings.shared.removalMode; items = goalPlan?.items ?? store.selectedItems() }
+        .task { mode = sample == nil ? AppSettings.shared.removalMode : .smart; items = sample?.items ?? goalPlan?.items ?? store.selectedItems() }
     }
 
     /// Items grouped by the tool or area that made them, largest group first.
     private struct ReviewGroup { let id: String; let title: String; let items: [ScanItem]; let bytes: Int64 }
     private var groups: [ReviewGroup] {
         Dictionary(grouping: runnable, by: \.categoryID).map { id, items in
-            ReviewGroup(id: id, title: store.buckets.first { $0.id == id }?.info.title ?? id.capitalized,
+            ReviewGroup(id: id, title: store.buckets.first { $0.id == id }?.info.title ?? sample?.titles[id] ?? id.capitalized,
                   items: items.sorted { $0.allocatedSize > $1.allocatedSize },
                   bytes: items.reduce(0) { $0 + $1.allocatedSize })
         }
@@ -171,6 +189,12 @@ struct ReviewSheet: View {
     /// Shown only when they apply, as single quiet lines.
     private var noteLines: [(text: String, tint: Color)] {
         var lines: [(text: String, tint: Color)] = []
+        // The button is never greyed out without a reason on screen.
+        if !cleaning {
+            if store.isScanning { lines.append(("A scan is running. Freeing starts once it finishes.", Brand.amber)) }
+            else if store.isCleaning { lines.append(("Another clean is still running. Try again when it finishes.", Brand.amber)) }
+            else if runnable.isEmpty { lines.append(("Nothing here can be removed by Cairn.", Brand.amber)) }
+        }
         if hasPersonalFilesToDelete {
             lines.append(("Delete now is on in Settings, so your own files here are deleted for good, not sent to the Trash.", Brand.amber))
         }
@@ -210,7 +234,7 @@ struct ReviewSheet: View {
             } label: {
                 HStack(spacing: 8) {
                     if cleaning { ProgressView().controlSize(.small) }
-                    Text(cleaning ? "Freeing…" : freedNow > 0 ? "Free \(Fmt.size(freedNow))" : "Move to Trash")
+                    Text(cleaning ? "Freeing…" : title)
                 }
             }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
@@ -224,10 +248,34 @@ struct ReviewSheet: View {
     }
 
     private func runClean() async {
+        guard sample == nil, !CommandLine.arguments.contains("--preview-ui") else { dismiss(); return }
         cleaning = true
         let summary = await store.clean(items, proEnabled: proEnabled, reviewedPlan: goalPlan, removal: mode)
         cleaning = false
         onDone(summary)
         dismiss()
+    }
+}
+
+/// The review sheet's showcase contents: the website story's 38.6 GB, by tool.
+struct ReviewSample {
+    let items: [ScanItem]
+    let titles: [String: String]
+
+    static var showcase: ReviewSample {
+        let home = FileScan.home
+        func item(_ path: String, _ gigabytes: Double, _ category: String) -> ScanItem {
+            ScanItem(url: home.appendingPathComponent(path), allocatedSize: Int64(gigabytes * 1_000_000_000),
+                     categoryID: category, severity: .safe)
+        }
+        return ReviewSample(items: [
+            item("Library/Developer/Xcode/DerivedData", 14.2, "xcode"),
+            item("Library/Containers/com.docker.docker/Data/build-cache", 9.8, "docker"),
+            item("Developer/storefront-web/node_modules", 5.2, "dev-projects"),
+            item("Developer/design-system/node_modules", 2.5, "dev-projects"),
+            item("Developer/marketing-site/node_modules", 1.8, "dev-projects"),
+            item(".npm/_cacache", 5.1, "npm"),
+        ], titles: ["xcode": "Xcode build files", "docker": "Docker build cache",
+                    "dev-projects": "node_modules", "npm": "npm cache"])
     }
 }
