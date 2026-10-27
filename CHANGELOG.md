@@ -4,9 +4,9 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
-## Waiting to be merged
+## 27 October 2026
 
-These are finished or nearly finished in open pull requests, or built and waiting for one. None of it is on `master` yet.
+Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.
 
 ### Apple Intelligence off switch (PR #18)
 
@@ -14,15 +14,23 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **How it turns off.** Cairn never deletes a file in `/System`. It makes a profile that System Settings asks you to approve; the profile switches the features off and stops their models downloading again. Then Cairn asks macOS to remove the models itself.
 - **Undo.** One button opens System Settings to remove the profile, and everything comes back on. macOS downloads the models again the first time a feature needs them.
 - **Removing Cairn.** If Cairn goes in the Bin while the profile is still on, it offers to open System Settings so Apple Intelligence can be turned back on first.
-- Removing the models uses a part of macOS Apple doesn't publish, so a macOS update can stop it working. If it does, Cairn says so and removes nothing.
 - **Measuring.** Cairn reads the sizes from macOS's own list of models. If that list comes back in a form it can't read, it asks each set for its size instead, and shows a dash when neither answers.
+- Removing the models uses a part of macOS Apple doesn't publish, so a macOS update can stop it working. If it does, Cairn says so and removes nothing. It has been checked on a Mac without Apple Intelligence (macOS 14.5), where the page says so; it still needs a run on a Mac that has it.
 
-### Other open pull requests
+### Sleeping projects, AI models, disk map and cleaning rules (PR #14)
 
-- **Clean-up and hardening before the signed download (PR #11).** About 1,100 unused lines removed, deleting made harder to trick, the tools Cairn runs pinned to system paths, the AI tool cleaning setting sealed so it can't be switched on from outside, a stricter check of the app's own signature, the £35.99 price, and the site address moving to cairnmac.com.
-- **Review shows the same total as the button (PR #12).** The review names the whole selection, and items the safety guard would refuse are never listed.
-- **Sleeping projects, AI models page, disk map and cleaning rules (PR #14).** Put an idle project to sleep with a note of how to wake it, see its git status, list every local AI model, see the whole disk as a map with System Data broken down, approve cleaning rules that then run on their own, and link Zed, opencode and Goose.
-- **Messages attachments (PR #15).** Make room shows how much Messages keeps in photos and videos, and opens Apple's own Storage review to trim it. Cairn never deletes them itself.
+- **Put a project to sleep.** Projects shows each repository's git state (branch, changed files, commits not pushed). An idle project with work that exists only on this Mac gets an amber "Not pushed" label. "Put to sleep" selects the project's rebuildable output for the normal review and keeps a note with the command that brings it back, such as `pnpm install`. Sleeping projects are listed under Asleep with a "Copy wake-up command" button. Cairn never runs that command itself.
+- **AI models page.** Clean › AI Models lists every model from Ollama, LM Studio, Hugging Face, GPT4All, Jan, Whisper, PyTorch, ComfyUI, Stable Diffusion, Fooocus, InvokeAI, DiffusionBee and Draw Things, with its size and the date it was downloaded. Nothing is picked for you. A model can go to the Trash after a confirmation; Ollama models share files, so Cairn gives you the `ollama rm` command instead.
+- **Disk map.** Files › Disk map draws the whole disk as one bar: macOS, System Data, apps, coding, your files and free space, with what is inside the part you choose. System Data is broken into swap, app caches, app support data, containers, Xcode and simulators, Mail, Messages, logs, the shared Library and what Cairn could not measure (such as local Time Machine snapshots). It only reads sizes and stops after two minutes.
+- **Cleaning rules you approve once.** Settings › Rules has six rules: old Xcode build files, package manager caches, build output in idle projects, browser caches, app caches and old logs. All start off. Turning one on measures and shows what it would clear today before you approve it. Each has a schedule, an age, and a size limit per run, can be paused, uses the same safety checks and receipts as a normal clean, and only takes items an AI tool would also be allowed to clean. The same page has the single low-space warning from Monitoring.
+- **AI tool link for Zed, opencode and Goose, and Cursor files with comments.** Cairn now connects to 18 tools. Settings files with comments (Cursor, Zed, opencode) are edited in place so the comments stay. Goose's YAML file gets one `cairn` extension and nothing else changes.
+
+### Messages attachments (PR #15)
+
+- Cairn now shows how much space **Messages attachments** take, split into videos, photos and other files, with how much is over a year old. It shows them in the scan and on Make room.
+- Cairn never removes them itself, because deleting the files by hand leaves gaps in chats. A **Review in Storage** button opens System Settings, where Messages lists the largest attachments and deletes them properly. Messages stays on the protected list.
+- Measuring them needs Full Disk Access. Without it, the row is simply left out.
+- Make room's Bin choices now go through the normal review, limited to just those items.
 
 ### Review numbers that match, and no item that always fails (PR #12)
 
@@ -34,39 +42,23 @@ These are finished or nearly finished in open pull requests, or built and waitin
 
 ### Clean-up and hardening (PR #11)
 
-- **About 1,100 lines of unused code removed:** old item rows, the disk map, missions, the old sidebar device card, hero art and helpers nothing called. Two unused Mac pictures and three tool icons leave the app too.
-- **Deleting is harder to trick.** Protected folders are matched whatever the capital letters, system folders are refused under both of macOS's spellings, an item swapped at the last instant is put back instead of deleted, and permission changes never follow a link.
+- **About 1,100 lines of unused code removed:** old item rows, the old disk map, missions, the old sidebar device card, hero art and helpers nothing called. Two unused Mac pictures and three tool icons leave the app too.
+- **Deleting is harder to trick.** Protected folders are matched whatever the capital letters, system folders are refused under both of macOS's spellings, an item swapped at the last instant is put back instead of deleted, and permission changes never follow a link. Apple's own caches and Ollama's shared store (from PR #16) are matched whatever the capital letters too.
 - **Tools Cairn runs are pinned.** macOS tools always come from their system folder, other tool names must be plain names, and a program anyone could have replaced is refused.
 - **AI tools cannot switch their own cleaning on.** The setting is sealed with a Keychain secret, so a `defaults write` from outside Cairn counts as Off.
 - **Signature check covers the whole app** (every file and the hardened runtime), and the release build stops if the hardened runtime is off or an unsafe entitlement is present.
-- The no-trial and licence seal changes from PR #6 ship here too, with Pro at £35.99.
+- **Pro is £35.99, one time, with no trial.** The 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
+- **Harder to crack.** The developer switch that turned Pro on with one Terminal command is gone from the app that is sold. The saved licence is sealed to the Mac it was activated on, so a hand-made or copied record no longer unlocks Pro, and dates in the future are refused. Pro also stays off in a copy of Cairn whose code has been changed.
+- **The Buy link and the share card read cairnmac.com.**
 - [docs/SECURITY.md](docs/SECURITY.md) explains what is protected, what is realistic, the Polar settings to change, and how to set up signed Sparkle updates.
 
-### Messages attachments
-
-- Cairn now shows how much space **Messages attachments** take, split into videos, photos and other files, with how much is over a year old. It shows them in the scan and on Make room.
-- Cairn never removes them itself, because deleting the files by hand leaves gaps in chats. A **Review in Storage** button opens System Settings, where Messages lists the largest attachments and deletes them properly. Messages stays on the protected list.
-- Measuring them needs Full Disk Access. Without it, the row is simply left out.
-
-### Sleeping projects, AI models, disk map and cleaning rules (this branch)
-
-- **Put a project to sleep.** Projects shows each repository's git state (branch, changed files, commits not pushed). An idle project with work that exists only on this Mac gets an amber "Not pushed" label. "Put to sleep" selects the project's rebuildable output for the normal review and keeps a note with the command that brings it back, such as `pnpm install`. Sleeping projects are listed under Asleep with a "Copy wake-up command" button. Cairn never runs that command itself.
-- **AI models page.** Clean › AI Models lists every model from Ollama, LM Studio, Hugging Face, GPT4All, Jan, Whisper, PyTorch, ComfyUI, Stable Diffusion, Fooocus, InvokeAI, DiffusionBee and Draw Things, with its size and the date it was downloaded. Nothing is picked for you. A model can go to the Trash after a confirmation; Ollama models share files, so Cairn gives you the `ollama rm` command instead.
-- **Disk map.** Files › Disk map draws the whole disk as two rings: macOS, System Data, apps, coding, your files and free space, and what is inside each. System Data is broken into swap, app caches, app support data, containers, Xcode and simulators, Mail, Messages, logs, the shared Library and what Cairn could not measure (such as local Time Machine snapshots). Click a slice to look inside it. It only reads sizes and stops after two minutes.
-- **Cleaning rules you approve once.** Settings › Rules has six rules: old Xcode build files, package manager caches, build output in idle projects, browser caches, app caches and old logs. All start off. Turning one on measures and shows what it would clear today before you approve it. Each has a schedule, an age, and a size limit per run, can be paused, uses the same safety checks and receipts as a normal clean, and only takes items an AI tool would also be allowed to clean. The same page has the single low-space warning from Monitoring.
-- **AI tool link for Zed, opencode and Goose, and Cursor files with comments.** Cairn now connects to 18 tools. Settings files with comments (Cursor, Zed, opencode) are edited in place so the comments stay. Goose's YAML file gets one `cairn` extension and nothing else changes.
-
-### Website beam options (PR #6)
+### Website beam options and real app screenshots (PR #6)
 
 - A copy of the website with a light beam landing on the app screenshot, three hero layouts to choose from, a Wave hero to compare, and an optional beam in the footer. The original page is unchanged.
 - The scroll-story page (`website/v2/story.html`), with a footer ready for buying: Download for Mac and Buy Cairn Pro.
-- **Pro is £35.99, one time, with no trial.** The app's price line changes to match and the 14-day trial is removed, so Pro features need a key. The amount charged is set in Polar and needs changing there too.
-- **Harder to crack.** The developer switch that turned Pro on with one Terminal command is gone from the app that is sold. The saved licence is sealed to the Mac it was activated on, so a hand-made or copied record no longer unlocks Pro, and dates in the future are refused. Pro also stays off in a copy of Cairn whose code has been changed.
 - **Website screenshots of the real app.** `--showcase` captures every screen with the logo, sharp at Retina size, with sample numbers that match the website. The scroll-story page now uses them (`website/v2/assets/app-shot-*.webp`); the old mock-ups are kept. On phones the window starts at its left edge so the Cairn logo stays in view.
 - **The Done screen no longer warns "No Put Back recorded"** for files that were deleted outright. Those are gone on purpose, so the amber line only counts items really left in the Trash without a record.
 - **The review sheet fits its list.** A short list no longer leaves an empty band above the buttons; a long one still scrolls.
-
-## 27 October 2026
 
 ### Everything from the research (PR #17)
 
@@ -77,7 +69,7 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **Apps page.** Who made each app (from its signature), where it came from (App Store, Homebrew, downloaded or part of macOS), when it was last opened, and an "Intel only" filter for apps that stop working in macOS 28.
 - **Leftovers when an app goes in the Bin.** Drag an app to the Bin in Finder and Cairn's menu bar shows what it left behind, to review. Can be turned off in Settings › General.
 - **Faster Duplicates.** Hard links are no longer counted as copies, files are compared by their first part before a full read, and fingerprints are remembered between scans. The page now matches the approved design, suggests which copy to keep, and points to Apple's own Duplicates album for photos.
-- **Share your clean.** The Done screen has a Share button with a picture of the space freed, the three biggest kinds of thing cleared (can be hidden) and the site address (taken from the app's licence settings, so it reads cairnmac.com once PR #11 is in), to copy, save or share. It never shows file or folder names.
+- **Share your clean.** The Done screen has a Share button with a picture of the space freed, the three biggest kinds of thing cleared (can be hidden) and the site address, cairnmac.com, to copy, save or share. It never shows file or folder names.
 - **Held-back space explained.** When Cairn deleted more than free space rose by, the Done screen says how much has not shown up yet, and that macOS lets it go from snapshots or purgeable space on its own.
 - **Docker's real size.** Docker's disk shows what it really uses next to the maximum Finder shows.
 - **What Cairn looks for.** Settings › Scanning lists every place Cairn checks, written from the app itself, and `cairn rules` prints it as Markdown. The published copy is [docs/WHAT-CAIRN-LOOKS-FOR.md](docs/WHAT-CAIRN-LOOKS-FOR.md).
@@ -103,19 +95,6 @@ These are finished or nearly finished in open pull requests, or built and waitin
 - **Bring back** asks whether to remove the drive copy or keep it as a dated spare. Drives are known by their ID, and the menu bar names the drive to plug in when moved app data is away. Drives without a password get a warning before your own files go to them.
 - **iPhone backups** can move to a drive or go to the Bin, never while a backup is running.
 - **Cloud:** keep uploaded files online only, clear cloud caches and old sync folders, or move your own files to the cloud. Cairn waits for the upload and only then sends the original to the Bin, if it hasn't changed.
-
-## 24 October 2026
-
-### Make room (PR #9)
-
-- **One Make room page.** Every big item gets one choice: Bin, SSD or Cloud. Cairn suggests one, the footer shows the total and where it goes, and nothing happens until you confirm.
-- **Moving to an SSD really frees space now.** Each file is copied, checked against the original and read back from the drive before the Mac's copy is removed. App data gets a link back so apps still find it while the drive is plugged in. If Cairn stops halfway, it finishes the move or puts the original back.
-- **More can move:** Hugging Face, iOS simulators, Android SDK and emulators, Xcode build files, Docker (Cairn closes it, moves it and checks it starts again), your own files and folders, and iPhone backups.
-- **Bring back** asks whether to remove the drive copy or keep it as a dated spare.
-- **Drives without a password** get a warning before your own files or iPhone backups go to them, but you can carry on.
-- **iPhone backups** show the device, date and whether the backup has a password. They can move to a drive or go to the Bin, but never while a backup is running.
-- **Cloud:** keep files online only once they are uploaded (pinned files are left alone), see cloud caches and old sync folders, and move your own files to the cloud. Cairn waits for the upload and only bins the original if it hasn't changed.
-- The menu bar names the drive to plug in when moved app data is away.
 
 ## 23 October 2026
 
