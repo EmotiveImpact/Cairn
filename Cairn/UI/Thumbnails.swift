@@ -34,11 +34,6 @@ final class ThumbnailCache {
         store.setObject(image, forKey: key as NSString, cost: cost)
     }
 
-    /// Cancel queued (not yet started) work — call when a view goes away.
-    func drainQueue() {
-        lock.lock(); queue.removeAll(); pendingKeys.removeAll(); lock.unlock()
-    }
-
     private func enqueue(key: String, url: URL, side: CGFloat, scale: CGFloat,
                          done: @escaping (NSImage) -> Void) {
         lock.lock()

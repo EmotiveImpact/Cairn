@@ -20,9 +20,30 @@ enum AgentCleaningMode: String, CaseIterable, Identifiable, Sendable {
         }
     }
     static let key = "cairn.agentCleaning.v1"
-    /// The saved preference, readable off the main actor.
-    static var current: AgentCleaningMode {
+    static let sealKey = "cairn.agentCleaning.v1.seal"
+    /// The saved choice as written, for showing in Settings. Not proof that the
+    /// person made it; cleaning decisions use `current`.
+    static var saved: AgentCleaningMode {
         UserDefaults.standard.string(forKey: key).flatMap(AgentCleaningMode.init(rawValue:)) ?? .off
+    }
+    /// The choice the person made in Cairn. A value changed from outside Cairn
+    /// (`defaults write`, another app, an AI tool) has no valid seal and counts
+    /// as off. May read the Keychain once, so prefer `verified()` on the main actor.
+    static var current: AgentCleaningMode {
+        let mode = saved
+        guard mode != .off else { return .off }
+        return SettingsSeal.isSealed(mode.rawValue, for: key, seal: UserDefaults.standard.string(forKey: sealKey)) ? mode : .off
+    }
+    /// `current`, worked out off the main actor.
+    static func verified() async -> AgentCleaningMode {
+        await Task.detached(priority: .userInitiated) { AgentCleaningMode.current }.value
+    }
+    /// Saves a choice made in Cairn's Settings, with its seal.
+    static func save(_ mode: AgentCleaningMode) {
+        let defaults = UserDefaults.standard
+        defaults.set(mode.rawValue, forKey: key)
+        if mode == .off { defaults.removeObject(forKey: sealKey) }
+        else { defaults.set(SettingsSeal.seal(mode.rawValue, for: key), forKey: sealKey) }
     }
 }
 

@@ -88,7 +88,8 @@ final class AppSettings {
     var removalMode: RemovalMode { didSet { d.set(removalMode.rawValue, forKey: "cairn.removalMode") } }
 
     /// What AI tools connected through `Cairn mcp` may clean. Off by default.
-    var agentCleaning: AgentCleaningMode { didSet { d.set(agentCleaning.rawValue, forKey: AgentCleaningMode.key) } }
+    /// Saved with a seal, so only a choice made here counts (see `SettingsSeal`).
+    var agentCleaning: AgentCleaningMode { didSet { if agentCleaning != oldValue { AgentCleaningMode.save(agentCleaning) } } }
 
     // Restore Bin
     var restoreBinKeepDays: Int { didSet { d.set(restoreBinKeepDays, forKey: "cairn.restoreBinKeepDays") } }
@@ -126,7 +127,7 @@ final class AppSettings {
         includeDeveloperCaches = b("cairn.includeDeveloperCaches", true)
         includeSimulators = b("cairn.includeSimulators", true)
         removalMode = ud.string(forKey: "cairn.removalMode").flatMap(RemovalMode.init(rawValue:)) ?? .smart
-        agentCleaning = AgentCleaningMode.current
+        agentCleaning = AgentCleaningMode.saved   // checked against its seal when Settings opens
         restoreBinKeepDays = ud.object(forKey: "cairn.restoreBinKeepDays") == nil ? 30 : ud.integer(forKey: "cairn.restoreBinKeepDays")
         SafePaths.userExcluded = excludedPaths
     }

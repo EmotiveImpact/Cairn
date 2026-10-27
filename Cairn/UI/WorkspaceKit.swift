@@ -74,24 +74,6 @@ extension CairnWorkspace where Trailing == EmptyView {
     }
 }
 
-struct WorkspaceHeading: View {
-    var title: String
-    var subtitle: String
-    var icon: String
-    var value: String = ""
-    var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            HStack(spacing: 12) {
-                Image(systemName: icon).font(.system(size: 28, weight: .light)).foregroundStyle(Brand.textSecondary).frame(width: 38)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(subtitle).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
-                    Text(title).font(.system(size: 16, weight: .medium))
-                }
-            }
-            if !value.isEmpty { Text(value).font(.system(size: 30, weight: .light)).tracking(-0.8).monospacedDigit() }
-        }.padding(.top, 14)
-    }
-}
 struct WorkspaceDetail: View {
     var title: String
     var text: String
@@ -138,15 +120,6 @@ struct WorkspaceRow: View {
             .background(focused ? Brand.wash(0.035) : Color.clear)
         }
         .buttonStyle(.plain)
-    }
-}
-struct WorkspaceColumns: View {
-    var leading: String
-    var trailing: String
-    var body: some View {
-        HStack { Text(leading); Spacer(); Text(trailing) }
-            .font(.system(size: 11)).foregroundStyle(Brand.textSecondary)
-            .padding(.horizontal, 20).frame(height: 36).background(Brand.background)
     }
 }
 /// Plain words for an empty page, aligned with the rows. No icon box.

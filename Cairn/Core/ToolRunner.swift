@@ -27,7 +27,37 @@ enum ToolRunner {
         FileScan.home.appendingPathComponent(".cargo/bin").path,
     ]
 
+    /// Tools that come with macOS always run from their system location, never
+    /// from a look-alike placed earlier on the PATH. A program Cairn starts
+    /// shares Cairn's Full Disk Access, so this matters.
+    static let systemTools: [String: String] = [
+        "tmutil": "/usr/bin/tmutil", "xcrun": "/usr/bin/xcrun",
+        "diskutil": "/usr/sbin/diskutil", "pgrep": "/usr/bin/pgrep",
+    ]
+
+    /// A bare command name such as `docker` or `pnpm`: no paths, spaces or
+    /// shell characters, so it can be looked up safely.
+    static func isPlainName(_ tool: String) -> Bool {
+        guard !tool.isEmpty, tool.count <= 64, !tool.hasPrefix("-"), !tool.hasPrefix(".") else { return false }
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_."))
+        return tool.unicodeScalars.allSatisfy { $0.isASCII && allowed.contains($0) }
+    }
+
+    /// Refuse a program that anyone else could have replaced: one another user
+    /// owns, or one that every account on the Mac may write to.
+    static func isTrustworthy(_ path: String) -> Bool {
+        let real = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
+        var info = stat()
+        guard stat(real, &info) == 0, info.st_mode & S_IFMT == S_IFREG else { return false }
+        guard info.st_uid == 0 || info.st_uid == getuid() else { return false }
+        return info.st_mode & S_IWOTH == 0
+    }
+
     static func resolve(_ tool: String) -> String? {
+        if let fixed = systemTools[tool] {
+            return FileManager.default.isExecutableFile(atPath: fixed) ? fixed : nil
+        }
+        guard isPlainName(tool) else { return nil }
         cacheLock.lock()
         let hit = resolvedCache[tool]
         cacheLock.unlock()
@@ -35,11 +65,11 @@ enum ToolRunner {
 
         // Shell startup can run arbitrary user plugins. Never hold the cache lock
         // during that subprocess, and never let it block another scan forever.
-        var path = resolveViaLoginShell(tool)
+        var path = resolveViaLoginShell(tool).flatMap { isTrustworthy($0) ? $0 : nil }
         if path == nil {
             path = fallbackDirs.lazy
                 .map { ($0 as NSString).appendingPathComponent(tool) }
-                .first { FileManager.default.isExecutableFile(atPath: $0) }
+                .first { FileManager.default.isExecutableFile(atPath: $0) && isTrustworthy($0) }
         }
         cacheLock.lock()
         resolvedCache[tool] = path ?? ""

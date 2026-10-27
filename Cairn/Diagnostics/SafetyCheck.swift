@@ -26,6 +26,8 @@ enum SafetyCheck {
             "Library/Caches/com.openai.codex",
             "Library/Mobile Documents", "Library/CloudStorage/Dropbox",
             "Library/Keychains", ".ssh/id_rsa", "Documents/tax.pdf",
+            // The Mac's disk ignores case, so the protected list must too.
+            "library/keychains", "LIBRARY/Mobile Documents", "documents/tax.pdf", ".SSH/id_rsa", ".Claude/projects",
         ]
         var fails = 0
         for rel in mustBlock {
@@ -36,6 +38,12 @@ enum SafetyCheck {
             if SafePaths.evaluate(u, allowedRoots: [home], rebuildable: true).isAllowed {
                 print("❌ ALLOWED as rebuildable (should be blocked): \(rel)"); fails += 1
             }
+        }
+        // System folders stay protected under either spelling macOS uses.
+        for path in ["/private/var/db/foo", "/var/db/foo", "/private/etc/hosts", "/etc/hosts", "/dev/disk0", "/System/Volumes/Data/Users"] {
+            if SafePaths.evaluate(URL(fileURLWithPath: path), allowedRoots: [URL(fileURLWithPath: "/")]).isAllowed {
+                print("❌ ALLOWED (should be blocked): \(path)"); fails += 1
+            } else { print("✅ blocked: \(path)") }
         }
         // Rebuildable project output may be deleted even where personal files may not.
         let mustBlockRebuildable = [
@@ -136,6 +144,15 @@ enum SafetyCheck {
             fails += 1
         }
 
+        // Tool names are looked up only when they are plain names, and the
+        // tools macOS ships always come from their system folder.
+        let unsafeNames = ["docker; rm -rf ~", "../bin/docker", "-c", "a b", "$(id)", "/usr/bin/docker", "", "`id`"]
+        if unsafeNames.allSatisfy({ !ToolRunner.isPlainName($0) && ToolRunner.resolve($0) == nil })
+            && ["docker", "pnpm", "go", "uv", "conda"].allSatisfy(ToolRunner.isPlainName)
+            && ToolRunner.resolve("tmutil") == "/usr/bin/tmutil" && ToolRunner.resolve("xcrun") == "/usr/bin/xcrun" {
+            print("✅ tool lookup refuses odd names and pins system tools")
+        } else { print("❌ tool lookup accepted an unsafe name or an unpinned system tool"); fails += 1 }
+
         // Tool commands run only with an explicit argument array; commands that
         // destroy data never run. A stale review item for a real cache path must
         // fail the identity check without touching it.
@@ -213,6 +230,29 @@ enum SafetyCheck {
                 print("✅ delete-now removes the item instead of parking it in Trash")
             } else {
                 print("❌ delete-now left data behind: \(deleteResult.error ?? "unknown")")
+                fails += 1
+            }
+
+            // A folder swapped in at the last instant (the trick a link attack
+            // relies on) is put back, and nothing is deleted.
+            let target = deleteRoot.appendingPathComponent("swap-target")
+            try FileManager.default.createDirectory(at: target, withIntermediateDirectories: false)
+            try Data(repeating: 3, count: 4096).write(to: target.appendingPathComponent("blob"))
+            var swapItem = ScanItem(url: target, allocatedSize: 4096, categoryID: "fixture", severity: .safe, selected: true)
+            swapItem.deleteImmediately = true
+            let aside = deleteRoot.appendingPathComponent("swap-original")
+            let swappedTrash = fixtureTrash.appendingPathComponent("swap-target")
+            let swapResult = Cleaner.clean(swapItem, allowedRoots: [deleteRoot], proEnabled: false, moveToTrash: { url in
+                try FileManager.default.moveItem(at: url, to: aside)
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false)
+                try FileManager.default.moveItem(at: url, to: swappedTrash); return swappedTrash
+            })
+            if !swapResult.ok && !swapResult.deleted && FileManager.default.fileExists(atPath: target.path)
+                && FileManager.default.fileExists(atPath: aside.appendingPathComponent("blob").path)
+                && !FileManager.default.fileExists(atPath: swappedTrash.path) {
+                print("✅ an item swapped while moving is put back and nothing is deleted")
+            } else {
+                print("❌ a swapped item was not caught: \(swapResult.error ?? "no error")")
                 fails += 1
             }
 

@@ -330,9 +330,6 @@ final class DuplicateStore {
     var hasScanned: Bool { phase == .finished || phase == .cancelled }
 
     // MARK: Derived stats
-    var groupCount: Int { groups.count }
-    /// Mockup "duplicate files" = every redundant copy (all copies minus one keeper per group).
-    var duplicateFileCount: Int { groups.reduce(0) { $0 + max(0, $1.count - 1) } }
     /// Historical property name; this is extra-copy file size, not capacity gain.
     var reclaimableBytes: Int64 { groups.reduce(0) { $0 + $1.reclaimableSize } }
     var selectedCopyCount: Int { groups.reduce(0) { $0 + $1.files.lazy.filter { $0.selected }.count } }
@@ -491,18 +488,6 @@ final class DuplicateStore {
         }
     }
 
-    /// Keep the recommended (canonical/oldest) copy, stage all others for removal.
-    func keepBest(_ groupID: UUID) {
-        guard !isRemoving else { return }
-        guard let gi = groups.firstIndex(where: { $0.id == groupID }) else { return }
-        let keeperID = Self.recommendedKeeperID(groups[gi].files)
-        for fi in groups[gi].files.indices {
-            let keep = groups[gi].files[fi].id == keeperID
-            groups[gi].files[fi].isKeeper = keep
-            groups[gi].files[fi].selected = !keep
-        }
-    }
-
     /// Select every non-keeper copy across all groups.
     func autoSelectRecommended() {
         guard !isRemoving else { return }
@@ -518,12 +503,6 @@ final class DuplicateStore {
         for gi in groups.indices {
             for fi in groups[gi].files.indices { groups[gi].files[fi].selected = false }
         }
-    }
-
-    func revealSelectedInFinder() {
-        let urls = groups.flatMap { $0.files }.filter { $0.selected }.map { $0.resolvedURL }
-        guard !urls.isEmpty else { return }
-        NSWorkspace.shared.activateFileViewerSelecting(urls)
     }
 
     // MARK: Removal (recoverable — Trash only)

@@ -27,8 +27,12 @@ enum SafePaths {
     static let home = FileManager.default.homeDirectoryForCurrentUser.resolvingSymlinksInPath()
 
     /// Absolute roots that are NEVER deletable, whatever a scanner declares.
+    /// macOS shows some of these both with and without `/private` (resolving a
+    /// link turns `/private/var/db` into `/var/db`), so both spellings are listed.
     static let denyAbsolutePrefixes: [String] = [
-        "/System", "/Library", "/usr", "/bin", "/sbin", "/private/var/db",
+        "/System", "/Library", "/usr", "/bin", "/sbin",
+        "/private/var/db", "/var/db", "/private/var/root", "/var/root",
+        "/private/etc", "/etc", "/dev", "/cores",
         "/nix",            // Nix store — advice only, never user-rm-safe
         "/Applications",   // never delete app bundles in v1
         // A macOS update in progress. Removing it too early can leave the Mac
@@ -71,7 +75,7 @@ enum SafePaths {
                      url.resolvingSymlinksInPath().standardizedFileURL]
         for configured in protectedSessionRoots {
             let root = URL(fileURLWithPath: configured).resolvingSymlinksInPath().standardizedFileURL.path
-            if paths.contains(where: { isUnder($0.path, root) || isUnder($0.path, configured) }) {
+            if paths.contains(where: { isUnderIgnoringCase($0.path, root) || isUnderIgnoringCase($0.path, configured) }) {
                 return "protected custom conversation location"
             }
         }
@@ -133,7 +137,7 @@ enum SafePaths {
             if path.split(separator: "/").contains(where: { $0.lowercased().hasPrefix("com.apple.e5rt") }) {
                 return "Apple's Neural Engine model cache, which macOS needs"
             }
-            for root in roots where path != root && isUnder(path, root) {
+            for root in roots where path.lowercased() != root.lowercased() && isUnderIgnoringCase(path, root) {
                 let first = path.dropFirst(root.count + 1).split(separator: "/").first.map { $0.lowercased() } ?? ""
                 if knownSafeAppleCaches.contains(first) { continue }
                 if first.hasPrefix("com.apple.") || appleCacheNames.contains(first) {
@@ -153,7 +157,7 @@ enum SafePaths {
                             .appendingPathComponent(".ollama/models").standardizedFileURL.path])
         let paths = [url.standardizedFileURL.path, url.resolvingSymlinksInPath().standardizedFileURL.path]
         for path in paths {
-            for store in stores where path != store && isUnder(path, store) {
+            for store in stores where path.lowercased() != store.lowercased() && isUnderIgnoringCase(path, store) {
                 return "Ollama models share files, so part of one cannot go on its own; use ollama rm"
             }
         }
@@ -184,7 +188,7 @@ enum SafePaths {
         let paths = [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
         for configured in protectedSessionRoots {
             let root = URL(fileURLWithPath: configured).resolvingSymlinksInPath().standardizedFileURL.path
-            if paths.contains(where: { isUnder($0.path, root) || isUnder($0.path, configured) }) {
+            if paths.contains(where: { isUnderIgnoringCase($0.path, root) || isUnderIgnoringCase($0.path, configured) }) {
                 return "protected custom conversation location"
             }
         }
@@ -212,29 +216,34 @@ enum SafePaths {
 
         // App support and cache folders under ~/Library keep the full agent-name
         // guard; the narrower one is for project build output only.
-        let projectArtifact = rebuildable && !isUnder(path, home.appendingPathComponent("Library").path)
+        let projectArtifact = rebuildable && !isUnderIgnoringCase(path, home.appendingPathComponent("Library").path)
         if let reason = projectArtifact ? rebuildableAncestorReason(url) : protectedSessionReason(url) { return .reject(reason) }
 
-        // Denylist always wins.
-        for prefix in denyAbsolutePrefixes where isUnder(path, prefix) {
+        // Denylist always wins. It is checked against both the path as given and
+        // where it really leads, ignoring upper and lower case: the Mac's disk
+        // treats ~/library/keychains as ~/Library/Keychains.
+        let spellings = [resolved, url.standardizedFileURL]
+        for prefix in denyAbsolutePrefixes where spellings.contains(where: { isUnderIgnoringCase($0.path, prefix) }) {
             return .reject("protected system location (\(prefix))")
         }
         if let reason = appleCacheReason(url) ?? sharedModelStoreReason(url) { return .reject(reason) }
-        for comp in denyComponents where resolved.pathComponents.contains(where: { $0.hasSuffix(comp) }) {
+        for comp in denyComponents where spellings.contains(where: { $0.pathComponents.contains(where: { $0.lowercased().hasSuffix(comp) }) }) {
             return .reject("protected library bundle (\(comp))")
         }
         for rel in denyHomeRelative {
             let denied = home.appendingPathComponent(rel).path
-            // Project build output inside ~/Documents is still build output.
-            if rebuildable && rel == "Documents" && path != denied
-                && resolved.pathComponents.contains(where: projectArtifactNames.contains) { continue }
-            if path == denied || isUnder(path, denied) {
-                return .reject("protected data location (~/\(rel))")
+            for spelling in spellings {
+                // Project build output inside ~/Documents is still build output.
+                if rebuildable && rel == "Documents" && spelling.path.lowercased() != denied.lowercased()
+                    && spelling.pathComponents.contains(where: projectArtifactNames.contains) { continue }
+                if isUnderIgnoringCase(spelling.path, denied) {
+                    return .reject("protected data location (~/\(rel))")
+                }
             }
         }
         for ex in userExcluded {
             let resolvedEx = URL(fileURLWithPath: ex).resolvingSymlinksInPath().standardizedFileURL.path
-            if isUnder(path, resolvedEx) || isUnder(url.standardizedFileURL.path, ex) {
+            if spellings.contains(where: { isUnderIgnoringCase($0.path, resolvedEx) || isUnderIgnoringCase($0.path, ex) }) {
                 return .reject("excluded by you in Settings")
             }
         }
@@ -259,7 +268,7 @@ enum SafePaths {
         if rebuildable {
             for excluded in userExcluded {
                 let resolvedEx = URL(fileURLWithPath: excluded).resolvingSymlinksInPath().standardizedFileURL.path
-                if isUnder(resolvedEx, root.path) || isUnder(excluded, url.standardizedFileURL.path) {
+                if isUnderIgnoringCase(resolvedEx, root.path) || isUnderIgnoringCase(excluded, url.standardizedFileURL.path) {
                     return .reject("contains a location excluded in Settings")
                 }
             }
@@ -291,7 +300,7 @@ enum SafePaths {
             // Removing a parent must not bypass an exclusion on its child.
             let resolved = child.resolvingSymlinksInPath().standardizedFileURL.path
             for excluded in excludedRoots {
-                if isUnder(child.path, excluded) || isUnder(resolved, excluded) { return .reject("contains a location excluded in Settings") }
+                if isUnderIgnoringCase(child.path, excluded) || isUnderIgnoringCase(resolved, excluded) { return .reject("contains a location excluded in Settings") }
             }
             if denyComponents.contains(where: { child.lastPathComponent.lowercased().hasSuffix($0) }) {
                 return .reject("contains a protected library bundle")
@@ -307,5 +316,11 @@ enum SafePaths {
         if path == prefix { return true }
         let p = prefix.hasSuffix("/") ? prefix : prefix + "/"
         return path.hasPrefix(p)
+    }
+
+    /// `isUnder` for the protected lists, which must not be dodged by changing
+    /// the case of a folder name on a disk that ignores case.
+    static func isUnderIgnoringCase(_ path: String, _ prefix: String) -> Bool {
+        isUnder(path.lowercased(), prefix.lowercased())
     }
 }

@@ -50,7 +50,7 @@ import Darwin
             let missing: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { _, _ in errSecItemNotFound })
             check(missing == nil, "Only a missing Keychain item is treated as absent")
         } catch { check(false, "Missing item decoding") }
-        rejects("Locked Keychain is an error, not a new trial") {
+        rejects("Locked Keychain is an error, not a missing item") {
             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
                 check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
                 return errSecInteractionNotAllowed
@@ -72,17 +72,17 @@ import Darwin
         let lazyRead = CancelBox()
         let deferred = LicenseManager(loadLocal: {
             lazyRead.cancel()
-            return LocalLicenseState(trialStart: Date(), license: nil)
+            return LocalLicenseState(license: nil)
         }, checkOnline: false, honorDevUnlock: false)
         try? await Task.sleep(nanoseconds: 100_000_000)
         check(!lazyRead.isCancelled && !deferred.hasRequestedStorage, "Default startup performs no Keychain access")
         await deferred.loadIfNeeded()
-        check(lazyRead.isCancelled && deferred.hasRequestedStorage && deferred.isInTrial, "Opening license settings loads entitlement on demand")
+        check(lazyRead.isCancelled && deferred.hasRequestedStorage && !deferred.isLoading && !deferred.isUnlocked && deferred.storageMessage == nil, "Opening license settings loads entitlement on demand")
         let releaseKeychain = DispatchSemaphore(value: 0)
         let before = Date()
         let slow = LicenseManager(loadLocal: {
             _ = releaseKeychain.wait(timeout: .now() + 8)
-            return LocalLicenseState(trialStart: Date(), license: nil)
+            return LocalLicenseState(license: nil)
         }, automatic: false, checkOnline: false, honorDevUnlock: false)
         check(Date().timeIntervalSince(before) < 0.2, "License construction performs no blocking read")
         let loading = Task { await slow.reloadStorage() }
@@ -93,10 +93,24 @@ import Darwin
         check(slow.storageMessage?.contains("longer") == true, "Slow Keychain check explains the delay")
         releaseKeychain.signal()
         await loading.value
-        check(!slow.isLoading && slow.isInTrial, "Delayed result finishes without rebuilding the window")
+        check(!slow.isLoading && slow.storageMessage == nil && !slow.isUnlocked, "Delayed result finishes without rebuilding the window")
         let denied = LicenseManager(loadLocal: { throw LicenseStorageError.keychain(errSecInteractionNotAllowed) }, automatic: false, checkOnline: false, honorDevUnlock: false)
         await denied.reloadStorage()
-        check(!denied.isLoading && !denied.isUnlocked && denied.storageMessage != nil, "Denied Keychain leaves free UI available and no false trial")
+        check(!denied.isLoading && !denied.isUnlocked && denied.storageMessage != nil, "Denied Keychain leaves free UI available and no false unlock")
+
+        // A saved licence counts offline only when this Mac sealed it, recently.
+        var sealed = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date(), granted: true)
+        check(!sealed.grantsOffline, "A hand-written licence record does not unlock Pro")
+        sealed.reseal()
+        check(sealed.grantsOffline, "A licence record sealed on this Mac unlocks Pro offline")
+        var edited = sealed; edited.key = "OTHER-KEY"
+        check(!edited.grantsOffline, "An edited licence record does not unlock Pro")
+        var future = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date().addingTimeInterval(365 * 86_400), granted: true)
+        future.reseal()
+        check(!future.grantsOffline, "A licence record dated in the future does not unlock Pro")
+        var stale = StoredLicense(key: "FIXTURE-KEY", activationID: "fixture", lastValidated: Date().addingTimeInterval(-LicenseConfig.offlineGrace - 60), granted: true)
+        stale.reseal()
+        check(!stale.grantsOffline, "Pro needs an online check after the offline grace period")
 
         let gate = ScanGate()
         let first = await gate.acquire()

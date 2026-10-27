@@ -26,10 +26,6 @@ struct OverviewWorkspace: View {
         return "\(sample.date.formatted(date: .abbreviated, time: .shortened)) · \(Fmt.size(sample.available)) available"
     }
     private let preview = CommandLine.arguments.contains("--preview-ui")
-    private var canOpenScanResults: Bool {
-        if preview { return CommandLine.arguments.contains("--preview-overview-results") }
-        return store.hasLiveResults && (store.phase == .finished || store.buckets.contains { !$0.items.isEmpty })
-    }
     private var history: [CapacityReading] {
         if preview && !CommandLine.arguments.contains("--preview-empty-overview") { return Self.sampleHistory }
         return preview ? [] : control.latestCapacity
@@ -106,13 +102,6 @@ struct OverviewWorkspace: View {
     private var shownReserve: Int64? {
         if preview { return PreviewStorageScenario.reserveBytes }
         return AppSettings.shared.reserveEnabled ? control.reserveBytes : nil
-    }
-    private var lowSpace: Bool {
-        displayedCapacity.map { $0.total > 0 && Double($0.available) / Double($0.total) < 0.05 } ?? false
-    }
-    private var storageHeadline: String {
-        guard displayedCapacity != nil else { return "Checking available storage." }
-        return lowSpace ? "Your Mac is running low on space" : "This Mac"
     }
     /// Height the chart can take so Home fits the window without scrolling.
     /// Everything else on the page is about 600 pt tall at the default size.

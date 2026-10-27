@@ -232,10 +232,6 @@ enum ReserveAlertPolicy {
     var latestCapacity: [CapacityReading] { CapacitySeries.visible(stored: capacity, current: current) }
     var currentAvailable: Int64? { current?.available }
     var reserveBytes: Int64 { Int64(AppSettings.shared.reserveGB) * 1_000_000_000 }
-    var reserveShortfall: Int64? {
-        guard AppSettings.shared.reserveEnabled, let free = currentAvailable else { return nil }
-        return max(0, reserveBytes - free)
-    }
     private func apply(_ snapshot: StorageEvidenceSnapshot) {
         guard snapshot.sequence >= sequence else { return }
         sequence = snapshot.sequence
