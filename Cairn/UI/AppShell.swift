@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, creative, chatApps, lookThrough, largeFiles, duplicates, apps, games, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, appleIntelligence, creative, chatApps, lookThrough, largeFiles, duplicates, apps, games, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -18,6 +18,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .browsers: return "Browsers"
         case .developer: return "Developer Cleanup"
         case .ai: return "AI Models"
+        case .appleIntelligence: return "Apple Intelligence"
         case .creative: return "Creative Pro"
         case .chatApps: return "Chat apps"
         case .lookThrough: return "Look through"
@@ -45,6 +46,7 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .browsers: return "globe"
         case .developer: return "chevron.left.forwardslash.chevron.right"
         case .ai: return "brain.head.profile"
+        case .appleIntelligence: return "sparkle"
         case .creative: return "film"
         case .chatApps: return "bubble.left"
         case .lookThrough: return "tray.full"
@@ -254,6 +256,7 @@ struct AppShell: View {
             storageStore.load()
             TrashWatch.shared.onLeftovers = { CairnMenuBar.shared.showLeftovers($0) }
             TrashWatch.shared.start()
+            AppleIntelligence.RemovalWatch.shared.start()
             appStore.onRemovals = { [store] in await store.appendRemovals($0) }
             dupStore.onRemovals = { [store] in await store.appendRemovals($0) }
             healthStore.onRemovals = { [store] in await store.appendRemovals($0) }
@@ -381,7 +384,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .appleIntelligence, .storage, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -551,6 +554,8 @@ struct AppShell: View {
                             onOpen: { section = $0 })
         case .chatApps:
             ChatAppsWorkspace(store: store, onReview: { if !previewMode { showReview = true } })
+        case .appleIntelligence:
+            AppleIntelligenceWorkspace()
         case .games:
             GamesWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .smartScan, .general, .browsers, .developer, .ai, .creative:
@@ -599,7 +604,7 @@ struct NavSidebar: View {
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
-    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .chatApps, .bugs]
+    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .appleIntelligence, .creative, .chatApps, .bugs]
     private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
 
     var body: some View {
@@ -683,6 +688,7 @@ private struct SidebarDisclosure: View {
                                   item == .developer ? "Developer" :
                                   item == .creative ? "Creative" :
                                   item == .bugs ? "Mac health" :
+                                  item == .appleIntelligence ? "Apple AI" :
                                   item == .storage ? "External storage" : nil)
                 }
             }

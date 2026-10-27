@@ -14,7 +14,9 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 - **Proves what it freed.** Every clean leaves a receipt. When macOS confirms the free space went up, the receipt says Verified.
 - **Keeps watch from the menu bar.** It shows space ready to free, idle projects and anything that has grown fast.
 - **Makes room three ways.** The Make room page gives each big item one choice: the Bin, an external SSD or the cloud. Moves to a drive check every file before the original goes, and app data keeps a link so the app still finds it. iPhone backups, simulators, Docker, AI models and your own folders can all move, and come back later.
-- **Also covers the rest of your Mac**: large and old files, duplicates, apps you no longer use and general Mac health.
+- **Plans the space you need.** Type how much room you need, or pick a macOS update, Xcode or Premiere, and Cairn picks the safest set that gets there, caches first.
+- **Knows games and chat apps.** A Games page finds Steam, Epic and CrossOver games and the ones a launcher left behind. A Chat apps page measures WhatsApp and Telegram and opens their own storage screens; Cairn never deletes chats.
+- **Also covers the rest of your Mac**: large and old files, duplicates, apps (who made each one, when it was last opened, and what it leaves behind when it goes in the Bin) and general Mac health.
 
 ## Works with your AI coding tools
 
@@ -44,8 +46,7 @@ Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 
 ## Coming in open pull requests
 
-- **Research features (PR #17):** a Games page, a Chat apps page for WhatsApp and Telegram, "I need X GB" (type the space you need and Cairn plans the safest way there), who made each app and when it was last opened, leftovers when an app goes in the Bin, faster Duplicates, a share card on the Done screen, and a list of everything Cairn looks for.
-- **Apple Intelligence off switch (after that):** macOS 27 downloads 12 to 30 GB of Apple Intelligence models with no off switch. Cairn measures them, lets you choose which go, lists what stops working, and turns them off through a profile you approve in System Settings. One Undo brings everything back.
+- **Apple Intelligence off switch (PR #18):** macOS 27 downloads 12 to 30 GB of Apple Intelligence models with no off switch. Cairn measures them, lets you choose which go, lists what stops working, and turns them off through a profile you approve in System Settings. One Undo brings everything back.
 - **Sleeping projects, AI models, disk map and cleaning rules (PR #14).**
 - **Hardening before the signed download (PR #11)**, **review totals that match the button (PR #12)** and **Messages attachments (PR #15)**.
 
