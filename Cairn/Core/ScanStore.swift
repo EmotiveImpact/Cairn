@@ -172,6 +172,8 @@ final class ScanStore {
 
     private var scanTask: Task<Void, Never>?
     private var bucketIndex: [String: Int] = [:]
+    /// Each scanner's permitted roots, so a finding the safety guard would refuse is never listed.
+    private var scanRoots: [String: [URL]] = [:]
     /// Every path already listed in this scan. Scanners overlap (an installer is also an
     /// old download; a Chrome cache sits inside the Google cache), so each byte is counted once.
     private var dedupe = PathDedupe()
@@ -433,6 +435,7 @@ final class ScanStore {
         // Seed buckets in registry order so the sidebar is stable while scanning.
         buckets = scanners.map { Bucket(info: $0.info) }
         bucketIndex = Dictionary(uniqueKeysWithValues: buckets.enumerated().map { ($1.id, $0) })
+        scanRoots = Dictionary(scanners.map { ($0.info.id, $0.allowedRoots) }, uniquingKeysWith: { a, _ in a })
         dedupe = PathDedupe()
         activeComparisonScope = comparisonScope()
         phase = .scanning
@@ -534,6 +537,11 @@ final class ScanStore {
         if !AppSettings.shared.includeDeveloperCaches && item.categoryID == "dev-caches" { return }
         if !AppSettings.shared.includeSimulators && item.resolvedURL.path.contains("/CoreSimulator/") { return }
         guard let i = bucketIndex[item.categoryID] else { return }
+        // Never offer what the clean would refuse (for example a build folder inside
+        // ~/.cursor): it could be ticked and counted, then fail every single time.
+        if case .trash = item.cleanMethod,
+           !SafePaths.evaluate(item.url, allowedRoots: scanRoots[item.categoryID] ?? [FileScan.home],
+                               rebuildable: item.isRebuildable).isAllowed { return }
         guard case .keep(let replaced) = dedupe.admit(item) else { return }
         if !replaced.isEmpty {
             for b in buckets.indices { buckets[b].removeItems { replaced.contains(PathDedupe.key($0)) } }

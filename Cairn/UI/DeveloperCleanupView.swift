@@ -74,7 +74,8 @@ struct DeveloperCleanupView: View {
                 }
             }
         } footer: {
-            NightTotal(strong: Fmt.size(pageSelectedBytes), rest: footerNote)
+            // The same total as the button, including picks on other pages.
+            NightTotal(strong: Fmt.size(outsideSelectedCount > 0 ? store.selectedTotal : pageSelectedBytes), rest: footerNote)
             Spacer()
             if pageSelected.isEmpty {
                 Button("Select all ready") { selectAllReady() }
@@ -100,7 +101,7 @@ struct DeveloperCleanupView: View {
         if !pageSelected.isEmpty {
             note += pageSelected.allSatisfy(\.isRegenerable) ? " · rebuilt on their own" : " · \(pageSelected.count) items"
         }
-        if outsideSelectedCount > 0 { note += " · plus \(outsideSelectedCount) from other pages" }
+        if outsideSelectedCount > 0 { note += " · including \(outsideSelectedCount) from other pages" }
         return note
     }
 
