@@ -95,6 +95,9 @@ final class ScanStore {
         var accounting = CleanupAccounting()
         var capacityChanges: [CleanupCapacityChange] = []
         var interrupted = false
+        /// Space each kind of thing took up, for the share card: kinds only,
+        /// never file names. Optional so older receipts still decode.
+        var cleared: [String: Int64]? = nil
         var trashed: Int { accounting.completedCount } // legacy view name: all completed actions
         var bytes: Int64 { accounting.estimatedAffectedBytes }
         var recoverableCount: Int { accounting.recordedRecoveryCount }
@@ -626,6 +629,26 @@ final class ScanStore {
         }
     }
 
+    /// An app that just went in the Bin: list what it left behind with the
+    /// other leftovers and select only those, so the normal review takes it
+    /// from here. Nothing else in the results changes.
+    func addLeftovers(_ items: [ScanItem]) {
+        guard !isScanning, !isCleaning, !items.isEmpty else { return }
+        if bucketIndex["orphaned"] == nil {
+            buckets.append(Bucket(info: OrphanedAppDataScanner().info))
+            bucketIndex["orphaned"] = buckets.count - 1
+        }
+        guard let index = bucketIndex["orphaned"] else { return }
+        clearSelection()
+        let paths = Set(items.map { $0.resolvedURL.standardizedFileURL.path })
+        buckets[index].removeItems { paths.contains($0.resolvedURL.standardizedFileURL.path) }
+        for item in items where !AppSettings.shared.isExcluded(item.resolvedURL) && !InUse.holdsCairn(item) {
+            buckets[index].append(item)
+        }
+        let ids = Set(items.map(\.id))
+        select { item, _ in ids.contains(item.id) }
+    }
+
     /// Safe, rebuildable findings: what "Clean recommended" removes.
     var recommendedItems: [ScanItem] {
         buckets.flatMap { $0.items.filter { $0.severity == .safe && $0.isRegenerable && $0.isActionable } }
@@ -812,6 +835,9 @@ final class ScanStore {
             }
             lifecycleCheckpoint("recovery")
             summary.accounting.record(outcome, recoveryRecorded: logEntry != nil)
+            if outcome.ok {
+                summary.cleared = (summary.cleared ?? [:]).merging([ShareCard.kind(of: item): max(0, outcome.bytesAffected)], uniquingKeysWith: +)
+            }
             if !journalSaved {
                 summary.interrupted = true
                 summary.errors.append(journal.error ?? "Action outcome could not be recorded; further cleanup stopped.")

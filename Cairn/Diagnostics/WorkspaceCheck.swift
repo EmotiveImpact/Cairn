@@ -56,7 +56,7 @@ enum WorkspaceCheck {
         let badCategory = MCPServer.handle(["jsonrpc": "2.0", "id": 4, "method": "tools/call", "params": ["name": "find_reclaimable", "arguments": ["category": "__no_such_category__"]] as [String: Any]])?["result"] as? [String: Any]
         check(badCategory?["isError"] as? Bool == true, "MCP rejects an unknown category before scanning")
         check(MCPServer.handle(["jsonrpc": "2.0", "id": 5, "method": "nope"])?["error"] != nil, "MCP reports unknown methods")
-        check(CLI.readOnlyCommands == ["status", "scan", "categories", "projects", "mcp", "help", "--help", "-h"], "Only read-only CLI commands run beside the app")
+        check(CLI.readOnlyCommands == ["status", "scan", "categories", "rules", "projects", "mcp", "help", "--help", "-h"], "Only read-only CLI commands run beside the app")
         check(!CLI.readOnlyCommands.contains("clean"), "The clean command never runs beside the app")
         // Moves: copy, read back, link, remove; bring back; crash recovery; refusals.
         do {

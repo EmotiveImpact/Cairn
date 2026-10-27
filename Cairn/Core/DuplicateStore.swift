@@ -64,7 +64,7 @@ struct DupGroup: Identifiable {
 enum DupHash {
     static let chunk = 1 << 20            // 1 MB
 
-    struct Identity: Equatable, Sendable {
+    struct Identity: Equatable, Codable, Sendable {
         let device: UInt64
         let inode: UInt64
         let size: Int64
@@ -98,6 +98,36 @@ enum DupHash {
 
     static func unchanged(_ url: URL, since fingerprint: Fingerprint) -> Bool {
         pathIdentity(url) == fingerprint.identity
+    }
+
+    /// The file's identity now, without reading it. Used to reuse a remembered digest.
+    static func currentIdentity(_ url: URL) -> Identity? { pathIdentity(url) }
+
+    /// A quick look before the full read: the size plus the first and last
+    /// 64 KB. Files that differ there are not duplicates; files that match
+    /// still get the full hash. Nil when the file cannot be read.
+    static func partial(_ url: URL, size: Int64) -> String? {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+        defer { try? handle.close() }
+        let edge = 64 * 1024
+        var hasher = SHA256()
+        withUnsafeBytes(of: size.littleEndian) { hasher.update(bufferPointer: $0) }
+        do {
+            let ok = try autoreleasepool { () -> Bool in
+                guard let head = try handle.read(upToCount: edge) else { return false }
+                hasher.update(data: head)
+                if size > Int64(edge) * 2 {
+                    try handle.seek(toOffset: UInt64(size - Int64(edge)))
+                    guard let tail = try handle.read(upToCount: edge) else { return false }
+                    hasher.update(data: tail)
+                }
+                return true
+            }
+            guard ok else { return nil }
+        } catch {
+            return nil
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
     }
 
     /// Returns nil if the file changes while read, cannot be read, or work is cancelled.
@@ -650,20 +680,47 @@ final class DuplicateStore {
         let totalCandidates = min(cap, clusters.reduce(0) { $0 + $1.count })
         onProgress(0, totalCandidates)
 
-        // Pass 2 — SHA-256 verify, group by digest.
+        // Pass 2 — SHA-256 verify, group by digest. Hard links to one file are
+        // one file, not copies. A quick look at each file's start and end drops
+        // most same-size strangers before any full read, and a digest from an
+        // earlier run is reused only while the file's identity is unchanged.
         var groups: [DupGroup] = []
         var hashed = 0
+        let remembered = DupFingerprintCache.load()
+        var learned: [String: DupFingerprintCache.Entry] = [:]
         for cluster in clusters {
-            if Task.isCancelled { return Discovery(groups: groups, limited: true) }
+            if Task.isCancelled { DupFingerprintCache.save(remembered, adding: learned); return Discovery(groups: groups, limited: true) }
             if hashed >= cap { break }
+            var seenFiles = Set<String>()
+            let distinct = cluster.filter { cand in
+                guard let id = DupHash.currentIdentity(cand.url) else { return false }
+                return seenFiles.insert("\(id.device):\(id.inode)").inserted
+            }
+            guard distinct.count > 1 else { continue }
+            var byPartial: [String: [Candidate]] = [:]
+            if distinct.count == 2 && distinct[0].size <= 128 * 1024 {
+                byPartial["small"] = distinct   // a quick look would read the whole file anyway
+            } else {
+                for cand in distinct {
+                    if Task.isCancelled { break }
+                    if let quick = DupHash.partial(cand.url, size: cand.size) { byPartial[quick, default: []].append(cand) }
+                }
+            }
             var byHash: [String: [Candidate]] = [:]
-            for cand in cluster {
-                if Task.isCancelled { return Discovery(groups: groups, limited: true) }
+            for cand in byPartial.values.filter({ $0.count > 1 }).joined() {
+                if Task.isCancelled { DupFingerprintCache.save(remembered, adding: learned); return Discovery(groups: groups, limited: true) }
                 if hashed >= cap { break }
-                guard let h = DupHash.fingerprint(cand.url) else { continue }
+                let digest: String
+                if let identity = DupHash.currentIdentity(cand.url), let entry = remembered[cand.url.path], entry.identity == identity {
+                    digest = entry.digest
+                } else {
+                    guard let h = DupHash.fingerprint(cand.url) else { continue }
+                    digest = h.digest
+                    learned[cand.url.path] = DupFingerprintCache.Entry(identity: h.identity, digest: h.digest)
+                }
                 hashed += 1
                 if hashed % 64 == 0 { onProgress(hashed, totalCandidates) }
-                byHash[h.digest, default: []].append(cand)
+                byHash[digest, default: []].append(cand)
             }
             for (hash, members) in byHash where members.count > 1 {
                 var files = members.map {
@@ -685,6 +742,45 @@ final class DuplicateStore {
             }
         }
         onProgress(hashed, totalCandidates)
+        DupFingerprintCache.save(remembered, adding: learned)
         return Discovery(groups: groups, limited: limited)
+    }
+}
+
+/// Digests from earlier duplicate scans, keyed by path and kept only while
+/// the file's device, inode, size and change times are exactly the same.
+/// Discovery speed only: a removal always hashes both files again first.
+enum DupFingerprintCache {
+    struct Entry: Codable, Sendable {
+        let identity: DupHash.Identity
+        let digest: String
+    }
+    static let limit = 50_000
+
+    static var url: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileScan.home.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return base.appendingPathComponent("Cairn/duplicate-fingerprints.json")
+    }
+
+    static func load() -> [String: Entry] {
+        guard let data = try? Data(contentsOf: url) else { return [:] }
+        return (try? JSONDecoder().decode([String: Entry].self, from: data)) ?? [:]
+    }
+
+    static func save(_ old: [String: Entry], adding new: [String: Entry]) {
+        guard !new.isEmpty else { return }
+        var merged = old.merging(new) { _, fresh in fresh }
+        if merged.count > limit {
+            // Keep everything just learned, then as many older entries as fit.
+            let keep = Set(new.keys)
+            for key in merged.keys where !keep.contains(key) {
+                if merged.count <= limit { break }
+                merged.removeValue(forKey: key)
+            }
+        }
+        guard let data = try? JSONEncoder().encode(merged) else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try? data.write(to: url, options: [.atomic])
     }
 }

@@ -58,7 +58,8 @@ enum Cleaner {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: rejectReason(verdict))
         }
-        let contentsVerdict = SafePaths.evaluateContents(item.resolvedURL, rebuildable: item.isRebuildable)
+        let contentsVerdict = SafePaths.evaluateContents(item.resolvedURL, rebuildable: item.isRebuildable,
+                                                         reinstallable: item.isReinstallable)
         guard contentsVerdict.isAllowed else {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: rejectReason(contentsVerdict))

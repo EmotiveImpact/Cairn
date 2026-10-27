@@ -4,7 +4,7 @@ import Observation
 
 /// Routes menu actions to the existing window. The menu never owns a scanner.
 @MainActor @Observable final class MenuBarRoute {
-    enum Action: Equatable { case overview, changes, makeRoom, projects, scan, stop, results, activity, storage(String?), preferences(String) }
+    enum Action: Equatable { case overview, changes, makeRoom, projects, scan, stop, results, activity, storage(String?), preferences(String), leftovers(AppLeftovers.Found) }
     struct Request: Equatable { let id = UUID(); let action: Action }
     static let shared = MenuBarRoute()
     var pending: Request?
@@ -214,6 +214,42 @@ enum MenuAvailableSpace {
             RunLoop.main.add(timer, forMode: .eventTracking)
         }
         #endif
+    }
+
+    private var leftoversPopover: NSPopover?
+    private var leftoversTimeout: Task<Void, Never>?
+
+    /// "Logic Pro went in the Bin. It left 7.4 GB behind." (leftovers.png),
+    /// shown from the menu bar icon without taking focus. Not now closes it;
+    /// Review leftovers opens the normal review with only those files.
+    func showLeftovers(_ found: AppLeftovers.Found) {
+        guard let button = statusItem?.button else { return }
+        closeLeftovers()
+        let view = LeftoversPopover(found: found,
+                                    onClose: { [weak self] in self?.closeLeftovers() },
+                                    onReview: { [weak self] in
+                                        self?.closeLeftovers()
+                                        MenuBarRoute.shared.send(.leftovers(found))
+                                    })
+        let controller = NSHostingController(rootView: view)
+        controller.sizingOptions = .preferredContentSize
+        let popover = NSPopover()
+        popover.behavior = .applicationDefined
+        popover.contentViewController = controller
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        leftoversPopover = popover
+        // A notice nobody answered goes away on its own; the next scan still lists the files.
+        leftoversTimeout = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            self?.closeLeftovers()
+        }
+    }
+
+    func closeLeftovers() {
+        leftoversTimeout?.cancel()
+        leftoversTimeout = nil
+        leftoversPopover?.performClose(nil)
+        leftoversPopover = nil
     }
 
     /// Sample-only inspection of the actual NSMenu, inside the preview window.

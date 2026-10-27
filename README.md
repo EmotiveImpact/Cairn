@@ -13,39 +13,55 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 - **Cleans each tool the proper way.** Docker, Homebrew, pnpm, Go, conda, git and Xcode simulators are cleaned with their own commands, so nothing breaks.
 - **Proves what it freed.** Every clean leaves a receipt. When macOS confirms the free space went up, the receipt says Verified.
 - **Keeps watch from the menu bar.** It shows space ready to free, idle projects and anything that has grown fast.
-- **Moves big things to an external SSD.** Local AI models and Xcode archives can be moved to an encrypted drive and brought back later. Every file is checked before the original goes.
+- **Makes room three ways.** The Make room page gives each big item one choice: the Bin, an external SSD or the cloud. Moves to a drive check every file before the original goes, and app data keeps a link so the app still finds it. iPhone backups, simulators, Docker, AI models and your own folders can all move, and come back later.
 - **Also covers the rest of your Mac**: large and old files, duplicates, apps you no longer use and general Mac health.
 
 ## Works with your AI coding tools
 
 Cairn can link to AI coding tools that run on your Mac, so they can check your disk and tell you what can be freed. Connect them in one click from **Settings › AI tools**.
 
-Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code and Windsurf.**
+Supported: **Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, VS Code, Windsurf, Cline, Roo Code, Kiro, Amazon Q, JetBrains Junie, LM Studio, Qwen Code and Amp.** Zed, opencode and Goose are in an open pull request (#14).
 
-Out of the box, AI tools can only look. A pull request that is still open lets them also run a clean, but only if you turn that on, only for safe rebuildable items, and only from a list you can see. Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
+Out of the box, AI tools can only look. You can also let them clean in **Settings › AI tools**: Off (the default), Ask me each time, or Let them clean safe junk. Only safe, rebuildable items qualify, and every plan lists each item, expires after 15 minutes and can be used once.
+
+There is a **Claude Code plugin** (`/cairn:status`, `/cairn:free-space`, `/cairn:projects`, and a skill for "no space left on device") and a **Gemini CLI extension** with the same commands:
+
+```sh
+/plugin marketplace add Emotive-Impact-Studios/cairn-plugins
+/plugin install cairn@cairn
+gemini extensions install https://github.com/Emotive-Impact-Studios/cairn-plugins
+```
+
+Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 
 ## Keeping your things safe
 
 - **You see everything first.** Every clean shows the exact files, their sizes and any command before anything runs.
 - **You choose how things are removed** in Settings › Cleaning. **Smart** (the default) deletes things that can be rebuilt, so the space comes back at once, and sends anything personal to the Trash. **Delete now** deletes everything you picked. **Move to Trash** keeps everything recoverable.
-- **Some things are always off limits**, whatever you choose: system files, passwords and keychains, Mail, Messages, Photos, iCloud, your source code history (`.git`), SSH keys and AI chat history.
+- **Some things are always off limits**, whatever you choose: system files, Apple's own caches, a macOS update in progress, passwords and keychains, Mail, Messages, Photos, iCloud, your source code history (`.git`), SSH keys and AI chat history.
 - **Nothing harmful runs.** Commands that would destroy data, such as removing Docker volumes, are never used.
 - **Files are checked again** just before each action, in case anything changed since the scan.
+
+## Coming in open pull requests
+
+- **Research features (PR #17):** a Games page, a Chat apps page for WhatsApp and Telegram, "I need X GB" (type the space you need and Cairn plans the safest way there), who made each app and when it was last opened, leftovers when an app goes in the Bin, faster Duplicates, a share card on the Done screen, and a list of everything Cairn looks for.
+- **Apple Intelligence off switch (after that):** macOS 27 downloads 12 to 30 GB of Apple Intelligence models with no off switch. Cairn measures them, lets you choose which go, lists what stops working, and turns them off through a profile you approve in System Settings. One Undo brings everything back.
+- **Sleeping projects, AI models, disk map and cleaning rules (PR #14).**
+- **Hardening before the signed download (PR #11)**, **review totals that match the button (PR #12)** and **Messages attachments (PR #15)**.
+
+See [CHANGELOG.md](CHANGELOG.md) for the details of each.
 
 ## What's next
 
 In rough order of priority:
 
-1. **A proper download.** A signed and notarised app with automatic updates, then a small private beta.
-2. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
-3. **Merge the open work**: the Night look and honest numbers (PR #5), AI tools that can clean (PR #7) and the website hero (PR #6).
-4. **Publish the Claude Code plugin and Gemini CLI extension** so others can install them.
+1. **Merge the open work** above, safety fixes first.
+2. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
+3. **Buying a licence** on the website at cairnmac.com.
+4. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
 5. **Update the website screenshots** to the new look.
-6. **Projects:** put an idle project to sleep (clear its rebuildable files and keep a note to restore them) and show its git status.
-7. **AI models page** listing every local model and how big it is.
-8. **Disk map**: a picture of what is taking up space.
-9. **More SSD moves**: Docker, simulators and Xcode's DerivedData.
-10. **Cleaning rules you approve once** and Cairn then runs on its own.
+6. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive, once PR #14 is in.
+7. **Larger text.** Cairn uses fixed text sizes, so the macOS text size setting doesn't change it yet.
 
 ## For developers
 
@@ -72,6 +88,7 @@ The same app binary works as a command line tool:
 cairn status            # free space and recent cleans
 cairn scan              # what can be freed
 cairn projects          # coding projects and how long they have been idle
+cairn rules             # everything Cairn looks for, as Markdown
 cairn clean --safe      # preview a safe clean (add --yes to run it)
 cairn mcp               # link for AI coding tools
 ```
@@ -99,6 +116,8 @@ Add `--json` for machine-readable output.
 ### Further reading
 
 - [Changelog](CHANGELOG.md) and [bugs and fixes](BUGS-AND-FIXES.md)
+- [What Cairn looks for](docs/WHAT-CAIRN-LOOKS-FOR.md), written from the app itself
+- [Third-party notices](THIRD-PARTY-NOTICES.md)
 - [Current capabilities](docs/STORAGE-CONTROL-CAPABILITIES.md): what is built and what is still restricted
 - [Release readiness](docs/RELEASE-READINESS-2026-10-01.md)
 - [Product requirements](docs/CAIRN-STORAGE-CONTROL-PRD.md)

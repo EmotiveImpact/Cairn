@@ -10,7 +10,7 @@ struct AppCachesScanner: CairnScanner {
     let info = CategoryInfo(
         id: "app-caches",
         title: "Application Caches",
-        subtitle: "Per-app caches in ~/Library/Caches — apps recreate these",
+        subtitle: "Per-app caches in ~/Library/Caches, which apps make again",
         systemImage: "app.badge.fill",
         group: .general,
         requiresFDA: true
@@ -44,6 +44,10 @@ struct AppCachesScanner: CairnScanner {
         "ccache",
         "pypoetry",
         "uv",
+        // Test browsers and build downloads (ToolDownloadsScanner)
+        "ms-playwright",
+        "Cypress",
+        "electron",
         // System-managed caches — never surface from here. Every other Apple
         // cache is skipped too, by SafePaths.appleCacheReason.
         "com.apple.Spotlight",

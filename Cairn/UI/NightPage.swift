@@ -106,11 +106,19 @@ struct NightName: View {
     var logo: BrandLogo?
     var title: String
     var subtitle: String = ""
+    /// A thin grey symbol in place of a logo, as on the hero pages.
+    var symbol: String? = nil
+    var titleSize: CGFloat = 13
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: symbol == nil ? 10 : 12) {
             if let logo { logo.frame(width: 22, height: 22) }
+            if let symbol {
+                Image(systemName: symbol).font(.system(size: 16, weight: .light))
+                    .foregroundStyle(Brand.textMuted).frame(width: 22, height: 22)
+                    .accessibilityHidden(true)
+            }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textPrimary)
+                Text(title).font(.system(size: titleSize, weight: .medium)).foregroundStyle(Brand.textPrimary)
                     .lineLimit(1).truncationMode(.middle)
                 if !subtitle.isEmpty {
                     Text(subtitle).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
@@ -125,6 +133,7 @@ struct NightName: View {
 /// 3 pt share bar: faint track, ice fill at 80%.
 struct NightMeter: View {
     var share: Double
+    var width: CGFloat = 150
     var body: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -133,7 +142,7 @@ struct NightMeter: View {
                     .frame(width: max(0, geo.size.width * CGFloat(min(1, max(0, share)))))
             }
         }
-        .frame(width: 150, height: 3)
+        .frame(width: width, height: 3)
         .accessibilityHidden(true)
     }
 }
@@ -160,13 +169,93 @@ struct NightPill: View {
 }
 
 /// "34.4 GB selected · rebuilt on their own": the number at 15 pt medium, the rest muted.
+/// The hero pages use the large size: 19 pt and 13.5 pt.
 struct NightTotal: View {
     var strong: String
     var rest: String
+    var large = false
     var body: some View {
-        (Text(strong).font(.system(size: 15, weight: .medium)).foregroundStyle(Brand.textPrimary)
-         + Text(" " + rest).font(.system(size: 13)).foregroundStyle(Brand.textMuted))
+        (Text(strong).font(.system(size: large ? 19 : 15, weight: .medium)).foregroundStyle(Brand.textPrimary)
+         + Text(" " + rest).font(.system(size: large ? 13.5 : 13)).foregroundStyle(large ? Brand.textSecondary : Brand.textMuted))
             .monospacedDigit().lineLimit(1)
+    }
+}
+
+/// The page from the feature mocks (features.html): eyebrow and one quiet
+/// button, a big light number with its label beside it, one 13.5 pt line,
+/// the open list, then the footer. Same frame and padding as NightPage.
+struct NightHeroPage<Hero: View, Trailing: View, Content: View, Footer: View>: View {
+    var eyebrow: String
+    var lead: String = ""
+    @ViewBuilder var hero: () -> Hero
+    @ViewBuilder var trailing: () -> Trailing
+    @ViewBuilder var content: () -> Content
+    @ViewBuilder var footer: () -> Footer
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(alignment: .center, spacing: 8) {
+                Text(eyebrow).nightEyebrow().lineLimit(1)
+                Spacer(minLength: 12)
+                trailing()
+            }
+            .frame(height: 28)
+            VStack(alignment: .leading, spacing: 8) {
+                hero()
+                if !lead.isEmpty {
+                    Text(lead).font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
+                        .frame(maxWidth: 600, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 4)
+                }
+            }
+            content()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            HStack(alignment: .center, spacing: 12) { footer() }
+        }
+        .padding(.top, 22).padding(.horizontal, 40).padding(.bottom, 26)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .foregroundStyle(Brand.textPrimary)
+    }
+}
+
+/// "337 GB of games": 64 pt light number, 19 pt grey words on its baseline.
+struct NightHeroNumber: View {
+    var number: String
+    var label: String
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(number).font(.system(size: 64, weight: .light)).tracking(-2.5).monospacedDigit()
+                .lineLimit(1).minimumScaleFactor(0.5)
+            Text(label).font(.system(size: 19)).foregroundStyle(Brand.textMuted).lineLimit(1)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// The boxed explanation under a row: faint ice wash, ice hairline, 12.5 pt.
+struct NightExplain: View {
+    var strong: String
+    var rest: String
+    var body: some View {
+        (Text(strong).fontWeight(.medium).foregroundStyle(Brand.textPrimary)
+         + Text(rest).foregroundStyle(Brand.textSecondary))
+            .font(.system(size: 12.5))
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 14).padding(.horizontal, 16)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Brand.room.opacity(0.045)))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Brand.room.opacity(0.12), lineWidth: 1))
+    }
+}
+
+extension View {
+    /// A row on the hero pages: 11 pt above and below, 4 pt in, hairline on top.
+    func nightHeroRow() -> some View {
+        padding(.vertical, 11).padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+            .overlay(alignment: .top) { Rectangle().fill(Brand.wash(0.06)).frame(height: 1) }
     }
 }
 

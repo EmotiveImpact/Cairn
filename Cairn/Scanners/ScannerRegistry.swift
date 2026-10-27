@@ -14,6 +14,7 @@ enum ScannerRegistry {
             DockerScanner(),            // graduated prune + Docker.raw advice
             GitMaintenanceScanner(),    // large .git (git gc) + abandoned-project detection
             AndroidSDKScanner(),        // system images, NDK, AVDs, build-tools
+            ToolDownloadsScanner(),     // Playwright / Cypress / Puppeteer browsers, Electron, Bazel, Unity, Watchman, gems, old SDKs
 
             // AI Models & Caches (the novel pillar)
             AICachesScanner(),          // Ollama / HF / LM Studio / SD / Whisper models + Claude/Windsurf caches
@@ -25,10 +26,13 @@ enum ScannerRegistry {
             AppCachesScanner(),
             BrowserCachesScanner(),
             CommunicationCachesScanner(), // Zoom / Teams / Spotify / Figma app caches
+            ChatAppsScanner(),          // WhatsApp / Telegram sizes, cleared in each app (advice)
+            GamesScanner(),             // Steam / Epic / CrossOver games, and Mac games
             LogsScanner(),
             InstallersScanner(),
             LargeOldFilesScanner(),
             OrphanedAppDataScanner(),
+            RuleSpotsScanner(),         // cache folders from a signed rules update; empty until one is installed
             TimeMachineSnapshotsScanner(),
             TrashScanner(),
         ]

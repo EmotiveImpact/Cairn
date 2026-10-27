@@ -1,4 +1,5 @@
 import Foundation
+import CryptoKit
 
 /// `Cairn --safetycheck` — a release gate. Asserts the SafePaths chokepoint still
 /// refuses every irreplaceable location (AI agent conversation history, iCloud
@@ -296,6 +297,95 @@ enum SafetyCheck {
         """
         let old = XcodeScanner.supersededRuntimes(XcodeScanner.parseRuntimes(runtimesJSON)).map(\.identifier)
         rule(old == ["A"], "only superseded, deletable simulator runtimes are offered")
+        let playwright = ToolDownloadsScanner.olderVersions(
+            ["chromium-1091", "chromium-1148", "firefox-1466", "webkit-2104", "webkit-1990", ".links", "ffmpeg-1010"],
+            key: ToolDownloadsScanner.dashKey)
+        rule(playwright.old == ["chromium-1091", "webkit-1990"]
+             && playwright.newest == ["chromium-1148", "firefox-1466", "webkit-2104", "ffmpeg-1010"],
+             "older test browser downloads are offered and the newest of each stays")
+        let gems = ToolDownloadsScanner.olderVersions(
+            ["rails-7.0.8", "rails-7.1.3", "nokogiri-1.15.0-arm64-darwin", "nokogiri-1.16.2-arm64-darwin", "rake-13.1.0"],
+            key: ToolDownloadsScanner.gemKey)
+        rule(gems.old == ["rails-7.0.8", "nokogiri-1.15.0-arm64-darwin"], "only older gem versions are counted")
+
+        // "I need X GB" never plans your own files, games, chat apps, advice or
+        // anything risky; caches come first and it stops once the goal is met.
+        func planned(_ id: String, _ group: CategoryGroup, _ gb: Double, _ severity: Severity = .safe,
+                     regenerable: Bool = true, method: CleanMethod = .trash) -> (info: CategoryInfo, items: [ScanItem]) {
+            (info: CategoryInfo(id: id, title: id, subtitle: "", systemImage: "folder", group: group, requiresFDA: false),
+             items: [ScanItem(url: home.appendingPathComponent("plan/\(id)"), allocatedSize: Int64(gb * 1e9), categoryID: id,
+                              severity: severity, isRegenerable: regenerable, cleanMethod: method)])
+        }
+        let planGroups = TargetPlan.groups([
+            planned("docker", .developer, 9, .review),
+            planned("installers", .general, 2),
+            planned("xcode", .developer, 7),
+            planned("app-caches", .general, 10),
+            planned("large-old", .general, 50, .review, regenerable: false),
+            planned("games", .general, 60, .review, regenerable: false),
+            planned("chat-apps", .general, 20, .review, regenerable: false, method: .adviceOnly),
+            planned("ai-models", .ai, 30, .risky),
+        ])
+        rule(planGroups.map(\.bucketID) == ["app-caches", "xcode", "installers", "docker"],
+             "the space planner takes caches first and never plans your files, games, chat apps or risky items")
+        let plan = TargetPlan.plan(planGroups, goal: 18_000_000_000)
+        rule(plan.reached && plan.chosen.map(\.categoryID) == ["app-caches", "xcode", "installers"],
+             "the space planner stops as soon as the goal is reached")
+        let without = TargetPlan.plan(planGroups, goal: 18_000_000_000, left: [planGroups[1].id])
+        rule(without.chosen.map(\.categoryID) == ["app-caches", "installers", "docker"],
+             "leaving a row out plans again around it")
+        rule(AppInventoryStore.signerName("Developer ID Application: Google LLC (EQHXZ8M8AV)") == "Google LLC"
+             && AppInventoryStore.signerName("Apple Mac OS Application Signing") == nil,
+             "an app's maker is read from its signing certificate")
+        rule(AppInventoryStore.caskAppNames("app \"Firefox.app\"\nzap trash: \"~/Library/Saved Application State/Firefox.app\"") == ["Firefox.app"]
+             && AppInventoryStore.caskAppNames("{\"artifacts\":[{\"app\":[\"Google Chrome.app\"]}]}") == ["Google Chrome.app"],
+             "Homebrew apps are found from each cask's recipe")
+
+        // The share card names kinds of things, never a project, file or folder of yours.
+        func cleared(_ path: String, _ category: String) -> String {
+            ShareCard.kind(of: ScanItem(url: home.appendingPathComponent(path), allocatedSize: 1, categoryID: category,
+                                        severity: .safe, isRegenerable: true))
+        }
+        rule(cleared("Projects/Secret Client/node_modules", "dev-projects") == "node_modules"
+             && cleared("Projects/Secret Client/out-of-tree", "dev-projects") == "Project builds"
+             && cleared("Library/Developer/Xcode/DerivedData/SecretApp-abc", "xcode") == "Xcode"
+             && cleared("Downloads/Secret.dmg", "something-new") == "Other files",
+             "the share card never shows a file or folder name")
+        rule(ReceiptLine.share(freed: 38_600_000_000) == "back on my Mac. That's about 10 films' worth."
+             && ReceiptLine.share(freed: 600_000_000) == "back on my Mac. That's about 200 photos' worth.",
+             "the share card's line reads naturally")
+
+        // A cleaning rules update must be signed by Cairn, and can only add one
+        // app's cache folder: never a whole cache root, a personal folder or a path out.
+        func spot(_ path: String) -> RuleUpdates.Spot { .init(id: path, title: path, path: path, note: "") }
+        rule(RuleUpdates.allowed(spot("Library/Caches/com.example.app"))
+             && RuleUpdates.allowed(spot("Library/Application Support/Example/Cache"))
+             && RuleUpdates.allowed(spot(".cache/example"))
+             && !RuleUpdates.allowed(spot("Library/Caches"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Cache"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Example"))
+             && !RuleUpdates.allowed(spot("Documents/Cache"))
+             && !RuleUpdates.allowed(spot("Library/Application Support/Claude/Cache"))
+             && !RuleUpdates.allowed(spot("../Shared/Cache"))
+             && !RuleUpdates.allowed(spot("/Library/Caches/example"))
+             && !RuleUpdates.allowed(spot("Library/Caches/com.apple.geod")),
+             "a rules update can only name one app's cache folder")
+        let signer = Curve25519.Signing.PrivateKey()
+        let publisher = signer.publicKey.rawRepresentation.base64EncodedString()
+        let listed = RuleUpdates.Book(version: 3, spots: [spot("Library/Caches/com.example.app"), spot("Documents/Cache")])
+        if let data = try? JSONEncoder().encode(listed), let signature = try? signer.signature(for: data) {
+            var tampered = data
+            tampered.append(contentsOf: Array(" ".utf8))
+            rule(RuleUpdates.book(data, signature: signature, key: publisher)?.spots.map(\.path) == ["Library/Caches/com.example.app"]
+                 && RuleUpdates.book(tampered, signature: signature, key: publisher) == nil
+                 && RuleUpdates.book(data, signature: signature, key: Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()) == nil
+                 && RuleUpdates.book(data, signature: signature, key: nil) == nil,
+                 "a rules update is used only when Cairn signed exactly that list")
+        } else {
+            rule(false, "a rules update is used only when Cairn signed exactly that list")
+        }
+        rule(!RuleUpdates.enabled || RuleUpdates.publicKey.flatMap { Data(base64Encoded: $0) }?.count == 32,
+             "rules updates stay off unless a real public key ships")
 
         // A build with the local Pro unlock still switched on must never ship —
         // it would hand every customer Pro without a key.

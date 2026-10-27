@@ -38,6 +38,7 @@ A plain summary of what is wrong now, what has been fixed but not merged, and wh
 
 | Date | Fix | Where |
 | --- | --- | --- |
+| 24 Oct | Apple's own caches in `~/Library/Caches` were listed as junk, and clearing one (the Neural Engine's compiled models) breaks text recognition until a restart. They are now off limits, as are macOS Install Data and partial removal of Ollama's shared store. | PR #16 (merged 25 Oct) |
 | 23 Oct | A ready clean removed a running test build's `.build` folder and the review didn't say caches are deleted outright. Cleaning now needs a click, the review says what can't be put back, and Cairn skips its own app, folders in use and fresh builds. | PR #5 (merged 23 Oct) |
 | 23 Oct | Items found by two scanners were counted twice (about 1 GB on the test Mac). | PR #5 (merged 23 Oct) |
 | 23 Oct | Home's scan number counted everything found, then dropped to the ready amount at the end. It now counts only ready space, with "to look through" shown separately. | PR #5 (merged 23 Oct) |

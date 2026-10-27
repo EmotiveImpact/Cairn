@@ -47,6 +47,24 @@ jobs:
             echo "SHOT-BEGIN"; base64 -i "$RUNNER_TEMP/makeRoom.jpg" | tr -d '\n'; echo; echo "SHOT-END"
           fi
 
+      # The newer pages with sample data, in Dark and two in Light, to compare with the mocks.
+      # Printed into the log only and moved out of the upload folder, so they add no artifact storage.
+      - name: New pages screenshots
+        continue-on-error: true
+        timeout-minutes: 4
+        run: |
+          bin="$(swift build --show-bin-path)/Cairn"
+          for shot in target chatApps games duplicates apps target:light games:light; do
+            section="${shot%%:*}"; extra=""; name="$section"
+            if [ "$shot" != "$section" ]; then extra="--capture-light"; name="$section-light"; fi
+            "$bin" --preview-ui --component-showcase --capture-screen="$section" --section="$section" $extra || true
+            if [ -f "artifacts/component-showcase/$name.png" ]; then
+              sips -s format jpeg -s formatOptions 70 "artifacts/component-showcase/$name.png" --out "$RUNNER_TEMP/$name.jpg" >/dev/null
+              echo "SHOT-BEGIN $name"; base64 -i "$RUNNER_TEMP/$name.jpg" | tr -d '\n'; echo; echo "SHOT-END"
+              mv "artifacts/component-showcase/$name.png" "$RUNNER_TEMP/"
+            fi
+          done
+
       - name: Upload screenshots
         if: always()
         continue-on-error: true

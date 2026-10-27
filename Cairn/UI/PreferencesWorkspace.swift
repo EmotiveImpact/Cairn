@@ -7,6 +7,9 @@ struct PreferencesWorkspace: View {
     @Bindable private var settings = AppSettings.shared
     @Binding var tab: String
     @State private var message = ""
+    @State private var showRulesList = false
+    @State private var showReport = false
+    @State private var checkingRules = false
     @AppStorage(CairnAppearance.key) private var appearance = CairnAppearance.dark.rawValue
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let tabs = ["General", "Cleaning", "Scanning", "Monitoring", "Protection", "Excluded locations", "AI tools", "License", "About & CLI"]
@@ -50,6 +53,8 @@ struct PreferencesWorkspace: View {
             Button("macOS privacy settings") { FullDiskAccess.openSettings() }
                 .buttonStyle(ControlPanelButtonStyle(size: .large)).disabled(preview)
         }
+        .sheet(isPresented: $showRulesList) { RulesListSheet() }
+        .sheet(isPresented: $showReport) { ProblemReportSheet(store: store) }
     }
     @ViewBuilder private var preferences: some View {
         switch tab {
@@ -63,6 +68,7 @@ struct PreferencesWorkspace: View {
             option("Sidebar focus outline", "Show an outline around the sidebar control reached with the keyboard.", $settings.showSidebarFocus)
             option("Open at login", "Register Cairn with macOS login items.", $settings.openAtLogin)
             option("Menu bar", "Show available internal storage beside Cairn's macOS menu bar icon.", $settings.showMenuBarItem)
+            option("Offer leftovers when an app goes in the Bin", "When you drag an app to the Bin, Cairn shows what it left behind from the menu bar. Needs the menu bar icon and Full Disk Access. Nothing is removed until you review it.", $settings.offerAppLeftovers)
             option("Scan notifications", "Notify when a scan completes. macOS permission is required.", $settings.scanNotifications)
             option("Play a sound when a clean finishes", "A single soft chime. Off by default.", $settings.finishSound)
         case "Cleaning":
@@ -83,6 +89,14 @@ struct PreferencesWorkspace: View {
             option("Simulator data", "Include simulator caches and simulators for runtimes that are no longer installed.", $settings.includeSimulators)
             option("Extra large-file confirmation", "Request an additional confirmation for large file removal.", $settings.askBeforeDeleting)
             option("Recommendations", "Show relevant cleanup suggestions from measured results.", $settings.smartRecommendations)
+            action("What Cairn looks for", "Every place Cairn checks, written from the app itself.", "See the list") { showRulesList = true }
+            if RuleUpdates.enabled {
+                action("Cleaning rules", "Version \(RuleUpdates.installedVersion). New places to look, signed by Cairn. They can only add cache folders, and everything still goes through review.",
+                       checkingRules ? "Checking…" : "Check now") { checkRules() }
+                    .disabled(checkingRules)
+            } else {
+                fixed("Cleaning rules", "Built into this version of Cairn. New places to look come with app updates.")
+            }
         case "Monitoring":
             option("Space reserve alerts", "Check available space while Cairn is running and alert when it remains below your chosen reserve. Nothing is removed.", preview ? .constant(true) : $settings.reserveEnabled)
                 .onChange(of: settings.reserveEnabled) { _, enabled in
@@ -192,6 +206,30 @@ struct PreferencesWorkspace: View {
                 NSPasteboard.general.clearContents(); NSPasteboard.general.setString(command, forType: .string)
                 message = "Command copied. Review it in Terminal; no installation has run."
             }.buttonStyle(ControlPanelButtonStyle()).padding(.vertical, 14)
+            action("Send a report", "Shows you the whole report first, to change or add to. It holds no file names, folder names or your account name.", "Send a report…") { showReport = true }
+        }
+    }
+    /// A row with a button on the right, for things that open or run rather than switch.
+    private func action(_ title: String, _ detail: String, _ button: String, perform: @escaping () -> Void) -> some View {
+        HStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(.system(size: 13, weight: .medium))
+                Text(detail).font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+            }.frame(maxWidth: .infinity, alignment: .leading)
+            Button(button, action: perform).buttonStyle(ControlPanelButtonStyle())
+        }
+        .nightRow()
+    }
+    private func checkRules() {
+        checkingRules = true
+        Task {
+            switch await RuleUpdates.check() {
+            case .off: message = "Rules updates are off in this version."
+            case .upToDate(let version): message = "Cleaning rules are up to date (version \(version))."
+            case .updated(let version, let spots): message = "Cleaning rules updated to version \(version): \(spots) places to look. Scan again to use them."
+            case .failed(let reason): message = reason
+            }
+            checkingRules = false
         }
     }
     /// A setting as a reference row: name and grey line on the left, switch on the right.

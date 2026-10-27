@@ -330,6 +330,8 @@ struct ChangesWorkspace: View {
     }
     private func route(_ category: CandidateReading.Category) -> NavSection {
         if category.id == "browser-caches" { return .browsers }
+        if category.id == "games" { return .games }
+        if category.id == "chat-apps" { return .chatApps }
         if ["large-old", "installers"].contains(category.id) { return .largeFiles }
         switch category.group {
         case .developer: return .developer

@@ -15,14 +15,15 @@ import Foundation
 ///     cairn scan [--json] [--category <id>]
 ///     cairn clean --safe [--category <id>] [--dry-run]
 ///     cairn categories
+///     cairn rules
 ///     cairn projects [--json] [--idle <days>]
 ///     cairn mcp
 enum CLI {
-    static let commands: Set<String> = ["status", "scan", "clean", "categories", "projects", "mcp", "help", "--help", "-h"]
+    static let commands: Set<String> = ["status", "scan", "clean", "categories", "rules", "projects", "mcp", "help", "--help", "-h"]
     /// Commands that only read file sizes, timestamps and saved receipts. They
     /// run alongside the app because they never write its stores, journals or
     /// recovery data. `clean` stays out: it previews, but it is the removal verb.
-    static let readOnlyCommands: Set<String> = ["status", "scan", "categories", "projects", "mcp", "help", "--help", "-h"]
+    static let readOnlyCommands: Set<String> = ["status", "scan", "categories", "rules", "projects", "mcp", "help", "--help", "-h"]
 
     static func run(_ args: [String]) {
         let command = args.first ?? "help"
@@ -42,6 +43,7 @@ enum CLI {
             }
             clean(category: category)
         case "categories":  categories()
+        case "rules":       print(RulesList.markdown())
         case "projects":    projects(json: flags.contains("--json"), idleDays: value(of: "--idle", in: args).flatMap(Int.init))
         case "mcp":         MCPServer.run()
         default:            help()
@@ -168,6 +170,7 @@ enum CLI {
           cairn scan [--category <id>]     measure cleanup candidates
           cairn clean --safe               preview eligible Trash candidates only
           cairn categories                 list scanner ids
+          cairn rules                      everything Cairn looks for, as Markdown
           cairn projects [--idle <days>]   repositories and their rebuildable build output
           cairn mcp                        MCP server for coding agents (read-only)
 

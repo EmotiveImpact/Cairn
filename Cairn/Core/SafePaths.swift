@@ -254,7 +254,7 @@ enum SafePaths {
     /// A `rebuildable` tree is not walked: package stores and caches routinely
     /// hold .db files and folders named after AI SDKs, and large ones exceed any
     /// reasonable walk budget. Settings exclusions inside it still block it.
-    static func evaluateContents(_ url: URL, rebuildable: Bool = false) -> Verdict {
+    static func evaluateContents(_ url: URL, rebuildable: Bool = false, reinstallable: Bool = false) -> Verdict {
         let root = url.resolvingSymlinksInPath().standardizedFileURL
         if rebuildable {
             for excluded in userExcluded {
@@ -284,7 +284,10 @@ enum SafePaths {
             }
             count += 1
             if count > 100_000 { return .reject("directory is too large to verify safely") }
-            if let reason = protectedSessionReason(child) ?? appleCacheReason(child) { return .reject(reason) }
+            // A reinstallable game folder holds save databases and caches with
+            // record-like names; only source control and agent data stop it.
+            let reason = reinstallable ? rebuildableAncestorReason(child) : protectedSessionReason(child) ?? appleCacheReason(child)
+            if let reason { return .reject(reason) }
             // Removing a parent must not bypass an exclusion on its child.
             let resolved = child.resolvingSymlinksInPath().standardizedFileURL.path
             for excluded in excludedRoots {

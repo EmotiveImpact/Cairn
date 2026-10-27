@@ -3,7 +3,7 @@ import AppKit
 
 /// Top-level navigation sections (the left sidebar).
 enum NavSection: String, CaseIterable, Identifiable {
-    case dashboard, changes, projects, makeRoom, smartScan, general, browsers, developer, ai, creative, lookThrough, largeFiles, duplicates, apps, storage, bugs, activity, settings
+    case dashboard, changes, projects, makeRoom, target, smartScan, general, browsers, developer, ai, creative, chatApps, lookThrough, largeFiles, duplicates, apps, games, storage, bugs, activity, settings
     var id: String { rawValue }
 
     var title: String {
@@ -12,16 +12,19 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .changes: return "Changes"
         case .projects: return "Projects"
         case .makeRoom: return "Make room"
+        case .target: return "I need space"
         case .smartScan: return "Smart Scan"
         case .general: return "General Cleanup"
         case .browsers: return "Browsers"
         case .developer: return "Developer Cleanup"
         case .ai: return "AI Models"
         case .creative: return "Creative Pro"
+        case .chatApps: return "Chat apps"
         case .lookThrough: return "Look through"
         case .largeFiles: return "Large Files"
         case .duplicates: return "Duplicates"
         case .apps: return "Apps"
+        case .games: return "Games"
         case .storage: return "Storage"
         case .bugs: return "Health"
         case .activity: return "Activity"
@@ -36,16 +39,19 @@ enum NavSection: String, CaseIterable, Identifiable {
         case .changes: return "chart.xyaxis.line"
         case .projects: return "folder"
         case .makeRoom: return "plus.circle"
+        case .target: return "scope"
         case .smartScan: return "scope"
         case .general: return "sparkles"
         case .browsers: return "globe"
         case .developer: return "chevron.left.forwardslash.chevron.right"
         case .ai: return "brain.head.profile"
         case .creative: return "film"
+        case .chatApps: return "bubble.left"
         case .lookThrough: return "tray.full"
         case .largeFiles: return "folder"
         case .duplicates: return "doc.on.doc"
         case .apps: return "square.grid.2x2"
+        case .games: return "gamecontroller"
         case .storage: return "externaldrive"
         case .bugs: return "heart.text.square"
         case .activity: return "clock"
@@ -68,11 +74,14 @@ enum NavSection: String, CaseIterable, Identifiable {
     /// Sections that open an existing sheet rather than routing content.
     var opensSheet: Bool { false }
 
+    /// Findings that have a page of their own rather than a list section.
+    static let ownPages: Set<String> = ["games", "chat-apps"]
+
     @MainActor
     func buckets(_ store: ScanStore) -> [ScanStore.Bucket] {
         switch self {
-        case .smartScan: return store.buckets
-        case .general: return store.generalBuckets.filter { $0.id != "browser-caches" }
+        case .smartScan: return store.buckets.filter { !Self.ownPages.contains($0.id) }
+        case .general: return store.generalBuckets.filter { $0.id != "browser-caches" && !Self.ownPages.contains($0.id) }
         case .browsers: return store.buckets.filter { $0.id == "browser-caches" }
         case .developer: return store.developerBuckets
         case .ai: return store.aiBuckets
@@ -243,6 +252,8 @@ struct AppShell: View {
                 }
             }
             storageStore.load()
+            TrashWatch.shared.onLeftovers = { CairnMenuBar.shared.showLeftovers($0) }
+            TrashWatch.shared.start()
             appStore.onRemovals = { [store] in await store.appendRemovals($0) }
             dupStore.onRemovals = { [store] in await store.appendRemovals($0) }
             healthStore.onRemovals = { [store] in await store.appendRemovals($0) }
@@ -354,6 +365,10 @@ struct AppShell: View {
         case .results: section = .smartScan
         case .storage(let id): storageDriveID = id; section = .storage
         case .preferences(let tab): preferencesTab = tab; section = .settings
+        case .leftovers(let found):
+            guard !previewMode, !store.isScanning, !store.isCleaning else { section = .apps; return }
+            store.addLeftovers(AppLeftovers.items(found))
+            if store.selectedCount > 0 { showReview = true }
         case .scan:
             guard !previewMode, menuScanStatus.canStart else { return }
             section = .smartScan
@@ -366,7 +381,7 @@ struct AppShell: View {
     }
 
     private var supportsResultFilter: Bool {
-        ![NavSection.dashboard, .makeRoom, .storage, .settings].contains(section)
+        ![NavSection.dashboard, .makeRoom, .target, .chatApps, .games, .storage, .settings].contains(section)
     }
 
     /// Find belongs to the measured list, never to the whole Mac. Cmd-F opens
@@ -529,6 +544,15 @@ struct AppShell: View {
                     store.select { item, _ in plan.itemIDs.contains(item.id) }
                     if store.selectedCount > 0 { goalReviewPending = true; showReview = true }
                 }, onOpen: { section = $0 })
+        case .target:
+            TargetWorkspace(store: store, freeNow: control.current?.available,
+                            onScan: { store.startScan(includeExternalVolumes: false) },
+                            onReview: { if !previewMode { showReview = true } },
+                            onOpen: { section = $0 })
+        case .chatApps:
+            ChatAppsWorkspace(store: store, onReview: { if !previewMode { showReview = true } })
+        case .games:
+            GamesWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .smartScan, .general, .browsers, .developer, .ai, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
@@ -543,7 +567,8 @@ struct AppShell: View {
         case .duplicates:
             DuplicatesWorkspace(store: dupStore, search: developerSearch, inspectorVisible: $showDeveloperInspector)
         case .apps:
-            AppsWorkspace(store: appStore, search: developerSearch, inspectorVisible: $showDeveloperInspector)
+            AppsWorkspace(store: appStore, search: developerSearch, inspectorVisible: $showDeveloperInspector,
+                          onOpenGames: { section = .games })
         case .storage:
             StorageWorkspace(store: storageStore, search: developerSearch, focused: $storageDriveID)
         case .bugs:
@@ -574,7 +599,7 @@ struct NavSidebar: View {
 
     // Six top-level places. Health sits with the other cleanups, external
     // storage with files, and Changes is reached from Activity.
-    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .bugs]
+    private let cleanItems: [NavSection] = [.smartScan, .general, .browsers, .developer, .ai, .creative, .chatApps, .bugs]
     private let fileItems: [NavSection] = [.lookThrough, .largeFiles, .duplicates, .storage]
 
     var body: some View {
@@ -589,11 +614,11 @@ struct NavSidebar: View {
             .accessibilityElement(children: .combine)
             ScrollView {
                 VStack(spacing: 2) {
-                    NavRow(item: .dashboard, section: $section)
+                    NavRow(item: .dashboard, section: $section, also: [.target])
                     NavRow(item: .projects, section: $section)
                     SidebarDisclosure(title: "Clean", glyph: .clean, items: cleanItems, section: $section)
                     SidebarDisclosure(title: "Files", glyph: .files, items: fileItems, section: $section)
-                    NavRow(item: .apps, section: $section)
+                    NavRow(item: .apps, section: $section, also: [.games])
                     NavRow(item: .activity, section: $section, also: [.changes])
                         .help("Free space over time, cleanup receipts and recovery")
                 }
