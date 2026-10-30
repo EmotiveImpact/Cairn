@@ -254,7 +254,7 @@ struct ReviewSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
                 Text(runningBlockers.isEmpty
-                     ? "Passwords, Mail, Photos, your code history and AI chats are never included."
+                     ? "Passwords, your emails, Photos, your code history and AI chats are never included."
                      : "Items from \(runningBlockers.joined(separator: ", ")) are skipped while it is open.")
                     .fixedSize(horizontal: false, vertical: true)
             }
