@@ -1,6 +1,8 @@
 # Cairn active capabilities and implementation ledger
 
-29 September 2026. This map describes active source routes, not release certification.
+29 October 2026 source reconciliation. This map describes source routes, not release certification.
+See [the current handoff](ROADMAP-CLAUDE.md) for outstanding gates.
+The milestone evidence and dated addenda below are historical; they do not certify later changes.
 Baseline for this continuation: `aa5030d`; clean checkout, six local commits ahead of origin.
 Read the [PRD](CAIRN-STORAGE-CONTROL-PRD.md) for requirements and the
 [validation checkpoint](../artifacts/storage-control/VALIDATION.md) for prior evidence.
@@ -36,10 +38,11 @@ separate persisted setting and has not been turned on by this work.
 
 - `.trash`: individually reviewed, subject to all executor checks; affected size is not freed space.
 - `.adviceOnly`: observation/guidance, never executable.
-- `.emptyTrash`: disabled in Cleaner.
-- `.tool`: all tool commands are disabled by Cleaner, pending individual validated adapters. A `.tool` enum value is not adapter certification.
-- External export: verified content copy only, source retained. Not migration, synchronization,
-  automatic backup or increased internal capacity.
+- `.emptyTrash`: routed to `Cleaner.deleteFromTrash`; permanent operation with executor checks. Runtime acceptance remains required.
+- `.tool`: routed to `Cleaner.runTool`; supported commands remain subject to executor policy. An enum value or implemented route is not adapter certification.
+- External export (`StorageTransfer`): verified copy with source retained and zero immediate reclaim.
+  `StorageRelocation` separately implements moves and tool-location workflows. Its presence
+  does not establish hardware acceptance; do not apply the export-only claim to all Storage actions.
 - Known chat/session data, repositories/worktrees, credentials, databases, protected system
   storage and excluded descendants remain outside generic removal. Observing folder sizes
   never creates a cleanup candidate.
@@ -66,14 +69,14 @@ placeholders. Allocated sizes remain estimates in the presence of APFS clones/sn
 | M1 | Bounded root observations, compatible subsets, SQLite/import/retention, injected clock/probe/failures | Fixture checks pass; real full-volume/energy soak still needed |
 | M2 | Native root evidence, exact intervals, text history and common operation state; retained graphite/rounded-stone identity | 16 route captures; minimum-size checks; full VoiceOver/Reduce Motion matrix remains |
 | M3 | Typed capabilities, immutable reviewed plan, source/scope/permission/age checks, met/impossible/stale states, zero Trash reclaim | Fixtures pass; controlled personal workflow needs independent review |
-| M4 | Shared action intents/outcomes, identity-bound recovery reconciliation, journaled restore, common capacity receipts; isolated npm verify spike | No certified production reclaim adapter; actual kill-at-every-boundary and receipt interaction matrix remain |
+| M4 | Shared action intents/outcomes, identity-bound recovery reconciliation, journaled restore, common capacity receipts; isolated npm verify spike | Permanent cleanup routes now exist in Cleaner; process-boundary crash fixtures now pass (see October 30 validation); production certification and receipt interaction matrix remain |
 | M5 | Separate opt-in folder observation, bounded FSEvents mailbox, dirty-root coalescing/backoff, pressure/priority/pause/lifecycle guards, quiet hours and alert suppression | Live disposable event + scheduler fixtures pass; actual sleep/wake, notification-delivery and overnight energy tests remain |
 | M6–M8 | Separate later milestones | Independent audit; release/commercial gates; physical SSD adapter testing |
 | M9 suggest-only | Opt-in measured-growth inspection suggestions | Native visual/accessibility acceptance and prolonged monitoring; unattended execution remains a separate later gate |
 
 1 October follow-up: the suggest-only phase of M9 now has an opt-in location
 allowlist and growth threshold. With reserve alerts off, background observation
-is limited to the selected locations. No rule performs cleanup. External export
+is limited to the selected locations. At that checkpoint no rule performed cleanup; the current Cleaning rules route above supersedes that restriction. External export
 now rejects duplicate mounted volume identities, including on recheck. Storage
 can inspect the npm cache path seen by Cairn but does not change its setting. This is
 not the M8 configured relocation adapter; actual drive, sleep/wake and prolonged

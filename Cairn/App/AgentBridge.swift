@@ -292,8 +292,8 @@ final class AgentBridge {
         return [
             "ok": summary.accounting.completedCount > 0,
             "completed": summary.accounting.completedCount,
-            "freedNowBytes": summary.accounting.freedBytes, "freedNow": Fmt.size(summary.accounting.freedBytes),
-            "movedToTrashBytes": max(0, summary.accounting.trashBytes - summary.accounting.freedBytes),
+            "freedNowBytes": summary.freedBytes, "freedNow": Fmt.size(summary.freedBytes),
+            "movedToTrashBytes": summary.accounting.movedToTrashBytes,
             "measuredChangeBytes": measured,
             "measuredChange": summary.capacityChanges.map(\.changeText).joined(separator: "; "),
             "failed": summary.failed,
@@ -308,7 +308,7 @@ final class AgentBridge {
         guard let store else { return ["ok": false, "error": "Cairn's window is closed. Call open_cairn, then try again."] }
         let runs = store.cleanupRuns.prefix(max(1, min(20, limit))).map { run -> [String: Any] in
             ["by": run.kind ?? "Cairn", "started": ISO8601DateFormatter().string(from: run.started),
-             "completed": run.summary.accounting.completedCount, "freedNowBytes": run.summary.accounting.freedBytes,
+             "completed": run.summary.accounting.completedCount, "freedNowBytes": run.summary.freedBytes,
              "measuredChange": run.summary.capacityChanges.map(\.changeText).joined(separator: "; "),
              "failed": run.summary.failed]
         }

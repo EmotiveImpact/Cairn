@@ -27,7 +27,7 @@ final class InstanceLease {
         // shared state; never terminate an existing app or take over its files.
         if let existing = NSRunningApplication.runningApplications(withBundleIdentifier: "com.emotiveimpact.cairn")
             .first(where: { $0.processIdentifier != getpid() && !$0.isTerminated }) {
-            existing.activate(options: [.activateIgnoringOtherApps])
+            existing.activate(options: [])
             fputs("Cairn is already running. Use the existing app or quit it normally before opening this copy.\n", stderr)
             return false
         }

@@ -16,6 +16,7 @@ struct ReviewSheet: View {
     @State private var items: [ScanItem] = []
     @State private var expanded: Set<String> = []
     @State private var mode: RemovalMode = .smart
+    @State private var acknowledgedPermanentDeletion = false
     /// The list's own height, so the sheet is only as tall as what it holds.
     @State private var listHeight: CGFloat?
     /// The most the list takes before it scrolls: the old fixed sheet was 600 points.
@@ -52,6 +53,9 @@ struct ReviewSheet: View {
     }
     /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
+        if hasPersonalFilesToDelete {
+            return "Selected files will be permanently deleted. They may be your only copies; Put Back will not be available."
+        }
         if freedNow > 0 && toTrash > 0 {
             return "\(Fmt.size(freedNow)) of caches and build files is freed straight away. They rebuild on their own when needed. "
                 + "Your own files (\(Fmt.size(toTrash))) go to the Trash, where you can put them back. Empty the Trash to free that space too."
@@ -85,6 +89,26 @@ struct ReviewSheet: View {
             }
             // A short list leaves no empty band above the buttons; a long one scrolls.
             .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
+            if runnable.contains(where: { $0.cleanMethod == .trash }) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Picker("For this cleanup", selection: $mode) {
+                        ForEach(RemovalMode.allCases) { option in
+                            Text(option.title).tag(option)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    .disabled(cleaning || sample != nil || goalPlan != nil)
+                    Text(goalPlan == nil
+                         ? "Applies to these selected files only. Tool commands and Trash emptying remain permanent."
+                         : "This goal review keeps its original removal mode. Review files from their category to choose a different mode.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                    if hasPersonalFilesToDelete {
+                        Toggle("I understand these personal files will be permanently deleted, with no Put Back.",
+                               isOn: $acknowledgedPermanentDeletion)
+                            .font(.system(size: 12)).disabled(cleaning)
+                    }
+                }
+            }
             notes
             footer
         }
@@ -93,7 +117,8 @@ struct ReviewSheet: View {
         .foregroundStyle(Brand.textPrimary)
         .background(Brand.surfaceElevated)
         .interactiveDismissDisabled(cleaning)
-        .task { mode = sample == nil ? AppSettings.shared.removalMode : .smart; items = sample?.items ?? goalPlan?.items ?? store.selectedItems() }
+        .onChange(of: mode) { _, _ in acknowledgedPermanentDeletion = false }
+        .task { mode = sample?.mode ?? AppSettings.shared.removalMode; items = sample?.items ?? goalPlan?.items ?? store.selectedItems() }
     }
 
     /// Items grouped by the tool or area that made them, largest group first.
@@ -125,6 +150,7 @@ struct ReviewSheet: View {
                     if open { expanded.remove(group.id) } else { expanded.insert(group.id) }
                 }
                 .buttonStyle(.plain).foregroundStyle(Brand.deepBlue)
+                .accessibilityLabel("\(open ? "Hide" : "Show") items in \(group.title)")
             }
             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             .padding(.leading, 32).padding(.bottom, open ? 6 : 12)
@@ -196,7 +222,7 @@ struct ReviewSheet: View {
             else if runnable.isEmpty { lines.append(("Nothing here can be removed by Cairn.", Brand.amber)) }
         }
         if hasPersonalFilesToDelete {
-            lines.append(("Delete now is on in Settings, so your own files here are deleted for good, not sent to the Trash.", Brand.amber))
+            lines.append(("Delete now is selected for this cleanup. Your own files here will be permanently deleted, with no Put Back.", Brand.amber))
         }
         if !skipped.isEmpty {
             lines.append(("\(skipped.count) advice-only \(skipped.count == 1 ? "item is" : "items are") left alone.", Brand.textMuted))
@@ -220,7 +246,7 @@ struct ReviewSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
                 Text(runningBlockers.isEmpty
-                     ? "Your code, documents and AI conversations are never included."
+                     ? "Protected system data, credentials and AI conversations remain blocked."
                      : "Items from \(runningBlockers.joined(separator: ", ")) are skipped while it is open.")
                     .fixedSize(horizontal: false, vertical: true)
             }
@@ -245,9 +271,11 @@ struct ReviewSheet: View {
 
     private var canClean: Bool {
         !cleaning && !store.isScanning && !store.isCleaning && !runnable.isEmpty
+            && (!hasPersonalFilesToDelete || acknowledgedPermanentDeletion)
     }
 
     private func runClean() async {
+        guard canClean else { return }
         guard sample == nil, !CommandLine.arguments.contains("--preview-ui") else { dismiss(); return }
         cleaning = true
         let summary = await store.clean(items, proEnabled: proEnabled, reviewedPlan: goalPlan, removal: mode)
@@ -261,6 +289,19 @@ struct ReviewSheet: View {
 struct ReviewSample {
     let items: [ScanItem]
     let titles: [String: String]
+    var mode: RemovalMode = .smart
+
+    /// Inert long review, including the personal-file acknowledgement.
+    static var stress: ReviewSample {
+        let items = (0..<12).map { index in
+            ScanItem(url: URL(fileURLWithPath: "/Sample/Downloads/Personal archive \(index).zip"),
+                     allocatedSize: 1_000_000_000, categoryID: "fixture-\(index)",
+                     severity: .review, isRegenerable: false)
+        }
+        return ReviewSample(items: items,
+            titles: Dictionary(uniqueKeysWithValues: (0..<12).map { ("fixture-\($0)", "Personal archive \($0)") }),
+            mode: .delete)
+    }
 
     static var showcase: ReviewSample {
         let home = FileScan.home

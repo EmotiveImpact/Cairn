@@ -6,6 +6,9 @@ import Foundation
 /// replaces them. Used by the app's live scan, the command line and MCP.
 struct PathDedupe {
     private(set) var listed: Set<String> = []
+    // Most findings are siblings. Only a path known to contain a prior finding
+    // needs the descendant search; otherwise each admission is O(path depth).
+    private var ancestors: Set<String> = []
 
     enum Verdict { case skip, keep(replacing: Set<String>) }
 
@@ -19,9 +22,14 @@ struct PathDedupe {
             parent = (parent as NSString).deletingLastPathComponent
         }
         let prefix = path + "/"
-        let inside = listed.filter { $0.hasPrefix(prefix) }
+        let inside: Set<String> = ancestors.contains(path) ? listed.filter { $0.hasPrefix(prefix) } : []
         listed.subtract(inside)
         listed.insert(path)
+        var ancestor = (path as NSString).deletingLastPathComponent
+        while !ancestor.isEmpty, ancestor != "/" {
+            ancestors.insert(ancestor)
+            ancestor = (ancestor as NSString).deletingLastPathComponent
+        }
         return .keep(replacing: inside)
     }
 

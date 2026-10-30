@@ -28,6 +28,8 @@ struct RecoveryWorkspace: View {
     @State private var purgedBytes: Int64 = 0
     @State private var purging = false
     @State private var confirmPurge = false
+    @State private var purgeError: String?
+    @State private var showPurgeError = false
 
     private let preview = CommandLine.arguments.contains("--preview-ui")
     private let inset: CGFloat = 40
@@ -176,7 +178,7 @@ struct RecoveryWorkspace: View {
     /// with the number, three plain figures and what the clean actually moved.
     private func receiptPage(_ summary: ScanStore.CleanSummary, date: Date?) -> some View {
         let freed = summary.freedBytes
-        let moved = max(0, summary.accounting.trashBytes - summary.accounting.freedBytes)
+        let moved = summary.accounting.movedToTrashBytes
         let inTrashNow = preview ? moved : stillInTrashBytes
         let change = summary.capacityChanges.first { $0.before != nil && $0.after != nil }
         let groups = receiptGroups
@@ -328,6 +330,9 @@ struct RecoveryWorkspace: View {
                 }
             }
         }
+        .alert("Trash deletion needs attention", isPresented: $showPurgeError) {
+            Button("OK", role: .cancel) {}
+        } message: { Text(purgeError ?? "Some items could not be deleted.") }
         // The page card paints the background, so the dot field shows through.
         .foregroundStyle(Brand.textPrimary)
         .task {
@@ -410,7 +415,7 @@ struct RecoveryWorkspace: View {
         }
         return store.cleanupRuns.map { run in
             let freed = Self.freed(run.summary)
-            let inTrash = max(0, run.summary.accounting.trashBytes - run.summary.accounting.freedBytes)
+            let inTrash = run.summary.accounting.movedToTrashBytes
             let amount = freed > 0 ? "Freed \(Fmt.size(freed))"
                 : inTrash > 0 ? "\(Fmt.size(inTrash)) in Trash"
                 : "\(run.summary.accounting.completedCount) \(run.summary.accounting.completedCount == 1 ? "item" : "items")"
@@ -418,8 +423,9 @@ struct RecoveryWorkspace: View {
             let pill: (String, NightPill.Tone)
             if store.isRunActive(run.id) { pill = ("In progress", .neutral) }
             else if run.summary.interrupted { pill = ("Stopped", .warn) }
-            else if verified { pill = ("Checked", .ok) }
             else if run.summary.failed > 0 { pill = ("\(run.summary.failed) skipped", .warn) }
+            else if !run.summary.errors.isEmpty { pill = ("Needs review", .warn) }
+            else if verified { pill = ("Checked", .ok) }
             else if run.summary.recoverableCount > 0 { pill = ("Can put back", .neutral) }
             else { pill = ("Recorded", .neutral) }
             return RunLine(id: run.id, title: runTitle(run), date: run.started,
@@ -635,7 +641,9 @@ struct RecoveryWorkspace: View {
         purging = true
         Task {
             let result = await store.deleteFromTrash(ids)
-            purged.formUnion(ids)
+            purgeError = store.restoreMessage
+            showPurgeError = purgeError != nil
+            purged.formUnion(result.ids)
             purgedBytes += result.bytes
             await StorageControl.shared.refreshCapacity(force: true)
             currentCapacity = StorageControl.shared.current
@@ -645,6 +653,7 @@ struct RecoveryWorkspace: View {
     }
     private func status(for entry: ScanStore.RemovalLogEntry) -> String {
         if entry.restoredAt != nil { return "Restored" }
+        if entry.deletedAt != nil { return "Deleted" }
         if availableTrash.contains(entry.id) { return "In Trash" }
         if entry.actionKind == "tool" { return "Tool action" }
         if entry.actionKind == "delete" || purged.contains(entry.id) { return "Deleted" }
@@ -696,6 +705,7 @@ private struct ActivityReceipt {
         if interrupted { return "Cleanup stopped" }
         if skippedCount == 1 { return "Finished with one skipped item" }
         if skippedCount > 1 { return "Finished with \(skippedCount) skipped items" }
+        if !issues.isEmpty { return "Finished with issues" }
         return "Cleanup finished"
     }
     static var sample: Self {

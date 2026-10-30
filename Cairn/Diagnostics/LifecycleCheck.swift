@@ -88,7 +88,7 @@ import AppKit
         do {
             try fm.createDirectory(at: root.appendingPathComponent("source"), withIntermediateDirectories: true)
             defer { try? fm.removeItem(at: root) }
-            for n in 0..<2 { try Data("Native fixture".utf8).write(to: root.appendingPathComponent("source/item-\(n).bin")) }
+            for n in 0..<12_000 { try Data("Native fixture".utf8).write(to: root.appendingPathComponent("source/item-\(n).bin")) }
             let scanning = store(root, count: 12_000)
             let host = NSHostingView(rootView: AnyView(EmptyView()))
             host.sizingOptions = []
@@ -208,6 +208,10 @@ import AppKit
             check(await late.save(run) != nil, "Receipt symlink introduced after load blocks save")
 
             // Retain production ScanStore results across repeated scans and stops.
+            for index in 0..<12_000 {
+                let file = root.appendingPathComponent("source/item-\(index).bin")
+                if !fm.fileExists(atPath: file.path) { try Data("Scan fixture".utf8).write(to: file) }
+            }
             let scanning = store(root, count: 12_000)
             let baseline = MemoryWatch.footprintBytes()
             var peak = baseline, gaps: TimeInterval = 0, beats = 0
@@ -223,7 +227,7 @@ import AppKit
             for round in 0..<12 {
                 scanning.startScan()
                 while scanning.isScanning { try? await Task.sleep(nanoseconds: 20_000_000) }
-                check(scanning.buckets.reduce(0) { $0 + $1.items.count } == 12_000, "Round \(round + 1): production store retains bounded results")
+                check(scanning.buckets.reduce(0) { $0 + $1.items.count } == 12_000, "Round \(round + 1): production store retains bounded results (count=\(scanning.buckets.reduce(0) { $0 + $1.items.count }), phase=\(scanning.phase), status=\(scanning.progressText))")
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 retained.append(MemoryWatch.footprintBytes())
                 scanning.startScan()
@@ -291,9 +295,11 @@ private struct LifecycleScanner: CairnScanner {
     func scan(_ context: ScanContext) async {
         for index in 0..<count {
             if context.isCancelled() { return }
-            let url = root.appendingPathComponent("source/item-\(index % 2).bin")
+            let url = root.appendingPathComponent("source/item-\(index).bin")
             context.emit(ScanItem(url: url, resolvedURL: url, allocatedSize: 18, categoryID: info.id, severity: .review, note: "Disposable \(index)"))
-            if index.isMultiple(of: 100) { try? await Task.sleep(nanoseconds: 3_000_000) }
+            // This suite tests retained results, not buffer overflow (covered by
+            // ReliabilityCheck's deliberate flood). Pace real-file findings.
+            if index.isMultiple(of: 100) { try? await Task.sleep(nanoseconds: 100_000_000) }
         }
     }
 }

@@ -202,12 +202,14 @@ struct WorkspaceCompletion: View {
     @State private var confirmEmpty = false
     @State private var emptying = false
     @State private var emptiedBytes: Int64 = 0
+    @State private var measuredEmptyingGain: Int64 = 0
+    @State private var emptyingError: String?
     @State private var sharing = false
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var finished: Date { date ?? shownAt }
 
-    private var freed: Int64 { summary.freedBytes + emptiedBytes }
-    private var movedToTrash: Int64 { max(0, summary.accounting.trashBytes - summary.accounting.freedBytes) }
+    private var freed: Int64 { summary.freedBytes + measuredEmptyingGain }
+    private var movedToTrash: Int64 { summary.accounting.movedToTrashBytes }
     private var inTrash: Int64 { max(0, min(movedToTrash, stillInTrash ?? (summary.restorable.isEmpty ? 0 : movedToTrash)) - emptiedBytes) }
     /// This clean's recorded Trash items that have not been put back.
     private var trashIDs: Set<UUID> {
@@ -271,7 +273,7 @@ struct WorkspaceCompletion: View {
                 }
                 .font(.system(size: 13)).foregroundStyle(Brand.room)
             } else if emptiedBytes > 0 {
-                Text("Emptied from the Trash. The space is free now.")
+                Text(measuredEmptyingGain > 0 ? "Trash emptied; available capacity increased." : "Trash emptied. No increase in available capacity was measured.")
                     .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             } else if freed == 0 && movedToTrash > 0 {
                 Text(inTrash > 0 ? "The space comes back when the Trash is emptied."
@@ -352,6 +354,7 @@ struct WorkspaceCompletion: View {
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
         .overlay {
+            if let emptyingError { Text(emptyingError).font(.system(size: 13)).foregroundStyle(Brand.amber) }
             if sharing {
                 ShareCardSheet(freed: freed, cleared: summary.cleared) { sharing = false }
                     .transition(.opacity)
@@ -366,6 +369,8 @@ struct WorkspaceCompletion: View {
         Task {
             let result = await store.deleteFromTrash(trashIDs)
             emptiedBytes += result.bytes
+            measuredEmptyingGain += result.freedBytes
+            emptyingError = store.restoreMessage
             await StorageControl.shared.refreshCapacity(force: true)
             emptying = false
         }

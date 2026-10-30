@@ -233,6 +233,30 @@ enum SafetyCheck {
                 fails += 1
             }
 
+            // A successful platform call without a verifiable destination must
+            // not become a successful receipt or permanent deletion.
+            for missingURL in [true, false] {
+                let source = deleteRoot.appendingPathComponent(missingURL ? "missing-url" : "missing-object")
+                try Data([7]).write(to: source)
+                var item = ScanItem(url: source, allocatedSize: 1, categoryID: "fixture", severity: .safe)
+                item.deleteImmediately = true
+                let destination = fixtureTrash.appendingPathComponent(source.lastPathComponent)
+                let result = Cleaner.clean(item, allowedRoots: [deleteRoot], proEnabled: false, moveToTrash: { url in
+                    if missingURL {
+                        try FileManager.default.moveItem(at: url, to: destination)
+                        return nil
+                    }
+                    return destination // simulate an unavailable destination
+                })
+                let preserved = FileManager.default.fileExists(atPath: missingURL ? destination.path : source.path)
+                if !result.ok && !result.deleted && result.bytesAffected == 0 && preserved {
+                    print("✅ unverified Trash destination refuses success and permanent deletion")
+                } else {
+                    print("❌ unverified Trash destination was accepted")
+                    fails += 1
+                }
+            }
+
             // A folder swapped in at the last instant (the trick a link attack
             // relies on) is put back, and nothing is deleted.
             let target = deleteRoot.appendingPathComponent("swap-target")
@@ -253,6 +277,30 @@ enum SafetyCheck {
                 print("✅ an item swapped while moving is put back and nothing is deleted")
             } else {
                 print("❌ a swapped item was not caught: \(swapResult.error ?? "no error")")
+                fails += 1
+            }
+
+            // A collision prevents rollback. Preserve both objects and report
+            // the failure, rather than promising that Put Back succeeded.
+            let collision = deleteRoot.appendingPathComponent("rollback-collision")
+            try Data([1]).write(to: collision)
+            var collisionItem = ScanItem(url: collision, allocatedSize: 1, categoryID: "fixture", severity: .safe)
+            collisionItem.deleteImmediately = true
+            let collisionAside = deleteRoot.appendingPathComponent("rollback-original")
+            let collisionTrash = fixtureTrash.appendingPathComponent("rollback-replacement")
+            let collisionResult = Cleaner.clean(collisionItem, allowedRoots: [deleteRoot], proEnabled: false, moveToTrash: { url in
+                try FileManager.default.moveItem(at: url, to: collisionAside)
+                try Data([2]).write(to: collisionTrash)
+                try Data([3]).write(to: url)
+                return collisionTrash
+            })
+            if !collisionResult.ok && collisionResult.error?.contains("Put Back failed") == true
+                && (try? Data(contentsOf: collision)) == Data([3])
+                && (try? Data(contentsOf: collisionTrash)) == Data([2])
+                && (try? Data(contentsOf: collisionAside)) == Data([1]) {
+                print("✅ rollback collision preserves both paths and reports failure")
+            } else {
+                print("❌ rollback collision was misreported or overwrote data")
                 fails += 1
             }
 
@@ -440,8 +488,11 @@ enum SafetyCheck {
              && !AI.featuresOff(removing: [AI.visual], among: everyFeature).contains { $0.id == "writing-tools" },
              "Apple Intelligence turns off only what the chosen models need")
         func profile(_ chosen: Set<String>) -> [String: Any]? {
-            guard let data = try? AI.Profile.data(removing: chosen, among: everyFeature) else { return nil }
-            return try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+            do {
+                guard let data = try AI.Profile.data(removing: chosen, among: everyFeature) else { return nil }
+                let plist = try PropertyListSerialization.propertyList(from: data, options: [], format: nil)
+                return plist as? [String: Any]
+            } catch { return nil }
         }
         func forced(_ plist: [String: Any]?, _ domain: String) -> [String: Any] {
             let payloads = plist?["PayloadContent"] as? [[String: Any]] ?? []

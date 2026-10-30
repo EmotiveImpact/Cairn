@@ -29,7 +29,7 @@ Run from the repository root. This opens sample components, not real cleanup act
 
 ## Packaging and release
 
-`build_local.sh` assembles and signs a local bundle; `build_release.sh` additionally invokes notarization. Both are operational scripts, not ordinary compile checks. They currently replace `dist/Cairn.app`; do not run them over a running or unpreserved bundle. Use a staged bundle and preserve the predecessor when updating a live development installation.
+`build_local.sh` assembles and signs a local bundle; `build_release.sh` additionally invokes notarization. Both are operational scripts, not ordinary compile checks. Each invocation writes a unique `dist/local.XXXXXX` or `dist/release.XXXXXX` directory, leaving previous bundles and archives untouched. Failed builds keep an `INCOMPLETE` marker; only artifacts without that marker passed all script checks. Compilation defaults to two workers; set `BUILD_JOBS` to override. The release script refuses to proceed if signed entitlements cannot be inspected. Use the exact output path printed by the script. Installation and publishing remain separate operations.
 
 Signing/notarization credentials are machine-local. Never commit key files, keychain exports or environment secrets. Public upload, App Store submission and personal cleanup require a separate explicit instruction.
 

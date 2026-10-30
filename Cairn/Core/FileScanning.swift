@@ -60,19 +60,30 @@ enum FileScan {
         let fileLimit = min(max(1, maxFiles), hardFileLimit)
         let deadline = ProcessInfo.processInfo.systemUptime + max(0.05, maxDuration)
 
-        // Symlink? Never follow; don't count (the target is sized via its own root).
-        let rv = try? url.resourceValues(forKeys: [.isSymbolicLinkKey, .isDirectoryKey, .isRegularFileKey,
-                                                    .totalFileAllocatedSizeKey, .fileAllocatedSizeKey,
-                                                    .fileSizeKey, .contentModificationDateKey, .isUbiquitousItemKey])
+        func recordFailure(_ error: Error) {
+            stats.truncated = true
+            let ns = error as NSError
+            let underlying = ns.userInfo[NSUnderlyingErrorKey] as? NSError
+            for cause in [ns, underlying].compactMap({ $0 }) {
+                if (cause.domain == NSCocoaErrorDomain && cause.code == NSFileReadNoPermissionError)
+                    || (cause.domain == NSPOSIXErrorDomain && [1, 13].contains(cause.code)) {
+                    stats.permissionDenied = true
+                }
+            }
+        }
+        // A missing/unreadable root is an incomplete observation, not an empty file.
+        let rv: URLResourceValues
+        do { rv = try url.resourceValues(forKeys: sizeKeys) }
+        catch { recordFailure(error); return stats }
         if ProcessInfo.processInfo.systemUptime >= deadline {
             stats.timedOut = true; stats.truncated = true; return stats
         }
-        if rv?.isSymbolicLink == true { return stats }
+        if rv.isSymbolicLink == true { return stats }
 
-        if rv?.isDirectory != true {
+        if rv.isDirectory != true {
             // Single file.
-            if rv?.isUbiquitousItem == true { return stats } // iCloud stub — leave unhydrated
-            if let mod = rv?.contentModificationDate { stats.latestModified = mod }
+            if rv.isUbiquitousItem == true { return stats } // iCloud stub — leave unhydrated
+            if let mod = rv.contentModificationDate { stats.latestModified = mod }
             stats.allocatedSize = allocated(from: rv)
             stats.fileCount = 1
             return stats
@@ -83,14 +94,10 @@ enum FileScan {
             includingPropertiesForKeys: Array(sizeKeys),
             options: [],
             errorHandler: { _, error in
-                let ns = error as NSError
-                if ns.domain == NSCocoaErrorDomain || ns.domain == NSPOSIXErrorDomain {
-                    // EPERM (1) / EACCES (13) → likely Full Disk Access gap.
-                    if ns.code == 257 || ns.code == 13 || ns.code == 1 { stats.permissionDenied = true }
-                }
-                return true // keep going; record the gap
+                recordFailure(error)
+                return true // keep readable siblings, but preserve every gap
             }
-        ) else { return stats }
+        ) else { stats.truncated = true; return stats }
         if ProcessInfo.processInfo.systemUptime >= deadline {
             stats.timedOut = true; stats.truncated = true; return stats
         }
@@ -106,7 +113,9 @@ enum FileScan {
                 guard let item = enumerator.nextObject() as? URL else { stop = true; return }
                 examined += 1
                 if examined > hardEntryLimit { stats.truncated = true; stop = true; return }
-                guard let v = try? item.resourceValues(forKeys: sizeKeys) else { return }
+                let v: URLResourceValues
+                do { v = try item.resourceValues(forKeys: sizeKeys) }
+                catch { recordFailure(error); return }
                 if v.isSymbolicLink == true { enumerator.skipDescendants(); return }
                 if v.isUbiquitousItem == true { enumerator.skipDescendants(); return }
                 if v.isDirectory == true { return }

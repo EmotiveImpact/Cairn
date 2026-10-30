@@ -85,11 +85,22 @@ actor RecoveryHistory {
         entries[index].restoredAt = Date()
         save(); return snapshot()
     }
+    func markDeleted(_ id: UUID) -> Snapshot {
+        ensureLoaded()
+        guard problem == nil, let index = entries.firstIndex(where: { $0.id == id }) else { return snapshot() }
+        entries[index].deletedAt = Date()
+        save(); return snapshot()
+    }
     func reconcile(_ actions: [ActionJournal.Entry]) -> Snapshot {
         ensureLoaded()
         guard problem == nil else { return snapshot() }
         var acknowledged = Set<UUID>(), changed = false
         for action in actions where action.state == .succeeded {
+            if action.actionKind == "delete-trash", let related = action.relatedRecoveryID,
+               let index = entries.firstIndex(where: { $0.id == related }), action.path == entries[index].trashPath {
+                if entries[index].deletedAt == nil { entries[index].deletedAt = action.date; changed = true }
+                acknowledged.insert(action.id); continue
+            }
             if action.actionKind == "restore", let related = action.relatedRecoveryID,
                let index = entries.firstIndex(where: { $0.id == related }), action.destinationPath == entries[index].originalPath {
                 if entries[index].restoredAt == nil { entries[index].restoredAt = action.date; changed = true }

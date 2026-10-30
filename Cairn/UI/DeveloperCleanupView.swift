@@ -9,8 +9,10 @@ struct DeveloperCleanupView: View {
     var searchText: String = ""
     @Binding var inspectorVisible: Bool
     var onReview: () -> Void
+    var onOpen: (NavSection) -> Void = { _ in }
 
     @State private var expandedBuckets: Set<String> = []
+    @State private var expandedItems: Set<UUID> = []
     @State private var previewBuckets = DeveloperCleanupView.makePreviewBuckets()
     private let previewMode = CommandLine.arguments.contains("--preview-ui")
 
@@ -165,21 +167,76 @@ struct DeveloperCleanupView: View {
             NightMeter(share: Double(group.bytes) / Double(largestBytes))
             Text(Fmt.size(group.bytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
                 .frame(width: 90, alignment: .trailing)
-            status(for: group.items).frame(width: 150, alignment: .leading)
+            Button {
+                expandedBuckets.formSymmetricDifference([group.id])
+            } label: {
+                HStack(spacing: 5) {
+                    status(for: group.items)
+                    Image(systemName: expandedBuckets.contains(group.id) ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10))
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Show cleanup choices for \(group.bucket.info.title)")
+            .frame(width: 150, alignment: .leading)
         }
         .nightRow()
     }
 
     private func itemRow(_ item: ScanItem) -> some View {
         let canSelect = item.severity != .risky && item.isActionable
-        return HStack(spacing: 14) {
-            NightCheck(on: item.selected, enabled: canSelect) { toggleItemSelection(item.id) }
+        return VStack(alignment: .leading, spacing: 8) {
+          HStack(spacing: 14) {
+            NightCheck(on: item.selected, enabled: canSelect && !store.isScanning && !store.isCleaning) { toggleItemSelection(item.id) }
                 .accessibilityLabel(item.selected ? "Deselect \(item.url.lastPathComponent)" : "Select \(item.url.lastPathComponent)")
             NightName(logo: nil, title: item.url.lastPathComponent, subtitle: shortPath(item.resolvedURL.path))
             Spacer().frame(width: 150)
             Text(Fmt.size(item.allocatedSize)).font(.system(size: 12.5)).foregroundStyle(Brand.textSecondary).monospacedDigit()
                 .frame(width: 90, alignment: .trailing)
-            status(for: [item]).frame(width: 150, alignment: .leading)
+            Button(expandedItems.contains(item.id) ? "Hide choices" : canSelect ? "Review item" : "Why / options") {
+                expandedItems.formSymmetricDifference([item.id])
+            }
+            .buttonStyle(.plain).foregroundStyle(Brand.room)
+            .frame(width: 150, alignment: .leading)
+          }
+          if expandedItems.contains(item.id) {
+              Text(item.note.isEmpty ? consequence(for: item) : item.note)
+                  .font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                  .fixedSize(horizontal: false, vertical: true)
+              HStack(spacing: 12) {
+                  if canSelect {
+                      Button("Review this item") {
+                          guard !previewMode, !store.isScanning, !store.isCleaning else { return }
+                          store.beginScopedReview([item.id])
+                          onReview()
+                      }
+                      .buttonStyle(ControlPanelButtonStyle())
+                  } else if item.resolvedURL.pathExtension.lowercased() == "app" {
+                      Button("Remove in Apps") { onOpen(.apps) }
+                          .buttonStyle(ControlPanelButtonStyle())
+                  } else if item.categoryID == "games" {
+                      Button("Open game removal options") { onOpen(.games) }
+                          .buttonStyle(ControlPanelButtonStyle())
+                  }
+                  if !canSelect, ChatAppsScanner.chatApp(for: item) != nil {
+                      Button("Open chat storage options") { onOpen(.chatApps) }
+                          .buttonStyle(ControlPanelButtonStyle())
+                  }
+                  if !canSelect, let owner = removalOwner(for: item) {
+                      Button("Open \(owner.name)") { NSWorkspace.shared.open(owner.url) }
+                          .buttonStyle(ControlPanelButtonStyle())
+                  }
+                  Button("Show in Finder") {
+                      NSWorkspace.shared.activateFileViewerSelecting([item.resolvedURL])
+                  }
+                  .buttonStyle(ControlPanelButtonStyle())
+              }
+              .disabled(previewMode || store.isScanning || store.isCleaning)
+              if canSelect && item.cleanMethod == .trash {
+                  Text("Choose Move to Trash or Delete now in the review. Protected files remain blocked.")
+                      .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+              }
+          }
         }
         .padding(.leading, 36)
         .nightRow()
@@ -197,6 +254,25 @@ struct DeveloperCleanupView: View {
             }.disabled(previewMode)
         }
         .help(item.note.isEmpty ? consequence(for: item) : item.note)
+    }
+
+    /// Open the owning app; never run a removal command or open the data file.
+    private func removalOwner(for item: ScanItem) -> (name: String, url: URL)? {
+        guard item.categoryID == "creative" else { return nil }
+        let path = item.resolvedURL.path.lowercased()
+        let name: String
+        let identifiers: [String]
+        if path.hasSuffix(".fcpbundle") {
+            name = "Final Cut Pro"; identifiers = ["com.apple.FinalCut"]
+        } else if path.hasSuffix(" smart previews.lrdata") {
+            name = "Lightroom Classic"; identifiers = ["com.adobe.LightroomClassicCC7", "com.adobe.Lightroom5"]
+        } else if path.hasPrefix("/library/application support/logic")
+                    || path.hasPrefix("/library/audio/apple loops/apple")
+                    || path.hasPrefix("/library/application support/garageband") {
+            name = "Logic Pro"; identifiers = ["com.apple.logic10"]
+        } else { return nil }
+        guard let url = identifiers.lazy.compactMap({ NSWorkspace.shared.urlForApplication(withBundleIdentifier: $0) }).first else { return nil }
+        return (name, url)
     }
 
     private func isReady(_ item: ScanItem) -> Bool {

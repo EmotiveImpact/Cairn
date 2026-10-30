@@ -233,7 +233,7 @@ struct AppShell: View {
         .focusEffectDisabled(Showcase.active)
         // Land idle on launch (the OSS-cleaner norm): show the last scan's cached
         // results instantly; the user starts a fresh scan from the Dashboard CTA or
-        // the Smart Scan page. No auto-scan, no launch CPU/RAM spike.
+        // the Smart Scan page. The opted-in weekly refresh below handles stale scans.
         .focusedSceneValue(\.cairnFind, supportsResultFilter ? { showResultFilter = true; searchFocused = true } : nil)
         .onChange(of: section) { _, next in
             developerSearch = ""
@@ -298,11 +298,8 @@ struct AppShell: View {
             // Legacy clean-on-quit is inert; reserve monitoring only observes.
             // Honor "Auto Scan Weekly": refresh a stale (>7-day-old) scan on open.
             // Never fires on first run — landing idle stays the first impression.
-            if !CommandLine.arguments.contains("--no-auto-scan"), AppSettings.shared.autoScanWeekly, store.phase == .idle,
-               let last = store.lastScanDate,
-               Date().timeIntervalSince(last) > 7 * 86_400 {
-                store.startScan(includeExternalVolumes: !AppSettings.shared.ignoreExternalDrives)
-            }
+            store.startWeeklyScanIfDue(enabled: AppSettings.shared.autoScanWeekly,
+                                       includeExternalVolumes: !AppSettings.shared.ignoreExternalDrives)
         }
         // Records RSS + what the app was doing, to ~/Library/Logs/Cairn-memory.log.
         // Local only. This is how a runaway spike gets traced to the page and scan
@@ -585,7 +582,8 @@ struct AppShell: View {
         case .smartScan, .general, .browsers, .developer, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
-                                 onReview: { if !previewMode { showReview = true } })
+                                 onReview: { if !previewMode { showReview = true } },
+                                 onOpen: { section = $0 })
         case .lookThrough:
             LookThroughWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .diskMap:

@@ -58,7 +58,7 @@ struct LookThroughWorkspace: View {
                 Spacer()
                 Button("Select none") { setSelected(mine.map(\.id), false) }
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
-                Button("Review and move \(Fmt.size(pickedBytes))") {
+                Button("Review cleanup · \(Fmt.size(pickedBytes))") {
                     store.beginScopedReview(Set(mine.map(\.id)))
                     onReview()
                 }
@@ -111,6 +111,8 @@ struct LookThroughWorkspace: View {
             NightCheck(on: count > 0, enabled: !tickable.isEmpty || count > 0) {
                 if count > 0 { setSelected(group.items.map(\.id), false) } else { setSelected(tickable.map(\.id), true) }
             }
+            .accessibilityLabel(count > 0 ? "Clear selection in \(group.title)" : "Select eligible items in \(group.title)")
+            .accessibilityValue("\(count) of \(group.items.count) selected")
             .opacity(count > 0 && count < group.items.count ? 0.6 : 1)
             .help(count > 0 && count < group.items.count ? "\(count) of \(group.items.count) picked" : "")
             VStack(alignment: .leading, spacing: 3) {
@@ -123,6 +125,7 @@ struct LookThroughWorkspace: View {
                     Text(group.peek.joined(separator: " · ")).foregroundStyle(Brand.textMuted).lineLimit(1)
                     Button(isOpen ? "Hide" : "See all") { expanded.formSymmetricDifference([group.id]) }
                         .buttonStyle(.plain).foregroundStyle(Brand.room)
+                        .accessibilityLabel("\(isOpen ? "Hide" : "Show") items in \(group.title)")
                 }
                 .font(.system(size: 12))
             }
@@ -140,6 +143,8 @@ struct LookThroughWorkspace: View {
     private func itemRow(_ item: ScanItem, on: Bool) -> some View {
         HStack(spacing: 14) {
             NightCheck(on: on, enabled: item.severity != .risky) { setSelected([item.id], !on) }
+                .accessibilityLabel(item.severity == .risky ? "\(item.resolvedURL.lastPathComponent) is protected" : "\(on ? "Deselect" : "Select") \(item.resolvedURL.lastPathComponent)")
+                .accessibilityHint(item.resolvedURL.path)
             NightName(logo: nil, title: item.resolvedURL.lastPathComponent, subtitle: folder(item))
             Text(age(item)).font(.system(size: 12)).foregroundStyle(Brand.textMuted).frame(width: 110, alignment: .trailing)
             Text(Fmt.size(item.allocatedSize)).font(.system(size: 13)).monospacedDigit().frame(width: 80, alignment: .trailing)

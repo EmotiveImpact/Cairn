@@ -88,6 +88,8 @@ struct AppleIntelligenceWorkspace: View {
         return HStack(spacing: 16) {
             if !installed.on {
                 NightCheck(on: goes, enabled: !follows && !busy) { toggle(set.id) }
+                    .accessibilityLabel("\(goes ? "Keep" : "Remove") \(set.title)")
+                    .accessibilityHint(follows ? "Included because all features using these models will be turned off" : "")
             }
             NightName(logo: nil, title: set.title, subtitle: set.line, symbol: "sparkle", titleSize: 13.5)
             NightMeter(share: Double(size ?? 0) / Double(largest), width: 140)

@@ -86,7 +86,7 @@ struct LargeFilesWorkspace: View {
                     .buttonStyle(ControlPanelButtonStyle(size: .large))
             }
             // Reviews only the files picked here, so the review shows this same number.
-            Button(selected.isEmpty ? "Review and move to Trash" : "Review and move \(Fmt.size(selectedBytes))") {
+            Button(selected.isEmpty ? "Review cleanup" : "Review cleanup · \(Fmt.size(selectedBytes))") {
                 store.beginScopedReview(Set(selected.map(\.id)))
                 onReview()
             }
@@ -143,12 +143,15 @@ struct LargeFilesWorkspace: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    NightMeter(share: Double(item.allocatedSize) / Double(max(1, largest)))
+                    // Keep filenames readable when the inspector narrows the list.
+                    if !inspectorVisible {
+                        NightMeter(share: Double(item.allocatedSize) / Double(max(1, largest)))
+                    }
                     Text(Fmt.size(item.allocatedSize)).font(.system(size: 13, weight: .medium)).monospacedDigit()
-                        .frame(width: 90, alignment: .trailing)
+                        .frame(width: inspectorVisible ? 70 : 90, alignment: .trailing)
                     NightPill(text: item.selected ? "Selected" : item.isActionable ? "Needs you" : "Advice only",
                               tone: item.selected ? .ok : .neutral)
-                        .frame(width: 120, alignment: .leading)
+                        .frame(width: inspectorVisible ? 90 : 120, alignment: .leading)
                 }
                 .contentShape(Rectangle())
             }
@@ -200,8 +203,16 @@ struct LargeFilesWorkspace: View {
                 .buttonStyle(ControlPanelButtonStyle())
         }
         .disabled(preview || !FileManager.default.fileExists(atPath: item.resolvedURL.path))
-        Text(item.isActionable ? "This may be your only copy. Check you still need it, or have a backup, before choosing it."
-                               : "Advice only. Cairn will not move this file.")
+        if item.isActionable && item.severity != .risky {
+            Button(item.selected ? "Remove from selection" : "Select for cleanup") {
+                store.toggle(item.id)
+            }
+            .buttonStyle(ControlPanelButtonStyle())
+            .disabled(preview || store.isScanning || store.isCleaning)
+        }
+        Text(item.isActionable && item.severity != .risky
+             ? "This may be your only copy. Select it, then review the cleanup. In the review you can choose Move to Trash or Delete now."
+             : "Cairn cannot remove this item. \(item.note.isEmpty ? "This location contains protected data or has no supported removal action." : item.note)")
             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             .fixedSize(horizontal: false, vertical: true)
     }
