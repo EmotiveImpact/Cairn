@@ -201,8 +201,10 @@ enum DiskMap {
     }
 
     /// The top-level parts plus a plain "Not measured" part for used space the
-    /// measured parts don't reach, so the bar has no blank gap. The gap is its
-    /// own part, never added to System Data or pinned on one cause.
+    /// measured parts don't reach, so the bar has no visible blank gap. The gap
+    /// is its own part, never added to System Data or pinned on one cause.
+    /// Under 0.5 GB it is left out: that is under 0.2% of even a 256 GB disk,
+    /// too thin to see on the bar, and would only add a near-empty row.
     static func areasWithUnmeasured(_ reading: Reading) -> [DiskArea] {
         let measured = reading.areas.filter { $0.kind != .free }.reduce(Int64(0)) { $0 + max(0, $1.bytes) }
         let gap = reading.used - measured
