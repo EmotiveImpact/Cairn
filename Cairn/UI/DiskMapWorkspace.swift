@@ -5,22 +5,65 @@ import AppKit
 /// coming back does not walk the disk again.
 @MainActor @Observable final class DiskMapStore {
     static let shared = DiskMapStore()
+    typealias Reader = @Sendable (@escaping @Sendable (String) -> Void) -> DiskMap.Reading?
+    private let reader: Reader
+    init(reader: @escaping Reader = { DiskMap.read(progress: $0) }) { self.reader = reader }
     private(set) var reading: DiskMap.Reading?
     private(set) var measuring = false
     private(set) var status = ""
 
+    private var task: Task<Void, Never>?
+    private var generation = UUID()
+    private(set) var stopping = false
+
     func measure() {
         guard !measuring else { return }
         measuring = true
-        status = "Measuring…"
-        Task {
-            let result = await Task.detached(priority: .utility) {
-                DiskMap.read(progress: { line in Task { @MainActor in DiskMapStore.shared.status = "Measuring " + line } })
-            }.value
-            reading = result ?? reading
-            status = result == nil ? "Cairn could not read this disk's capacity." : ""
-            measuring = false
+        stopping = false
+        let request = UUID()
+        generation = request
+        status = "Waiting for other disk work to finish…"
+        let reader = self.reader
+        task = Task { [weak self] in
+            guard let self else { return }
+            defer { self.measuring = false; self.stopping = false }
+            guard await ScanGate.shared.acquire(.diskMap) else {
+                self.status = "Disk mapping stopped."
+                return
+            }
+            defer { ScanGate.shared.release() }
+            guard !Task.isCancelled else { self.status = "Disk mapping stopped."; return }
+            self.status = "Measuring…"
+            let worker = Task.detached(priority: .utility) {
+                let throttle = ProgressThrottle()
+                return reader { line in
+                    guard !Task.isCancelled, throttle.shouldPublish() else { return }
+                    Task { @MainActor in
+                        guard self.generation == request, self.measuring, !self.stopping else { return }
+                        self.status = "Measuring " + line
+                    }
+                }
+            }
+            let result = await withTaskCancellationHandler {
+                await worker.value
+            } onCancel: { worker.cancel() }
+            guard !Task.isCancelled else { self.status = "Disk mapping stopped."; return }
+            self.reading = result ?? self.reading
+            self.status = result == nil ? "Cairn could not read this disk's capacity." : ""
         }
+    }
+
+    func cancel() {
+        guard measuring else { return }
+        stopping = true
+        status = "Stopping disk mapping…"
+        task?.cancel()
+    }
+
+    func cancelAndWait() async {
+        let worker = task
+        cancel()
+        await worker?.value
     }
 
     func showSample() { reading = DiskMapWorkspace.sample }
@@ -67,11 +110,11 @@ struct DiskMapWorkspace: View {
                     Button { path.removeLast(); chosen = nil } label: { Label("Back", systemImage: "chevron.left") }
                         .buttonStyle(ControlPanelButtonStyle(size: .small))
                 }
-                Button { measure() } label: {
-                    Label(map.measuring ? "Measuring…" : reading == nil ? "Map my disk" : "Measure again", systemImage: "arrow.clockwise")
+                Button { if map.measuring { map.cancel() } else { measure() } } label: {
+                    Label(map.stopping ? "Stopping…" : map.measuring ? "Stop" : reading == nil ? "Map my disk" : "Measure again", systemImage: map.measuring ? "stop.circle" : "arrow.clockwise")
                 }
                 .buttonStyle(ControlPanelButtonStyle(size: .small))
-                .disabled(map.measuring)
+                .disabled(preview || map.stopping)
             }
         } content: {
             if reading != nil {
@@ -84,16 +127,16 @@ struct DiskMapWorkspace: View {
                 }
             } else {
                 NightEmpty(title: map.measuring ? "Mapping your disk" : "Not mapped yet",
-                           message: map.measuring ? map.status
+                           message: !map.status.isEmpty ? map.status
                                : "Cairn measures macOS, System Data, apps and your files. It only reads sizes and takes up to two minutes.",
                            busy: map.measuring)
             }
         } footer: {
             if let reading {
-                Text("Sizes are read from the disk. ≥ means a folder hit a measuring limit.")
-                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
+                Text("Category estimates may share blocks; the bar scales them to fit. Available space comes from macOS. ≥ means incomplete.")
+                    .font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
                 Spacer()
-                Text(map.measuring ? map.status : "Measured " + reading.date.formatted(.relative(presentation: .named)))
+                Text(!map.status.isEmpty ? map.status : "Measured " + reading.date.formatted(.relative(presentation: .named)))
                     .font(.system(size: 12)).foregroundStyle(Brand.textMuted).lineLimit(1)
             }
         }
@@ -125,8 +168,8 @@ struct DiskMapWorkspace: View {
 
     private var lead: String {
         if let focus { return focus.note.isEmpty ? "Choose a part to see what is inside it." : focus.note }
-        return reading == nil ? "A picture of everything on this Mac's disk, System Data included."
-                              : "Everything on this disk, System Data included. Choose a part to look inside."
+        return reading == nil ? "Capacity and estimated sizes of the folders Cairn can read."
+                              : "Measured categories, not a complete inventory. Snapshots and unreadable files may be missing. Choose a part to look inside."
     }
 
     private func measure() {
@@ -179,16 +222,13 @@ struct DiskMapWorkspace: View {
 
     private var diskBar: some View {
         let areas = shown
-        let sum = areas.reduce(Int64(0)) { $0 + $1.bytes }
-        // The whole disk is the scale, so a reading whose parts fall short
-        // leaves an honest gap instead of stretching the parts.
-        let total = Double(max(1, focus == nil ? max(sum, reading?.total ?? 0) : sum))
+        let fractions = DiskMap.barFractions(areas, capacity: focus == nil ? reading.map { ($0.total, $0.free) } : nil)
         return VStack(alignment: .leading, spacing: 8) {
             GeometryReader { geo in
                 let gaps = CGFloat(max(0, areas.count - 1)) * 3
                 HStack(spacing: 3) {
                     ForEach(Array(areas.enumerated()), id: \.element.id) { index, area in
-                        let width = max(4, (geo.size.width - gaps) * CGFloat(Double(area.bytes) / total))
+                        let width = max(0, geo.size.width - gaps) * CGFloat(fractions[index])
                         // The open part (or the one under the pointer) stays full
                         // strength and the rest step back a little: no outline or glow.
                         let lead = hovered ?? opened?.id
@@ -355,17 +395,17 @@ struct DiskMapWorkspace: View {
         func a(_ id: String, _ title: String, _ kind: DiskArea.Kind, _ size: Int64, _ children: [DiskArea] = [], _ note: String = "") -> DiskArea {
             DiskArea(id: id, title: title, kind: kind, bytes: size * gb, children: children, note: note)
         }
-        // Parts add up to the 582 GB used, as a real reading does.
+        // Illustrative estimates; real categories need not reconcile with capacity.
         let system = [a("sys/dev", "Xcode and simulators", .systemData, 52), a("sys/support", "App support data", .systemData, 31),
                       a("sys/caches", "App caches", .systemData, 22), a("sys/containers", "App containers", .systemData, 17),
-                      a("sys/vm", "Swap and sleep image", .systemData, 8), a("sys/unseen", "Not measured", .systemData, 13)]
+                      a("sys/vm", "Swap and sleep image", .systemData, 8), a("sys/library", "Shared Library", .systemData, 13)]
         let files = [a("f/dl", "Downloads", .files, 92), a("f/docs", "Documents", .files, 60), a("f/pics", "Pictures", .files, 38),
                      a("f/movies", "Movies", .files, 24), a("f/desk", "Desktop", .files, 6)]
         let dev = [a("d/dev", "Developer", .developer, 104), a("d/hidden", "Hidden tool folders", .developer, 41)]
         let apps = [a("a/xcode", "Xcode", .apps, 12), a("a/logic", "Logic Pro", .apps, 7), a("a/rest", "48 smaller items", .apps, 39)]
         return DiskMap.Reading(total: 994 * gb, free: 412 * gb, areas: [
             a("macos", "macOS", .macOS, 16, [], "macOS and the files it needs to start. Read-only."),
-            a("sys", "System Data", .systemData, 143, system, "What Finder calls System Data, broken into its parts."),
+            a("sys", "System Data", .systemData, 143, system, "Measured app and system folders, not Apple’s System Data classification."),
             a("apps", "Apps", .apps, 58, apps), a("dev", "Coding", .developer, 145, dev),
             a("files", "Your files", .files, 220, files), a("free", "Free", .free, 412),
         ], date: Date())

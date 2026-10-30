@@ -1,10 +1,111 @@
 # Bugs & Fixes
 
+Latest validation: [30 October native build and diagnostic results](artifacts/production-readiness-20261030/VALIDATION.md). The build and safety/workspace/evidence/reliability checks now pass on the paired Mac; this supersedes earlier unrun-check notes. Production readiness remains incomplete.
+
 Living log of bugs, safety risks, and their fixes for the Mac cleaner app. Newest at top of each section. Every entry: **symptom → cause → fix → status**.
 
 Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium · ⚪ low/polish.
 
 ---
+
+Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
+
+## 30 October 2026 — Unreadable paths looked completely measured
+
+A failed root metadata read returned an exact zero-byte file count. Missing and
+permission-denied fixture roots reproduced this. Measurement errors now retain
+incomplete/permission flags, and DiskMap preserves zero-byte partial categories
+and unavailable capacity. Native build and standard diagnostics passed; real
+permission-denied disk-map rendering still needs acceptance.
+
+## 30 October 2026 — Disk map bypassed the operation queue
+
+Disk mapping could traverse the disk alongside other heavy operations, had no
+Stop control and routed progress through the singleton. A held-gate fixture
+reproduced the overlap. Mapping now queues, supports cancellation with worker
+drain, retains the previous map on Stop and filters stale/rate-limited progress.
+Native build and lifecycle regressions pass; no personal disk was scanned.
+
+## 30 October 2026 — Malformed license response looked revoked
+
+Missing, unknown, incorrectly typed or non-JSON successful responses were
+converted to denied licenses. The HTTP client now throws a retryable error,
+allowing existing offline-grace handling rather than persisting false revocation.
+Four before-fix fixture failures now pass; all seven status cases and the native
+reliability suite passed. Live commerce remains unverified.
+
+## 30 October 2026 — Minimum-size UI defects
+
+Native captures reproduced filenames disappearing from Large Files with its
+inspector open, and Home's Rescan button wrapping mid-word. The file list now
+preserves name space by hiding its redundant meter beside the inspector; Home
+moves its actions into a second row when they do not fit. Native rebuild and
+after-captures verify both corrections. The long personal-deletion review keeps
+its acknowledgement and footer visible at minimum height.
+
+## 30 October 2026 — Release entitlement inspection failed open
+
+The release script ignored errors from signed-entitlement inspection and could
+claim verification succeeded, then continue to notarization. A disposable tool
+fixture reproduced this. Inspection failure now stops packaging with INCOMPLETE
+retained; tests also require no notarization call for unsafe entitlements or a
+missing hardened runtime. All 16 packaging fixtures pass on Linux and macOS.
+Build scripts default to two compiler workers (override with BUILD_JOBS).
+No real signing, notarization or publication was performed in these tests.
+
+## 30 October 2026 — Silent Put Back refusal
+
+Already-restored records, unknown IDs and unreadable recovery history returned
+without explaining why Put Back failed. Three disposable regressions reproduced
+this; specific refusal messages now pass those checks. A replaced Trash object
+is also verified to be rejected before restore executes, preserving its bytes.
+Native build and standard diagnostics passed.
+
+## 30 October 2026 — Failed Trash deletion looked finished
+
+- Corrupt or pending action journals stopped deletion without marking the
+  receipt interrupted. Stopped status is now persisted across reload.
+- Unreadable recovery history refused deletion without an explanation. The
+  operation now reports the storage error before returning.
+- Activity could show Checked ahead of failures. Failure and review states now
+  take priority, and receipt titles acknowledge unresolved issues.
+
+Five reproduced fixture failures now pass, alongside native build and standard
+diagnostics. No personal Trash was touched.
+
+## 30 October 2026 — Sustained scan responsiveness
+
+Sibling-path deduplication searched all earlier findings on every admission,
+and applying a batch could starve the main actor. Added ancestor indexing and
+cooperative batch yields with cancellation checks. Corrected a diagnostic that
+emitted two paths while expecting 12,000 retained results. Twelve lifecycle
+rounds and eight native workspace rounds now pass with 12,000 distinct files.
+The native workspace heartbeat gap stayed below 0.365 seconds.
+
+## 30 October 2026 — Stop/drain cancellation
+
+Pressing Stop cleared the task handle, so a later `cancelAndWait` could return
+while the producer was still closing. A real ScanStore fixture reproduced this
+before the fix. ScanStore and DuplicateStore now retain the cancelled handle.
+Native build, standard diagnostics, load and hash-memory checks pass; detailed
+before/after logs are in the production-readiness checkpoint.
+
+## 30 October 2026 — Accounting and scan freshness
+
+- Mixed tool and Trash cleanup subtracted tool bytes from Trash bytes. Added a separate file-deletion estimate and shared `movedToTrashBytes` calculation across receipts, rules and agent responses.
+- Receipt totals chose the larger of deletion estimates and positive-only capacity deltas. They now require complete measurements, use net capacity change and give Trash-only actions zero reclaim credit.
+- Cleanup rewrote the scan timestamp as now, delaying weekly freshness checks. Snapshot updates now retain the scan start date and refuse cancelled/partial results.
+- Cached display buckets dropped `readyBytes` on reload. The saved Ready total now survives the display mapping.
+
+## 29 October 2026 — Trash executor fixes (native checks passed)
+
+- **Unverified Trash destination counted as success:** `Cleaner.trash` defaulted verification to true when the moved object's identity could not be read, and accepted a missing destination. It now refuses success/permanent deletion unless a destination identity is available. Added disposable cases for missing URL and missing object.
+- **Failed rollback reported as successful Put Back:** the source-swap branch ignored `renamex_np`'s return value. It now reports restoration failure and the retained Trash path. Added a collision fixture asserting all three objects retain their original contents.
+- **Missing identity bypassed permanent-delete checks:** both Trash-emptying entry points treated absent identity as permission to proceed. They now require a matching recorded identity; legacy entries without one require a fresh scan.
+
+Source diff and whitespace checks passed. Regression fixtures in
+`--safetycheck` passed on the paired Mac on 30 October.
+No personal cleanup was performed.
 
 ## Where things stand, 27 October 2026
 
@@ -19,7 +120,7 @@ A plain summary of what is wrong now, what has been fixed, and what is still to 
 | 🟡 | **Claude Code, Claude Desktop and Codex point at a deleted test build** on Edem's Mac (a test copy opened on 23 Oct rewrote the link when AI tools were connected from it). Still the case on 27 Oct. | The Cairn link in those tools is broken until it points at a real build. | PR #5 makes Connect prefer `/Applications/Cairn.app`. Cairn is not installed there yet, so this needs an installed build and then Reconnect in Settings › AI tools. |
 | 🟡 | **The AI tool link was slow** (7.5 minutes for a full answer on a busy Mac). | AI tools time out or give up. | Fixed in PR #5 with a 10-minute scan memory and answers from the last scan. The first scan is still slow (about 5.5 minutes). |
 | 🟡 | **Most of the scan total is "Large & old files"** (33 of 53 GB), which Cairn only shows for review. | The headline number looked far bigger than what one click frees. | Fixed in PR #5: "Ready to free" is shown separately from "Needs you". |
-| 🟡 | **Weekly auto-scan on launch did not run** on a test build. | The menu bar and Home can show old numbers. | Not investigated yet. |
+| 🟡 | **Weekly auto-scan on launch did not run** on a test build. | The menu bar and Home can show old numbers. | Launch-policy and busy-gate fixture checks pass on 30 October; snapshot-age fix landed in this worktree. Original installed-app symptom remains unverified. |
 | 🟡 | **Whole-disk search and sizing large folders is slow** (BUG-014). | Long waits on big disks. | Reduced, not solved. |
 | ⚪ | **GitHub's automatic build checks sometimes do not start** on this repository. | Pull requests can show red for reasons outside the change. | Builds are checked on the Mac instead when this happens. |
 
@@ -288,3 +389,20 @@ _(none yet)_
 - Trash, don't permanently delete, by default. Permanent delete requires explicit, typed confirmation for large amounts.
 - `SAFE` items may be pre-selected; `REVIEW` never auto-selected; `RISKY` never selectable (info-only).
 - Every destructive action is logged here if it ever misbehaves in testing.
+
+## 30 October 2026 — selection accessibility
+
+Look Through group/item selection and Apple Intelligence model selection had
+no contextual accessible names. Review expansion buttons repeated generic names.
+Added explicit names and selection values, including partial group counts.
+These are source fixes; direct preview-tree inspection exposed only the hosting
+root and did not establish VoiceOver/keyboard acceptance.
+
+## 30 October 2026 — disk-map proportions and attribution
+
+The previous bar scaled available capacity down when estimated categories exceeded
+used capacity (20% became 14.3% in a 100/20/120 fixture). Preserve the macOS
+available-capacity fraction independently and scale category estimates into the
+remaining space, retaining gaps for incomplete coverage. Removed the residual
+that attributed incompatible counter/walk differences to System Data. The view
+now explains that categories are estimates and may omit snapshots/unreadable files.

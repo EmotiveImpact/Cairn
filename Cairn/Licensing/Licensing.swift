@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import IOKit
 import Security
+import LocalAuthentication
 import SwiftUI
 
 // MARK: - Config
@@ -142,10 +143,12 @@ enum LicenseStorageError: LocalizedError {
 
 enum LicenseKeychain {
     private static func query(_ account: String) -> [String: Any] {
-        [kSecClass as String: kSecClassGenericPassword,
-         kSecAttrService as String: "com.emotiveimpact.cairn.license",
-         kSecAttrAccount as String: account,
-         kSecUseAuthenticationUI as String: kSecUseAuthenticationUIFail]
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        return [kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "com.emotiveimpact.cairn.license",
+                kSecAttrAccount as String: account,
+                kSecUseAuthenticationContext as String: context]
     }
     static func read<T: Decodable>(_ account: String, as: T.Type,
                                   fetch: (CFDictionary, UnsafeMutablePointer<CFTypeRef?>?) -> OSStatus = SecItemCopyMatching) throws -> T? {
@@ -236,7 +239,13 @@ struct PolarClient {
     func validate(key: String, activationID: String) async throws -> Bool {
         let body: [String: Any] = ["key": key, "organization_id": organizationID, "activation_id": activationID]
         let json = try await post("/v1/customer-portal/license-keys/validate", body)
-        return ((json["status"] as? String) ?? "") == "granted"
+        // A broken/changed response is not evidence of revocation. Throw a
+        // transient error so refresh retains the existing offline grace state.
+        switch json["status"] as? String {
+        case "granted": return true
+        case "revoked", "disabled": return false
+        default: throw PolarError(message: "The licensing server returned an invalid status. Please try again later.")
+        }
     }
 
     func deactivate(key: String, activationID: String) async throws {

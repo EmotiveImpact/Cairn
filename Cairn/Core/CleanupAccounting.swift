@@ -11,8 +11,14 @@ struct CleanupAccounting: Codable, Sendable {
     private var deletedStored: Int64?
     /// Files deleted outright: gone, so never waiting for a Put Back record.
     private var deletedCountStored: Int?
-    /// Space released now: deleted files, emptied Trash and tool cleans.
+    /// Legacy name: estimated bytes deleted or passed to a cleanup tool, not measured capacity.
     var freedBytes: Int64 { deletedStored ?? 0 }
+    private var deletedFileBytesStored: Int64?
+    /// Tool estimates must never be subtracted from unrelated files sent to Trash.
+    var movedToTrashBytes: Int64 {
+        let deletedFiles = deletedFileBytesStored ?? max(0, freedBytes - toolBytes)
+        return max(0, trashBytes - deletedFiles)
+    }
     var completedCount: Int { trashCount + toolCount }
     var estimatedAffectedBytes: Int64 { trashBytes + toolBytes }
     var missingRecoveryCount: Int { max(0, trashCount - recordedRecoveryCount - (deletedCountStored ?? 0)) }
@@ -24,7 +30,10 @@ struct CleanupAccounting: Codable, Sendable {
         if outcome.usedTool { toolCount += 1; toolBytes += bytes }
         else {
             trashCount += 1; trashBytes += bytes
-            if outcome.deleted { deletedCountStored = (deletedCountStored ?? 0) + 1 }
+            if outcome.deleted {
+                deletedCountStored = (deletedCountStored ?? 0) + 1
+                deletedFileBytesStored = (deletedFileBytesStored ?? 0) + bytes
+            }
             if outcome.movedToTrashURL != nil && recoveryRecorded { recordedRecoveryCount += 1 }
         }
     }

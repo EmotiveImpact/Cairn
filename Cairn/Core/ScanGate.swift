@@ -22,6 +22,7 @@ final class ScanGate: @unchecked Sendable {
     static let changed = Notification.Name("Cairn.heavyOperationChanged")
     enum Operation: String, Sendable {
         case scan = "Scanning files"
+        case diskMap = "Mapping disk usage"
         case duplicates = "Comparing duplicates"
         case apps = "Measuring applications"
         case health = "Checking health"

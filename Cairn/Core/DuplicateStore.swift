@@ -401,7 +401,8 @@ final class DuplicateStore {
     func cancel() {
         scanGeneration = UUID()
         scanTask?.cancel()
-        scanTask = nil
+        // Keep the handle until replacement so cancelAndWait still drains a
+        // worker after Stop has already requested cancellation.
         if phase == .scanning { phase = .cancelled }
     }
 

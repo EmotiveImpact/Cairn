@@ -90,19 +90,21 @@ enum Cleaner {
         // What reached the Trash must be the very item that was scanned. A move
         // keeps a file's identity on the same disk, so a different one means it
         // was swapped at the last instant: put it straight back and stop.
-        var verified = true
-        if let trashed = resulting, let moved = SourceIdentity.read(trashed) {
-            if moved.device == scanned.device && moved != scanned {
-                _ = renamex_np(trashed.path, item.resolvedURL.path, UInt32(RENAME_EXCL))
-                return Outcome(bytesAffected: 0, usedTool: false,
-                               error: "The item changed while Cairn was moving it, so it was put back and nothing was deleted. Run a fresh scan.")
-            }
-            // Copied to another disk's Trash: the identity cannot be compared,
-            // so leave it in the Trash rather than deleting it.
-            verified = moved.device == scanned.device
+        guard let trashed = resulting, let moved = SourceIdentity.read(trashed) else {
+            return Outcome(bytesAffected: 0, usedTool: false,
+                           error: "macOS did not provide a verifiable Trash destination. No permanent deletion was attempted. Inspect the original location and Trash before retrying.")
         }
-        guard item.deleteImmediately, verified, let trashed = resulting else {
-            return Outcome(movedToTrashURL: resulting, bytesAffected: item.allocatedSize, usedTool: false, error: nil)
+        if moved.device == scanned.device && moved != scanned {
+            let restored = renamex_np(trashed.path, item.resolvedURL.path, UInt32(RENAME_EXCL)) == 0
+            return Outcome(bytesAffected: 0, usedTool: false,
+                           error: restored
+                             ? "The item changed while Cairn was moving it, so it was put back and nothing was deleted. Run a fresh scan."
+                             : "The item changed while Cairn was moving it. Nothing was permanently deleted, but Put Back failed. Inspect the original location and Trash: \(trashed.path)")
+        }
+        // Cross-volume Trash copies have a different identity. Keep them
+        // recoverable instead of permanently deleting an unverified object.
+        guard item.deleteImmediately, moved.device == scanned.device else {
+            return Outcome(movedToTrashURL: trashed, bytesAffected: item.allocatedSize, usedTool: false, error: nil)
         }
         if removeTree(trashed) {
             return Outcome(movedToTrashURL: nil, bytesAffected: item.allocatedSize, usedTool: false, error: nil, deleted: true)
@@ -117,8 +119,8 @@ enum Cleaner {
         guard isDirectTrashChild(url) else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "Only items directly inside a Trash folder can be emptied.")
         }
-        if let scanned = item.sourceIdentity, SourceIdentity.read(url) != scanned {
-            return Outcome(bytesAffected: 0, usedTool: false, error: "This Trash item changed since scanning. Run a fresh scan.")
+        guard let scanned = item.sourceIdentity, SourceIdentity.read(url) == scanned else {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "This Trash item's identity is missing or changed. Run a fresh scan.")
         }
         guard FileScan.exists(url) else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "This item is no longer in the Trash.")
@@ -133,7 +135,7 @@ enum Cleaner {
     static func deleteTrashedCopy(at trashURL: URL, identity: SourceIdentity?) -> Bool {
         let url = trashURL.standardizedFileURL
         guard isDirectTrashChild(url) else { return false }
-        if let identity, SourceIdentity.read(url) != identity { return false }
+        guard let identity, SourceIdentity.read(url) == identity else { return false }
         return removeTree(url)
     }
 

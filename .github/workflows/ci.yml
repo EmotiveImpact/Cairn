@@ -23,8 +23,13 @@ jobs:
           sudo xcode-select -s /Applications/Xcode_16.4.app || true
           swift --version
 
+      - name: Packaging failure checks (no signing or submission)
+        run: |
+          bash -n build_local.sh build_release.sh
+          python3 Support/Checks/packaging-check.py
+
       - name: Build
-        run: swift build -c debug
+        run: swift build -c debug -j 2
 
       # Disposable-fixture suites only. None of these touch personal data.
       - name: Safety check
@@ -78,6 +83,21 @@ jobs:
         run: |
           "$(swift build --show-bin-path)/Cairn" --evidencecheck
 
+      - name: Reliability regressions
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --reliabilitycheck
+
+      - name: Scan lifecycle and crash recovery
+        timeout-minutes: 8
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --lifecyclecheck
+
       - name: CLI refusal check
         run: |
           sh Support/Checks/cli-clean-refusal.sh "$(swift build --show-bin-path)/Cairn"
+
+      - name: Universal optimized build and reliability regressions
+        run: |
+          swift build -c release -j 2 --arch arm64 --arch x86_64
+          lipo -verify_arch arm64 x86_64 .build/apple/Products/Release/Cairn
+          .build/apple/Products/Release/Cairn --reliabilitycheck

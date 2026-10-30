@@ -1,5 +1,6 @@
 import Foundation
 import Security
+import LocalAuthentication
 import Darwin
 
 /// Isolated failure injection. No real Keychain, scans, preferences or volumes.
@@ -26,6 +27,37 @@ import Darwin
             check(StorageControl.shared.notificationStatus.contains("unbundled build"),
                   "Unbundled executable skips UserNotifications without crashing")
         }
+        let chartAreas = [DiskArea(id: "a", title: "A", kind: .files, bytes: 120),
+                          DiskArea(id: "free", title: "Free", kind: .free, bytes: 20)]
+        let overlappingChart = DiskMap.barFractions(chartAreas, capacity: (100, 20))
+        check(abs(overlappingChart[0] - 0.8) < 0.00001 && abs(overlappingChart[1] - 0.2) < 0.00001,
+              "Overlapping estimates cannot shrink the available-capacity fraction")
+        var partialChartAreas = chartAreas
+        partialChartAreas[0].bytes = 30
+        let partialChart = DiskMap.barFractions(partialChartAreas, capacity: (100, 20))
+        check(abs(partialChart.reduce(0, +) - 0.5) < 0.00001,
+              "Incomplete category coverage leaves an unassigned chart gap")
+        check(DiskMap.barFractions(chartAreas, capacity: (0, 20)) == [0, 0],
+              "Invalid capacity does not fabricate chart proportions")
+        check(DiskMap.barFractions(partialChartAreas).allSatisfy { $0.isFinite && $0 >= 0 },
+              "Nested estimates have finite nonnegative proportions")
+
+        var mixed = ScanStore.CleanSummary()
+        mixed.accounting.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/trash"), bytesAffected: 800, usedTool: false), recoveryRecorded: true)
+        mixed.accounting.record(.init(bytesAffected: 900, usedTool: true, deleted: true))
+        check(mixed.accounting.movedToTrashBytes == 800, "Tool cleanup cannot erase unrelated Trash estimates")
+        check(mixed.freedBytes == 0, "Unmeasured deletion estimates do not count as freed capacity")
+        mixed.capacityChanges = [.init(id: "fixture", before: .init(volumeID: "A", name: "Fixture", available: 100),
+                                       after: .init(volumeID: "A", name: "Fixture", available: 150))]
+        check(mixed.freedBytes == 50, "Receipt uses measured gain rather than the larger deletion estimate")
+        mixed.capacityChanges.append(.init(id: "other", before: .init(volumeID: "B", name: "Other", available: 100),
+                                          after: .init(volumeID: "B", name: "Other", available: 20)))
+        check(mixed.freedBytes == 0, "Capacity decreases offset gains instead of being discarded")
+        var trashOnly = ScanStore.CleanSummary()
+        trashOnly.accounting.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/trash"), bytesAffected: 800, usedTool: false))
+        trashOnly.capacityChanges = Array(mixed.capacityChanges.prefix(1))
+        check(trashOnly.freedBytes == 0, "Trash-only operations earn no immediate reclaim credit")
+
         var receipt = CleanupAccounting()
         receipt.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/.Trash/file"), bytesAffected: 800, usedTool: false), recoveryRecorded: true)
         receipt.record(.init(bytesAffected: 200, usedTool: false))
@@ -47,6 +79,74 @@ import Darwin
         check(decreased.delta == -200 && decreased.changeText.contains("less"), "Capacity decreases remain signed and visible")
         check(CleanupCapacityChange(id: "/fixture", before: capacityBefore, after: nil).delta == nil, "Missing capacity readings remain unknown")
         check(CleanupCapacityChange(id: "/fixture", before: capacityBefore, after: .init(volumeID: "replacement", name: "Fixture", available: 2_000)).delta == nil, "Replacement drive readings cannot produce false savings")
+        let mapStarted = CancelBox()
+        let queuedMap = DiskMapStore(reader: { _ in
+            mapStarted.cancel()
+            return DiskMap.Reading(total: 100, free: 20, areas: [], date: Date())
+        })
+        let mapGate = await ScanGate.shared.acquire(.copy)
+        queuedMap.measure()
+        try? await Task.sleep(nanoseconds: 100_000_000)
+        check(!mapStarted.isCancelled && queuedMap.measuring, "Disk map waits behind existing disk work")
+        if mapGate { ScanGate.shared.release() }
+        let mapDeadline = Date().addingTimeInterval(2)
+        while queuedMap.measuring && Date() < mapDeadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+        check(mapStarted.isCancelled && queuedMap.reading?.free == 20, "Queued disk map starts and publishes after gate release")
+
+        let blockedMapStarted = CancelBox()
+        let blockedMap = DiskMapStore(reader: { _ in blockedMapStarted.cancel(); return nil })
+        let heldMapLease = await ScanGate.shared.acquire(.copy)
+        blockedMap.measure()
+        await Task.yield()
+        await blockedMap.cancelAndWait()
+        check(!blockedMapStarted.isCancelled && !blockedMap.measuring,
+              "Stopping a queued disk map never invokes its reader")
+        if heldMapLease { ScanGate.shared.release() }
+
+        let mappingStarted = CancelBox(), mappingFinished = CancelBox(), mappingCancelled = CancelBox()
+        let stoppedMap = DiskMapStore(reader: { progress in
+            mappingStarted.cancel()
+            let deadline = Date().addingTimeInterval(2)
+            while !Task.isCancelled && Date() < deadline { Thread.sleep(forTimeInterval: 0.002) }
+            if Task.isCancelled { mappingCancelled.cancel() }
+            progress("late progress must be ignored")
+            mappingFinished.cancel()
+            return DiskMap.Reading(total: 1, free: 1, areas: [], date: Date())
+        })
+        stoppedMap.showSample()
+        let priorMap = stoppedMap.reading
+        stoppedMap.measure()
+        let mappingDeadline = Date().addingTimeInterval(2)
+        while !mappingStarted.isCancelled && Date() < mappingDeadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+        await stoppedMap.cancelAndWait()
+        await Task.yield()
+        check(mappingStarted.isCancelled && mappingFinished.isCancelled && mappingCancelled.isCancelled && !stoppedMap.measuring,
+              "Disk-map cancellation drains the detached measurement worker")
+        check(stoppedMap.reading == priorMap && stoppedMap.status == "Disk mapping stopped.",
+              "Stopped disk map preserves the previous reading and rejects late updates")
+        let nextMapLease = await ScanGate.shared.acquire(.scan)
+        check(nextMapLease, "Disk-map cancellation releases the shared disk-work gate")
+        if nextMapLease { ScanGate.shared.release() }
+
+        // Route licensing requests through an in-memory URLProtocol. No network
+        // or personal credentials are used, even for malformed server responses.
+        let licenseConfig = URLSessionConfiguration.ephemeral
+        licenseConfig.protocolClasses = [LicenseResponseFixture.self]
+        let licenseSession = URLSession(configuration: licenseConfig)
+        for scenario in ["granted", "revoked", "disabled", "missing", "unknown", "wrongtype", "nonjson"] {
+            let client = PolarClient(organizationID: "fixture", base: URL(string: "https://\(scenario).invalid")!, session: licenseSession)
+            do {
+                let granted = try await client.validate(key: "fixture", activationID: "fixture")
+                check(["granted", "revoked", "disabled"].contains(scenario) && granted == (scenario == "granted"),
+                      "License response has a recognized status: \(scenario)")
+            } catch {
+                check(!["granted", "revoked", "disabled"].contains(scenario) &&
+                      (error as? PolarClient.PolarError)?.isDefinitiveRejection == false,
+                      "Malformed license response is retryable, not revocation: \(scenario)")
+            }
+        }
+        licenseSession.invalidateAndCancel()
+
         // Simulated Security statuses. Never access this user's Keychain.
         do {
             let missing: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { _, _ in errSecItemNotFound })
@@ -54,7 +154,7 @@ import Darwin
         } catch { check(false, "Missing item decoding") }
         rejects("Locked Keychain is an error, not a missing item") {
             let _: Double? = try LicenseKeychain.read("fixture", as: Double.self, fetch: { query, _ in
-                check((query as NSDictionary)[kSecUseAuthenticationUI as String] as? String == kSecUseAuthenticationUIFail as String, "Startup Keychain read forbids interaction")
+                check(((query as NSDictionary)[kSecUseAuthenticationContext as String] as? LAContext)?.interactionNotAllowed == true, "Startup Keychain read forbids interaction")
                 return errSecInteractionNotAllowed
             })
         }
@@ -134,6 +234,17 @@ import Darwin
         check(afterStress, "Gate remains usable after repeated immediate cancellations")
         gate.release()
 
+        func dedupeItem(_ path: String) -> ScanItem {
+            ScanItem(url: URL(fileURLWithPath: path), allocatedSize: 1, categoryID: "fixture", severity: .review)
+        }
+        let childFirst = PathDedupe.apply([dedupeItem("/fixture/tree/a"), dedupeItem("/fixture/tree/b"), dedupeItem("/fixture/tree"), dedupeItem("/fixture/tree/c")])
+        check(childFirst.map { $0.url.path } == ["/fixture/tree"], "Parent replaces descendants and blocks later descendants")
+        let siblings = (0..<12_000).map { dedupeItem("/fixture/siblings/file-\($0)") }
+        let dedupeStart = Date()
+        let siblingResults = PathDedupe.apply(siblings + [siblings[0]])
+        check(siblingResults.count == 12_000, "Large sibling set preserves distinct files and drops repeats")
+        print("DEDUPE: 12000 siblings in \(Date().timeIntervalSince(dedupeStart))s")
+
         let floodFinished = CancelBox()
         let flood = ScanEventPipeline(scanners: [FixtureScanner(flood: true, started: CancelBox(), finished: floodFinished)], fdaGranted: false, includeExternal: false, minSize: 0, bufferLimit: 32)
         let floodDeadline = Date().addingTimeInterval(2)
@@ -154,6 +265,110 @@ import Darwin
         do {
             try fm.createDirectory(at: root, withIntermediateDirectories: false)
             defer { try? fm.removeItem(at: root) }
+            let absentMeasurement = FileScan.measure(root.appendingPathComponent("absent-measurement"))
+            check(absentMeasurement.truncated && absentMeasurement.fileCount == 0,
+                  "Missing measurement root is incomplete, not an exact zero-byte file")
+            let deniedParent = root.appendingPathComponent("denied-measurement")
+            try fm.createDirectory(at: deniedParent, withIntermediateDirectories: false)
+            let deniedFile = deniedParent.appendingPathComponent("file")
+            try Data("unreadable fixture".utf8).write(to: deniedFile)
+            try fm.setAttributes([.posixPermissions: 0], ofItemAtPath: deniedParent.path)
+            let deniedMeasurement = FileScan.measure(deniedFile)
+            try fm.setAttributes([.posixPermissions: 0o700], ofItemAtPath: deniedParent.path)
+            check(deniedMeasurement.truncated && deniedMeasurement.permissionDenied && deniedMeasurement.fileCount == 0,
+                  "Unreadable measurement root retains a permission gap instead of exact zero")
+
+            // Exercise the same launch hook as AppShell with isolated persisted snapshots.
+            let launchNow = Date(timeIntervalSince1970: 1_800_000_000)
+            let week: TimeInterval = 7 * 86_400
+            for (label, age, enabled, args, expected) in [
+                ("absent", nil as TimeInterval?, true, [String](), false),
+                ("fresh", 60.0, true, [], false),
+                ("exactly seven days", week, true, [], false),
+                ("stale", week + 1, true, [], true),
+                ("disabled", week + 1, false, [], false),
+                ("command suppression", week + 1, true, ["--no-auto-scan"], false),
+                ("future timestamp", -60.0, true, [], false)
+            ] {
+                let log = root.appendingPathComponent("weekly-\(label).json")
+                if let age {
+                    try JSONEncoder().encode(ScanStore.Snapshot(date: launchNow.addingTimeInterval(-age), buckets: []))
+                        .write(to: log.appendingPathExtension("snapshot"))
+                }
+                let began = CancelBox(), ended = CancelBox()
+                let launchStore = ScanStore(removalLogURL: log,
+                    fixtureScanners: [FixtureScanner(flood: false, started: began, finished: ended)])
+                launchStore.loadSnapshot()
+                let held = await ScanGate.shared.acquire(.copy)
+                let requested = launchStore.startWeeklyScanIfDue(enabled: enabled,
+                    includeExternalVolumes: false, arguments: args, now: launchNow)
+                check(requested == expected, "Weekly launch policy: \(label)")
+                await Task.yield()
+                check(!began.isCancelled, "Weekly scan waits behind active disk work: \(label)")
+                if held { ScanGate.shared.release() }
+                if expected {
+                    let deadline = Date().addingTimeInterval(2)
+                    while !began.isCancelled && Date() < deadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+                    check(began.isCancelled, "Stale weekly launch reaches the real scanner after the gate opens")
+                    check(!launchStore.startWeeklyScanIfDue(enabled: true, includeExternalVolumes: false,
+                        arguments: [], now: launchNow), "Repeated launch cannot restart an active scan")
+                }
+                await launchStore.cancelAndWait()
+                if expected {
+                    check(ended.isCancelled, "Weekly worker drains after cancellation")
+                    check(!launchStore.startWeeklyScanIfDue(enabled: true, includeExternalVolumes: false,
+                        arguments: [], now: launchNow), "Launch refresh respects a stopped scan")
+                }
+            }
+
+            // A journal failure must stop reviewed Trash deletion and persist that
+            // status. The source is disposable and outside the real Trash.
+            let refusedFile = root.appendingPathComponent("retained-trash-fixture")
+            try Data("retain me".utf8).write(to: refusedFile)
+            for pending in [false, true] {
+                let log = root.appendingPathComponent("trash-abort-\(pending).json")
+                let journalURL = log.appendingPathExtension("actions")
+                let journal = ActionJournal(url: journalURL)
+                if pending {
+                    _ = journal.begin(path: refusedFile.path, category: "fixture")
+                } else {
+                    try Data("invalid journal".utf8).write(to: journalURL)
+                }
+                let record = ScanStore.RemovalLogEntry(name: "Fixture", originalPath: "/fixture/original",
+                    trashPath: refusedFile.path, bytes: 9, date: Date(), category: "fixture",
+                    trashIdentity: SourceIdentity.read(refusedFile))
+                let history = RecoveryHistory(url: log)
+                _ = await history.append([record])
+                let deletionStore = ScanStore(removalLogURL: log, actionJournal: journal)
+                let result = await deletionStore.deleteFromTrash([record.id])
+                check(result.ids.isEmpty && result.freedBytes == 0 && (try? Data(contentsOf: refusedFile)) == Data("retain me".utf8),
+                      "Journal refusal preserves the file and reports no deletion (pending=\(pending))")
+                check(deletionStore.lastCleanSummary?.interrupted == true,
+                      "Journal refusal marks the Trash receipt stopped (pending=\(pending))")
+                let reloaded = await CleanupRunHistory(url: log.appendingPathExtension("runs")).load()
+                check(reloaded.runs.first?.summary.interrupted == true,
+                      "Stopped Trash receipt survives reload (pending=\(pending))")
+            }
+            let unreadableLog = root.appendingPathComponent("unreadable-trash-history.json")
+            try Data("invalid recovery".utf8).write(to: unreadableLog)
+            let unreadableStore = ScanStore(removalLogURL: unreadableLog)
+            let unreadableResult = await unreadableStore.deleteFromTrash([UUID()])
+            check(unreadableResult.ids.isEmpty && unreadableStore.restoreMessage != nil,
+                  "Recovery preflight failure explains why Trash deletion did not start")
+
+            let cancelledStarted = CancelBox(), cancelledFinished = CancelBox()
+            let stoppedStore = ScanStore(removalLogURL: root.appendingPathComponent("cancel-history.json"),
+                fixtureScanners: [FixtureScanner(flood: false, started: cancelledStarted, finished: cancelledFinished)])
+            stoppedStore.startScan()
+            let cancelDeadline = Date().addingTimeInterval(2)
+            while !cancelledStarted.isCancelled && Date() < cancelDeadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+            stoppedStore.cancel() // user presses Stop before the lifecycle drain
+            await stoppedStore.cancelAndWait()
+            check(cancelledStarted.isCancelled && cancelledFinished.isCancelled,
+                  "Stop followed by cancelAndWait still awaits the actual worker")
+            // Keep the disposable producer settled even when testing old code.
+            while !cancelledFinished.isCancelled && Date() < cancelDeadline { try? await Task.sleep(nanoseconds: 10_000_000) }
+
             let destroyMarker = root.appendingPathComponent("must-not-exist")
             let destructiveTool = ScanItem(
                 url: root, resolvedURL: root, allocatedSize: 1024,
@@ -372,6 +587,49 @@ import Darwin
             let reloaded = ScanStore(removalLogURL: journal, recordRestoredBytes: { _ in })
             await reloaded.loadRemovalLog()
             check(reloaded.removalLog.first?.restoredAt != nil, "Restored status survives relaunch")
+            check(!(await recovery.restoreFromLog(record)) && recovery.restoreMessage != nil,
+                  "Already-restored entry explains why Put Back cannot run again")
+            let absentRecord = ScanStore.RemovalLogEntry(name: "Unknown", originalPath: original.path,
+                trashPath: trashed.path, bytes: 15, date: Date(), category: "fixture")
+            check(!(await recovery.restoreFromLog(absentRecord)) && recovery.restoreMessage != nil,
+                  "Unknown recovery entry is refused with an explanation")
+            let brokenRestore = ScanStore(removalLogURL: unreadableLog)
+            check(!(await brokenRestore.restoreFromLog(record)) && brokenRestore.restoreMessage != nil,
+                  "Unreadable recovery history explains a refused restore")
+            // A replacement object at the recorded Trash path must never be restored.
+            try Data("recorded object".utf8).write(to: trashed)
+            let identified = ScanStore.RemovalLogEntry(name: "Identified", originalPath: root.appendingPathComponent("identity-restored").path,
+                trashPath: trashed.path, bytes: 15, date: Date(), category: "fixture",
+                trashIdentity: SourceIdentity.read(trashed))
+            let identityLog = root.appendingPathComponent("identity-restore.json")
+            _ = await RecoveryHistory(url: identityLog).append([identified])
+            try fm.moveItem(at: trashed, to: trash.appendingPathComponent("retained-original"))
+            try Data("replacement object".utf8).write(to: trashed)
+            let restoreCalled = CancelBox()
+            let identityStore = ScanStore(removalLogURL: identityLog, restoreFile: { _, _ in restoreCalled.cancel(); return true })
+            check(!(await identityStore.restoreFromLog(identified)) && !restoreCalled.isCancelled,
+                  "Changed Trash identity is rejected before invoking restore")
+            check((try? Data(contentsOf: trashed)) == Data("replacement object".utf8),
+                  "Rejected identity restore preserves replacement bytes")
+
+            // Permanent deletion state must survive restart and interrupted
+            // recovery-log writes, without marking unrelated entries deleted.
+            let deletionURL = root.appendingPathComponent("deleted-history.json")
+            let deletionHistory = RecoveryHistory(url: deletionURL)
+            let deletionRecord = ScanStore.RemovalLogEntry(name: "Deleted fixture", originalPath: "/fixture/original",
+                trashPath: "/fixture/trash", bytes: 1, date: Date(), category: "fixture")
+            _ = await deletionHistory.append([deletionRecord])
+            let deletionJournal = ActionJournal(url: root.appendingPathComponent("deletion-journal.json"))
+            let deletionAction = deletionJournal.begin(path: "/fixture/trash", category: "fixture",
+                actionKind: "delete-trash", relatedRecoveryID: deletionRecord.id)!
+            check(deletionJournal.finish(deletionAction, succeeded: true, trashPath: nil), "Deletion outcome persists")
+            let reconciledDeletion = await deletionHistory.reconcile(deletionJournal.recent)
+            check(reconciledDeletion.entries.first?.deletedAt != nil && reconciledDeletion.entries.first?.recoverable == false,
+                  "Deletion reconciliation removes Put Back eligibility")
+            let deletionReload = await RecoveryHistory(url: deletionURL).load()
+            check(deletionReload.entries.first?.deletedAt != nil && deletionReload.error == nil,
+                  "Deleted state survives restart")
+
             // Concurrent callers must merge against the actor's current history,
             // not overwrite one another with stale UI snapshots.
             let bulk = RecoveryHistory(url: root.appendingPathComponent("bulk-recovery.json"))
@@ -474,4 +732,27 @@ private struct FixtureScanner: CairnScanner {
             }
         }
     }
+}
+
+/// In-memory HTTP responses scoped to the diagnostic session only.
+private final class LicenseResponseFixture: URLProtocol {
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    override func startLoading() {
+        guard let url = request.url else { return }
+        let scenario = url.host?.components(separatedBy: ".").first ?? "missing"
+        let body: String
+        switch scenario {
+        case "granted", "revoked", "disabled": body = "{\"status\":\"\(scenario)\"}"
+        case "unknown": body = "{\"status\":\"unexpected\"}"
+        case "wrongtype": body = "{\"status\":42}"
+        case "nonjson": body = "unavailable"
+        default: body = "{}"
+        }
+        let response = HTTPURLResponse(url: url, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: ["Content-Type": "application/json"])!
+        client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
+        client?.urlProtocol(self, didLoad: Data(body.utf8))
+        client?.urlProtocolDidFinishLoading(self)
+    }
+    override func stopLoading() {}
 }

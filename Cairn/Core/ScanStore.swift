@@ -217,6 +217,8 @@ final class ScanStore {
     var onCompletedScan: (() -> Void)?
     var comparisonScopeStable: Bool { activeComparisonScope == comparisonScope() }
     private static var comparisonURL: URL { supportDirectory.appendingPathComponent("scan-comparison.json") }
+    private var persistedComparisonURL: URL { customRemovalLogURL?.appendingPathExtension("comparison") ?? Self.comparisonURL }
+    private var persistedSnapshotURL: URL { customRemovalLogURL?.appendingPathExtension("snapshot") ?? Self.snapshotURL }
     private func comparisonScope() -> ScanComparison.Scope {
         let settings = AppSettings.shared
         return .init(categories: buckets.map(\.id).sorted(), exclusions: settings.excludedPaths.sorted(),
@@ -229,7 +231,7 @@ final class ScanStore {
             complete: scope == comparisonScope() && buckets.allSatisfy { $0.complete && !$0.permissionGap },
             buckets: buckets.map { .init(id: $0.id, title: $0.info.title, icon: $0.info.systemImage, group: $0.info.group, bytes: $0.totalSize) })
         comparisonReadings = Array((comparisonReadings + [reading]).suffix(2))
-        do { try JSONEncoder().encode(comparisonReadings).write(to: Self.comparisonURL, options: .atomic) }
+        do { try JSONEncoder().encode(comparisonReadings).write(to: persistedComparisonURL, options: .atomic) }
         catch { comparisonError = "Comparison history could not be saved. Existing history was retained." }
     }
 
@@ -252,7 +254,7 @@ final class ScanStore {
         }
         return (lastSnapshot?.buckets ?? []).map {
             DisplayBucket(id: $0.id, title: $0.title, systemImage: $0.systemImage,
-                          group: $0.group, bytes: $0.bytes, count: $0.count)
+                          group: $0.group, bytes: $0.bytes, count: $0.count, readyBytes: $0.readyBytes)
         }
     }
     func displayBuckets(in group: CategoryGroup) -> [DisplayBucket] { displayBuckets.filter { $0.group == group } }
@@ -280,12 +282,12 @@ final class ScanStore {
 
     /// Load the cached snapshot for display. Call once on launch; never scans.
     func loadSnapshot() {
-        if comparisonReadings.isEmpty, comparisonError == nil, FileManager.default.fileExists(atPath: Self.comparisonURL.path) {
-            do { comparisonReadings = Array(try JSONDecoder().decode([ScanComparison.Reading].self, from: Data(contentsOf: Self.comparisonURL)).suffix(2)) }
+        if comparisonReadings.isEmpty, comparisonError == nil, FileManager.default.fileExists(atPath: persistedComparisonURL.path) {
+            do { comparisonReadings = Array(try JSONDecoder().decode([ScanComparison.Reading].self, from: Data(contentsOf: persistedComparisonURL)).suffix(2)) }
             catch { comparisonError = "Comparison history could not be read; it will not be overwritten." }
         }
         guard lastSnapshot == nil,
-              let data = try? Data(contentsOf: Self.snapshotURL),
+              let data = try? Data(contentsOf: persistedSnapshotURL),
               let snap = try? JSONDecoder().decode(Snapshot.self, from: data) else { return }
         lastSnapshot = snap
         ReclaimStats.shared.reclaimableBytes = snap.buckets.reduce(Int64(0)) { $0 + $1.bytes }
@@ -303,10 +305,12 @@ final class ScanStore {
                            group: $0.info.group, bytes: $0.totalSize, count: $0.items.count,
                            readyBytes: $0.items.filter(CLI.isReady).reduce(Int64(0)) { $0 + $1.allocatedSize })
         }
-        let snap = Snapshot(date: Date(), buckets: snaps)
+        // Cleanup updates amounts, not the age of the underlying scan.
+        guard phase == .finished, let scanStartedAt else { return }
+        let snap = Snapshot(date: scanStartedAt, buckets: snaps)
         lastSnapshot = snap
         ReclaimStats.shared.reclaimableBytes = snaps.reduce(Int64(0)) { $0 + $1.bytes }
-        if let data = try? JSONEncoder().encode(snap) { try? data.write(to: Self.snapshotURL, options: .atomic) }
+        if let data = try? JSONEncoder().encode(snap) { try? data.write(to: persistedSnapshotURL, options: .atomic) }
     }
 
     // MARK: - Removal log (persistent Restore Bin)
@@ -324,7 +328,8 @@ final class ScanStore {
         var trashIdentity: SourceIdentity? = nil
         var actionKind: String? = nil   // "trash" or "tool"; older records may be unknown
         var restoredAt: Date? = nil
-        var recoverable: Bool { trashPath != nil && restoredAt == nil }
+        var deletedAt: Date? = nil
+        var recoverable: Bool { trashPath != nil && restoredAt == nil && deletedAt == nil }
     }
     private(set) var removalLog: [RemovalLogEntry] = []
 
@@ -375,13 +380,30 @@ final class ScanStore {
     @discardableResult
     func restoreFromLog(_ entry: RemovalLogEntry) async -> Bool {
         restoreMessage = nil
-        guard !isRestoring, !isCleaning, !isScanning else { return false }
+        guard !isRestoring, !isCleaning, !isScanning else {
+            restoreMessage = "Finish the current operation before restoring an item."
+            return false
+        }
         isRestoring = true
         defer { isRestoring = false }
-        guard await prepareRemovalLog(),
-              let recorded = removalLog.first(where: { $0.id == entry.id }), recorded.recoverable,
-              let trash = recorded.trashPath else { return false }
-        guard await ScanGate.shared.acquire(.restore) else { return false }
+        guard await prepareRemovalLog() else {
+            restoreMessage = removalLogError ?? "Recovery history is unavailable; nothing was restored."
+            return false
+        }
+        guard let recorded = removalLog.first(where: { $0.id == entry.id }) else {
+            restoreMessage = "This item is no longer in the recovery history. Nothing was restored."
+            return false
+        }
+        guard recorded.recoverable, let trash = recorded.trashPath else {
+            restoreMessage = recorded.restoredAt != nil ? "This item was already restored."
+                : recorded.deletedAt != nil ? "This item was permanently deleted and cannot be put back."
+                : "This record has no Trash location to restore from."
+            return false
+        }
+        guard await ScanGate.shared.acquire(.restore) else {
+            restoreMessage = "Restore was cancelled before it started."
+            return false
+        }
         defer { ScanGate.shared.release() }
         let restore = restoreFile
         let journal = recoveryJournal
@@ -416,6 +438,17 @@ final class ScanStore {
 
     // MARK: - Scan lifecycle
 
+    /// Launch refresh only: never replace active results or retry a user-stopped scan.
+    @discardableResult
+    func startWeeklyScanIfDue(enabled: Bool, includeExternalVolumes: Bool,
+                              arguments: [String] = CommandLine.arguments, now: Date = Date()) -> Bool {
+        guard enabled, !arguments.contains("--no-auto-scan"), phase == .idle,
+              !isCleaning, !isRestoring, let last = lastScanDate,
+              now.timeIntervalSince(last) > 7 * 86_400 else { return false }
+        startScan(includeExternalVolumes: includeExternalVolumes)
+        return true
+    }
+
     func startScan(includeExternalVolumes external: Bool = false) {
         guard !isCleaning, !isRestoring else { return }
         cancel()
@@ -448,7 +481,8 @@ final class ScanStore {
 
     func cancel() {
         scanTask?.cancel()
-        scanTask = nil
+        // Keep the handle until replacement so cancelAndWait still drains a
+        // worker after Stop has already requested cancellation.
         if phase == .scanning { phase = .cancelled }
     }
 
@@ -476,10 +510,15 @@ final class ScanStore {
         var lastFlush = Date.timeIntervalSinceReferenceDate
         let flushInterval: TimeInterval = 0.08
 
-        func flush() {
+        func flush() async {
             guard !pending.isEmpty else { return }
-            for item in pending { applyItem(item) }
+            let batch = pending
             pending.removeAll(keepingCapacity: true)
+            for (index, item) in batch.enumerated() {
+                guard !Task.isCancelled else { return }
+                applyItem(item)
+                if index.isMultiple(of: 32) { await Task.yield() }
+            }
             lastFlush = Date.timeIntervalSinceReferenceDate
         }
 
@@ -490,23 +529,26 @@ final class ScanStore {
                 receivedItems += 1
                 if receivedItems > 20_000 { pipeline.overflow.cancel(); break scanEvents }
                 pending.append(item)
-                if Date.timeIntervalSinceReferenceDate - lastFlush >= flushInterval { flush() }
+                if Date.timeIntervalSinceReferenceDate - lastFlush >= flushInterval { await flush() }
             case .progress(let id, let msg):
                 // Progress text is cosmetic; only surface it on a flush tick so a
                 // fast-moving path string can't drive a redraw per file.
                 if Date.timeIntervalSinceReferenceDate - lastFlush >= flushInterval {
-                    flush()
+                    await flush()
+                    if Task.isCancelled { break scanEvents }
                     apply(.progress(id, msg))
                 }
             default:
-                flush()
+                await flush()
+                if Task.isCancelled { break scanEvents }
                 apply(event)
             }
         }
         // Keep the shared gate until detached producers really have exited.
         await pipeline.stopAndWait()
         guard !Task.isCancelled else { return }
-        flush()
+        await flush()
+        guard !Task.isCancelled else { return }
         if pipeline.overflow.isCancelled {
             phase = .cancelled
             progressText = "Scan stopped at the result limit. Partial results retained; scan a smaller scope."
@@ -843,23 +885,95 @@ final class ScanStore {
 
     /// Permanently delete recorded Trash items so their space is released now.
     /// Only the exact recorded Trash object (same identity) is removed.
-    func deleteFromTrash(_ ids: Set<UUID>) async -> (count: Int, bytes: Int64) {
-        guard !isCleaning, !isRestoring else { return (0, 0) }
-        let entries = removalLog.filter { ids.contains($0.id) && $0.recoverable && $0.trashPath != nil }
-        guard !entries.isEmpty else { return (0, 0) }
+    func deleteFromTrash(_ ids: Set<UUID>) async -> (ids: Set<UUID>, bytes: Int64, freedBytes: Int64) {
+        restoreMessage = nil
+        guard !isCleaning, !isRestoring, !isScanning else {
+            restoreMessage = "Finish the current operation before deleting Trash items."
+            return ([], 0, 0)
+        }
         isCleaning = true
         defer { isCleaning = false }
-        let result = await Task.detached(priority: .userInitiated) { () -> (Int, Int64) in
-            var count = 0, bytes: Int64 = 0
-            for entry in entries {
-                guard let path = entry.trashPath else { continue }
-                if Cleaner.deleteTrashedCopy(at: URL(fileURLWithPath: path), identity: entry.trashIdentity) {
-                    count += 1; bytes += entry.bytes
-                }
+        guard await prepareRemovalLog() else {
+            restoreMessage = removalLogError ?? "Recovery history is unavailable; nothing was deleted."
+            return ([], 0, 0)
+        }
+        guard await ScanGate.shared.acquire(.cleanup) else {
+            restoreMessage = "Deletion was cancelled before it started."
+            return ([], 0, 0)
+        }
+        defer { ScanGate.shared.release() }
+        let journal = recoveryJournal
+        let entries = removalLog.filter { ids.contains($0.id) && $0.recoverable }
+        guard !entries.isEmpty else { return ([], 0, 0) }
+        guard var run = await beginSpecialistRun("Empty reviewed Trash") else {
+            restoreMessage = receiptError ?? "Receipt could not be saved; nothing was deleted."
+            return ([], 0, 0)
+        }
+        defer { activeRunIDs.remove(run.id) }
+        let capacity = await CleanupCapacityWindow.begin(urls: entries.compactMap { $0.trashPath.map { URL(fileURLWithPath: $0) } })
+        var summary = CleanSummary()
+        var deleted = Set<UUID>(), bytes: Int64 = 0
+        for entry in entries {
+            if Task.isCancelled { summary.interrupted = true; break }
+            run.summary = summary
+            guard await saveRun(run) else {
+                summary.interrupted = true
+                restoreMessage = receiptError ?? "Receipt checkpoint failed; deletion stopped."
+                break
             }
-            return (count, bytes)
-        }.value
-        return result
+            guard let path = entry.trashPath, let identity = entry.trashIdentity else {
+                restoreMessage = "Some items have no recorded Trash identity. Scan Trash again before deleting them."
+                summary.failed += 1
+                continue
+            }
+            let action = await Task.detached(priority: .utility) {
+                guard journal.prepare() else { return nil as UUID? }
+                return journal.begin(path: path, category: entry.category, affectedBytes: entry.bytes,
+                                     actionKind: "delete-trash", relatedRecoveryID: entry.id, runID: run.id)
+            }.value
+            guard let action else {
+                summary.interrupted = true
+                restoreMessage = journal.error ?? "The deletion intent could not be saved; deletion stopped."
+                break
+            }
+            let ok = await Task.detached(priority: .userInitiated) {
+                Cleaner.deleteTrashedCopy(at: URL(fileURLWithPath: path), identity: identity)
+            }.value
+            let saved = await Task.detached(priority: .utility) {
+                journal.finish(action, succeeded: ok, trashPath: nil,
+                               detail: ok ? "Recorded Trash item deleted" : "Trash deletion refused or failed")
+            }.value
+            if ok {
+                deleted.insert(entry.id); bytes += entry.bytes
+                summary.accounting.record(.init(bytesAffected: entry.bytes, usedTool: false, deleted: true))
+                let snapshot = await recoveryHistory.markDeleted(entry.id)
+                applyRecovery(snapshot)
+                guard saved, snapshot.error == nil else {
+                    summary.interrupted = true
+                    restoreMessage = "Deletion completed but its history could not be fully saved. Review the action journal."
+                    break
+                }
+                guard await Task.detached(priority: .utility, operation: { journal.acknowledgeRecovery([action]) }).value else {
+                    summary.interrupted = true
+                    restoreMessage = journal.error ?? "Deletion history could not be saved; deletion stopped."
+                    break
+                }
+            } else {
+                summary.failed += 1
+                restoreMessage = "Some Trash items changed or could not be deleted. They were not marked as deleted."
+            }
+            if !saved {
+                summary.interrupted = true
+                restoreMessage = journal.error ?? "Deletion outcome could not be saved; deletion stopped."
+                break
+            }
+        }
+        summary.capacityChanges = await capacity.finish()
+        if let restoreMessage { summary.errors.append(restoreMessage) }
+        if !(await finishSpecialistRun(run, summary: summary)) {
+            restoreMessage = receiptError ?? "Deletion finished but its receipt could not be saved."
+        }
+        return (deleted, bytes, summary.freedBytes)
     }
 
     nonisolated static func actionKind(_ item: ScanItem) -> String {

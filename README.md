@@ -44,22 +44,17 @@ Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 ## Keeping your things safe
 
 - **You see everything first.** Every clean shows the exact files, their sizes and any command before anything runs.
-- **You choose how things are removed** in Settings › Cleaning. **Smart** (the default) deletes things that can be rebuilt, so the space comes back at once, and sends anything personal to the Trash. **Delete now** deletes everything you picked. **Move to Trash** keeps everything recoverable.
+- **You choose how things are removed** in each cleanup review, with a default in Settings › Cleaning. **Smart** deletes eligible rebuildable data and sends eligible personal files to Trash. **Delete now** requires acknowledgement for personal files; protected or unsupported items remain blocked. **Move to Trash** retains supported files for Put Back while they remain available. Trash does not immediately free space; receipts distinguish file-size estimates from measured capacity changes.
 - **Some things are always off limits**, whatever you choose: system files, Apple's own caches, a macOS update in progress, passwords and keychains, Mail, Messages, Photos, iCloud, your source code history (`.git`), SSH keys and AI chat history.
-- **Nothing harmful runs.** Commands that would destroy data, such as removing Docker volumes, are never used.
+- **Cleanup commands are restricted.** Destructive commands such as removing Docker volumes are blocked; permitted commands still appear in the review before execution.
 - **Files are checked again** just before each action, in case anything changed since the scan.
 
 ## What's next
 
-In rough order of priority:
-
-1. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
-2. **Buying a licence** on the website at cairnmac.com.
-3. **Test the Apple Intelligence switch** on a Mac that has Apple Intelligence (macOS 15.1 or later).
-4. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
-5. **Update the website screenshots** to the new look.
-6. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive.
-7. **Larger text.** Cairn uses fixed text sizes, so the macOS text size setting doesn't change it yet.
+The actionable queue is in [the Claude handoff roadmap](docs/ROADMAP-CLAUDE.md).
+Start with the installed Mac build and runtime acceptance gates, then release
+preparation. The roadmap separates source implementation, checks actually run,
+and work that still needs hardware, owner decisions or explicit authorization.
 
 ## For developers
 
@@ -76,7 +71,7 @@ BIN="$(swift build --show-bin-path)/Cairn"
 "$BIN" --workspacecheck
 ```
 
-This builds the executable only. For normal use, run a packaged `Cairn.app`, since a raw executable does not get the same notification and permission identity. `build_local.sh` and `build_release.sh` package, sign and (for release) notarise the app; they need a Developer ID certificate. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before using them.
+This builds the executable only. For normal use, run a packaged `Cairn.app`, since a raw executable does not get the same notification and permission identity. `build_local.sh` and `build_release.sh` package, sign and (for release) notarise the app; they need a Developer ID certificate. Each invocation writes a unique directory under `dist/` and prints its output path; existing builds are preserved. Read [CONTRIBUTING.md](CONTRIBUTING.md) and [AGENTS.md](AGENTS.md) before using them.
 
 ### Command line
 
@@ -87,7 +82,7 @@ cairn status            # free space and recent cleans
 cairn scan              # what can be freed
 cairn projects          # coding projects and how long they have been idle
 cairn rules             # everything Cairn looks for, as Markdown
-cairn clean --safe      # preview a safe clean (add --yes to run it)
+cairn clean --safe      # preview only; review exact items in the app
 cairn mcp               # link for AI coding tools
 ```
 

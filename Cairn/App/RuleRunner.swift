@@ -94,10 +94,10 @@ import Foundation
             rule.lastResult = "Nothing to clear"
         } else {
             let summary = await store.clean(items, proEnabled: proEnabled(), runKind: "Rule · " + kind.title)
-            rule.lastRunBytes = summary.accounting.freedBytes
+            rule.lastRunBytes = summary.freedBytes
             rule.lastRunItems = summary.accounting.completedCount
-            let trashed = max(0, summary.accounting.trashBytes - summary.accounting.freedBytes)
-            var parts = ["Cleared \(Fmt.size(summary.accounting.freedBytes))"]
+            let trashed = summary.accounting.movedToTrashBytes
+            var parts = ["\(summary.accounting.completedCount) items cleaned", "\(Fmt.size(summary.freedBytes)) measured capacity increase"]
             if trashed > 0 { parts.append("\(Fmt.size(trashed)) moved to the Trash") }
             if summary.failed > 0 { parts.append("\(summary.failed) skipped") }
             rule.lastResult = parts.joined(separator: " · ")

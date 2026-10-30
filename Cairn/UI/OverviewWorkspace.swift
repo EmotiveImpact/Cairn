@@ -453,10 +453,9 @@ struct OverviewWorkspace: View {
             return tile("Last clean", "\(last.date.formatted(.dateTime.day().month(.wide))) · \(Fmt.size(last.freed)) freed", "Checked on this Mac.", "See receipt") { onOpen(.activity) }
         }
         if let run = store.cleanupRuns.first(where: { $0.finished != nil && $0.summary.accounting.completedCount > 0 }) {
-            let gains = run.summary.capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
-            let freed = max(run.summary.accounting.freedBytes, gains)
+            let freed = run.summary.freedBytes
             let title = "\(run.started.formatted(.dateTime.day().month(.wide))) · " + (freed > 0 ? "\(Fmt.size(freed)) freed" : "\(run.summary.accounting.completedCount) items cleaned")
-            let detail = gains > 0 ? "Checked on this Mac." : run.summary.recoverableCount > 0 ? "\(run.summary.recoverableCount) can be put back." : "Recorded in Activity."
+            let detail = freed > 0 ? "Checked on this Mac." : run.summary.recoverableCount > 0 ? "\(run.summary.recoverableCount) can be put back." : "Recorded in Activity."
             return tile("Last clean", title, detail, "See receipt") { onOpen(.activity) }
         }
         return tile("Last clean", "No cleans yet", "Every clean leaves a receipt in Activity.", "Open Activity") { onOpen(.activity) }
@@ -591,11 +590,26 @@ struct OverviewWorkspace: View {
         .help("Move large folders to \(drive.name)")
     }
     private var header: some View {
-        HStack(alignment: .center) {
+        ViewThatFits(in: .horizontal) {
+            HStack {
+                headerIdentity.fixedSize()
+                Spacer()
+                headerActions.fixedSize()
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                headerIdentity
+                headerActions
+            }
+        }
+    }
+    private var headerIdentity: some View {
+        HStack {
             Text("This Mac").font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textSecondary)
             if let drive = externalDrive { drivePill(drive).padding(.leading, 14) }
-            Spacer()
-            HStack(spacing: 8) {
+        }
+    }
+    private var headerActions: some View {
+        HStack(spacing: 8) {
                 Button { if !preview { scan() } } label: {
                     Label(store.isScanning ? "Stop scan" : (store.lastScanDate != nil || preview ? "Rescan" : "Scan this Mac"), systemImage: store.isScanning ? "stop.circle" : "arrow.clockwise")
                 }.buttonStyle(ControlPanelButtonStyle(size: .small))
@@ -612,7 +626,7 @@ struct OverviewWorkspace: View {
                     .buttonStyle(ControlPanelButtonStyle(size: .small))
                     .help("Available space over the last week or month")
             }
-        }
+        .fixedSize(horizontal: true, vertical: false)
     }
     private var historySection: some View {
         VStack(alignment: .leading, spacing: 4) {

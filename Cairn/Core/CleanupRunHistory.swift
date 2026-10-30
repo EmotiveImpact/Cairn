@@ -10,12 +10,12 @@ struct CleanupRun: Codable, Identifiable, Sendable {
 }
 
 extension ScanStore.CleanSummary {
-    /// Space this clean gave back: what was deleted, emptied or cleaned by its
-    /// tool, or the measured rise in free space when that is larger. Files
-    /// still in the Trash are not counted.
+    /// Positive net observed capacity change across all affected volumes.
+    /// Estimates and unrelated changes during Trash-only actions earn no credit.
     var freedBytes: Int64 {
-        let gains = capacityChanges.compactMap(\.delta).filter { $0 > 0 }.reduce(0, +)
-        return max(accounting.freedBytes, gains)
+        guard accounting.freedBytes > 0, !capacityChanges.isEmpty,
+              capacityChanges.allSatisfy({ $0.delta != nil }) else { return 0 }
+        return max(0, capacityChanges.compactMap(\.delta).reduce(0, +))
     }
 }
 
@@ -34,7 +34,7 @@ extension CleanupRunHistory {
         return snapshot.runs.reduce(into: Totals()) { totals, run in
             totals.cleans += 1
             totals.freedBytes += run.summary.freedBytes
-            totals.movedToTrashBytes += max(0, run.summary.accounting.trashBytes - run.summary.accounting.freedBytes)
+            totals.movedToTrashBytes += run.summary.accounting.movedToTrashBytes
         }
     }
 }

@@ -98,6 +98,7 @@ struct NightCheck: View {
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityAddTraits(on ? .isSelected : [])
+        .accessibilityValue(on ? "Selected" : "Not selected")
     }
 }
 
