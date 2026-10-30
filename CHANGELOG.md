@@ -24,6 +24,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 - **Plain words again.** The review, Large Files, the disk map, receipts, rules and the Trash and Put Back messages say things simply ("deleted for good", "can't be put back", "freed") instead of terms such as "measured capacity increase" or "Trash item's identity". The review's safety line reads "Passwords, Mail, Photos, your code history and AI chats are never included."
 - **Not measured is back on the disk map** as its own part, just before Free, so the bar has no blank gap. It shows only when at least 0.5 GB is unaccounted for, and its note says what it can include (local Time Machine snapshots, other accounts on this Mac, folders Cairn can't open) without claiming which.
+- **Review sheet.** The line under the big number wraps onto more lines instead of stopping at "…". Smart, Delete now and Move to Trash use the same quiet switcher as Settings, the "I understand" box is Cairn's own tick box, and Cancel no longer opens with a blue macOS focus ring.
 - **Finish screen.** If emptying the Trash goes wrong, the message now sits under the result instead of floating over the middle of the page.
 - **CI's universal build check** works again. `lipo` had its words in the wrong order, which turned every run red after the build itself had passed.
 - **Installed for testing.** The signed test build from 30 October is in `/Applications/Cairn.app`. It isn't notarised, so right-click and choose Open the first time.

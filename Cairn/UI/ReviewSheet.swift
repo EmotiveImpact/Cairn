@@ -78,7 +78,9 @@ struct ReviewSheet: View {
                 Text(cleaning ? "Freeing space · keep Cairn open" : "Check once, then free").nightEyebrow()
                 Text(title).font(.system(size: 30, weight: .light)).tracking(-0.6)
                 if let trashNote {
+                    // Wraps onto more lines rather than cutting off with "…".
                     Text(trashNote).font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             ScrollView {
@@ -91,21 +93,28 @@ struct ReviewSheet: View {
             .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             if runnable.contains(where: { $0.cleanMethod == .trash }) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("For this clean", selection: $mode) {
-                        ForEach(RemovalMode.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
+                    // The same quiet switcher as Settings › Cleaning.
+                    HStack(spacing: 12) {
+                        Text("For this clean").font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                        CairnSegmentedControl(label: "For this clean", selection: $mode,
+                                              options: RemovalMode.allCases.map { ($0.title, $0) })
+                            .frame(width: 360, height: 32)
+                            .disabled(cleaning || sample != nil || goalPlan != nil)
                     }
-                    .pickerStyle(.segmented)
-                    .disabled(cleaning || sample != nil || goalPlan != nil)
                     Text(goalPlan == nil
                          ? "Just for this clean. Tool commands and emptying the Trash can't be put back, whichever you pick."
                          : "This clean keeps the choice it was planned with. To pick differently, review the files from their own page.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                     if hasPersonalFilesToDelete {
-                        Toggle("I understand my own files here will be deleted for good and can't be put back.",
-                               isOn: $acknowledgedPermanentDeletion)
-                            .font(.system(size: 12)).disabled(cleaning)
+                        HStack(alignment: .top, spacing: 10) {
+                            NightCheck(on: acknowledgedPermanentDeletion, enabled: !cleaning) { acknowledgedPermanentDeletion.toggle() }
+                                .accessibilityLabel("I understand my own files here will be deleted for good and can't be put back")
+                            Text("I understand my own files here will be deleted for good and can't be put back.")
+                                .font(.system(size: 12)).foregroundStyle(Brand.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onTapGesture { if !cleaning { acknowledgedPermanentDeletion.toggle() } }
+                        }
                     }
                 }
             }
@@ -235,6 +244,7 @@ struct ReviewSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(noteLines.indices, id: \.self) { i in
                     Text(noteLines[i].text).foregroundStyle(noteLines[i].tint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .font(.system(size: 12))
@@ -252,8 +262,11 @@ struct ReviewSheet: View {
             }
             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             Spacer(minLength: 12)
+            // No blue macOS focus ring when the sheet opens: these look like
+            // every other button in Cairn. Escape still cancels.
             Button("Cancel") { dismiss() }
                 .buttonStyle(ControlPanelButtonStyle(size: .large))
+                .focusEffectDisabled()
                 .keyboardShortcut(.cancelAction).disabled(cleaning)
             Button {
                 Task { await runClean() }
@@ -264,6 +277,7 @@ struct ReviewSheet: View {
                 }
             }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+            .focusEffectDisabled()
             // Deliberately no Return shortcut: removing files takes a click, never a stray key press.
             .disabled(!canClean)
         }
