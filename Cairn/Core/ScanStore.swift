@@ -12,6 +12,7 @@ final class ScanStore {
     private let restoreFile: @Sendable (URL, URL) -> Bool
     private let recordRestoredBytes: (Int64) -> Void
     private let fixtureScanners: [CairnScanner]?
+    private let scanBufferLimit: Int
     private let lifecycleCheckpoint: @Sendable (String) -> Void
     private let cleanFile: @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome
     init(removalLogURL: URL? = nil,
@@ -19,9 +20,10 @@ final class ScanStore {
          restoreFile: @escaping @Sendable (URL, URL) -> Bool = { Cleaner.restore(from: $0, to: $1) },
          recordRestoredBytes: ((Int64) -> Void)? = nil,
          fixtureScanners: [CairnScanner]? = nil,
+         scanBufferLimit: Int = ScanEventPipeline.defaultBufferLimit,
          lifecycleCheckpoint: @escaping @Sendable (String) -> Void = { _ in },
          cleanFile: @escaping @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome = { Cleaner.clean($0, allowedRoots: $1, proEnabled: $2, reviewedSource: $3) }) {
-        self.fixtureScanners = fixtureScanners; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
+        self.fixtureScanners = fixtureScanners; self.scanBufferLimit = scanBufferLimit; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
         recoveryJournal = actionJournal ?? (removalLogURL.map { ActionJournal(url: $0.appendingPathExtension("actions")) } ?? .shared)
         customRemovalLogURL = removalLogURL; self.restoreFile = restoreFile; self.recordRestoredBytes = recordRestoredBytes ?? { if removalLogURL == nil { ReclaimStats.shared.recordRestore(bytes: $0) } }
     }
@@ -381,27 +383,27 @@ final class ScanStore {
     func restoreFromLog(_ entry: RemovalLogEntry) async -> Bool {
         restoreMessage = nil
         guard !isRestoring, !isCleaning, !isScanning else {
-            restoreMessage = "Finish the current operation before restoring an item."
+            restoreMessage = "Wait for the current scan or clean to finish, then try again."
             return false
         }
         isRestoring = true
         defer { isRestoring = false }
         guard await prepareRemovalLog() else {
-            restoreMessage = removalLogError ?? "Recovery history is unavailable; nothing was restored."
+            restoreMessage = removalLogError ?? "Cairn couldn't read its Put Back records, so nothing was put back."
             return false
         }
         guard let recorded = removalLog.first(where: { $0.id == entry.id }) else {
-            restoreMessage = "This item is no longer in the recovery history. Nothing was restored."
+            restoreMessage = "This item is no longer in Cairn's records, so it can't be put back."
             return false
         }
         guard recorded.recoverable, let trash = recorded.trashPath else {
-            restoreMessage = recorded.restoredAt != nil ? "This item was already restored."
-                : recorded.deletedAt != nil ? "This item was permanently deleted and cannot be put back."
-                : "This record has no Trash location to restore from."
+            restoreMessage = recorded.restoredAt != nil ? "This item has already been put back."
+                : recorded.deletedAt != nil ? "This item was deleted for good, so it can't be put back."
+                : "Cairn doesn't know where this item is in the Trash, so it can't put it back."
             return false
         }
         guard await ScanGate.shared.acquire(.restore) else {
-            restoreMessage = "Restore was cancelled before it started."
+            restoreMessage = "Stopped before anything was put back."
             return false
         }
         defer { ScanGate.shared.release() }
@@ -498,7 +500,8 @@ final class ScanStore {
         let minSize: Int64 = 5 * 1024 * 1024 // default 5 MB floor; scanners can override per item
 
         let pipeline = ScanEventPipeline(scanners: scanners, fdaGranted: fdaGranted,
-                                         includeExternal: includeExternal, minSize: minSize)
+                                         includeExternal: includeExternal, minSize: minSize,
+                                         bufferLimit: scanBufferLimit)
 
         // Scanners emit thousands of items per scan. Applying each one immediately
         // published an @Observable change per item, so SwiftUI re-rendered the whole
@@ -888,25 +891,25 @@ final class ScanStore {
     func deleteFromTrash(_ ids: Set<UUID>) async -> (ids: Set<UUID>, bytes: Int64, freedBytes: Int64) {
         restoreMessage = nil
         guard !isCleaning, !isRestoring, !isScanning else {
-            restoreMessage = "Finish the current operation before deleting Trash items."
+            restoreMessage = "Wait for the current scan or clean to finish, then try again."
             return ([], 0, 0)
         }
         isCleaning = true
         defer { isCleaning = false }
         guard await prepareRemovalLog() else {
-            restoreMessage = removalLogError ?? "Recovery history is unavailable; nothing was deleted."
+            restoreMessage = removalLogError ?? "Cairn couldn't read its Put Back records, so nothing was deleted."
             return ([], 0, 0)
         }
         guard await ScanGate.shared.acquire(.cleanup) else {
-            restoreMessage = "Deletion was cancelled before it started."
+            restoreMessage = "Stopped before anything was deleted."
             return ([], 0, 0)
         }
         defer { ScanGate.shared.release() }
         let journal = recoveryJournal
         let entries = removalLog.filter { ids.contains($0.id) && $0.recoverable }
         guard !entries.isEmpty else { return ([], 0, 0) }
-        guard var run = await beginSpecialistRun("Empty reviewed Trash") else {
-            restoreMessage = receiptError ?? "Receipt could not be saved; nothing was deleted."
+        guard var run = await beginSpecialistRun("Emptied the Trash") else {
+            restoreMessage = receiptError ?? "Cairn couldn't save a receipt, so nothing was deleted."
             return ([], 0, 0)
         }
         defer { activeRunIDs.remove(run.id) }
@@ -918,11 +921,11 @@ final class ScanStore {
             run.summary = summary
             guard await saveRun(run) else {
                 summary.interrupted = true
-                restoreMessage = receiptError ?? "Receipt checkpoint failed; deletion stopped."
+                restoreMessage = receiptError ?? "Cairn couldn't update the receipt, so it stopped."
                 break
             }
             guard let path = entry.trashPath, let identity = entry.trashIdentity else {
-                restoreMessage = "Some items have no recorded Trash identity. Scan Trash again before deleting them."
+                restoreMessage = "Some items from older cleans can't be checked, so Cairn left them. Scan again and clean the Trash from the scan instead."
                 summary.failed += 1
                 continue
             }
@@ -933,7 +936,7 @@ final class ScanStore {
             }.value
             guard let action else {
                 summary.interrupted = true
-                restoreMessage = journal.error ?? "The deletion intent could not be saved; deletion stopped."
+                restoreMessage = journal.error ?? "Cairn couldn't record what it was about to delete, so it stopped."
                 break
             }
             let ok = await Task.detached(priority: .userInitiated) {
@@ -950,28 +953,28 @@ final class ScanStore {
                 applyRecovery(snapshot)
                 guard saved, snapshot.error == nil else {
                     summary.interrupted = true
-                    restoreMessage = "Deletion completed but its history could not be fully saved. Review the action journal."
+                    restoreMessage = "The items were deleted, but Cairn couldn't save the full record."
                     break
                 }
                 guard await Task.detached(priority: .utility, operation: { journal.acknowledgeRecovery([action]) }).value else {
                     summary.interrupted = true
-                    restoreMessage = journal.error ?? "Deletion history could not be saved; deletion stopped."
+                    restoreMessage = journal.error ?? "Cairn couldn't save the record, so it stopped."
                     break
                 }
             } else {
                 summary.failed += 1
-                restoreMessage = "Some Trash items changed or could not be deleted. They were not marked as deleted."
+                restoreMessage = "Some items in the Trash had changed or couldn't be deleted, so Cairn left them."
             }
             if !saved {
                 summary.interrupted = true
-                restoreMessage = journal.error ?? "Deletion outcome could not be saved; deletion stopped."
+                restoreMessage = journal.error ?? "Cairn couldn't save the result, so it stopped."
                 break
             }
         }
         summary.capacityChanges = await capacity.finish()
         if let restoreMessage { summary.errors.append(restoreMessage) }
         if !(await finishSpecialistRun(run, summary: summary)) {
-            restoreMessage = receiptError ?? "Deletion finished but its receipt could not be saved."
+            restoreMessage = receiptError ?? "Deleted, but the receipt couldn't be saved."
         }
         return (deleted, bytes, summary.freedBytes)
     }

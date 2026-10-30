@@ -59,7 +59,7 @@ jobs:
         timeout-minutes: 4
         run: |
           bin="$(swift build --show-bin-path)/Cairn"
-          for shot in target chatApps games duplicates apps appleIntelligence target:light games:light appleIntelligence:light; do
+          for shot in target chatApps games duplicates apps appleIntelligence diskMap review target:light games:light appleIntelligence:light; do
             section="${shot%%:*}"; extra=""; name="$section"
             if [ "$shot" != "$section" ]; then extra="--capture-light"; name="$section-light"; fi
             "$bin" --preview-ui --component-showcase --capture-screen="$section" --section="$section" $extra || true
@@ -99,5 +99,5 @@ jobs:
       - name: Universal optimized build and reliability regressions
         run: |
           swift build -c release -j 2 --arch arm64 --arch x86_64
-          lipo -verify_arch arm64 x86_64 .build/apple/Products/Release/Cairn
+          lipo .build/apple/Products/Release/Cairn -verify_arch arm64 x86_64
           .build/apple/Products/Release/Cairn --reliabilitycheck

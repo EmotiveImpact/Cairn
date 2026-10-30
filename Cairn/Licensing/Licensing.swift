@@ -244,7 +244,7 @@ struct PolarClient {
         switch json["status"] as? String {
         case "granted": return true
         case "revoked", "disabled": return false
-        default: throw PolarError(message: "The licensing server returned an invalid status. Please try again later.")
+        default: throw PolarError(message: "Cairn couldn't check your licence just now. It will try again later.")
         }
     }
 

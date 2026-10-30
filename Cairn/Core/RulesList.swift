@@ -21,7 +21,7 @@ enum RulesList {
         "Nothing is removed until you have reviewed it.",
         "Your own files go to the Bin, so you can put them back.",
         "Caches and build files that rebuild on their own are deleted, so the space comes back straight away. Settings can send them to the Bin instead.",
-        "Every item is checked again against Cairn's protected list just before it moves: system files, credentials, Mail, Messages, Photos, iCloud, source code and AI conversation history are never touched.",
+        "Every item is checked again against Cairn's protected list just before it moves: system files, credentials, your emails, Messages, Photos, iCloud, source code and AI conversation history are never touched.",
         "Apps that are still open keep their caches until you close them.",
     ]
 

@@ -211,8 +211,8 @@ struct LargeFilesWorkspace: View {
             .disabled(preview || store.isScanning || store.isCleaning)
         }
         Text(item.isActionable && item.severity != .risky
-             ? "This may be your only copy. Select it, then review the cleanup. In the review you can choose Move to Trash or Delete now."
-             : "Cairn cannot remove this item. \(item.note.isEmpty ? "This location contains protected data or has no supported removal action." : item.note)")
+             ? "This may be your only copy. Select it, then review the clean, where you can choose Move to Trash or Delete now."
+             : "Cairn can't remove this. \(item.note.isEmpty ? "It holds protected data, or Cairn has no safe way to remove it." : item.note)")
             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             .fixedSize(horizontal: false, vertical: true)
     }

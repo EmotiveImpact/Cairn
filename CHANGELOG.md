@@ -4,6 +4,32 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
+## 30 October 2026
+
+### Safer cleaning, measured numbers and a disk map you can stop (PR #20)
+
+- **Choose how each clean removes things.** The review now has Smart, Delete now and Move to Trash at the top, starting from your choice in Settings › Cleaning. If Delete now would remove your own files for good, a tick box saying you understand must be ticked before the button works. Protected things (system files, passwords, Mail, Messages, Photos, iCloud, `.git`, SSH keys, AI chats) stay blocked whatever you pick.
+- **Every row on the Clean pages opens.** "Review item" or "Why / options" explains the item and offers Review this item and Show in Finder. For things Cairn can't remove, a button goes to the place that can: Apps, Games, Chat apps, or Final Cut Pro, Lightroom and Logic. Large Files has a Select for cleanup button in its side panel.
+- **"Freed" now means measured.** A receipt only says "freed" when macOS's own free-space figure went up after the clean. Files sent to the Trash count for nothing until the Trash is emptied.
+- **Emptying the Trash from a receipt or Activity** goes one item at a time with a record of each, checks each item is the very one Cairn put there, and marks only those that really went as Deleted. Anything that fails is explained.
+- **Safer moves to the Trash.** If macOS doesn't say where an item landed in the Trash, Cairn stops and deletes nothing. If an item swapped at the last moment can't be put back, Cairn says so instead of claiming it was.
+- **Disk map** waits for other scans, has a Stop button, and keeps the last map when stopped. Space Cairn can't put a name to is no longer counted inside System Data.
+- **Folders Cairn can't read** show as incomplete (≥) instead of empty.
+- **Licence check.** An odd reply from the licence server no longer switches Pro off; Cairn tries again later.
+- **Smaller fixes.** Home's buttons move to a second row in a narrow window, file names stay visible beside the Large Files side panel, VoiceOver reads the tick boxes, and the app stays responsive while scan results arrive.
+- **Build scripts** write each build to a new folder under `dist/` (for example `dist/release.ab12cd`), never replace the last good build, and leave an `INCOMPLETE` file when something fails. The release script stops before notarising if it can't read the app's entitlements.
+- **More checks in CI:** packaging failures, reliability, scan crash recovery and a universal (Apple silicon and Intel) build.
+
+### Plain words, and the disk map's gap labelled (PR #21)
+
+- **Plain words again.** The review, Large Files, the disk map, receipts, rules and the Trash and Put Back messages say things simply ("deleted for good", "can't be put back", "freed") instead of terms such as "measured capacity increase" or "Trash item's identity". The review's safety line reads "Passwords, your emails, Photos, your code history and AI chats are never included." It says emails rather than Mail because Cairn does offer the copies Mail keeps of attachments you have opened; the emails keep the originals. Settings and the rules list say the same now.
+- **Not measured is back on the disk map** as its own part, just before Free, so the bar has no blank gap. It shows only when at least 0.5 GB is unaccounted for, and its note says what it can include (local Time Machine snapshots, other accounts on this Mac, folders Cairn can't open) without claiming which.
+- **Review sheet.** The line under the big number wraps onto more lines instead of stopping at "…". Smart, Delete now and Move to Trash use the same quiet switcher as Settings, the "I understand" box is Cairn's own tick box, and Cancel no longer opens with a blue macOS focus ring.
+- **Finish screen.** If emptying the Trash goes wrong, the message now sits under the result instead of floating over the middle of the page.
+- **CI's universal build check** works again. `lipo` had its words in the wrong order, which turned every run red after the build itself had passed.
+- **CI's scan stress test is steady.** It scans 12,000 test files twelve times and checks every one is kept. On a slow GitHub Mac the app sometimes fell more than 2,048 files behind, so the scan stopped at its safety limit and the test failed by chance. The test now leaves room for all its files; the limit itself is unchanged in the app and still has its own test.
+- **Installed for testing.** The signed test build from 30 October is in `/Applications/Cairn.app`. It isn't notarised, so right-click and choose Open the first time.
+
 ## 27 October 2026
 
 Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.
