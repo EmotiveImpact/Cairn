@@ -27,6 +27,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 - **Review sheet.** The line under the big number wraps onto more lines instead of stopping at "…". Smart, Delete now and Move to Trash use the same quiet switcher as Settings, the "I understand" box is Cairn's own tick box, and Cancel no longer opens with a blue macOS focus ring.
 - **Finish screen.** If emptying the Trash goes wrong, the message now sits under the result instead of floating over the middle of the page.
 - **CI's universal build check** works again. `lipo` had its words in the wrong order, which turned every run red after the build itself had passed.
+- **CI's scan stress test is steady.** It scans 12,000 test files twelve times and checks every one is kept. On a slow GitHub Mac the app sometimes fell more than 2,048 files behind, so the scan stopped at its safety limit and the test failed by chance. The test now leaves room for all its files; the limit itself is unchanged in the app and still has its own test.
 - **Installed for testing.** The signed test build from 30 October is in `/Applications/Cairn.app`. It isn't notarised, so right-click and choose Open the first time.
 
 ## 27 October 2026
