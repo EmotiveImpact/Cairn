@@ -92,15 +92,13 @@ struct ReviewSheet: View {
             // A short list leaves no empty band above the buttons; a long one scrolls.
             .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             if runnable.contains(where: { $0.cleanMethod == .trash }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    // The same quiet switcher as Settings › Cleaning.
-                    HStack(spacing: 12) {
-                        Text("For this clean").font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
-                        CairnSegmentedControl(label: "For this clean", selection: $mode,
-                                              options: RemovalMode.allCases.map { ($0.title, $0) })
-                            .frame(width: 360, height: 32)
-                            .disabled(cleaning || sample != nil || goalPlan != nil)
-                    }
+                VStack(alignment: .leading, spacing: 10) {
+                    // The same switcher, heading and spacing as Settings › Appearance and Cleaning.
+                    Text("For this clean").font(.system(size: 13, weight: .medium))
+                    CairnSegmentedControl(label: "For this clean", selection: $mode,
+                                          options: RemovalMode.allCases.map { ($0.title, $0) })
+                        .frame(width: 360)
+                        .disabled(cleaning || sample != nil || goalPlan != nil)
                     Text(goalPlan == nil
                          ? "Just for this clean. Tool commands and emptying the Trash can't be put back, whichever you pick."
                          : "This clean keeps the choice it was planned with. To pick differently, review the files from their own page.")
