@@ -54,7 +54,7 @@ struct ReviewSheet: View {
     /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
         if hasPersonalFilesToDelete {
-            return "Selected files will be permanently deleted. They may be your only copies; Put Back will not be available."
+            return "These files will be deleted for good. They may be your only copies, and they can't be put back."
         }
         if freedNow > 0 && toTrash > 0 {
             return "\(Fmt.size(freedNow)) of caches and build files is freed straight away. They rebuild on their own when needed. "
@@ -91,7 +91,7 @@ struct ReviewSheet: View {
             .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             if runnable.contains(where: { $0.cleanMethod == .trash }) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Picker("For this cleanup", selection: $mode) {
+                    Picker("For this clean", selection: $mode) {
                         ForEach(RemovalMode.allCases) { option in
                             Text(option.title).tag(option)
                         }
@@ -99,11 +99,11 @@ struct ReviewSheet: View {
                     .pickerStyle(.segmented)
                     .disabled(cleaning || sample != nil || goalPlan != nil)
                     Text(goalPlan == nil
-                         ? "Applies to these selected files only. Tool commands and Trash emptying remain permanent."
-                         : "This goal review keeps its original removal mode. Review files from their category to choose a different mode.")
+                         ? "Just for this clean. Tool commands and emptying the Trash can't be put back, whichever you pick."
+                         : "This clean keeps the choice it was planned with. To pick differently, review the files from their own page.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     if hasPersonalFilesToDelete {
-                        Toggle("I understand these personal files will be permanently deleted, with no Put Back.",
+                        Toggle("I understand my own files here will be deleted for good and can't be put back.",
                                isOn: $acknowledgedPermanentDeletion)
                             .font(.system(size: 12)).disabled(cleaning)
                     }
@@ -222,7 +222,7 @@ struct ReviewSheet: View {
             else if runnable.isEmpty { lines.append(("Nothing here can be removed by Cairn.", Brand.amber)) }
         }
         if hasPersonalFilesToDelete {
-            lines.append(("Delete now is selected for this cleanup. Your own files here will be permanently deleted, with no Put Back.", Brand.amber))
+            lines.append(("Delete now is picked, so your own files here are deleted for good, not sent to the Trash.", Brand.amber))
         }
         if !skipped.isEmpty {
             lines.append(("\(skipped.count) advice-only \(skipped.count == 1 ? "item is" : "items are") left alone.", Brand.textMuted))
@@ -246,7 +246,7 @@ struct ReviewSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
                 Text(runningBlockers.isEmpty
-                     ? "Protected system data, credentials and AI conversations remain blocked."
+                     ? "Passwords, Mail, Photos, your code history and AI chats are never included."
                      : "Items from \(runningBlockers.joined(separator: ", ")) are skipped while it is open.")
                     .fixedSize(horizontal: false, vertical: true)
             }

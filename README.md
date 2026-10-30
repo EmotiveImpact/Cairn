@@ -51,10 +51,18 @@ Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 
 ## What's next
 
-The actionable queue is in [the Claude handoff roadmap](docs/ROADMAP-CLAUDE.md).
-Start with the installed Mac build and runtime acceptance gates, then release
-preparation. The roadmap separates source implementation, checks actually run,
-and work that still needs hardware, owner decisions or explicit authorization.
+In rough order of priority:
+
+1. **Try the installed test build.** A signed copy is in Applications (not notarised yet, so right-click and choose Open the first time). Then connect the AI tools to it.
+2. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
+3. **Buying a licence** on the website at cairnmac.com: £35.99 once, no trial.
+4. **Test the Apple Intelligence switch** on a Mac that has Apple Intelligence (macOS 15.1 or later).
+5. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
+6. **Update the website screenshots** to the new look.
+7. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive.
+8. **Larger text.** Cairn uses fixed text sizes, so the macOS text size setting doesn't change it yet.
+
+The detailed checklist for each step, with what has been tested and what still needs a real Mac, is in [docs/ROADMAP-CLAUDE.md](docs/ROADMAP-CLAUDE.md).
 
 ## For developers
 

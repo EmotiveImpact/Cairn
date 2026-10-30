@@ -10,6 +10,14 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 30 October 2026 · Trash error floated over the finish screen ⚪
+
+If emptying the Trash from the finish screen failed, the message was drawn as an overlay in the middle of the page with no background, on top of the result. It now sits in the page under the result line. Fixed in PR #21; not yet seen on a real Mac.
+
+## 30 October 2026 · Disk map showed a blank gap ⚪
+
+After the disk map stopped counting unexplained space inside System Data, the bar ended in an unlabelled gap. Used space the measured parts miss (0.5 GB or more) now shows as its own "Not measured" part before Free, with a note saying what it can include. Fixed in PR #21, with two reliability checks.
+
 ## 30 October 2026 — Unreadable paths looked completely measured
 
 A failed root metadata read returned an exact zero-byte file count. Missing and

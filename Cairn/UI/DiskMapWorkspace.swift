@@ -93,7 +93,7 @@ struct DiskMapWorkspace: View {
         }
         return current
     }
-    private var shown: [DiskArea] { focus?.children ?? reading?.areas ?? [] }
+    private var shown: [DiskArea] { focus?.children ?? reading.map(DiskMap.areasWithUnmeasured) ?? [] }
     /// The part whose insides show beside the list: the one clicked, else the
     /// largest part that has something inside (System Data on most Macs).
     private var opened: DiskArea? {
@@ -133,7 +133,7 @@ struct DiskMapWorkspace: View {
             }
         } footer: {
             if let reading {
-                Text("Category estimates may share blocks; the bar scales them to fit. Available space comes from macOS. ≥ means incomplete.")
+                Text("Sizes are read from the disk. Free space comes from macOS. ≥ means Cairn couldn't measure all of it.")
                     .font(.system(size: 12)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Text(!map.status.isEmpty ? map.status : "Measured " + reading.date.formatted(.relative(presentation: .named)))
@@ -168,8 +168,8 @@ struct DiskMapWorkspace: View {
 
     private var lead: String {
         if let focus { return focus.note.isEmpty ? "Choose a part to see what is inside it." : focus.note }
-        return reading == nil ? "Capacity and estimated sizes of the folders Cairn can read."
-                              : "Measured categories, not a complete inventory. Snapshots and unreadable files may be missing. Choose a part to look inside."
+        return reading == nil ? "A picture of what is using space on this Mac's disk."
+                              : "What is using space on this disk. Choose a part to look inside."
     }
 
     private func measure() {
@@ -195,7 +195,8 @@ struct DiskMapWorkspace: View {
     }
 
     private func tone(_ area: DiskArea, index: Int) -> Color {
-        focus == nil ? Self.tone(area.kind) : Self.step(index)
+        if unmeasured(area) { return Brand.wash(0.14) }
+        return focus == nil ? Self.tone(area.kind) : Self.step(index)
     }
 
     /// Steps of ice for the parts inside one area, largest first.
@@ -254,7 +255,7 @@ struct DiskMapWorkspace: View {
                                         }
                                     }
                                     .lineLimit(1)
-                                    .foregroundStyle(Self.label(on: area.kind))
+                                    .foregroundStyle(unmeasured(area) ? Brand.textMuted : Self.label(on: area.kind))
                                     .padding(.leading, 9)
                                 }
                             }
@@ -395,17 +396,18 @@ struct DiskMapWorkspace: View {
         func a(_ id: String, _ title: String, _ kind: DiskArea.Kind, _ size: Int64, _ children: [DiskArea] = [], _ note: String = "") -> DiskArea {
             DiskArea(id: id, title: title, kind: kind, bytes: size * gb, children: children, note: note)
         }
-        // Illustrative estimates; real categories need not reconcile with capacity.
+        // Illustrative estimates. The parts fall 13 GB short of the 582 GB used,
+        // as a real reading usually does, so the sample shows "Not measured".
         let system = [a("sys/dev", "Xcode and simulators", .systemData, 52), a("sys/support", "App support data", .systemData, 31),
                       a("sys/caches", "App caches", .systemData, 22), a("sys/containers", "App containers", .systemData, 17),
-                      a("sys/vm", "Swap and sleep image", .systemData, 8), a("sys/library", "Shared Library", .systemData, 13)]
+                      a("sys/vm", "Swap and sleep image", .systemData, 8)]
         let files = [a("f/dl", "Downloads", .files, 92), a("f/docs", "Documents", .files, 60), a("f/pics", "Pictures", .files, 38),
                      a("f/movies", "Movies", .files, 24), a("f/desk", "Desktop", .files, 6)]
         let dev = [a("d/dev", "Developer", .developer, 104), a("d/hidden", "Hidden tool folders", .developer, 41)]
         let apps = [a("a/xcode", "Xcode", .apps, 12), a("a/logic", "Logic Pro", .apps, 7), a("a/rest", "48 smaller items", .apps, 39)]
         return DiskMap.Reading(total: 994 * gb, free: 412 * gb, areas: [
             a("macos", "macOS", .macOS, 16, [], "macOS and the files it needs to start. Read-only."),
-            a("sys", "System Data", .systemData, 143, system, "Measured app and system folders, not Apple’s System Data classification."),
+            a("sys", "System Data", .systemData, 130, system, "App and system folders Cairn measured. Finder works out System Data differently, so the two won't match exactly."),
             a("apps", "Apps", .apps, 58, apps), a("dev", "Coding", .developer, 145, dev),
             a("files", "Your files", .files, 220, files), a("free", "Free", .free, 412),
         ], date: Date())

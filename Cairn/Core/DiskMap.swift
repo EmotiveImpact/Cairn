@@ -184,7 +184,7 @@ enum DiskMap {
         var areas = [macOS,
                      DiskArea(id: "sys", title: "System Data", kind: .systemData, bytes: systemData.reduce(0) { $0 + $1.bytes },
                               partial: libraryPartial || systemData.contains(where: \.partial), children: systemData,
-                              note: "Measured app and system folders. This is not Apple’s System Data classification. Snapshots and unreadable files are not attributed here."),
+                              note: "App and system folders Cairn measured. Finder works out System Data differently, so the two won't match exactly."),
                      apps]
         if !developer.isEmpty {
             areas.append(DiskArea(id: "dev", title: "Coding", kind: .developer, bytes: developer.reduce(0) { $0 + $1.bytes },
@@ -198,6 +198,20 @@ enum DiskMap {
         areas.append(DiskArea(id: "free", title: "Free", kind: .free, bytes: free, note: "Available, counting space macOS can release on its own."))
         guard !Task.isCancelled else { return nil }
         return Reading(total: total, free: free, areas: areas, date: Date())
+    }
+
+    /// The top-level parts plus a plain "Not measured" part for used space the
+    /// measured parts don't reach, so the bar has no blank gap. The gap is its
+    /// own part, never added to System Data or pinned on one cause.
+    static func areasWithUnmeasured(_ reading: Reading) -> [DiskArea] {
+        let measured = reading.areas.filter { $0.kind != .free }.reduce(Int64(0)) { $0 + max(0, $1.bytes) }
+        let gap = reading.used - measured
+        guard gap >= 512 * 1_024 * 1_024 else { return reading.areas }
+        let part = DiskArea(id: "unmeasured", title: "Not measured", kind: .other, bytes: gap,
+                            note: "Space macOS counts as used that Cairn couldn't put a name to. It can include local Time Machine snapshots, other accounts on this Mac and folders Cairn can't open.")
+        var areas = reading.areas
+        areas.insert(part, at: areas.firstIndex { $0.kind == .free } ?? areas.endIndex)
+        return areas
     }
 
     /// Category walks can overlap/shared-count blocks. Keep the available-capacity

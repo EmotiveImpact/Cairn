@@ -330,7 +330,7 @@ struct RecoveryWorkspace: View {
                 }
             }
         }
-        .alert("Trash deletion needs attention", isPresented: $showPurgeError) {
+        .alert("Some items weren't deleted", isPresented: $showPurgeError) {
             Button("OK", role: .cancel) {}
         } message: { Text(purgeError ?? "Some items could not be deleted.") }
         // The page card paints the background, so the dot field shows through.

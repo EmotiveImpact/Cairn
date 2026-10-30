@@ -273,7 +273,7 @@ struct WorkspaceCompletion: View {
                 }
                 .font(.system(size: 13)).foregroundStyle(Brand.room)
             } else if emptiedBytes > 0 {
-                Text(measuredEmptyingGain > 0 ? "Trash emptied; available capacity increased." : "Trash emptied. No increase in available capacity was measured.")
+                Text(measuredEmptyingGain > 0 ? "Emptied from the Trash. The space is free now." : "Emptied from the Trash, but macOS doesn't show more free space yet.")
                     .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             } else if freed == 0 && movedToTrash > 0 {
                 Text(inTrash > 0 ? "The space comes back when the Trash is emptied."
@@ -281,6 +281,10 @@ struct WorkspaceCompletion: View {
                     .font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
             } else if summary.interrupted {
                 Text("Stopped before the end").font(.system(size: 13)).foregroundStyle(Brand.amber)
+            }
+            if let emptyingError {
+                Text(emptyingError).font(.system(size: 13)).foregroundStyle(Brand.amber)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if heldBack > 0 {
                 Text("\(Fmt.size(heldBack)) has not shown up as free space yet. macOS can keep it for a while in local Time Machine snapshots or as purgeable space, then lets it go on its own.")
@@ -354,7 +358,6 @@ struct WorkspaceCompletion: View {
         .background(Brand.background)
         .foregroundStyle(Brand.textPrimary)
         .overlay {
-            if let emptyingError { Text(emptyingError).font(.system(size: 13)).foregroundStyle(Brand.amber) }
             if sharing {
                 ShareCardSheet(freed: freed, cleared: summary.cleared) { sharing = false }
                     .transition(.opacity)

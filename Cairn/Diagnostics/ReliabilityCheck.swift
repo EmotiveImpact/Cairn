@@ -41,6 +41,18 @@ import Darwin
               "Invalid capacity does not fabricate chart proportions")
         check(DiskMap.barFractions(partialChartAreas).allSatisfy { $0.isFinite && $0 >= 0 },
               "Nested estimates have finite nonnegative proportions")
+        let gb: Int64 = 1_000_000_000
+        let gapReading = DiskMap.Reading(total: 10 * gb, free: 2 * gb,
+                                         areas: [DiskArea(id: "a", title: "A", kind: .files, bytes: 5 * gb),
+                                                 DiskArea(id: "free", title: "Free", kind: .free, bytes: 2 * gb)], date: Date())
+        let withGap = DiskMap.areasWithUnmeasured(gapReading)
+        let gapIDs = withGap.map(\.id)
+        let gapFill: Double = DiskMap.barFractions(withGap, capacity: (gapReading.total, gapReading.free)).reduce(0, +)
+        check(gapIDs == ["a", "unmeasured", "free"] && withGap[1].bytes == 3 * gb && withGap[1].kind == .other,
+              "Used space the parts miss is its own Not measured part, before Free")
+        check(abs(gapFill - 1) < 0.00001, "With a Not measured part the disk bar has no blank gap")
+        check(DiskMap.areasWithUnmeasured(DiskMap.Reading(total: 100, free: 20, areas: chartAreas, date: Date())) == chartAreas,
+              "Overlapping estimates add no Not measured part")
 
         var mixed = ScanStore.CleanSummary()
         mixed.accounting.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/trash"), bytesAffected: 800, usedTool: false), recoveryRecorded: true)
