@@ -275,6 +275,24 @@ enum EvidenceCheck {
         check(FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: true) == night &&
               FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: false) == delivered,
               "Quiet-hours checks only count while quiet hours last")
+
+        let names: [String] = ["seen", "late", "new", "gone", "locked", "empty", "unreached"]
+        let watched: [ObservedRoot] = names.map {
+            ObservedRoot(id: $0, title: $0, path: "/fixture/" + $0, icon: "folder", observationOnly: true)
+        }
+        let earlier: [String: LocationReading] = ["seen": fixtureReading("seen", gb, at: t0), "late": fixtureReading("late", gb, at: t0)]
+        let measuredAt: Date = t0.addingTimeInterval(600)
+        let fresh: [LocationReading] = [
+            fixtureReading("seen", gb, at: measuredAt),
+            fixtureReading("late", gb, at: measuredAt, coverage: .cancelled),
+            fixtureReading("new", gb, at: measuredAt),
+            fixtureReading("gone", 0, at: measuredAt, coverage: .unavailable),
+            fixtureReading("locked", 0, at: measuredAt, coverage: .unavailable),
+            fixtureReading("empty", 0, at: measuredAt, coverage: .absent),
+        ]
+        let unknown = FastDropPolicy.unknowns(roots: watched, previous: earlier, readings: fresh, missing: ["gone"])
+        check(unknown.unfinished == ["late", "unreached"] && unknown.uncompared == ["new", "locked"],
+              "Only places that are really not there, empty or excluded are ruled out; unreadable ones stay unknown")
         let near = FastDropReport.make(drop: close!, before: nil, after: nil, changes: [], reserve: 30 * gb, note: nil)
         let reservePhrase: String = "reach your " + Fmt.size(30 * gb) + " reserve in about 20 minutes"
         check(near.body.contains(reservePhrase), "Report says when the reserve is close")

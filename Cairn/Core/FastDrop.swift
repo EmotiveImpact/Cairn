@@ -106,6 +106,27 @@ enum FastDropPolicy {
         guard let delivered else { return quietCheck }
         return max(delivered, quietCheck)
     }
+
+    /// Watched places that can't be ruled out: not measured in time, or there
+    /// but with no earlier size. A place confirmed not to exist (a tool you
+    /// don't use) or that you excluded holds nothing, so it is in neither list.
+    /// Any other unreadable place stays unknown.
+    static func unknowns(roots: [ObservedRoot], previous: [String: LocationReading], readings: [LocationReading],
+                         missing: Set<String>) -> (unfinished: [String], uncompared: [String]) {
+        let latest = Dictionary(readings.map { ($0.root.id, $0) }, uniquingKeysWith: { first, _ in first })
+        var unfinished: [String] = [], uncompared: [String] = []
+        for root in roots where !missing.contains(root.id) {
+            let fresh = latest[root.id]
+            if previous[root.id] != nil {
+                if fresh?.coverage.comparable != true { unfinished.append(root.title) }
+            } else if let fresh {
+                if fresh.coverage != .absent && fresh.coverage != .excluded { uncompared.append(root.title) }
+            } else {
+                unfinished.append(root.title)
+            }
+        }
+        return (unfinished, uncompared)
+    }
 }
 
 /// What Cairn found after a fast drop: the notification and the card on

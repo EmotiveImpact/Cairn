@@ -556,24 +556,13 @@ enum ReserveAlertPolicy {
         if traversalPauseReason != nil || measurementTask != nil || cancel.isCancelled {
             note = "Cairn only checked swap and snapshots this time."
         } else if let measured = await measureSuspects(cancel: cancel) {
-            let (roots, readings) = measured
+            let (roots, readings, missing) = measured
             let previous = LocationComparison.latestComparable(locations)
             changes = readings.compactMap { reading in
                 previous[reading.root.id].flatMap { LocationComparison.changes([$0, reading]).first }
             }
-            let latest = Dictionary(readings.map { ($0.root.id, $0) }, uniquingKeysWith: { first, _ in first })
-            // A place that isn't there (a tool you don't use) or that you
-            // excluded holds nothing, so only places that exist are listed.
-            let empty: Set<LocationCoverage> = [.absent, .unavailable, .excluded]
-            for root in roots {
-                if previous[root.id] != nil {
-                    if latest[root.id]?.coverage.comparable != true { unfinished.append(root.title) }
-                } else if let fresh = latest[root.id] {
-                    if !empty.contains(fresh.coverage) { uncompared.append(root.title) }
-                } else {
-                    unfinished.append(root.title)
-                }
-            }
+            let unknown = FastDropPolicy.unknowns(roots: roots, previous: previous, readings: readings, missing: missing)
+            unfinished = unknown.unfinished; uncompared = unknown.uncompared
             if !readings.isEmpty, error == nil {
                 do { apply(try await evidence.append(locations: readings)) } catch { historyWriteFailed() }
             }
@@ -595,7 +584,8 @@ enum ReserveAlertPolicy {
         return hour >= 22 || hour < 8
     }
     /// Nil when another scan holds the gate; background work never queues.
-    private func measureSuspects(cancel: CancelBox) async -> ([ObservedRoot], [LocationReading])? {
+    /// Also returns the places confirmed not to exist on disk.
+    private func measureSuspects(cancel: CancelBox) async -> ([ObservedRoot], [LocationReading], Set<String>)? {
         guard ScanGate.shared.tryAcquireForMonitoring() else { return nil }
         defer { ScanGate.shared.release() }
         let exclusions = AppSettings.shared.excludedPaths
@@ -603,17 +593,25 @@ enum ReserveAlertPolicy {
             let roots = FastDropPolicy.ordered(ObservedRoot.measurable(fullDiskAccess: FullDiskAccess.isGranted()))
             let deadline = ProcessInfo.processInfo.systemUptime + FastDropPolicy.totalSeconds
             var readings: [LocationReading] = []
+            var missing: Set<String> = []
             for root in roots {
                 let remaining = deadline - ProcessInfo.processInfo.systemUptime
                 if remaining < 0.5 || cancel.isCancelled { break }
                 var probe = LocationProbe()
                 probe.seconds = min(FastDropPolicy.perRoot, remaining)
-                readings.append(autoreleasepool {
+                let reading: LocationReading = autoreleasepool {
                     probe.measure(root, exclusions: exclusions, source: "fast-drop",
                                   cancelled: { cancel.isCancelled || ScanGate.shared.snapshot.queued > 0 })
-                })
+                }
+                // "Unavailable" also covers a folder that can't be opened, so
+                // only a path that is really not there counts as missing.
+                if reading.coverage == .unavailable {
+                    var info = stat()
+                    if lstat(root.url.path, &info) != 0 && errno == ENOENT { missing.insert(root.id) }
+                }
+                readings.append(reading)
             }
-            return (roots, readings)
+            return (roots, readings, missing)
         }.value
     }
     func dismissFastDrop() {
