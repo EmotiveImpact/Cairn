@@ -29,6 +29,10 @@ import AppKit
                 guard Cleaner.canRestore(from: from, to: to, trashRoots: [trash]) else { return false }
                 return renamex_np(from.path, to.path, UInt32(RENAME_EXCL)) == 0
             }, recordRestoredBytes: { _ in }, fixtureScanners: [LifecycleScanner(root: root, count: count)],
+            // Room for every fixture finding: these suites check retained results, so
+            // a slow runner falling behind must not trip the overflow guard, which
+            // ReliabilityCheck's deliberate flood covers.
+            scanBufferLimit: max(ScanEventPipeline.defaultBufferLimit, count + 64),
             lifecycleCheckpoint: { point in if point == checkpoint { _exit(78) } },
             cleanFile: { item, roots, pro, reviewed in
                 Cleaner.clean(item, allowedRoots: roots, proEnabled: pro, reviewedSource: reviewed, moveToTrash: { source in
@@ -297,8 +301,7 @@ private struct LifecycleScanner: CairnScanner {
             if context.isCancelled() { return }
             let url = root.appendingPathComponent("source/item-\(index).bin")
             context.emit(ScanItem(url: url, resolvedURL: url, allocatedSize: 18, categoryID: info.id, severity: .review, note: "Disposable \(index)"))
-            // This suite tests retained results, not buffer overflow (covered by
-            // ReliabilityCheck's deliberate flood). Pace real-file findings.
+            // A steady trickle like a real scan, so results arrive over many flushes.
             if index.isMultiple(of: 100) { try? await Task.sleep(nanoseconds: 100_000_000) }
         }
     }
