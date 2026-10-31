@@ -39,7 +39,11 @@ struct BrandLogo: View {
         case "xcode-build": return "xcode"
         case "npm-cache": return "npm"
         case "codex-state": return "codex"
-        case "docker": return "docker"
+        case "docker", "docker-disk": return "docker"
+        case "simulators": return "xcode"
+        case "ollama-models": return "ollama"
+        case "claude-data": return "claude"
+        case "cursor-worktrees": return "cursor"
         default: return nil
         }
     }

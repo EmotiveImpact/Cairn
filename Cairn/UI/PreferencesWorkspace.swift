@@ -112,7 +112,17 @@ struct PreferencesWorkspace: View {
                     }
                     if !preview { StorageControl.shared.configureMonitoring() }
                 }
-            option("Watch known folders", "Observe metadata for build output, package and browser caches, Downloads and Codex local data. No file contents are read and no cleanup runs.", $settings.locationMonitoringEnabled)
+            option("Alert when space drops fast", "If 5 GB or more goes within half an hour, or your reserve is close at that rate, Cairn checks the places that usually grow (swap, Docker, simulators, AI models, agent worktrees and more) and tells you which grew. Nothing is removed.", preview ? .constant(true) : $settings.fastDropAlertsEnabled)
+                .onChange(of: settings.fastDropAlertsEnabled) { _, enabled in
+                    if enabled && !preview {
+                        settings.reservePaused = false
+                        Notify.requestAuth()
+                        StorageControl.shared.start()
+                        Task { await StorageControl.shared.refreshCapacity(); await StorageControl.shared.refreshNotificationStatus() }
+                    }
+                    if !preview { StorageControl.shared.configureMonitoring() }
+                }
+            option("Watch known folders", "Keep the sizes of build output, package and browser caches, simulators, AI models, Docker, Claude Code data, agent worktrees, Downloads and Codex local data up to date. Only sizes are read, never what's inside files, and nothing is cleaned.", $settings.locationMonitoringEnabled)
                 .onChange(of: settings.locationMonitoringEnabled) { _, _ in
                     if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
                 }
@@ -139,10 +149,10 @@ struct PreferencesWorkspace: View {
                 }
                 fixed("Suggestion state", settings.locationMonitoringEnabled ? "Cairn will suggest inspections from recent compatible measurements. You can also measure known locations manually in Changes." : "Turn on Watch known folders for background measurements, or measure manually in Changes. Suggestions do not trigger cleanup.")
             }
-            if preview || settings.reserveEnabled {
-                option("Quiet hours · 22:00–08:00", "Keep in-app reserve status visible but send no reserve notifications during these local hours.", $settings.reserveQuietHours)
+            if preview || settings.reserveEnabled || settings.fastDropAlertsEnabled {
+                option("Quiet hours · 22:00–08:00", "Keep reserve and fast-drop status visible in Cairn but send no notifications during these local hours.", $settings.reserveQuietHours)
             }
-            if preview || settings.reserveEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled) {
+            if preview || settings.reserveEnabled || settings.fastDropAlertsEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled) {
                 if !preview {
                     HStack(spacing: 16) {
                         if settings.reservePaused {

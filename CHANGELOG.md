@@ -4,6 +4,18 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
+## 31 October 2026
+
+### Fast-drop alert and a wider watch list
+
+- **An alert when space goes fast.** The low-space alert only spoke once you were already below your reserve, so losing 20 GB in an hour while still above it said nothing. Settings › Monitoring now has **Alert when space drops fast** (off until you turn it on). While Cairn is open it checks free space every five minutes. If 5 GB or more goes within half an hour, or at that rate your reserve is less than two hours away, it quickly measures the usual places (30 seconds at most, quick ones first), compares each with its last size, and sends one notification such as "12.4 GB less free space in 25 minutes. Swap (memory kept on disk) grew by 6 GB and Docker disk grew by 4.2 GB." If none of them grew, it says the space went somewhere Cairn doesn't watch rather than guessing. At most one alert an hour, and quiet hours apply.
+- **What it found stays on Changes** for a day, with when each place started growing. Each figure covers its own time, so they aren't added up to explain the whole drop. Nothing is removed, and swap and snapshots never become something to clean.
+- **Swap and local Time Machine snapshots on Changes.** Known locations now starts with how big swap is and how many local snapshots there are, read straight from macOS, with a line saying macOS or Time Machine manages them.
+- **Ten more places watched** for growth: iPhone and iPad simulators, Ollama, Hugging Face and LM Studio models, Docker's disk, OrbStack and Colima disks, Claude Code data (`~/.claude`), Cursor worktrees and Conductor workspaces. Claude Code data, worktrees and the virtual machine disks are watch-only: measuring them never makes anything inside them cleanable, and the worktree protection is unchanged. Docker and OrbStack disks are only measured with Full Disk Access, so macOS never asks about other apps' data in the background. Codex worktrees are already covered by Codex local data. Claude Code's own `--worktree` folders sit inside each project, so they aren't on the list yet.
+- **Each watched place keeps its own history.** Saved readings are now capped per place (48 each) as well as overall, so a place that rarely changes, such as a model folder, keeps the size a later reading is compared with.
+- **Build scripts tidy `dist/`.** `build_local.sh` and `build_release.sh` now keep this build and the two before it (set `KEEP_BUILDS` to change that) and remove older ones. A failed build is kept for a day so its error can be read, a build whose app is open is never touched, and nothing outside `dist/local.*` or `dist/release.*` is removed. The CI packaging check covers all three.
+- Not yet tried on a real Mac: a real fast drop, the notification and the Changes card with live data. CI checks the rules, the wording, the watch list and the build script tidy-up with test data.
+
 ## 27 October 2026
 
 Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.

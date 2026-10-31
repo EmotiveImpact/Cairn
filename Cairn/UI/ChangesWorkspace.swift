@@ -59,6 +59,12 @@ struct ChangesWorkspace: View {
                     Spacer()
                     CairnSegmentedControl(label: "Period", selection: $period, options: [("24 hours", 1), ("7 days", 7), ("30 days", 30)]).frame(width: 228, height: 32)
                 }
+                if let report = fastDropReport {
+                    fastDropCard(report).padding(.top, 26)
+                } else if control.checkingFastDrop && !preview {
+                    Text("Space is going fast. Checking what grew…")
+                        .font(.system(size: 12)).foregroundStyle(Brand.amber).padding(.top, 22)
+                }
                 history.padding(.top, 26)
                 if !suggestions.isEmpty { suggestionSection.padding(.top, 28) }
                 locationSection.padding(.top, 28)
@@ -126,6 +132,7 @@ struct ChangesWorkspace: View {
             .task {
                 if !preview {
                     await control.refreshCapacity()
+                    await control.refreshSignals()
                     legacyReadings = StorageHistory.load()
                 }
             }
@@ -175,6 +182,9 @@ struct ChangesWorkspace: View {
             }
             Text(control.measuringLocations ? control.measurementStatus : "Folder sizes from metadata only. These observations do not grant permission to remove anything.")
                 .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+            if search.isEmpty, let signals = preview ? Optional(Self.sampleSignals) : control.latestSignals {
+                signalRows(signals)
+            }
             if visibleLocations.isEmpty {
                 Text(search.isEmpty ? "Measure known locations to start a baseline. A second compatible reading shows growth or decline." : "No observed location matches this filter.")
                     .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).padding(.vertical, 12)
@@ -217,6 +227,105 @@ struct ChangesWorkspace: View {
                 .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
         }
     }
+    // MARK: - Fast drop and macOS figures
+
+    private var fastDropReport: FastDropReport? {
+        if preview { return Showcase.active ? nil : Self.sampleFastDrop }
+        guard let report = control.fastDrop, Date().timeIntervalSince(report.date) < 86_400 else { return nil }
+        return report
+    }
+    private func fastDropCard(_ report: FastDropReport) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                Text("SPACE WENT FAST").font(.system(size: 11)).tracking(0.7).foregroundStyle(Brand.amber)
+                Spacer()
+                Text(report.date.formatted(date: .abbreviated, time: .shortened)).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                Button("Dismiss") { control.dismissFastDrop() }
+                    .buttonStyle(.plain).font(.system(size: 11)).foregroundStyle(Brand.deepBlue).disabled(preview)
+            }
+            Text(report.headline).font(.system(size: 19, weight: .regular)).monospacedDigit()
+            if let line = report.reserveLine {
+                Text(line).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+            }
+            if report.growers.isEmpty {
+                Text(report.findingLine).font(.system(size: 12)).foregroundStyle(Brand.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(report.growers) { grower in
+                        HStack(spacing: 12) {
+                            BrandLogo(name: BrandLogo.forRoot(grower.id), fallback: grower.icon, size: 22)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(grower.title).font(.system(size: 13)).foregroundStyle(Brand.textPrimary)
+                                if let since = grower.since {
+                                    Text("Since \(since.formatted(date: Calendar.current.isDateInToday(since) ? .omitted : .abbreviated, time: .shortened))")
+                                        .font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                                }
+                            }
+                            Spacer()
+                            Text(grower.bytes.map { "+" + Fmt.size($0) } ?? "+\(grower.count ?? 0)")
+                                .font(.system(size: 13)).monospacedDigit().foregroundStyle(Brand.textPrimary)
+                        }.frame(minHeight: 42)
+                        Rectangle().fill(Brand.separator).frame(height: 0.5)
+                    }
+                }
+            }
+            VStack(alignment: .leading, spacing: 5) {
+                if report.growers.contains(where: { $0.id == "swap" }) {
+                    Text("Swap is memory macOS keeps on disk when apps need more than your Mac has. It shrinks by itself when you quit busy apps or restart. Cairn never removes it.")
+                }
+                if let note = report.note { Text(note) }
+                if !report.unfinished.isEmpty {
+                    Text("Not measured in time: \(FastDropReport.list(report.unfinished)).")
+                }
+                Text("Each figure is measured over its own time, so they don't add up to the drop. Nothing was removed.")
+            }.font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Brand.wash(0.02)))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Brand.separator, lineWidth: 1))
+    }
+    /// Figures macOS reports itself. They explain space; Cairn never acts on them.
+    private func signalRows(_ signals: SystemSignals) -> some View {
+        VStack(spacing: 0) {
+            if let swap = signals.swapBytes {
+                signalRow("memorychip", FastDropReport.swapTitle,
+                          "macOS manages this. It shrinks when you quit busy apps or restart.", Fmt.size(swap))
+            }
+            if let count = signals.snapshotCount {
+                signalRow("clock.arrow.circlepath", "Local Time Machine snapshots",
+                          "Time Machine manages these. macOS doesn't say how much each one holds.", "\(count)")
+            }
+        }
+    }
+    private func signalRow(_ icon: String, _ title: String, _ detail: String, _ value: String) -> some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                Image(systemName: icon).frame(width: 24).foregroundStyle(Brand.textSecondary)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title).font(.system(size: 13)).foregroundStyle(Brand.textPrimary)
+                    Text(detail).font(.system(size: 11)).foregroundStyle(Brand.textMuted)
+                }
+                Spacer()
+                Text(value).font(.system(size: 13)).monospacedDigit().frame(minWidth: 92, alignment: .trailing)
+            }.frame(minHeight: 52)
+            Rectangle().fill(Brand.separator).frame(height: 0.5)
+        }
+    }
+    private static var sampleSignals: SystemSignals {
+        SystemSignals(date: Date(), swapBytes: 6_440_000_000, snapshotCount: 3)
+    }
+    private static var sampleFastDrop: FastDropReport {
+        let now = Date()
+        return FastDropReport(id: UUID(), date: now.addingTimeInterval(-12 * 60), dropBytes: 12_400_000_000, interval: 25 * 60,
+            reserve: PreviewStorageScenario.reserveBytes, secondsToReserve: 70 * 60,
+            growers: [
+                .init(id: "swap", title: FastDropReport.swapTitle, icon: "memorychip", bytes: 6_000_000_000, count: nil, since: now.addingTimeInterval(-40 * 60)),
+                .init(id: "docker-disk", title: "Docker disk", icon: "shippingbox", bytes: 4_200_000_000, count: nil, since: now.addingTimeInterval(-55 * 60)),
+                .init(id: "snapshots", title: "Local Time Machine snapshots", icon: "clock.arrow.circlepath", bytes: nil, count: 2, since: now.addingTimeInterval(-40 * 60))
+            ], note: nil)
+    }
+
     private static var sampleLocationHistory: [LocationReading] {
         sampleChanges.flatMap { change -> [LocationReading] in
             let root = ObservedRoot(id: change.id, title: change.category.title, path: "/Sample/" + change.category.title, icon: change.category.icon, observationOnly: false)

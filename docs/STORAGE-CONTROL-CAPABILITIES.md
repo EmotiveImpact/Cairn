@@ -28,6 +28,7 @@ Read the [PRD](CAIRN-STORAGE-CONTROL-PRD.md) for requirements and the
 | AI Models | LocalModels reads manifests and folder sizes on opening the page | Read-only list; Trash for a single confirmed model inside a known store, through SafePaths.evaluate; Ollama only via a copied `ollama rm` command |
 | Disk map | DiskMap on request: APFS volume counters plus bounded walks, two-minute limit | Read-only |
 | Growth suggestions | Explicit opt-in, selected known folders and threshold; recent comparable location readings | Inspect-only suggestions in Overview and Changes. No cleanup permission or unattended executor route |
+| Fast-drop alert (31 Oct) | Explicit opt-in, default off. FastDropPolicy reads the five-minute capacity checks: 5 GB or more gone within 30 minutes, or 2 GB or more with the reserve under two hours away at that rate; one alert an hour. Then swap (`vm.swapusage`), local snapshot count (`tmutil listlocalsnapshots /`) and one bounded walk of each watched root (30 s total, 8 s per root, cheap roots first) under `ScanGate.tryAcquireForMonitoring` | Notification plus a Changes card naming what grew, each over its own dated interval; never summed into a residual. No cleanup permission; swap and snapshots are never candidates. Respects pause, quiet hours, memory/thermal/Low Power/low-space pauses |
 
 Heavy traversals and data operations share ScanGate. The new location worker keeps its lease
 until its detached traversal has stopped. Capacity metadata reads are cheap and coalesced.
@@ -56,7 +57,11 @@ its records, preserves the input file and can be retried after interruption. Ear
 daily history remains separate; no historical volume IDs are invented.
 
 Limits: 16 MiB SQLite page budget, 512 KiB SQLite page cache, 2,300 capacity readings,
-32 candidate snapshots, 1,024 root readings, 90-day age retention, 128 KiB per encoded row.
+32 candidate snapshots, 1,024 root readings (and at most 48 for any one root, so a quiet root
+keeps its baseline), 90-day age retention, 128 KiB per encoded row. The watched catalogue has
+16 disjoint roots (31 October: simulators, Ollama, Hugging Face, LM Studio, Docker, OrbStack,
+Colima, `~/.claude`, Cursor worktrees and Conductor workspaces added, watch-only where
+protected; Docker and OrbStack only with Full Disk Access).
 The measurement walker has a 100,000-entry/64-level/30-second budget and one descriptor per
 active depth. It never reads file contents, follows symlinks/mounts, or intentionally hydrates
 placeholders. Allocated sizes remain estimates in the presence of APFS clones/snapshots.

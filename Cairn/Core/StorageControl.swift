@@ -196,6 +196,18 @@ enum ReserveAlertPolicy {
     private(set) var monitoringStatus = "Monitoring is off"
     private(set) var pendingLocationCount = 0
     private(set) var notificationStatus = "Notification permission not checked"
+    /// Swap and local snapshots, as macOS last reported them.
+    private(set) var latestSignals: SystemSignals?
+    /// The last fast drop and what grew, kept for a day.
+    private(set) var fastDrop: FastDropReport?
+    private(set) var checkingFastDrop = false
+    @ObservationIgnored private var recentCapacity: [CapacityReading] = []
+    @ObservationIgnored private var recentSignals: [SystemSignals] = []
+    @ObservationIgnored private var fastDropTask: Task<Void, Never>?
+    @ObservationIgnored private var fastDropCancellation: CancelBox?
+    @ObservationIgnored private var fullDiskAccess = false
+    private static let fastDropAlertKey = "cairn.fastDropAlertedAt.v1"
+    private static let fastDropReportKey = "cairn.fastDropReport.v1"
     @ObservationIgnored private var watcher: LocationEventWatcher?
     @ObservationIgnored private var watchedRootIDs: Set<String> = []
     @ObservationIgnored private var dirty = DirtyLocationSchedule(rootIDs: Set(ObservedRoot.catalogue().map(\.id)))
@@ -214,11 +226,16 @@ enum ReserveAlertPolicy {
     @ObservationIgnored private var measurementCancellation: CancelBox?
     @ObservationIgnored private let evidence: StorageEvidenceStore
     @ObservationIgnored private let probe: @Sendable () -> CapacityReading?
+    @ObservationIgnored private let signalsProbe: @Sendable () -> SystemSignals
     private let defaults = UserDefaults.standard
 
     init(evidence: StorageEvidenceStore = StorageEvidenceStore(),
-         probe: @escaping @Sendable () -> CapacityReading? = { CapacityProbe.read() }) {
-        self.evidence = evidence; self.probe = probe
+         probe: @escaping @Sendable () -> CapacityReading? = { CapacityProbe.read() },
+         signals: @escaping @Sendable () -> SystemSignals = { SystemSignals.read() }) {
+        self.evidence = evidence; self.probe = probe; self.signalsProbe = signals
+        if let data = UserDefaults.standard.data(forKey: Self.fastDropReportKey),
+           let report = try? JSONDecoder().decode(FastDropReport.self, from: data),
+           Date().timeIntervalSince(report.date) < 86_400 { fastDrop = report }
     }
     var changes: [CandidateChange] { CandidateComparison.changes(candidates) }
     var locationChanges: [LocationChange] { LocationComparison.changes(locations) }
@@ -266,7 +283,8 @@ enum ReserveAlertPolicy {
     }
     private var monitoringEnabled: Bool {
         let settings = AppSettings.shared
-        return (settings.reserveEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled && !settings.growthSuggestionIDs.isEmpty)) && !settings.reservePaused
+        return (settings.reserveEnabled || settings.fastDropAlertsEnabled ||
+                (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled && !settings.growthSuggestionIDs.isEmpty)) && !settings.reservePaused
     }
     func configureMonitoring() {
         let settings = AppSettings.shared
@@ -279,14 +297,18 @@ enum ReserveAlertPolicy {
             monitoringStatus = sleeping ? "Paused while your Mac sleeps" : settings.reservePaused ? "Monitoring paused" : "Monitoring is off"
             return
         }
-        guard settings.locationMonitoringEnabled else {
+        // The fast-drop alert needs a recent size for each usual suspect to
+        // compare with, so it keeps them measured even when folder watching
+        // is otherwise off.
+        guard settings.locationMonitoringEnabled || settings.fastDropAlertsEnabled else {
             watcher?.stop(); watcher = nil; watchedRootIDs = []
             if backgroundMeasurement { cancelLocationMeasurement() }
             monitoringStatus = settings.reserveEnabled ? "Capacity alerts active · folder monitoring is off" : "Monitoring is off"
             return
         }
-        let roots = ObservedRoot.nonOverlapping(ObservedRoot.catalogue()).filter {
-            settings.reserveEnabled || settings.growthSuggestionIDs.contains($0.id)
+        let watchAll = settings.reserveEnabled || settings.fastDropAlertsEnabled
+        let roots = ObservedRoot.measurable(fullDiskAccess: fullDiskAccess).filter {
+            watchAll || settings.growthSuggestionIDs.contains($0.id)
         }
         let rootIDs = Set(roots.map(\.id))
         if watcher != nil && rootIDs != watchedRootIDs {
@@ -338,7 +360,7 @@ enum ReserveAlertPolicy {
         return nil
     }
     private func scheduleBackgroundMeasurement() {
-        guard watcher != nil, traversalPauseReason == nil, measurementTask == nil else {
+        guard watcher != nil, traversalPauseReason == nil, measurementTask == nil, fastDropTask == nil else {
             if backgroundMeasurement && traversalPauseReason != nil { cancelLocationMeasurement() }
             return
         }
@@ -352,7 +374,7 @@ enum ReserveAlertPolicy {
         guard workspaceTokens.isEmpty else { return }
         let center = NSWorkspace.shared.notificationCenter
         workspaceTokens.append(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-            Task { @MainActor in self?.sleeping = true; self?.configureMonitoring() }
+            Task { @MainActor in self?.sleeping = true; self?.fastDropCancellation?.cancel(); self?.configureMonitoring() }
         })
         for name in [NSWorkspace.didWakeNotification, NSWorkspace.didMountNotification, NSWorkspace.didUnmountNotification] {
             workspaceTokens.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
@@ -368,7 +390,7 @@ enum ReserveAlertPolicy {
         pressure.setEventHandler { [weak self] in
             guard let self, let pressure = self.pressureSource else { return }
             self.memoryPressure = !pressure.data.contains(.normal)
-            if self.memoryPressure { self.cancelLocationMeasurement() }
+            if self.memoryPressure { self.cancelLocationMeasurement(); self.fastDropCancellation?.cancel() }
             self.configureMonitoring()
         }
         pressure.resume(); pressureSource = pressure
@@ -385,8 +407,9 @@ enum ReserveAlertPolicy {
         refreshTask = nil
     }
     private func performCapacityRefresh(force: Bool) async {
-        let reading = await Task.detached(priority: .utility) { [probe] in probe() }.value
+        let (reading, access) = await Task.detached(priority: .utility) { [probe] in (probe(), FullDiskAccess.isGranted()) }.value
         lastChecked = Date()
+        if access != fullDiskAccess { fullDiskAccess = access; configureMonitoring() }
         guard let reading else {
             current = nil
             if error == nil { error = "Internal storage is unavailable. No capacity change was recorded." }
@@ -399,6 +422,11 @@ enum ReserveAlertPolicy {
         // continually reset the five-minute confirmation window.
         let previous = reserveObservation ?? capacity.last
         considerReserveAlert(reading, previous: previous)
+        remember(reading)
+        if AppSettings.shared.fastDropAlertsEnabled && !AppSettings.shared.reservePaused {
+            await refreshSignals(maxAge: 240)
+            considerFastDrop(reading)
+        }
         if previous == nil || previous?.volumeID != reading.volumeID ||
             reading.date.timeIntervalSince(previous!.date) >= Self.minimumSampleInterval {
             reserveObservation = reading
@@ -431,8 +459,8 @@ enum ReserveAlertPolicy {
     }
     /// Explicit scan/re-measure only. Merely visiting a view cannot traverse files.
     func measureLocations() {
-        guard measurementTask == nil else { return }
-        launchLocationMeasurement(roots: ObservedRoot.nonOverlapping(ObservedRoot.catalogue()), source: "manual")
+        guard measurementTask == nil, fastDropTask == nil else { return }
+        launchLocationMeasurement(roots: ObservedRoot.measurable(fullDiskAccess: FullDiskAccess.isGranted()), source: "manual")
     }
     private func launchLocationMeasurement(roots: [ObservedRoot], source: String, gateAlreadyHeld: Bool = false, revision: UInt64? = nil) {
         let exclusions = AppSettings.shared.excludedPaths
@@ -472,6 +500,107 @@ enum ReserveAlertPolicy {
         measurementStatus = "Stopping location measurement…"
         measurementCancellation?.cancel(); measurementTask?.cancel()
     }
+    // MARK: - Fast drop
+
+    /// Swap and snapshot figures. Cheap: one sysctl and one short tmutil call.
+    func refreshSignals(maxAge: TimeInterval = 60) async {
+        if let last = latestSignals, Date().timeIntervalSince(last.date) < maxAge { return }
+        let signals = await Task.detached(priority: .utility) { [signalsProbe] in signalsProbe() }.value
+        remember(signals)
+    }
+    private func remember(_ signals: SystemSignals) {
+        latestSignals = signals
+        recentSignals.append(signals)
+        recentSignals.removeAll { signals.date.timeIntervalSince($0.date) > 2 * 3_600 }
+        if recentSignals.count > 60 { recentSignals.removeFirst(recentSignals.count - 60) }
+    }
+    /// Every reading counts here, including ones too close together to be
+    /// saved to history, so a drop is seen within one check.
+    private func remember(_ reading: CapacityReading) {
+        recentCapacity.append(reading)
+        recentCapacity.removeAll { reading.date.timeIntervalSince($0.date) > 2 * 3_600 }
+        if recentCapacity.count > 120 { recentCapacity.removeFirst(recentCapacity.count - 120) }
+    }
+    private func considerFastDrop(_ reading: CapacityReading) {
+        guard fastDropTask == nil else { return }
+        let settings = AppSettings.shared
+        let lastAlert = defaults.object(forKey: Self.fastDropAlertKey) as? Date
+        guard let drop = FastDropPolicy.detect(current: reading, recent: Array(capacity.suffix(16)) + recentCapacity,
+                                               reserve: settings.reserveEnabled ? reserveBytes : nil,
+                                               lastAlert: lastAlert) else { return }
+        // Claim this drop before measuring, so the next reading cannot start a
+        // second check or a second notification for the same fall.
+        defaults.set(reading.date, forKey: Self.fastDropAlertKey)
+        let baseline = recentSignals.last(where: { $0.date <= drop.from.date }) ?? recentSignals.first
+        let cancel = CancelBox()
+        fastDropCancellation = cancel; checkingFastDrop = true
+        fastDropTask = Task { [weak self] in
+            await self?.checkFastDrop(drop, baseline: baseline, cancel: cancel)
+            self?.checkingFastDrop = false; self?.fastDropTask = nil; self?.fastDropCancellation = nil
+        }
+    }
+    /// Measure the usual suspects once, inside a time limit, and compare each
+    /// with its last complete reading. Read-only: nothing is cleaned or moved.
+    private func checkFastDrop(_ drop: FastDropPolicy.Drop, baseline: SystemSignals?, cancel: CancelBox) async {
+        await load()
+        let after = await Task.detached(priority: .utility) { [signalsProbe] in signalsProbe() }.value
+        remember(after)
+        var changes: [LocationChange] = [], unfinished: [String] = [], note: String?
+        if traversalPauseReason != nil || measurementTask != nil || cancel.isCancelled {
+            note = "Cairn only checked swap and snapshots this time."
+        } else if let measured = await measureSuspects(cancel: cancel) {
+            let (roots, readings) = measured
+            let previous = LocationComparison.latestComparable(locations)
+            changes = readings.compactMap { reading in
+                previous[reading.root.id].flatMap { LocationComparison.changes([$0, reading]).first }
+            }
+            let finished = Set(readings.filter(\.coverage.comparable).map(\.root.id))
+            unfinished = roots.filter { previous[$0.id] != nil && !finished.contains($0.id) }.map(\.title)
+            if !readings.isEmpty, error == nil {
+                do { apply(try await evidence.append(locations: readings)) } catch { historyWriteFailed() }
+            }
+        } else {
+            note = "Cairn was busy with a scan, so it only checked swap and snapshots this time."
+        }
+        let report = FastDropReport.make(drop: drop, before: baseline, after: after, changes: changes,
+                                         reserve: AppSettings.shared.reserveEnabled ? reserveBytes : nil,
+                                         note: note, unfinished: unfinished)
+        fastDrop = report
+        if let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: Self.fastDropReportKey) }
+        guard Notify.isAvailable else { return }
+        if AppSettings.shared.reserveQuietHours {
+            let hour = Calendar.current.component(.hour, from: report.date)
+            if hour >= 22 || hour < 8 { return }
+        }
+        Notify.send(title: report.title, body: report.body)
+    }
+    /// Nil when another scan holds the gate; background work never queues.
+    private func measureSuspects(cancel: CancelBox) async -> ([ObservedRoot], [LocationReading])? {
+        guard ScanGate.shared.tryAcquireForMonitoring() else { return nil }
+        defer { ScanGate.shared.release() }
+        let exclusions = AppSettings.shared.excludedPaths
+        return await Task.detached(priority: .utility) {
+            let roots = FastDropPolicy.ordered(ObservedRoot.measurable(fullDiskAccess: FullDiskAccess.isGranted()))
+            let deadline = ProcessInfo.processInfo.systemUptime + FastDropPolicy.totalSeconds
+            var readings: [LocationReading] = []
+            for root in roots {
+                let remaining = deadline - ProcessInfo.processInfo.systemUptime
+                if remaining < 0.5 || cancel.isCancelled { break }
+                var probe = LocationProbe()
+                probe.seconds = min(FastDropPolicy.perRoot, remaining)
+                readings.append(autoreleasepool {
+                    probe.measure(root, exclusions: exclusions, source: "fast-drop",
+                                  cancelled: { cancel.isCancelled || ScanGate.shared.snapshot.queued > 0 })
+                })
+            }
+            return (roots, readings)
+        }.value
+    }
+    func dismissFastDrop() {
+        fastDrop = nil
+        defaults.removeObject(forKey: Self.fastDropReportKey)
+    }
+
     private func historyWriteFailed() {
         error = "Storage history could not be saved. Existing records are preserved; new history is paused."
     }
