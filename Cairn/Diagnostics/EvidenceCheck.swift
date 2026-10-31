@@ -166,9 +166,14 @@ enum EvidenceCheck {
             let perRoot = StorageEvidenceStore(url: base.appendingPathComponent("per-root/history.sqlite"), legacyURL: legacy, now: { now })
             _ = try await perRoot.append(locations: [fixtureReading("quiet", 4_000_000_000, at: now.addingTimeInterval(-3_600))])
             for batch in 0..<2 {
-                _ = try await perRoot.append(locations: (0..<30).map { index in
-                    fixtureReading("busy", Int64(1_000 + batch * 30 + index), at: now.addingTimeInterval(Double(batch * 30 + index - 60)))
-                })
+                var busy: [LocationReading] = []
+                for index in 0..<30 {
+                    let step: Int = batch * 30 + index
+                    let size: Int64 = Int64(1_000 + step)
+                    let when: Date = now.addingTimeInterval(TimeInterval(step - 60))
+                    busy.append(fixtureReading("busy", size, at: when))
+                }
+                _ = try await perRoot.append(locations: busy)
             }
             let perRootLoaded = try await perRoot.load()
             check(perRootLoaded.locations.filter { $0.root.id == "quiet" }.count == 1 &&
