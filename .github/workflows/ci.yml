@@ -70,17 +70,23 @@ jobs:
             fi
           done
 
-      # Changes with a sample fast drop, swap and snapshots, printed into the log only.
-      - name: Changes screenshot
+      # Changes with a sample fast drop, swap and snapshots, and Settings › Monitoring
+      # in Dark and Light, printed into the log only.
+      - name: Monitoring screenshots
         continue-on-error: true
-        timeout-minutes: 2
+        timeout-minutes: 3
         run: |
-          "$(swift build --show-bin-path)/Cairn" --preview-ui --component-showcase --capture-screen=changes --section=changes || true
-          if [ -f artifacts/component-showcase/changes.png ]; then
-            sips -s format jpeg -s formatOptions 70 artifacts/component-showcase/changes.png --out "$RUNNER_TEMP/changes.jpg" >/dev/null
-            echo "SHOT-BEGIN changes"; base64 -i "$RUNNER_TEMP/changes.jpg" | tr -d '\n'; echo; echo "SHOT-END"
-            mv artifacts/component-showcase/changes.png "$RUNNER_TEMP/"
-          fi
+          bin="$(swift build --show-bin-path)/Cairn"
+          "$bin" --preview-ui --component-showcase --capture-screen=changes --section=changes || true
+          "$bin" --preview-ui --component-showcase --capture-screen=settings --section=settings --preferences-tab=Monitoring || true
+          "$bin" --preview-ui --component-showcase --capture-screen=settings --section=settings --preferences-tab=Monitoring --capture-light || true
+          for name in changes settings settings-light; do
+            if [ -f "artifacts/component-showcase/$name.png" ]; then
+              sips -s format jpeg -s formatOptions 70 "artifacts/component-showcase/$name.png" --out "$RUNNER_TEMP/$name.jpg" >/dev/null
+              echo "SHOT-BEGIN $name"; base64 -i "$RUNNER_TEMP/$name.jpg" | tr -d '\n'; echo; echo "SHOT-END"
+              mv "artifacts/component-showcase/$name.png" "$RUNNER_TEMP/"
+            fi
+          done
 
       - name: Upload screenshots
         if: always()
