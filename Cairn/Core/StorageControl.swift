@@ -207,6 +207,7 @@ enum ReserveAlertPolicy {
     @ObservationIgnored private var fastDropCancellation: CancelBox?
     @ObservationIgnored private var fullDiskAccess = false
     private static let fastDropAlertKey = "cairn.fastDropAlertedAt.v1"
+    private static let fastDropQuietCheckKey = "cairn.fastDropQuietCheckAt.v1"
     private static let fastDropReportKey = "cairn.fastDropReport.v1"
     @ObservationIgnored private var watcher: LocationEventWatcher?
     @ObservationIgnored private var watchedRootIDs: Set<String> = []
@@ -319,7 +320,9 @@ enum ReserveAlertPolicy {
             watchedRootIDs = rootIDs
             watcher = LocationEventWatcher(roots: roots) { [weak self] ids, gap in
                 Task { @MainActor [weak self] in
-                    guard let self, self.monitoringEnabled, AppSettings.shared.locationMonitoringEnabled, !self.sleeping else { return }
+                    let settings = AppSettings.shared
+                    guard let self, self.monitoringEnabled, settings.locationMonitoringEnabled || settings.fastDropAlertsEnabled,
+                          !self.sleeping else { return }
                     if gap { self.dirty.reconcile(at: Date()) }
                     else { self.dirty.mark(ids, at: Date()) }
                     self.pendingLocationCount = self.dirty.pending.keys.filter { self.watchedRootIDs.contains($0) }.count
@@ -524,28 +527,32 @@ enum ReserveAlertPolicy {
     private func considerFastDrop(_ reading: CapacityReading) {
         guard fastDropTask == nil else { return }
         let settings = AppSettings.shared
-        let lastAlert = defaults.object(forKey: Self.fastDropAlertKey) as? Date
+        let quiet = Self.inQuietHours(reading.date)
+        let lastCheck = FastDropPolicy.lastCheck(delivered: defaults.object(forKey: Self.fastDropAlertKey) as? Date,
+                                                 quietCheck: defaults.object(forKey: Self.fastDropQuietCheckKey) as? Date,
+                                                 quiet: quiet)
         guard let drop = FastDropPolicy.detect(current: reading, recent: Array(capacity.suffix(16)) + recentCapacity,
                                                reserve: settings.reserveEnabled ? reserveBytes : nil,
-                                               lastAlert: lastAlert) else { return }
+                                               lastAlert: lastCheck) else { return }
         // Claim this drop before measuring, so the next reading cannot start a
-        // second check or a second notification for the same fall.
-        defaults.set(reading.date, forKey: Self.fastDropAlertKey)
+        // second check or a second notification for the same fall. A check in
+        // quiet hours sends nothing, so it leaves the alert for the morning.
+        defaults.set(reading.date, forKey: quiet ? Self.fastDropQuietCheckKey : Self.fastDropAlertKey)
         let baseline = recentSignals.last(where: { $0.date <= drop.from.date }) ?? recentSignals.first
         let cancel = CancelBox()
         fastDropCancellation = cancel; checkingFastDrop = true
         fastDropTask = Task { [weak self] in
-            await self?.checkFastDrop(drop, baseline: baseline, cancel: cancel)
+            await self?.checkFastDrop(drop, baseline: baseline, quiet: quiet, cancel: cancel)
             self?.checkingFastDrop = false; self?.fastDropTask = nil; self?.fastDropCancellation = nil
         }
     }
     /// Measure the usual suspects once, inside a time limit, and compare each
     /// with its last complete reading. Read-only: nothing is cleaned or moved.
-    private func checkFastDrop(_ drop: FastDropPolicy.Drop, baseline: SystemSignals?, cancel: CancelBox) async {
+    private func checkFastDrop(_ drop: FastDropPolicy.Drop, baseline: SystemSignals?, quiet: Bool, cancel: CancelBox) async {
         await load()
         let after = await Task.detached(priority: .utility) { [signalsProbe] in signalsProbe() }.value
         remember(after)
-        var changes: [LocationChange] = [], unfinished: [String] = [], note: String?
+        var changes: [LocationChange] = [], unfinished: [String] = [], uncompared: [String] = [], note: String?
         if traversalPauseReason != nil || measurementTask != nil || cancel.isCancelled {
             note = "Cairn only checked swap and snapshots this time."
         } else if let measured = await measureSuspects(cancel: cancel) {
@@ -554,8 +561,19 @@ enum ReserveAlertPolicy {
             changes = readings.compactMap { reading in
                 previous[reading.root.id].flatMap { LocationComparison.changes([$0, reading]).first }
             }
-            let finished = Set(readings.filter(\.coverage.comparable).map(\.root.id))
-            unfinished = roots.filter { previous[$0.id] != nil && !finished.contains($0.id) }.map(\.title)
+            let latest = Dictionary(readings.map { ($0.root.id, $0) }, uniquingKeysWith: { first, _ in first })
+            // A place that isn't there (a tool you don't use) or that you
+            // excluded holds nothing, so only places that exist are listed.
+            let empty: Set<LocationCoverage> = [.absent, .unavailable, .excluded]
+            for root in roots {
+                if previous[root.id] != nil {
+                    if latest[root.id]?.coverage.comparable != true { unfinished.append(root.title) }
+                } else if let fresh = latest[root.id] {
+                    if !empty.contains(fresh.coverage) { uncompared.append(root.title) }
+                } else {
+                    unfinished.append(root.title)
+                }
+            }
             if !readings.isEmpty, error == nil {
                 do { apply(try await evidence.append(locations: readings)) } catch { historyWriteFailed() }
             }
@@ -564,15 +582,17 @@ enum ReserveAlertPolicy {
         }
         let report = FastDropReport.make(drop: drop, before: baseline, after: after, changes: changes,
                                          reserve: AppSettings.shared.reserveEnabled ? reserveBytes : nil,
-                                         note: note, unfinished: unfinished)
+                                         note: note, unfinished: unfinished, uncompared: uncompared)
         fastDrop = report
         if let data = try? JSONEncoder().encode(report) { defaults.set(data, forKey: Self.fastDropReportKey) }
-        guard Notify.isAvailable else { return }
-        if AppSettings.shared.reserveQuietHours {
-            let hour = Calendar.current.component(.hour, from: report.date)
-            if hour >= 22 || hour < 8 { return }
-        }
+        // Decided when the drop was claimed, so the claim and the notification agree.
+        guard Notify.isAvailable, !quiet else { return }
         Notify.send(title: report.title, body: report.body)
+    }
+    private static func inQuietHours(_ date: Date) -> Bool {
+        guard AppSettings.shared.reserveQuietHours else { return false }
+        let hour = Calendar.current.component(.hour, from: date)
+        return hour >= 22 || hour < 8
     }
     /// Nil when another scan holds the gate; background work never queues.
     private func measureSuspects(cancel: CancelBox) async -> ([ObservedRoot], [LocationReading])? {

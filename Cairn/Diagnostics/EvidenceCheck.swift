@@ -251,6 +251,30 @@ enum EvidenceCheck {
         let busy = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: "Cairn was busy.")
         check(!busy.body.contains("somewhere Cairn doesn't watch") && busy.body.hasSuffix("Cairn was busy."),
               "A skipped folder check is not reported as nothing having grown")
+        let firstRun = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: nil,
+                                           uncompared: ["Docker disk"])
+        let lateRun = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: nil,
+                                          unfinished: ["Cursor worktrees"])
+        let firstBody: String = firstRun.body
+        let lateBody: String = lateRun.body
+        check(!firstBody.contains("somewhere Cairn doesn't watch") && firstBody.contains("can't say yet where") &&
+              !lateBody.contains("somewhere Cairn doesn't watch") && lateBody.contains("can't say yet where"),
+              "A place with no earlier size, or not measured in time, is never ruled out")
+        let shortened: String = FastDropReport.shortList(["a", "b", "c", "d", "e", "f"])
+        check(shortened == "a, b, c, d and 2 more", "Long lists of places are shortened")
+
+        let night = t0.addingTimeInterval(-10 * 60)
+        let morning = FastDropPolicy.lastCheck(delivered: nil, quietCheck: night, quiet: false)
+        let stillNight = FastDropPolicy.lastCheck(delivered: nil, quietCheck: night, quiet: true)
+        let later: CapacityReading = reading(25, 50)
+        let morningDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil, lastAlert: morning)
+        let nightDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil, lastAlert: stillNight)
+        check(morningDrop != nil && nightDrop == nil,
+              "A check in quiet hours does not use up the alert once they end, and still spaces checks at night")
+        let delivered = t0.addingTimeInterval(-3 * 3_600)
+        check(FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: true) == night &&
+              FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: false) == delivered,
+              "Quiet-hours checks only count while quiet hours last")
         let near = FastDropReport.make(drop: close!, before: nil, after: nil, changes: [], reserve: 30 * gb, note: nil)
         let reservePhrase: String = "reach your " + Fmt.size(30 * gb) + " reserve in about 20 minutes"
         check(near.body.contains(reservePhrase), "Report says when the reserve is close")

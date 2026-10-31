@@ -97,6 +97,15 @@ enum FastDropPolicy {
     /// The whole check stops after this long; one folder gets at most `perRoot`.
     static let totalSeconds: TimeInterval = 30
     static let perRoot: TimeInterval = 8
+
+    /// The check a new one is timed from. Quiet hours never use up the alert:
+    /// checks at night are spaced by their own time, so a drop that carries on
+    /// past the end of quiet hours still gets its notification.
+    static func lastCheck(delivered: Date?, quietCheck: Date?, quiet: Bool) -> Date? {
+        guard quiet, let quietCheck else { return delivered }
+        guard let delivered else { return quietCheck }
+        return max(delivered, quietCheck)
+    }
 }
 
 /// What Cairn found after a fast drop: the notification and the card on
@@ -134,8 +143,11 @@ struct FastDropReport: Codable, Sendable, Identifiable, Equatable {
     let growers: [Grower]
     /// Why the folder check did not run, when it did not.
     let note: String?
-    /// Places with an earlier size that could not be measured in time.
+    /// Places that could not be measured in time.
     var unfinished: [String] = []
+    /// Places that exist but have no earlier size to compare with, so they
+    /// can't be ruled out.
+    var uncompared: [String] = []
 
     var title: String { "Cairn · Space is going fast" }
     var headline: String { "\(Fmt.size(dropBytes)) less free space in \(Self.spoken(interval))" }
@@ -146,7 +158,11 @@ struct FastDropReport: Codable, Sendable, Identifiable, Equatable {
     var findingLine: String {
         if !growers.isEmpty { return Self.list(growers.prefix(3).map(\.phrase)) + "." }
         if note != nil { return "Swap and snapshots didn't grow much." }
-        return "None of the places Cairn checks grew much, so the space went somewhere Cairn doesn't watch."
+        // Only say the space went elsewhere when every watched place was compared.
+        if !uncompared.isEmpty || !unfinished.isEmpty {
+            return "Nothing Cairn could compare grew much. Some places had no earlier size or weren't measured in time, so Cairn can't say yet where the space went."
+        }
+        return "None of the places Cairn checks grew much, so the space most likely went somewhere Cairn doesn't watch."
     }
     var body: String {
         ([headline + ".", findingLine] + [reserveLine, note].compactMap { $0 }).joined(separator: " ")
@@ -154,7 +170,7 @@ struct FastDropReport: Codable, Sendable, Identifiable, Equatable {
 
     static func make(drop: FastDropPolicy.Drop, before: SystemSignals?, after: SystemSignals?,
                      changes: [LocationChange], reserve: Int64?, note: String?, unfinished: [String] = [],
-                     now: Date = Date()) -> FastDropReport {
+                     uncompared: [String] = [], now: Date = Date()) -> FastDropReport {
         var sized: [Grower] = []
         if let old = before?.swapBytes, let new = after?.swapBytes, new - old >= minimumGrowth {
             sized.append(Grower(id: "swap", title: swapTitle, icon: "memorychip", bytes: new - old, count: nil, since: before?.date))
@@ -170,7 +186,8 @@ struct FastDropReport: Codable, Sendable, Identifiable, Equatable {
         }
         return FastDropReport(id: UUID(), date: now, dropBytes: drop.bytes, interval: drop.interval,
                               reserve: reserve, secondsToReserve: drop.secondsToReserve,
-                              growers: Array(sized.prefix(5)), note: note, unfinished: unfinished)
+                              growers: Array(sized.prefix(5)), note: note, unfinished: unfinished,
+                              uncompared: uncompared)
     }
 
     static func spoken(_ seconds: TimeInterval) -> String {
@@ -181,5 +198,10 @@ struct FastDropReport: Codable, Sendable, Identifiable, Equatable {
     static func list(_ parts: [String]) -> String {
         guard let last = parts.last else { return "" }
         return parts.count == 1 ? last : parts.dropLast().joined(separator: ", ") + " and " + last
+    }
+    /// The first few names, then how many more.
+    static func shortList(_ parts: [String], limit: Int = 4) -> String {
+        guard parts.count > limit else { return list(parts) }
+        return list(Array(parts.prefix(limit)) + ["\(parts.count - limit) more"])
     }
 }

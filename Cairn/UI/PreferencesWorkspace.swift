@@ -112,7 +112,7 @@ struct PreferencesWorkspace: View {
                     }
                     if !preview { StorageControl.shared.configureMonitoring() }
                 }
-            option("Alert when space drops fast", "If 5 GB or more goes within half an hour, or your reserve is close at that rate, Cairn checks the places that usually grow (swap, Docker, simulators, AI models, agent worktrees and more) and tells you which grew. Nothing is removed.", preview ? .constant(true) : $settings.fastDropAlertsEnabled)
+            option("Alert when space drops fast", "If 5 GB or more goes within half an hour, or your reserve is close at that rate, Cairn checks the places that usually grow (swap, Docker, simulators, AI models, agent worktrees and more) and tells you which grew. To have something to compare with, it keeps their sizes up to date while it's open. Nothing is removed.", preview ? .constant(true) : $settings.fastDropAlertsEnabled)
                 .onChange(of: settings.fastDropAlertsEnabled) { _, enabled in
                     if enabled && !preview {
                         settings.reservePaused = false

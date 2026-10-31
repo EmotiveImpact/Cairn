@@ -276,7 +276,10 @@ struct ChangesWorkspace: View {
                 }
                 if let note = report.note { Text(note) }
                 if !report.unfinished.isEmpty {
-                    Text("Not measured in time: \(FastDropReport.list(report.unfinished)).")
+                    Text("Not measured in time: \(FastDropReport.shortList(report.unfinished)).")
+                }
+                if !report.uncompared.isEmpty {
+                    Text("No earlier size to compare with yet: \(FastDropReport.shortList(report.uncompared)).")
                 }
                 Text("Each figure is measured over its own time, so they don't add up to the drop. Nothing was removed.")
             }.font(.system(size: 11)).foregroundStyle(Brand.textMuted).fixedSize(horizontal: false, vertical: true)
