@@ -264,17 +264,24 @@ enum EvidenceCheck {
         check(shortened == "a, b, c, d and 2 more", "Long lists of places are shortened")
 
         let night = t0.addingTimeInterval(-10 * 60)
-        let morning = FastDropPolicy.lastCheck(delivered: nil, quietCheck: night, quiet: false)
-        let stillNight = FastDropPolicy.lastCheck(delivered: nil, quietCheck: night, quiet: true)
+        let morning = FastDropPolicy.timing(delivered: nil, quietCheck: night, quiet: false)
+        let stillNight = FastDropPolicy.timing(delivered: nil, quietCheck: night, quiet: true)
+        let reported = FastDropPolicy.timing(delivered: nil, quietCheck: t0.addingTimeInterval(10 * 60), quiet: false)
         let later: CapacityReading = reading(25, 50)
-        let morningDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil, lastAlert: morning)
-        let nightDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil, lastAlert: stillNight)
+        let morningDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                      lastAlert: morning.cooldownFrom, floor: morning.floor)
+        let nightDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                    lastAlert: stillNight.cooldownFrom, floor: stillNight.floor)
+        let repeatDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                     lastAlert: reported.cooldownFrom, floor: reported.floor)
         check(morningDrop != nil && nightDrop == nil,
               "A check in quiet hours does not use up the alert once they end, and still spaces checks at night")
+        check(repeatDrop == nil, "A fall already reported overnight is not sent again in the morning")
         let delivered = t0.addingTimeInterval(-3 * 3_600)
-        check(FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: true) == night &&
-              FastDropPolicy.lastCheck(delivered: delivered, quietCheck: night, quiet: false) == delivered,
-              "Quiet-hours checks only count while quiet hours last")
+        let quietTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: true)
+        let dayTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: false)
+        check(quietTiming.cooldownFrom == night && dayTiming.cooldownFrom == delivered && dayTiming.floor == night,
+              "Quiet-hours checks only start the cooldown while quiet hours last")
 
         let names: [String] = ["seen", "late", "new", "gone", "locked", "empty", "unreached"]
         let watched: [ObservedRoot] = names.map {

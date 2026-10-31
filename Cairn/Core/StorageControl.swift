@@ -528,12 +528,12 @@ enum ReserveAlertPolicy {
         guard fastDropTask == nil else { return }
         let settings = AppSettings.shared
         let quiet = Self.inQuietHours(reading.date)
-        let lastCheck = FastDropPolicy.lastCheck(delivered: defaults.object(forKey: Self.fastDropAlertKey) as? Date,
-                                                 quietCheck: defaults.object(forKey: Self.fastDropQuietCheckKey) as? Date,
-                                                 quiet: quiet)
+        let timing = FastDropPolicy.timing(delivered: defaults.object(forKey: Self.fastDropAlertKey) as? Date,
+                                           quietCheck: defaults.object(forKey: Self.fastDropQuietCheckKey) as? Date,
+                                           quiet: quiet)
         guard let drop = FastDropPolicy.detect(current: reading, recent: Array(capacity.suffix(16)) + recentCapacity,
                                                reserve: settings.reserveEnabled ? reserveBytes : nil,
-                                               lastAlert: lastCheck) else { return }
+                                               lastAlert: timing.cooldownFrom, floor: timing.floor) else { return }
         // Claim this drop before measuring, so the next reading cannot start a
         // second check or a second notification for the same fall. A check in
         // quiet hours sends nothing, so it leaves the alert for the morning.

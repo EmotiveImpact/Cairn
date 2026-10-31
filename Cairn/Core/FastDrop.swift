@@ -54,16 +54,19 @@ enum FastDropPolicy {
         var interval: TimeInterval { to.date.timeIntervalSince(from.date) }
     }
 
+    /// `lastAlert` starts the cooldown. `floor` is the last check of any kind:
+    /// a drop must start after it, so one fall is never reported twice.
     static func detect(current: CapacityReading, recent: [CapacityReading], reserve: Int64?,
-                       lastAlert: Date?) -> Drop? {
+                       lastAlert: Date?, floor: Date? = nil) -> Drop? {
         if let lastAlert, current.date.timeIntervalSince(lastAlert) < cooldown { return nil }
+        let start: Date? = [lastAlert, floor].compactMap { $0 }.max()
         // Same disk, inside the window, at least a minute apart, and taken after
-        // the last alert so one drop is never reported twice.
+        // the last check.
         let candidates = recent.filter { reading -> Bool in
             guard reading.volumeID == current.volumeID, reading.date < current.date else { return false }
             let age = current.date.timeIntervalSince(reading.date)
             guard age >= 60, age <= window else { return false }
-            if let lastAlert, reading.date <= lastAlert { return false }
+            if let start, reading.date <= start { return false }
             return true
         }
         guard let from = candidates.max(by: { $0.available == $1.available ? $0.date > $1.date : $0.available < $1.available }) else { return nil }
@@ -98,13 +101,13 @@ enum FastDropPolicy {
     static let totalSeconds: TimeInterval = 30
     static let perRoot: TimeInterval = 8
 
-    /// The check a new one is timed from. Quiet hours never use up the alert:
-    /// checks at night are spaced by their own time, so a drop that carries on
-    /// past the end of quiet hours still gets its notification.
-    static func lastCheck(delivered: Date?, quietCheck: Date?, quiet: Bool) -> Date? {
-        guard quiet, let quietCheck else { return delivered }
-        guard let delivered else { return quietCheck }
-        return max(delivered, quietCheck)
+    /// Quiet hours never use up the alert: checks at night are spaced by their
+    /// own time, so once quiet hours end a new fall can notify straight away.
+    /// The last check is always the floor, so a fall already reported on
+    /// Changes overnight is not sent again in the morning.
+    static func timing(delivered: Date?, quietCheck: Date?, quiet: Bool) -> (cooldownFrom: Date?, floor: Date?) {
+        let latest: Date? = [delivered, quietCheck].compactMap { $0 }.max()
+        return (quiet ? latest : delivered, latest)
     }
 
     /// Watched places that can't be ruled out: not measured in time, or there
