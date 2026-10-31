@@ -272,11 +272,17 @@ enum EvidenceCheck {
                                                                       lastAlert: morning.cooldownFrom, floor: morning.floor)
         let nightDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
                                                                     lastAlert: stillNight.cooldownFrom, floor: stillNight.floor)
-        let repeatDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+        // The 10-minute reading (56 GB) ended the fall reported overnight.
+        let flat: CapacityReading = reading(25, 55)
+        let unchecked: FastDropPolicy.Drop? = FastDropPolicy.detect(current: flat, recent: steady, reserve: nil, lastAlert: nil)
+        let repeatDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: flat, recent: steady, reserve: nil,
                                                                      lastAlert: reported.cooldownFrom, floor: reported.floor)
+        let newFall: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                  lastAlert: reported.cooldownFrom, floor: reported.floor)
         check(morningDrop != nil && nightDrop == nil,
               "A check in quiet hours does not use up the alert once they end, and still spaces checks at night")
-        check(repeatDrop == nil, "A fall already reported overnight is not sent again in the morning")
+        check(unchecked != nil && repeatDrop == nil, "A fall already reported overnight is not sent again in the morning")
+        check(newFall?.bytes == 6 * gb, "A new fall is measured from the reading that ended the reported one")
         let delivered = t0.addingTimeInterval(-3 * 3_600)
         let quietTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: true)
         let dayTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: false)
