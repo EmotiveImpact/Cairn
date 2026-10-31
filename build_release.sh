@@ -15,6 +15,32 @@ BUILD_DIR="$(mktemp -d "dist/release.XXXXXX")"
 APP="$BUILD_DIR/${APP_NAME}.app"
 touch "$BUILD_DIR/INCOMPLETE"
 trap 'status=$?; if [ "$status" -ne 0 ]; then echo "Build failed; incomplete artifacts retained at $BUILD_DIR" >&2; fi' EXIT
+
+# Keep the newest few finished builds (KEEP_BUILDS, 3 by default, counting this
+# one) so dist/ stops growing by a full app on every run. A failed build is
+# kept for a day so its error can be looked at. A build whose app is running is
+# never touched, and nothing outside dist/PREFIX.* is ever removed.
+prune_old_builds() {
+  local prefix="$1" keep="${KEEP_BUILDS:-3}" kept=0 dir
+  case "$keep" in ''|*[!0-9]*) keep=3 ;; esac
+  [ "$keep" -ge 1 ] || keep=1
+  while IFS= read -r dir; do
+    case "$dir" in "dist/$prefix."?*) ;; *) continue ;; esac
+    [ -d "$dir" ] && [ ! -L "$dir" ] || continue
+    if [ "$dir" = "$BUILD_DIR" ]; then kept=$((kept + 1)); continue; fi
+    if [ -e "$dir/INCOMPLETE" ]; then
+      [ -n "$(find "$dir/INCOMPLETE" -mmin +1440 2>/dev/null)" ] || continue
+    elif [ "$kept" -lt "$keep" ]; then
+      kept=$((kept + 1)); continue
+    fi
+    if pgrep -f "/$dir/" >/dev/null 2>&1; then
+      echo "▸ Keeping $dir: its app is running."
+      continue
+    fi
+    rm -rf "$dir"
+    echo "▸ Removed old build $dir"
+  done < <(ls -1dt "dist/$prefix."* 2>/dev/null)
+}
 ZIP="$BUILD_DIR/${APP_NAME}.zip"
 ENTITLEMENTS="${APP_NAME}/${APP_NAME}-dist.entitlements"
 NOTARY_PROFILE="${NOTARY_PROFILE:-vlume-notary}"
@@ -78,4 +104,5 @@ ditto -c -k --keepParent "$APP" "$ZIP"
 spctl -a -vvv -t execute "$APP" 2>&1 | sed 's/^/   /'
 echo ""
 rm "$BUILD_DIR/INCOMPLETE"
+prune_old_builds release
 echo "✅ $ZIP — signed, notarized, stapled, universal. Requires macOS 14 or later."

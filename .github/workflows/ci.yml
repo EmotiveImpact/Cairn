@@ -70,6 +70,18 @@ jobs:
             fi
           done
 
+      # Changes with a sample fast drop, swap and snapshots, printed into the log only.
+      - name: Changes screenshot
+        continue-on-error: true
+        timeout-minutes: 2
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --preview-ui --component-showcase --capture-screen=changes --section=changes || true
+          if [ -f artifacts/component-showcase/changes.png ]; then
+            sips -s format jpeg -s formatOptions 70 artifacts/component-showcase/changes.png --out "$RUNNER_TEMP/changes.jpg" >/dev/null
+            echo "SHOT-BEGIN changes"; base64 -i "$RUNNER_TEMP/changes.jpg" | tr -d '\n'; echo; echo "SHOT-END"
+            mv artifacts/component-showcase/changes.png "$RUNNER_TEMP/"
+          fi
+
       - name: Upload screenshots
         if: always()
         continue-on-error: true
@@ -99,5 +111,5 @@ jobs:
       - name: Universal optimized build and reliability regressions
         run: |
           swift build -c release -j 2 --arch arm64 --arch x86_64
-          lipo -verify_arch arm64 x86_64 .build/apple/Products/Release/Cairn
+          lipo .build/apple/Products/Release/Cairn -verify_arch arm64 x86_64
           .build/apple/Products/Release/Cairn --reliabilitycheck

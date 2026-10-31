@@ -42,6 +42,7 @@ enum EvidenceCheck {
         let low = CapacityReading(date: now, volumeID: "a", available: 12_000_000_000, total: 500_000_000_000)
         let staleLow = CapacityReading(date: now.addingTimeInterval(-86_400), volumeID: "a", available: 12_000_000_000, total: 500_000_000_000)
         check(ReserveAlertPolicy.decide(current: low, previous: staleLow, target: 30_000_000_000, alreadyAlerted: false) == .unchanged, "A long offline gap cannot serve as a confirming low-space sample")
+        fastDropChecks(check)
         let gate = ScanGate()
         check(gate.tryAcquireForMonitoring(), "Idle gate admits one background traversal")
         check(!gate.tryAcquireForMonitoring(), "Busy gate never queues repeated background jobs")
@@ -160,6 +161,24 @@ enum EvidenceCheck {
             let old = CapacityReading(date: now.addingTimeInterval(-91 * 86_400), volumeID: "fixture-volume", available: 5, total: 100)
             let trimmed = try await store.append(capacity: old)
             check(trimmed.capacity.count == 1, "Expired observations prune without changing legacy file")
+            // A place that rarely changes keeps its last size while a busy one is
+            // measured over and over: the fast-drop check compares with it.
+            let perRoot = StorageEvidenceStore(url: base.appendingPathComponent("per-root/history.sqlite"), legacyURL: legacy, now: { now })
+            _ = try await perRoot.append(locations: [fixtureReading("quiet", 4_000_000_000, at: now.addingTimeInterval(-3_600))])
+            for batch in 0..<2 {
+                var busy: [LocationReading] = []
+                for index in 0..<30 {
+                    let step: Int = batch * 30 + index
+                    let size: Int64 = Int64(1_000 + step)
+                    let when: Date = now.addingTimeInterval(TimeInterval(step - 60))
+                    busy.append(fixtureReading("busy", size, at: when))
+                }
+                _ = try await perRoot.append(locations: busy)
+            }
+            let perRootLoaded = try await perRoot.load()
+            check(perRootLoaded.locations.filter { $0.root.id == "quiet" }.count == 1 &&
+                  perRootLoaded.locations.filter { $0.root.id == "busy" }.count == StorageEvidenceStore.readingsPerLocation,
+                  "Each place keeps its own recent readings; a busy place cannot push out a quiet one")
             let invalidLegacy = base.appendingPathComponent("invalid.json")
             try Data("invalid-history".utf8).write(to: invalidLegacy)
             let badStore = StorageEvidenceStore(url: base.appendingPathComponent("bad/history.sqlite"), legacyURL: invalidLegacy, now: { now })
@@ -168,5 +187,154 @@ enum EvidenceCheck {
         } catch { check(false, "Fixture error: \(error.localizedDescription)") }
         print("Evidence checks: \(failures) failures")
         exit(failures == 0 ? 0 : 1)
+    }
+
+    static func fixtureReading(_ id: String, _ bytes: Int64, at date: Date, volume: String = "fixture-volume",
+                               coverage: LocationCoverage = .complete) -> LocationReading {
+        let root = ObservedRoot(id: id, title: id == "docker-disk" ? "Docker disk" : id, path: "/fixture/" + id, icon: "folder", observationOnly: true)
+        return LocationReading(id: UUID(), root: root, started: date.addingTimeInterval(-1), ended: date, volumeID: volume,
+            identity: .init(device: 1, inode: 2), parentIdentity: .init(device: 1, inode: 1), scope: "fixture-scope",
+            coverage: coverage, allocated: bytes, logical: bytes, entries: 3, hardLinksSkipped: 0, source: "fixture",
+            metric: "allocated-and-logical-v1", adapterVersion: 1)
+    }
+
+    /// Pure checks of the fast-drop alert and the wider watch list. No disk access.
+    static func fastDropChecks(_ check: (Bool, String) -> Void) {
+        let t0 = Date(timeIntervalSince1970: 1_900_000_000)
+        let gb: Int64 = 1_000_000_000
+        func reading(_ minutes: Double, _ available: Double, volume: String = "a") -> CapacityReading {
+            CapacityReading(date: t0.addingTimeInterval(minutes * 60), volumeID: volume, available: Int64(available * 1e9), total: 500 * gb)
+        }
+        let steady = [reading(0, 60), reading(5, 58), reading(10, 56)]
+        let fast = FastDropPolicy.detect(current: reading(25, 54.5), recent: steady, reserve: nil, lastAlert: nil)
+        check(fast?.bytes == Int64(5.5e9) && fast?.interval == 25 * 60, "5 GB or more gone within half an hour is a fast drop")
+        check(FastDropPolicy.detect(current: reading(25, 56.5), recent: steady, reserve: nil, lastAlert: nil) == nil,
+              "A smaller drop with no reserve close is not an alert")
+        check(FastDropPolicy.detect(current: reading(45, 50), recent: [reading(0, 60), reading(20, 51)], reserve: nil, lastAlert: nil) == nil,
+              "Space lost before the half-hour window does not count")
+        check(FastDropPolicy.detect(current: reading(25, 50), recent: steady.map { reading($0.date.timeIntervalSince(t0) / 60, Double($0.available) / 1e9, volume: "b") }, reserve: nil, lastAlert: nil) == nil,
+              "Readings from another disk are never compared")
+        check(FastDropPolicy.detect(current: reading(25, 50), recent: steady, reserve: nil, lastAlert: t0.addingTimeInterval(-5 * 60)) == nil,
+              "At most one fast-drop alert an hour")
+        check(FastDropPolicy.detect(current: reading(25, 50), recent: steady, reserve: nil, lastAlert: t0.addingTimeInterval(-2 * 3_600)) != nil,
+              "Alerts again once the hour has passed")
+        check(FastDropPolicy.detect(current: reading(0.5, 50), recent: [reading(0, 60)], reserve: nil, lastAlert: nil) == nil,
+              "Readings under a minute apart are not compared")
+        let close = FastDropPolicy.detect(current: reading(20, 32.5), recent: [reading(0, 35)], reserve: 30 * gb, lastAlert: nil)
+        check(close != nil && abs((close?.secondsToReserve ?? 0) - 20 * 60) < 1, "A smaller drop counts when the reserve is near at that rate")
+        check(FastDropPolicy.detect(current: reading(20, 29), recent: [reading(0, 31.5)], reserve: 30 * gb, lastAlert: nil) == nil,
+              "Below the reserve, the reserve alert speaks instead")
+        check(FastDropPolicy.detect(current: reading(5, 32), recent: [reading(0, 34.5)], reserve: 30 * gb, lastAlert: nil) == nil,
+              "No forecast from less than ten minutes of readings")
+
+        let drop = fast!
+        let before = SystemSignals(date: t0, swapBytes: 2 * gb, snapshotCount: 1)
+        let after = SystemSignals(date: t0.addingTimeInterval(25 * 60), swapBytes: 8 * gb, snapshotCount: 3)
+        func change(_ id: String, _ from: Int64, _ to: Int64) -> LocationChange {
+            LocationChange(before: fixtureReading(id, from, at: t0.addingTimeInterval(-600)), after: fixtureReading(id, to, at: t0.addingTimeInterval(1_500)))
+        }
+        let report = FastDropReport.make(drop: drop, before: before, after: after,
+            changes: [change("docker-disk", 10 * gb, 14 * gb), change("npm-cache", gb, gb + 200_000_000), change("xcode-build", 9 * gb, 8 * gb)],
+            reserve: nil, note: nil, now: t0.addingTimeInterval(25 * 60))
+        check(report.growers.map(\.id) == ["swap", "docker-disk", "snapshots"],
+              "Report names what grew, biggest first, and leaves out small or shrinking places")
+        let opening: String = Fmt.size(Int64(5.5e9)) + " less free space in 25 minutes."
+        let swapPhrase: String = FastDropReport.swapTitle + " grew by " + Fmt.size(6 * gb)
+        let dockerPhrase: String = "Docker disk grew by " + Fmt.size(4 * gb)
+        let body: String = report.body
+        check(body.hasPrefix(opening) && body.contains(swapPhrase) && body.contains(dockerPhrase) &&
+              body.contains("2 new local Time Machine snapshots appeared"),
+              "Notification says how much went, how fast, and what grew")
+        let quiet = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: nil)
+        check(quiet.growers.isEmpty && quiet.body.contains("somewhere Cairn doesn't watch"),
+              "When nothing watched grew, the notification says so instead of guessing")
+        let busy = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: "Cairn was busy.")
+        check(!busy.body.contains("somewhere Cairn doesn't watch") && busy.body.hasSuffix("Cairn was busy."),
+              "A skipped folder check is not reported as nothing having grown")
+        let firstRun = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: nil,
+                                           uncompared: ["Docker disk"])
+        let lateRun = FastDropReport.make(drop: drop, before: before, after: before, changes: [], reserve: nil, note: nil,
+                                          unfinished: ["Cursor worktrees"])
+        let firstBody: String = firstRun.body
+        let lateBody: String = lateRun.body
+        check(!firstBody.contains("somewhere Cairn doesn't watch") && firstBody.contains("can't say yet where") &&
+              !lateBody.contains("somewhere Cairn doesn't watch") && lateBody.contains("can't say yet where"),
+              "A place with no earlier size, or not measured in time, is never ruled out")
+        let shortened: String = FastDropReport.shortList(["a", "b", "c", "d", "e", "f"])
+        check(shortened == "a, b, c, d and 2 more", "Long lists of places are shortened")
+
+        let night = t0.addingTimeInterval(-10 * 60)
+        let morning = FastDropPolicy.timing(delivered: nil, quietCheck: night, quiet: false)
+        let stillNight = FastDropPolicy.timing(delivered: nil, quietCheck: night, quiet: true)
+        let reported = FastDropPolicy.timing(delivered: nil, quietCheck: t0.addingTimeInterval(10 * 60), quiet: false)
+        let later: CapacityReading = reading(25, 50)
+        let morningDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                      lastAlert: morning.cooldownFrom, floor: morning.floor)
+        let nightDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                    lastAlert: stillNight.cooldownFrom, floor: stillNight.floor)
+        // The 10-minute reading (56 GB) ended the fall reported overnight.
+        let flat: CapacityReading = reading(25, 55)
+        let unchecked: FastDropPolicy.Drop? = FastDropPolicy.detect(current: flat, recent: steady, reserve: nil, lastAlert: nil)
+        let repeatDrop: FastDropPolicy.Drop? = FastDropPolicy.detect(current: flat, recent: steady, reserve: nil,
+                                                                     lastAlert: reported.cooldownFrom, floor: reported.floor)
+        let newFall: FastDropPolicy.Drop? = FastDropPolicy.detect(current: later, recent: steady, reserve: nil,
+                                                                  lastAlert: reported.cooldownFrom, floor: reported.floor)
+        check(morningDrop != nil && nightDrop == nil,
+              "A check in quiet hours does not use up the alert once they end, and still spaces checks at night")
+        check(unchecked != nil && repeatDrop == nil, "A fall already reported overnight is not sent again in the morning")
+        check(newFall?.bytes == 6 * gb, "A new fall is measured from the reading that ended the reported one")
+        let delivered = t0.addingTimeInterval(-3 * 3_600)
+        let quietTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: true)
+        let dayTiming = FastDropPolicy.timing(delivered: delivered, quietCheck: night, quiet: false)
+        check(quietTiming.cooldownFrom == night && dayTiming.cooldownFrom == delivered && dayTiming.floor == night,
+              "Quiet-hours checks only start the cooldown while quiet hours last")
+
+        let names: [String] = ["seen", "late", "new", "gone", "locked", "empty", "unreached"]
+        let watched: [ObservedRoot] = names.map {
+            ObservedRoot(id: $0, title: $0, path: "/fixture/" + $0, icon: "folder", observationOnly: true)
+        }
+        let earlier: [String: LocationReading] = ["seen": fixtureReading("seen", gb, at: t0), "late": fixtureReading("late", gb, at: t0)]
+        let measuredAt: Date = t0.addingTimeInterval(600)
+        let fresh: [LocationReading] = [
+            fixtureReading("seen", gb, at: measuredAt),
+            fixtureReading("late", gb, at: measuredAt, coverage: .cancelled),
+            fixtureReading("new", gb, at: measuredAt),
+            fixtureReading("gone", 0, at: measuredAt, coverage: .unavailable),
+            fixtureReading("locked", 0, at: measuredAt, coverage: .unavailable),
+            fixtureReading("empty", 0, at: measuredAt, coverage: .absent),
+        ]
+        let unknown = FastDropPolicy.unknowns(roots: watched, previous: earlier, readings: fresh, missing: ["gone"])
+        check(unknown.unfinished == ["late", "unreached"] && unknown.uncompared == ["new", "locked"],
+              "Only places that are really not there, empty or excluded are ruled out; unreadable ones stay unknown")
+        let near = FastDropReport.make(drop: close!, before: nil, after: nil, changes: [], reserve: 30 * gb, note: nil)
+        let reservePhrase: String = "reach your " + Fmt.size(30 * gb) + " reserve in about 20 minutes"
+        check(near.body.contains(reservePhrase), "Report says when the reserve is close")
+        let decoded = try? JSONDecoder().decode(FastDropReport.self, from: (try? JSONEncoder().encode(report)) ?? Data())
+        check(decoded == report, "The last report survives a restart")
+        let oneMinute: String = FastDropReport.spoken(60)
+        let twoHours: String = FastDropReport.spoken(95 * 60)
+        let joined: String = FastDropReport.list(["a", "b", "c"])
+        check(oneMinute == "1 minute" && twoHours == "2 hours" && joined == "a, b and c", "Durations and lists read naturally")
+
+        let catalogue = ObservedRoot.catalogue(home: URL(fileURLWithPath: "/Users/fixture"))
+        let ids = catalogue.map(\.id)
+        let added = ["simulators", "ollama-models", "huggingface", "lmstudio-models", "docker-disk", "orbstack-disk",
+                     "colima-disk", "claude-data", "cursor-worktrees", "conductor-workspaces"]
+        check(Set(ids).count == ids.count && Set(added).isSubset(of: Set(ids)) && ids.count <= 32,
+              "Watch list covers the fast growers, once each, within the watcher's limit")
+        check(ObservedRoot.nonOverlapping(catalogue).count == catalogue.count, "No watched place sits inside another")
+        let withoutAccess = Set(ObservedRoot.measurable(fullDiskAccess: false, home: URL(fileURLWithPath: "/Users/fixture")).map(\.id))
+        check(!withoutAccess.contains("docker-disk") && !withoutAccess.contains("orbstack-disk") && withoutAccess.contains("claude-data") &&
+              ObservedRoot.measurable(fullDiskAccess: true, home: URL(fileURLWithPath: "/Users/fixture")).count == catalogue.count,
+              "Other apps' containers are only measured with Full Disk Access")
+        let protectedIDs = ["docker-disk", "orbstack-disk", "colima-disk", "claude-data", "cursor-worktrees", "conductor-workspaces"]
+        check(catalogue.filter { protectedIDs.contains($0.id) }.allSatisfy(\.observationOnly) &&
+              Set(protectedIDs).isDisjoint(with: GrowthSuggestions.selectableIDs),
+              "Protected places are watch-only and never become suggestions")
+        check(catalogue.filter { ["claude-data", "cursor-worktrees"].contains($0.id) }.allSatisfy { SafePaths.protectedSessionReason($0.url) != nil },
+              "Watching Claude Code data and worktrees leaves their protection in place")
+        check(FastDropPolicy.ordered(catalogue).first?.id == "docker-disk" && FastDropPolicy.ordered(catalogue).count == catalogue.count,
+              "Quick places are measured first and every place is included")
+        check(SystemSignals.swapTotal() != nil, "macOS reports the size of swap")
     }
 }
