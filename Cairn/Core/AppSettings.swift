@@ -52,6 +52,9 @@ final class AppSettings {
     var growthSuggestionsEnabled: Bool { didSet { d.set(growthSuggestionsEnabled, forKey: "cairn.growthSuggestionsEnabled.v1") } }
     var growthSuggestionIDs: [String] { didSet { d.set(growthSuggestionIDs, forKey: "cairn.growthSuggestionIDs.v1") } }
     var growthSuggestionGB: Int { didSet { d.set(growthSuggestionGB, forKey: "cairn.growthSuggestionGB.v1") } }
+    /// Alert-only: when free space falls fast, measure the usual places and
+    /// say which grew. It never arms a rule or removes anything.
+    var fastDropAlertsEnabled: Bool { didSet { d.set(fastDropAlertsEnabled, forKey: "cairn.fastDropAlertsEnabled.v1") } }
     var reserveQuietHours: Bool { didSet { d.set(reserveQuietHours, forKey: "cairn.reserveQuietHours") } }
     var reserveGB: Int { didSet { d.set(reserveGB, forKey: "cairn.reserveGB") } }
     var goalGB: Int { didSet { d.set(goalGB, forKey: "cairn.goalGB") } }
@@ -109,6 +112,7 @@ final class AppSettings {
         growthSuggestionIDs = (ud.stringArray(forKey: "cairn.growthSuggestionIDs.v1") ?? GrowthSuggestions.defaultIDs)
             .filter { GrowthSuggestions.selectableIDs.contains($0) }
         growthSuggestionGB = max(1, min(20, ud.object(forKey: "cairn.growthSuggestionGB.v1") == nil ? 1 : ud.integer(forKey: "cairn.growthSuggestionGB.v1")))
+        fastDropAlertsEnabled = b("cairn.fastDropAlertsEnabled.v1", false)
         reserveQuietHours = b("cairn.reserveQuietHours", false)
         reservePaused = b("cairn.reservePaused", false)
         reservePauseUntil = ud.object(forKey: "cairn.reservePauseUntil") as? Date

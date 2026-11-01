@@ -80,12 +80,14 @@ enum ScanEvent {
 /// Bounded delivery and an explicit producer lifetime. Cancelling a consumer
 /// alone does not await a detached task, so the gate owner must call stopAndWait.
 struct ScanEventPipeline {
+    /// Events a scan may queue for the store before it stops at the result limit.
+    static let defaultBufferLimit = 2048
     let stream: AsyncStream<ScanEvent>
     let overflow = CancelBox()
     private let worker: Task<Void, Never>
 
     init(scanners: [CairnScanner], fdaGranted: Bool, includeExternal: Bool,
-         minSize: Int64, bufferLimit: Int = 2048) {
+         minSize: Int64, bufferLimit: Int = ScanEventPipeline.defaultBufferLimit) {
         let (stream, continuation) = AsyncStream.makeStream(of: ScanEvent.self,
             bufferingPolicy: .bufferingOldest(max(1, bufferLimit)))
         self.stream = stream

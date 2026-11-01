@@ -12,6 +12,7 @@ final class ScanStore {
     private let restoreFile: @Sendable (URL, URL) -> Bool
     private let recordRestoredBytes: (Int64) -> Void
     private let fixtureScanners: [CairnScanner]?
+    private let scanBufferLimit: Int
     private let lifecycleCheckpoint: @Sendable (String) -> Void
     private let cleanFile: @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome
     init(removalLogURL: URL? = nil,
@@ -19,9 +20,10 @@ final class ScanStore {
          restoreFile: @escaping @Sendable (URL, URL) -> Bool = { Cleaner.restore(from: $0, to: $1) },
          recordRestoredBytes: ((Int64) -> Void)? = nil,
          fixtureScanners: [CairnScanner]? = nil,
+         scanBufferLimit: Int = ScanEventPipeline.defaultBufferLimit,
          lifecycleCheckpoint: @escaping @Sendable (String) -> Void = { _ in },
          cleanFile: @escaping @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome = { Cleaner.clean($0, allowedRoots: $1, proEnabled: $2, reviewedSource: $3) }) {
-        self.fixtureScanners = fixtureScanners; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
+        self.fixtureScanners = fixtureScanners; self.scanBufferLimit = scanBufferLimit; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
         recoveryJournal = actionJournal ?? (removalLogURL.map { ActionJournal(url: $0.appendingPathExtension("actions")) } ?? .shared)
         customRemovalLogURL = removalLogURL; self.restoreFile = restoreFile; self.recordRestoredBytes = recordRestoredBytes ?? { if removalLogURL == nil { ReclaimStats.shared.recordRestore(bytes: $0) } }
     }
@@ -498,7 +500,8 @@ final class ScanStore {
         let minSize: Int64 = 5 * 1024 * 1024 // default 5 MB floor; scanners can override per item
 
         let pipeline = ScanEventPipeline(scanners: scanners, fdaGranted: fdaGranted,
-                                         includeExternal: includeExternal, minSize: minSize)
+                                         includeExternal: includeExternal, minSize: minSize,
+                                         bufferLimit: scanBufferLimit)
 
         // Scanners emit thousands of items per scan. Applying each one immediately
         // published an @Observable change per item, so SwiftUI re-rendered the whole

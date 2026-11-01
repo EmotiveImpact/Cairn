@@ -123,12 +123,12 @@ struct OverviewWorkspace: View {
                     heroFootprint.hidden().accessibilityHidden(true)
                     cleanHero
                 }
-                .padding(.top, 14)
+                .padding(.top, 18)
                 graphPanel.padding(.top, 14)
                 diskCard.padding(.top, 14)
                 nextTiles.padding(.top, 14)
-            }.padding(.horizontal, 40).padding(.top, 18).padding(.bottom, 26)
-                .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
+            }.padding(.horizontal, 40).padding(.top, 22).padding(.bottom, 26)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
             // The scan and clean status strip takes height from this view while it shows;
@@ -202,10 +202,10 @@ struct OverviewWorkspace: View {
     /// built from the same fonts and spacing, used only to reserve its height.
     private var heroFootprint: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("00.0 GB").font(.system(size: 58, weight: .light)).tracking(-2.3)
+            Text("00.0 GB").font(.system(size: 64, weight: .light)).tracking(-2.5)
             Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
                 .font(.system(size: 13.5))
-                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 8)
             Text("00.0 GB more to look through yourself").font(.system(size: 13)).padding(.top, 6)
             Text("Review").padding(.horizontal, 16).frame(minHeight: 34).padding(.top, 14)
@@ -220,8 +220,8 @@ struct OverviewWorkspace: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
                     CountingBytes(bytes: store.recommendedBytes, duration: 0.3, still: reduceMotion)
-                        .font(.system(size: 58, weight: .light)).tracking(-2.3)
-                    Text("ready so far").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                        .font(.system(size: 64, weight: .light)).tracking(-2.5)
+                    Text("ready so far").font(.system(size: 19)).foregroundStyle(Brand.textMuted)
                 }
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -240,12 +240,12 @@ struct OverviewWorkspace: View {
                 VStack(alignment: .leading, spacing: 0) {
                     HStack(alignment: .firstTextBaseline, spacing: 12) {
                         CountingBytes(bytes: recommendedBytes, duration: 0.8, still: reduceMotion)
-                            .font(.system(size: 58, weight: .light)).tracking(-2.3)
-                        Text("you can get back").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                            .font(.system(size: 64, weight: .light)).tracking(-2.5)
+                        Text("you can get back").font(.system(size: 19)).foregroundStyle(Brand.textMuted)
                     }
                     Text("Build files, caches and old simulators that your tools rebuild on their own. Your code, documents and AI conversations are never included.")
                         .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
-                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.top, 8)
                     toReviewLine
                     HStack(spacing: 10) {
@@ -270,7 +270,7 @@ struct OverviewWorkspace: View {
                      ? "The last scan was stopped early, so Cairn can't give you a number yet. A full scan takes a minute or two."
                      : "A scan takes a minute or two. Nothing is removed until you review it.")
                     .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
                 HStack(spacing: 10) {
                     Button { scan() } label: { Text("Scan this Mac").frame(minWidth: 140) }
@@ -283,12 +283,12 @@ struct OverviewWorkspace: View {
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text("All tidy").font(.system(size: 58, weight: .light)).tracking(-2.3)
-                    Text("nothing to get back right now").font(.system(size: 20)).foregroundStyle(Brand.textMuted)
+                    Text("All tidy").font(.system(size: 64, weight: .light)).tracking(-2.5)
+                    Text("nothing to get back right now").font(.system(size: 19)).foregroundStyle(Brand.textMuted)
                 }
                 Text("Your caches and build files are already small. Cairn will show a number here when they grow.")
                     .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: 440, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true).frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
                 toReviewLine
                 Button("See everything") { onOpen(.smartScan) }.buttonStyle(ControlPanelButtonStyle(size: .large)).padding(.top, 14)
@@ -591,11 +591,12 @@ struct OverviewWorkspace: View {
     }
     private var header: some View {
         ViewThatFits(in: .horizontal) {
-            HStack {
+            HStack(alignment: .center, spacing: 8) {
                 headerIdentity.fixedSize()
-                Spacer()
+                Spacer(minLength: 12)
                 headerActions.fixedSize()
             }
+            .frame(height: 28)
             VStack(alignment: .leading, spacing: 10) {
                 headerIdentity
                 headerActions
@@ -604,7 +605,7 @@ struct OverviewWorkspace: View {
     }
     private var headerIdentity: some View {
         HStack {
-            Text("This Mac").font(.system(size: 13, weight: .medium)).foregroundStyle(Brand.textSecondary)
+            Text("This Mac").nightEyebrow()
             if let drive = externalDrive { drivePill(drive).padding(.leading, 14) }
         }
     }

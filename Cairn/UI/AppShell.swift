@@ -686,14 +686,11 @@ private struct SidebarDisclosure: View {
                 HStack(spacing: 10) {
                     SidebarIcon(glyph: glyph)
                         .frame(width: 16).foregroundStyle(items.contains(section) ? Brand.room : Brand.textSecondary)
-                    Text(title).font(.system(size: 13.5, weight: .regular)).foregroundStyle(Brand.textSecondary)
+                    Text(title).font(.system(size: 13.5, weight: .regular)).foregroundStyle(hovering ? Brand.textPrimary : Brand.textSecondary)
                     Spacer(minLength: 0)
                     Image(systemName: expanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 10, weight: .semibold)).foregroundStyle(Brand.textMuted)
                 }.padding(.horizontal, 10).frame(height: 33)
-                .background {
-                    if hovering { RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04)) }
-                }
                 .onHover { hovering = $0 && !Showcase.active }
                 .contentShape(Rectangle())
             }
@@ -779,18 +776,13 @@ private struct NavRow: View {
                 }
                 Text(label ?? item.title).lineLimit(1)
                     .font(.system(size: child ? 13 : 13.5, weight: .regular))
-                    .foregroundStyle(selected ? Brand.textPrimary : Brand.textSecondary)
+                    .foregroundStyle(selected || hovering ? Brand.textPrimary : Brand.textSecondary)
                 Spacer()
             }
             .padding(.leading, child ? 20 : 10).padding(.trailing, 10)
             .frame(height: child ? 30 : 33)
-            .background {
-                if selected && !child {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Brand.surfaceSubtle)
-                } else if hovering {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Color.white.opacity(0.04))
-                }
-            }
+            // No box behind a chosen or hovered row (Edem, 1 Nov): the ice icon
+            // and brighter words show where you are; hovering only brightens the words.
             .onHover { hovering = $0 && !Showcase.active }
             .padding(.leading, child ? 26 : 0)
             .contentShape(Rectangle())
