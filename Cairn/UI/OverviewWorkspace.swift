@@ -128,7 +128,7 @@ struct OverviewWorkspace: View {
                 diskCard.padding(.top, 14)
                 nextTiles.padding(.top, 14)
             }.padding(.horizontal, 40).padding(.top, 22).padding(.bottom, 26)
-                .frame(maxWidth: 1200, alignment: .leading).frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { height in
             // The scan and clean status strip takes height from this view while it shows;
