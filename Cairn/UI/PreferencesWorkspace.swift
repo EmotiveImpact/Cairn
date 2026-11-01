@@ -131,11 +131,13 @@ struct PreferencesWorkspace: View {
                     if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
                 }
             if settings.growthSuggestionsEnabled || preview {
-                HStack {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Growth threshold").font(.system(size: 13, weight: .medium))
-                    Spacer()
-                    Stepper("\(settings.growthSuggestionGB) GB", value: $settings.growthSuggestionGB, in: 1...20)
-                        .frame(width: 145)
+                    CairnSegmentedControl(label: "Growth threshold", selection: growthThreshold,
+                                          options: Self.growthSteps.map { ("\($0) GB", $0) })
+                        .frame(width: 360)
+                    Text("How much a folder has to grow before Cairn suggests a look.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }.nightRow()
                 ForEach(ObservedRoot.catalogue().filter { GrowthSuggestions.selectableIDs.contains($0.id) }) { root in
                     option(root.title, root.id == "downloads" ? "Personal files: suggestion opens an inspection only." : "Suggest an inspection when this location grows by the chosen amount.",
@@ -247,6 +249,12 @@ struct PreferencesWorkspace: View {
         }
     }
     /// A setting as a reference row: name and grey line on the left, switch on the right.
+    static let growthSteps = [1, 2, 5, 10, 20]
+    /// Shows an older in-between value (say 3 GB) as the nearest step until a step is picked.
+    private var growthThreshold: Binding<Int> {
+        Binding(get: { Self.growthSteps.min { abs($0 - settings.growthSuggestionGB) < abs($1 - settings.growthSuggestionGB) } ?? 1 },
+                set: { settings.growthSuggestionGB = $0 })
+    }
     private func option(_ title: String, _ detail: String, _ value: Binding<Bool>) -> some View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
