@@ -70,7 +70,7 @@ jobs:
             fi
           done
 
-      # Changes with a sample fast drop, swap and snapshots, and Settings › Monitoring
+      # Home, Changes with a sample fast drop, swap and snapshots, and Settings › Monitoring
       # in Dark and Light, printed into the log only.
       - name: Monitoring screenshots
         continue-on-error: true
@@ -78,9 +78,10 @@ jobs:
         run: |
           bin="$(swift build --show-bin-path)/Cairn"
           "$bin" --preview-ui --component-showcase --capture-screen=changes --section=changes || true
+          "$bin" --preview-ui --component-showcase --capture-screen=dashboard --section=dashboard || true
           "$bin" --preview-ui --component-showcase --capture-screen=settings --section=settings --preferences-tab=Monitoring || true
           "$bin" --preview-ui --component-showcase --capture-screen=settings --section=settings --preferences-tab=Monitoring --capture-light || true
-          for name in changes settings settings-light; do
+          for name in dashboard changes settings settings-light; do
             if [ -f "artifacts/component-showcase/$name.png" ]; then
               sips -s format jpeg -s formatOptions 70 "artifacts/component-showcase/$name.png" --out "$RUNNER_TEMP/$name.jpg" >/dev/null
               echo "SHOT-BEGIN $name"; base64 -i "$RUNNER_TEMP/$name.jpg" | tr -d '\n'; echo; echo "SHOT-END"
