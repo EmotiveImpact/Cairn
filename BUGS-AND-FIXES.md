@@ -21,7 +21,7 @@ Cairn now reads a saved licence quietly about two seconds after opening (only on
 a Mac where a licence was saved), keeps Pro for 30 days offline, retries by itself
 when Polar can't be reached, and shows "Check now" instead of the key box while a
 key is saved. New `--licensecheck` runs in CI with an in-memory server and
-Keychain. Not yet tried against live Polar or a real Keychain.
+Keychain. PR #23. Not yet tried against live Polar or a real Keychain.
 
 ## 30 October 2026 — Unreadable paths looked completely measured
 
