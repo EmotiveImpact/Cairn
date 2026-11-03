@@ -10,6 +10,19 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 3 November 2026 — Saved licence only read from Settings
+
+🟠 A saved licence was read only when Settings › Licence was opened, so after
+every restart Pro stayed off until that page was visited. If Polar could not be
+reached (for example straight after login, before Wi-Fi was up) and the last
+check was over 14 days old, the page offered the key box as if the key had been
+lost, and nothing tried again. Hidden for now because Pro unlocks nothing yet.
+Cairn now reads a saved licence quietly about two seconds after opening (only on
+a Mac where a licence was saved), keeps Pro for 30 days offline, retries by itself
+when Polar can't be reached, and shows "Check now" instead of the key box while a
+key is saved. New `--licensecheck` runs in CI with an in-memory server and
+Keychain. PR #23. Not yet tried against live Polar or a real Keychain.
+
 ## 30 October 2026 — Unreadable paths looked completely measured
 
 A failed root metadata read returned an exact zero-byte file count. Missing and

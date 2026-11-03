@@ -4,6 +4,14 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
+## 3 November 2026
+
+### Licence key asked for once (PR #23)
+
+- **Pro is on as soon as Cairn opens.** A saved licence is read quietly in the background a couple of seconds after the window appears, so there is no need to visit Settings › Licence after a restart. Only Macs where a licence was saved have their Keychain read at launch.
+- **No internet is fine.** If Cairn can't reach the licence server, for example straight after login, it keeps the saved key, keeps Pro on for up to 30 days (was 14), and tries again by itself.
+- **The key box stays away.** While a key is saved, Settings shows "Check now" instead of asking for the key again. A refunded or cancelled licence still switches Pro off.
+
 ## 27 October 2026
 
 Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.
