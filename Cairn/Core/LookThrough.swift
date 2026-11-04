@@ -104,7 +104,7 @@ enum LookThrough {
 
     /// "WhatsApp" from "group.net.whatsapp.WhatsApp.shared", "Cymatics Equinox" from a zip name.
     private static let vagueNames: Set<String> = ["venv", "node_modules", "dists", "caches", "cache", "store", "hub",
-                                                    "archives", "devices", "build", "target", "dist", "models", "data"]
+                                                    "archives", "devices", "build", "target", "dist", "models", "data", "_cacache"]
 
     static func shortName(_ item: ScanItem) -> String {
         var name = item.resolvedURL.deletingPathExtension().lastPathComponent

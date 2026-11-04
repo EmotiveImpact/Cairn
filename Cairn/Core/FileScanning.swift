@@ -16,6 +16,11 @@ struct DirStats {
     var cancelled: Bool = false
     /// The monotonic per-tree time budget expired while measuring this item.
     var timedOut: Bool = false
+    /// Bytes in files that have another hard link, counted only when a caller
+    /// asks for them to be kept apart. Removing one link to such a file frees
+    /// nothing while the other stays, for example a pnpm store file that a
+    /// project's node_modules also links to. These bytes are NOT in allocatedSize.
+    var sharedLinkBytes: Int64 = 0
 }
 
 /// Filesystem measurement. ONE enumerator pass accumulates on-disk allocated
@@ -30,6 +35,11 @@ enum FileScan {
     // sizes (DirStats.truncated), which makeItem labels for review.
     private static let hardFileLimit = 100_000
     private static let hardEntryLimit = 250_000
+    // Known package caches (Gradle, pnpm, Go) can hold several hundred thousand
+    // files. Callers that pass `largeTree` lift the counts and rely on their
+    // time limit instead, so a big cache is measured in full, not cut short.
+    private static let largeTreeFileLimit = 2_000_000
+    private static let largeTreeEntryLimit = 3_000_000
     private static let defaultMeasureSeconds: TimeInterval = 4
 
     private static let sizeKeys: Set<URLResourceKey> = [
@@ -48,16 +58,27 @@ enum FileScan {
     /// (BUG-014). The hard entry cap also bounds trees with very many directories
     /// or tiny/non-regular files. The monotonic deadline bounds slow I/O across
     /// all callers; cancellation and every cap mark the result incomplete.
+    /// `largeTree` lifts the file and entry counts for a known big cache; the
+    /// time limit still bounds it. `separateSharedLinks` keeps files with
+    /// another hard link out of allocatedSize and adds them to sharedLinkBytes.
     static func measure(_ url: URL, maxFiles: Int = .max,
-                        maxDuration: TimeInterval = defaultMeasureSeconds) -> DirStats {
-        autoreleasepool { measureTree(url, maxFiles: maxFiles, maxDuration: maxDuration) }
+                        maxDuration: TimeInterval = defaultMeasureSeconds,
+                        largeTree: Bool = false,
+                        separateSharedLinks: Bool = false) -> DirStats {
+        autoreleasepool {
+            measureTree(url, maxFiles: maxFiles, maxDuration: maxDuration,
+                        largeTree: largeTree, separateSharedLinks: separateSharedLinks)
+        }
     }
 
-    private static func measureTree(_ url: URL, maxFiles: Int, maxDuration: TimeInterval) -> DirStats {
+    private static func measureTree(_ url: URL, maxFiles: Int, maxDuration: TimeInterval,
+                                    largeTree: Bool, separateSharedLinks: Bool) -> DirStats {
         var stats = DirStats()
         let fm = FileManager.default
         if Task.isCancelled { stats.cancelled = true; stats.truncated = true; return stats }
-        let fileLimit = min(max(1, maxFiles), hardFileLimit)
+        let fileLimit = min(max(1, maxFiles), largeTree ? largeTreeFileLimit : hardFileLimit)
+        let entryLimit = largeTree ? largeTreeEntryLimit : hardEntryLimit
+        let keys = separateSharedLinks ? sizeKeys.union([.linkCountKey]) : sizeKeys
         let deadline = ProcessInfo.processInfo.systemUptime + max(0.05, maxDuration)
 
         func recordFailure(_ error: Error) {
@@ -91,7 +112,7 @@ enum FileScan {
 
         guard let enumerator = fm.enumerator(
             at: url,
-            includingPropertiesForKeys: Array(sizeKeys),
+            includingPropertiesForKeys: Array(keys),
             options: [],
             errorHandler: { _, error in
                 recordFailure(error)
@@ -112,14 +133,18 @@ enum FileScan {
                 if ProcessInfo.processInfo.systemUptime >= deadline { stats.timedOut = true; stats.truncated = true; stop = true; return }
                 guard let item = enumerator.nextObject() as? URL else { stop = true; return }
                 examined += 1
-                if examined > hardEntryLimit { stats.truncated = true; stop = true; return }
+                if examined > entryLimit { stats.truncated = true; stop = true; return }
                 let v: URLResourceValues
-                do { v = try item.resourceValues(forKeys: sizeKeys) }
+                do { v = try item.resourceValues(forKeys: keys) }
                 catch { recordFailure(error); return }
                 if v.isSymbolicLink == true { enumerator.skipDescendants(); return }
                 if v.isUbiquitousItem == true { enumerator.skipDescendants(); return }
                 if v.isDirectory == true { return }
-                stats.allocatedSize += allocated(from: v)
+                if separateSharedLinks, let links = v.linkCount, links > 1 {
+                    stats.sharedLinkBytes += allocated(from: v)
+                } else {
+                    stats.allocatedSize += allocated(from: v)
+                }
                 stats.fileCount += 1
                 if let mod = v.contentModificationDate, mod > stats.latestModified { stats.latestModified = mod }
                 if stats.fileCount >= fileLimit { stats.truncated = true; stop = true }

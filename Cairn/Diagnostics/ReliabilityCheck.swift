@@ -699,6 +699,80 @@ import Darwin
             check(try !(await reloaded.prepareRemovalLog()) && Data(contentsOf: journal) == corruptBytes, "External history change is not overwritten")
         } catch { check(false, "Fixture failure: \(error.localizedDescription)") }
 
+        // Developer caches: each common cache is found, the usual big ones are
+        // measured first, every cache the time limit skips keeps its own row,
+        // Gradle is one click only once it has been quiet for a day, and pnpm
+        // files shared with a project are not counted as space to free.
+        do {
+            let fm = FileManager.default
+            let home = fm.temporaryDirectory.appendingPathComponent("cairn-devcaches-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: home) }
+            func put(_ rel: String, bytes: Int = 4096, ageDays: Double = 0) throws -> URL {
+                let url = home.appendingPathComponent(rel)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(repeating: 7, count: bytes).write(to: url)
+                if ageDays > 0 {
+                    try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -ageDays * 86_400)], ofItemAtPath: url.path)
+                }
+                return url
+            }
+            func scan(_ scanner: DevCachesScanner) async -> [ScanItem] {
+                let found = SelfTest.Collector()
+                let context = ScanContext(fdaGranted: false, includeExternalVolumes: false, minSizeBytes: 0,
+                                          emit: { found.add($0) }, progress: { _ in }, isCancelled: { false })
+                await scanner.scan(context)
+                return found.items
+            }
+            func item(_ items: [ScanItem], _ rel: String) -> ScanItem? {
+                let path = home.appendingPathComponent(rel).path
+                return items.first { $0.url.path == path }
+            }
+            _ = try put("Library/Caches/Homebrew/downloads/bottle.tar.gz")
+            _ = try put(".npm/_cacache/content-v2/sha512/aa/entry")
+            _ = try put(".gradle/caches/modules-2/files-2.1/library.jar", ageDays: 3)
+            let shared = try put("Library/pnpm/store/v10/files/00/shared", bytes: 16_384)
+            _ = try put("Library/pnpm/store/v10/files/01/unused", bytes: 8192)
+            let linked = home.appendingPathComponent("app/node_modules/.pnpm/pkg/shared")
+            try fm.createDirectory(at: linked.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.linkItem(at: shared, to: linked)
+
+            check(DevCachesScanner.targets.prefix(3).map(\.label) == ["Homebrew cache", "Gradle caches", "pnpm store"],
+                  "The usual biggest developer caches are measured first")
+            let found = await scan(DevCachesScanner(home: home))
+            let brew = item(found, "Library/Caches/Homebrew"), npm = item(found, ".npm/_cacache")
+            let gradle = item(found, ".gradle/caches"), pnpm = item(found, "Library/pnpm/store")
+            check(brew?.severity == .safe && brew?.selected == true && brew?.cleanMethod.isPaid == true,
+                  "Homebrew download cache is found, ticked, and cleaned with Homebrew's own command")
+            check(npm?.severity == .safe && npm?.selected == true && npm.map(LookThrough.shortName) == "npm cache",
+                  "npm cache is found, ticked and named plainly")
+            check(gradle?.severity == .safe && gradle?.selected == true
+                    && gradle?.requiresQuitBundleIDs.contains("com.google.android.studio") == true,
+                  "A Gradle cache quiet for a day is one click, and waits for Android Studio to close")
+            let storeURL = home.appendingPathComponent("Library/pnpm/store")
+            let whole = FileScan.measure(storeURL)
+            let split = FileScan.measure(storeURL, separateSharedLinks: true)
+            check(split.sharedLinkBytes > 0 && split.allocatedSize > 0
+                    && split.allocatedSize + split.sharedLinkBytes == whole.allocatedSize,
+                  "Hard-linked files are kept apart from space a removal would free")
+            check(pnpm?.allocatedSize == split.allocatedSize && pnpm?.severity == .review
+                    && pnpm?.note.contains("shared with your projects") == true
+                    && pnpm?.note.contains("can free less") == true,
+                  "pnpm store counts only files no project links to, and says pnpm may free less")
+
+            _ = try put(".gradle/caches/journal-1/file-access.bin")
+            let busy = item(await scan(DevCachesScanner(home: home)), ".gradle/caches")
+            check(busy?.severity == .review && busy?.selected == false && busy?.note.contains("last day") == true,
+                  "A Gradle cache used in the last day stays for the user to check")
+            check(!DevCachesScanner.gradleIsQuiet(latestModified: .distantPast)
+                    && !DevCachesScanner.gradleIsQuiet(latestModified: Date(timeIntervalSinceNow: -3_600))
+                    && DevCachesScanner.gradleIsQuiet(latestModified: Date(timeIntervalSinceNow: -90_000)),
+                  "Gradle counts as quiet only after a full day without use")
+
+            let late = await scan(DevCachesScanner(home: home, timeLimit: 0))
+            check(late.count == 4 && late.allSatisfy { !$0.isActionable && $0.allocatedSize == 0 && $0.note.contains("Not measured") },
+                  "Every cache the time limit skips keeps its own row")
+        } catch { check(false, "Developer cache fixture: \(error.localizedDescription)") }
+
         do {
             let start = Date()
             let output = try ToolRunner.runExecutable("/usr/bin/python3", ["-c", "import sys,time; sys.stdout.write('o'*400000); sys.stdout.flush(); sys.stderr.write('e'*400000); sys.stderr.flush(); time.sleep(5)"], timeout: 0.7)

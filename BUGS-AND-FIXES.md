@@ -10,6 +10,19 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 4 November 2026: Developer caches could drop off the list
+
+Developer caches were measured one at a time against one 18-second limit, in a
+fixed order that put Homebrew 25th. When the limit ran out, only the first
+cache left over got a "not measured" row and the rest vanished. Gradle caches
+with more than 100,000 files showed a partial size, and the pnpm store counted
+files its projects still share. Caches are now measured three at a time with
+the usual biggest first, every skipped cache keeps its own row, known caches
+are counted in full within their time limit, and pnpm files shared with a
+project are kept out of the number. A Gradle cache quiet for a day is one
+click and waits for Android Studio or IntelliJ to close. Fixture checks are
+in the reliability check; a look-only scan on a real Mac is still to do.
+
 ## 30 October 2026 — Unreadable paths looked completely measured
 
 A failed root metadata read returned an exact zero-byte file count. Missing and
