@@ -71,9 +71,10 @@ enum ProjectIndex {
         }
         for item in items where item.categoryID == categoryID {
             var parent = item.url.deletingLastPathComponent().standardizedFileURL
-            // vendor/bundle and Carthage/Build belong to the folder above.
+            // vendor/bundle, Carthage/Build and .vercel/output belong to the folder above.
             if (parent.lastPathComponent == "vendor" && item.url.lastPathComponent == "bundle")
-                || (parent.lastPathComponent == "Carthage" && item.url.lastPathComponent == "Build") {
+                || (parent.lastPathComponent == "Carthage" && item.url.lastPathComponent == "Build")
+                || (parent.lastPathComponent == ".vercel" && item.url.lastPathComponent == "output") {
                 parent = parent.deletingLastPathComponent()
             }
             let (root, repo) = project(for: parent) ?? (parent, false)

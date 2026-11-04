@@ -72,6 +72,8 @@ enum WorkspaceCheck {
             try file("site/wp-config.php"); try folder("site/wp-includes"); try file("site/wp-content/plugins/shop/composer.json")
             try folder("site/wp-content/plugins/shop/node_modules/x")
             try file("rails/Gemfile"); try folder("rails/vendor/bundle/ruby"); try folder("rails/vendor/javascript")
+            try file("cra/package.json", "{}"); try file("cra/build/asset-manifest.json", "{}")
+            try file("cra/.vercel/project.json", "{}"); try folder("cra/.vercel/output/static")
 
             let scanner = DevProjectsScanner()
             let (candidates, found, summary) = scanner.collect(roots: [root], isCancelled: { false })
@@ -91,11 +93,13 @@ enum WorkspaceCheck {
                   && matched["java/target"] == .mavenTarget && matched["rails/vendor/bundle"] == .bundlerVendor,
                   "Gradle, Maven and Bundler output is matched beside its manifest")
             check(matched["electron/build"] == nil && matched["rails/vendor"] == nil, "A build folder of source files is never matched")
+            check(matched["cra/build"] == .webBuild && matched["cra/.vercel/output"] == .vercelOutput && matched["cra/.vercel"] == nil,
+                  "A web app's build folder and Vercel output are matched, never the Vercel project link")
             check(summary.stoppedEarly == nil && summary.foldersListed > 10, "A small home folder is walked to the end")
 
             // Breadth first: a long chain cannot use up the budget before a
             // project one folder down is reached.
-            // Twelve folders at the top and under 70 one level down, so 100 is
+            // Thirteen folders at the top and under 70 one level down, so 100 is
             // enough for every folder two levels down but not for the whole tree.
             for i in 1...60 { try folder("Chain/w\(i)/sub/deeper") }
             try folder("Zebra/app/.git")
@@ -138,6 +142,9 @@ enum WorkspaceCheck {
             check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/obj"))
                   && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/obj/notes")),
                   "A generic build name only counts as build output when it is the item itself")
+            check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/.vercel/output"))
+                  && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/.vercel")),
+                  "Only Vercel's build output counts, never its project link")
 
             let wake = ProjectSleep.wakeCommand(for: root.appendingPathComponent("expo"),
                                                 cleared: [root.appendingPathComponent("expo/android/app/build")])

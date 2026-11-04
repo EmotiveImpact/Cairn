@@ -267,6 +267,8 @@ struct DevProjectsScanner: CairnScanner {
             return rebuilt("Godot import cache for \(project), made again when Godot next opens it")
         case .pythonCache:
             return rebuilt("Python tool cache (\(name)) for \(project), made again on the next run")
+        case .vercelOutput:
+            return rebuilt("Vercel build output for \(project), made again by vercel build. The link to your Vercel project stays")
         case .webCache:
             return rebuilt("Web build cache (\(name)) for \(project), made again on the next build")
         case .carthage:

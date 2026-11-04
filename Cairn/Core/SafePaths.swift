@@ -202,6 +202,7 @@ enum SafePaths {
         if projectArtifactLeafNames.contains(leaf) || leaf.hasPrefix("cmake-build-") { return true }
         let parent = parts.dropLast().last
         return (leaf == "bundle" && parent == "vendor") || (leaf == "Build" && parent == "Carthage")
+            || (leaf == "output" && parent == ".vercel")
     }
 
     static func rebuildableAncestorReason(_ url: URL) -> String? {

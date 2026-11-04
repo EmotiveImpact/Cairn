@@ -178,7 +178,7 @@ enum ProjectFinder {
     /// manifest beside it, so a folder that only shares the name is entered
     /// like any other folder instead.
     enum Kind: String, Sendable {
-        case nodeModules, venv, cargoTarget, mavenTarget, sbtTarget, pods, swiftBuild, webBuild, webCache
+        case nodeModules, venv, cargoTarget, mavenTarget, sbtTarget, pods, swiftBuild, webBuild, webCache, vercelOutput
         case unity, unreal, flutter
         case gradleBuild, gradleCache, xcodeBuild, cmakeBuild, dotnet
         case elixirBuild, elixirDeps, stackWork, cabal, zig, godot, pythonCache
@@ -235,6 +235,8 @@ enum ProjectFinder {
                 return (.xcodeBuild, url)
             }
             if has("CMakeLists.txt"), inside("CMakeCache.txt") { return (.cmakeBuild, url) }
+            // Create React App and similar bundlers write an asset manifest.
+            if has("package.json"), inside("asset-manifest.json") { return (.webBuild, url) }
         case ".gradle":
             if gradle || has("settings.gradle") || has("settings.gradle.kts") || has("gradlew") { return (.gradleCache, url) }
         case "DerivedData":
@@ -258,6 +260,9 @@ enum ProjectFinder {
         case "vendor":
             if has("composer.json") { return (.composerVendor, url) }
             if has("Gemfile"), inside("bundle") { return (.bundlerVendor, url.appendingPathComponent("bundle")) }
+        case ".vercel":
+            // Only the build output; project.json beside it links the site.
+            if has("package.json") || has("vercel.json"), inside("output") { return (.vercelOutput, url.appendingPathComponent("output")) }
         case ".terraform":
             if hasEnding(".tf") { return (.terraform, url) }
         case "Carthage":
