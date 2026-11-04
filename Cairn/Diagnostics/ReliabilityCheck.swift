@@ -738,7 +738,7 @@ import Darwin
 
             check(DevCachesScanner.targets.prefix(3).map(\.label) == ["Homebrew cache", "Gradle caches", "pnpm store"],
                   "The usual biggest developer caches are measured first")
-            let found = await scan(DevCachesScanner(home: home))
+            let found = await scan(DevCachesScanner(home: home, gradleRunning: { false }))
             let brew = item(found, "Library/Caches/Homebrew"), npm = item(found, ".npm/_cacache")
             let gradle = item(found, ".gradle/caches"), pnpm = item(found, "Library/pnpm/store")
             check(brew?.severity == .safe && brew?.selected == true && brew?.cleanMethod.isPaid == true,
@@ -759,8 +759,32 @@ import Darwin
                     && pnpm?.note.contains("can free less") == true,
                   "pnpm store counts only files no project links to, and says pnpm may free less")
 
+            // A Gradle build can read a day-old cache without changing it, so a
+            // running Gradle keeps the cache for review and cleaning skips it.
+            let gradleOn = item(await scan(DevCachesScanner(home: home, gradleRunning: { true })), ".gradle/caches")
+            check(gradleOn?.severity == .review && gradleOn?.selected == false
+                    && gradleOn?.note.contains("Gradle is running") == true,
+                  "A quiet Gradle cache stays for review while Gradle is running")
+            let daemon = "/usr/bin/java -Xmx2g -cp gradle-launcher-8.10.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.10"
+            if let gradle, let npm {
+                check(InUse.reason(gradle, running: [], commandLines: [daemon])?.contains("Gradle is still running") == true
+                        && InUse.reason(gradle, running: [], commandLines: ["/usr/bin/java -jar other.jar"]) == nil
+                        && InUse.reason(npm, running: [], commandLines: [daemon]) == nil,
+                      "Cleaning skips Gradle folders while Gradle runs, and only those")
+            } else {
+                check(false, "Gradle and npm fixture caches were found")
+            }
+            var procArgs: [UInt8] = [2, 0, 0, 0]  // argument count, little-endian on every Mac
+            for part in ["/usr/bin/java", "", "", "java", "org.gradle.launcher.GradleMain", "PATH=/usr/bin"] {
+                procArgs += Array(part.utf8) + [0]
+            }
+            check(InUse.commandLine(fromProcArgs: procArgs, size: procArgs.count) == "java org.gradle.launcher.GradleMain",
+                  "A process's arguments are read without its path or environment")
+            check(InUse.runningCommandLines().contains { $0.contains("--reliabilitycheck") },
+                  "Cairn can read the command lines of this user's processes")
+
             _ = try put(".gradle/caches/journal-1/file-access.bin")
-            let busy = item(await scan(DevCachesScanner(home: home)), ".gradle/caches")
+            let busy = item(await scan(DevCachesScanner(home: home, gradleRunning: { false })), ".gradle/caches")
             check(busy?.severity == .review && busy?.selected == false && busy?.note.contains("last day") == true,
                   "A Gradle cache used in the last day stays for the user to check")
             check(!DevCachesScanner.gradleIsQuiet(latestModified: .distantPast)
@@ -768,7 +792,7 @@ import Darwin
                     && DevCachesScanner.gradleIsQuiet(latestModified: Date(timeIntervalSinceNow: -90_000)),
                   "Gradle counts as quiet only after a full day without use")
 
-            let late = await scan(DevCachesScanner(home: home, timeLimit: 0))
+            let late = await scan(DevCachesScanner(home: home, timeLimit: 0, gradleRunning: { false }))
             check(late.count == 4 && late.allSatisfy { !$0.isActionable && $0.allocatedSize == 0 && $0.note.contains("Not measured") },
                   "Every cache the time limit skips keeps its own row")
         } catch { check(false, "Developer cache fixture: \(error.localizedDescription)") }

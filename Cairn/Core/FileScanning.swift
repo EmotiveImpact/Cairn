@@ -36,8 +36,9 @@ enum FileScan {
     private static let hardFileLimit = 100_000
     private static let hardEntryLimit = 250_000
     // Known package caches (Gradle, pnpm, Go) can hold several hundred thousand
-    // files. Callers that pass `largeTree` lift the counts and rely on their
-    // time limit instead, so a big cache is measured in full, not cut short.
+    // files. Callers that pass `largeTree` lift the counts and rely mainly on
+    // their time limit, so a big cache is usually measured in full. A walk that
+    // still hits the time limit or a raised cap is marked partial, as before.
     private static let largeTreeFileLimit = 2_000_000
     private static let largeTreeEntryLimit = 3_000_000
     static let defaultMeasureSeconds: TimeInterval = 4

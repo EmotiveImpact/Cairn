@@ -721,8 +721,13 @@ final class ScanStore {
             return item
         }
         // Leave alone anything a running program or a build in progress is using.
-        let running = await Task.detached(priority: .userInitiated) { InUse.runningExecutables() }.value
-        let busy = prepared.compactMap { item in InUse.reason(item, running: running).map { (item.id, $0) } }
+        let needsCommandLines = prepared.contains(where: InUse.isGradleFolder)
+        let (running, commandLines) = await Task.detached(priority: .userInitiated) {
+            (InUse.runningExecutables(), needsCommandLines ? InUse.runningCommandLines() : [])
+        }.value
+        let busy = prepared.compactMap { item in
+            InUse.reason(item, running: running, commandLines: commandLines).map { (item.id, $0) }
+        }
         let busyIDs = Set(busy.map(\.0))
         let items = prepared.filter { !busyIDs.contains($0.id) }
         if items.isEmpty && !busy.isEmpty {

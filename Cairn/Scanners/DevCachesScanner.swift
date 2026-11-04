@@ -23,6 +23,9 @@ struct DevCachesScanner: CairnScanner {
     var perCacheLimit: TimeInterval = 8
     /// Caches measured at once.
     static let parallel = 3
+    /// Whether a Gradle build or Gradle background process is running. The
+    /// reliability check swaps in a fixed answer.
+    var gradleRunning: @Sendable () -> Bool = { InUse.gradleRunning() }
 
     /// Rebuildable package and build caches. Plain caches are removed directly;
     /// stores that are hard-linked into projects or read-only use the tool's own
@@ -97,6 +100,8 @@ struct DevCachesScanner: CairnScanner {
             guard SafePaths.protectedSessionReason(url) == nil, FileScan.exists(url) else { return nil }
             return (target: target, url: url)
         }
+        // Read once per scan, and only when there is a Gradle cache to judge.
+        let gradleBusy = present.contains { $0.target.kind == .gradleCaches } && gradleRunning()
 
         // A sliding window: a new cache starts the moment one finishes, and
         // nothing starts once the time limit has passed.
@@ -113,7 +118,7 @@ struct DevCachesScanner: CairnScanner {
                     active += 1
                     ctx.progress(target.label)
                     let limit = min(perCacheLimit, remaining)
-                    group.addTask { measureTarget(target, at: url, ctx: ctx, maxDuration: limit) }
+                    group.addTask { measureTarget(target, at: url, ctx: ctx, maxDuration: limit, gradleBusy: gradleBusy) }
                 }
                 if active == 0 { return next }
                 guard let result = await group.next() else { return next }
@@ -139,7 +144,7 @@ struct DevCachesScanner: CairnScanner {
     }
 
     private func measureTarget(_ target: Target, at url: URL, ctx: ScanContext,
-                               maxDuration: TimeInterval) -> ScanItem? {
+                               maxDuration: TimeInterval, gradleBusy: Bool) -> ScanItem? {
         let stats = FileScan.measure(url, maxDuration: maxDuration, largeTree: true,
                                      separateSharedLinks: target.kind == .pnpmStore)
         if ctx.isCancelled() || stats.cancelled { return nil }
@@ -158,8 +163,12 @@ struct DevCachesScanner: CairnScanner {
             quitFirst = Self.gradleApps
             let quiet = Self.gradleIsQuiet(latestModified: stats.latestModified)
             // One click only when the whole cache was read, so the last-used
-            // time is known, and Gradle has not touched it for a day.
-            if quiet && !partial {
+            // time is known, Gradle has not touched it for a day, and no Gradle
+            // build or background process is running. A build can read the
+            // cache without changing it. Cleaning checks for Gradle again.
+            if gradleBusy {
+                note += ". Gradle is running now, so it is left for you to check"
+            } else if quiet && !partial {
                 severity = .safe
                 note += ". Gradle has not used it for a day and downloads what it needs on the next build"
             } else if !quiet {

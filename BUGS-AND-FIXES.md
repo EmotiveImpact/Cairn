@@ -20,7 +20,8 @@ files its projects still share. Caches are now measured three at a time with
 the usual biggest first, every skipped cache keeps its own row, known caches
 are counted in full within their time limit, and pnpm files shared with a
 project are kept out of the number. A Gradle cache quiet for a day is one
-click and waits for Android Studio or IntelliJ to close. A look-only scan on
+click and waits for Android Studio or IntelliJ to close; it is never cleaned
+while a Gradle build or Gradle's background process is running. A look-only scan on
 Edem's Mac also showed an 8.67 GB Rust build folder as 5.91 GB, because
 project build folders stopped at 50,000 files; Rust, SwiftPM and game engine
 build folders are now counted in full within 10 seconds each. Fixture checks
