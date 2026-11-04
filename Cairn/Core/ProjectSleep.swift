@@ -85,6 +85,7 @@ enum ProjectSleep {
             // vendor/bundle and Carthage/Build are rebuilt from the folder above.
             if folder.lastPathComponent == "vendor" && name == "bundle" { folder.deleteLastPathComponent(); name = "vendor/bundle" }
             if folder.lastPathComponent == "Carthage" && name == "Build" { folder.deleteLastPathComponent(); name = "Carthage/Build" }
+            if folder.lastPathComponent == ".vercel" && name == "output" { folder.deleteLastPathComponent(); name = ".vercel/output" }
             // A package's node_modules is installed from the workspace root
             // that holds the lock file, once for the whole workspace, and a
             // Gradle module is built from the folder that holds gradlew.
@@ -131,12 +132,25 @@ enum ProjectSleep {
         func hasFile(endingWith ending: String) -> Bool {
             ((try? fm.contentsOfDirectory(atPath: folder.path)) ?? []).contains { $0.hasSuffix(ending) }
         }
+        func hasScript(_ script: String) -> Bool {
+            guard let data = fm.contents(atPath: folder.appendingPathComponent("package.json").path),
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let scripts = json["scripts"] as? [String: Any] else { return false }
+            return scripts[script] != nil
+        }
         var steps: [String] = []
-        if names.contains("node_modules") || has("package.json") && names.contains(".next") {
-            if has("pnpm-lock.yaml") { steps.append("pnpm install") }
-            else if has("yarn.lock") { steps.append("yarn install") }
-            else if has("bun.lockb") || has("bun.lock") { steps.append("bun install") }
-            else if has("package.json") || has("package-lock.json") { steps.append("npm install") }
+        let runner: String? = has("pnpm-lock.yaml") ? "pnpm" : has("yarn.lock") ? "yarn"
+            : (has("bun.lockb") || has("bun.lock")) ? "bun" : (has("package.json") || has("package-lock.json")) ? "npm" : nil
+        if let runner, names.contains("node_modules") || has("package.json") && names.contains(".next") {
+            steps.append("\(runner) install")
+        }
+        // Web build output comes back from the project's own build script,
+        // or from vercel build, which runs that script and writes its output.
+        if names.contains(".vercel/output") {
+            steps.append("vercel build")
+        } else if let runner, !names.isDisjoint(with: [".next", ".nuxt", ".output", ".svelte-kit", "dist", "build"]),
+                  hasScript("build") {
+            steps.append("\(runner) run build")
         }
         if names.contains("Pods"), has("Podfile") { steps.append("pod install") }
         if !names.isDisjoint(with: [".venv", "venv"]) {

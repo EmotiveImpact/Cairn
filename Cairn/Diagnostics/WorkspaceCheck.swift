@@ -72,7 +72,7 @@ enum WorkspaceCheck {
             try file("site/wp-config.php"); try folder("site/wp-includes"); try file("site/wp-content/plugins/shop/composer.json")
             try folder("site/wp-content/plugins/shop/node_modules/x")
             try file("rails/Gemfile"); try folder("rails/vendor/bundle/ruby"); try folder("rails/vendor/javascript")
-            try file("cra/package.json", "{}"); try file("cra/build/asset-manifest.json", "{}")
+            try file("cra/package.json", #"{"scripts":{"build":"react-scripts build"}}"#); try file("cra/build/asset-manifest.json", "{}")
             try file("cra/.vercel/project.json", "{}"); try folder("cra/.vercel/output/static")
 
             let scanner = DevProjectsScanner()
@@ -151,6 +151,11 @@ enum WorkspaceCheck {
             check(wake?.hasSuffix("&& (cd 'android' && ./gradlew build)") == true, "An Android module wakes with gradlew from its own folder")
             check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("java"), cleared: [root.appendingPathComponent("java/target")])?
                     .hasSuffix("&& mvn package") == true, "A Maven project wakes with mvn package")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("cra"), cleared: [root.appendingPathComponent("cra/build")])?
+                    .hasSuffix("&& npm run build") == true, "A web app wakes with its own build script")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("cra"),
+                                           cleared: [root.appendingPathComponent("cra/build"), root.appendingPathComponent("cra/.vercel/output")])?
+                    .hasSuffix("' && vercel build") == true, "Vercel output wakes with vercel build, once")
         } catch {
             check(false, "Project finder fixture could not be created: \(error)")
         }
