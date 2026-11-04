@@ -115,6 +115,9 @@ enum WorkspaceCheck {
             try folder("Deep/.git")
             try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -100 * 86_400)],
                                  ofItemAtPath: root.appendingPathComponent("site/wp-content/plugins/shop/composer.json").path)
+            // A plugin linked back to its own site must not loop.
+            try fm.createSymbolicLink(at: root.appendingPathComponent("site/wp-content/plugins/local-site"),
+                                      withDestinationURL: root.appendingPathComponent("site"))
             let appBuild = ScanItem(url: root.appendingPathComponent("expo/android/app/build"), allocatedSize: 70,
                                     categoryID: ProjectIndex.categoryID, severity: .safe)
             let pluginModules = ScanItem(url: root.appendingPathComponent("site/wp-content/plugins/shop/node_modules"), allocatedSize: 40,
