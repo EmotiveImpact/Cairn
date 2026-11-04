@@ -12,6 +12,7 @@ final class ScanStore {
     private let restoreFile: @Sendable (URL, URL) -> Bool
     private let recordRestoredBytes: (Int64) -> Void
     private let fixtureScanners: [CairnScanner]?
+    private let scanBufferLimit: Int
     private let lifecycleCheckpoint: @Sendable (String) -> Void
     private let cleanFile: @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome
     init(removalLogURL: URL? = nil,
@@ -19,9 +20,10 @@ final class ScanStore {
          restoreFile: @escaping @Sendable (URL, URL) -> Bool = { Cleaner.restore(from: $0, to: $1) },
          recordRestoredBytes: ((Int64) -> Void)? = nil,
          fixtureScanners: [CairnScanner]? = nil,
+         scanBufferLimit: Int = ScanEventPipeline.defaultBufferLimit,
          lifecycleCheckpoint: @escaping @Sendable (String) -> Void = { _ in },
          cleanFile: @escaping @Sendable (ScanItem, [URL], Bool, ReviewedSource?) -> Cleaner.Outcome = { Cleaner.clean($0, allowedRoots: $1, proEnabled: $2, reviewedSource: $3) }) {
-        self.fixtureScanners = fixtureScanners; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
+        self.fixtureScanners = fixtureScanners; self.scanBufferLimit = scanBufferLimit; self.cleanFile = cleanFile; self.lifecycleCheckpoint = lifecycleCheckpoint
         recoveryJournal = actionJournal ?? (removalLogURL.map { ActionJournal(url: $0.appendingPathExtension("actions")) } ?? .shared)
         customRemovalLogURL = removalLogURL; self.restoreFile = restoreFile; self.recordRestoredBytes = recordRestoredBytes ?? { if removalLogURL == nil { ReclaimStats.shared.recordRestore(bytes: $0) } }
     }
@@ -498,7 +500,8 @@ final class ScanStore {
         let minSize: Int64 = 5 * 1024 * 1024 // default 5 MB floor; scanners can override per item
 
         let pipeline = ScanEventPipeline(scanners: scanners, fdaGranted: fdaGranted,
-                                         includeExternal: includeExternal, minSize: minSize)
+                                         includeExternal: includeExternal, minSize: minSize,
+                                         bufferLimit: scanBufferLimit)
 
         // Scanners emit thousands of items per scan. Applying each one immediately
         // published an @Observable change per item, so SwiftUI re-rendered the whole
@@ -718,8 +721,13 @@ final class ScanStore {
             return item
         }
         // Leave alone anything a running program or a build in progress is using.
-        let running = await Task.detached(priority: .userInitiated) { InUse.runningExecutables() }.value
-        let busy = prepared.compactMap { item in InUse.reason(item, running: running).map { (item.id, $0) } }
+        let needsCommandLines = prepared.contains(where: InUse.isGradleFolder)
+        let (running, commandLines) = await Task.detached(priority: .userInitiated) {
+            (InUse.runningExecutables(), needsCommandLines ? InUse.runningCommandLines() : [])
+        }.value
+        let busy = prepared.compactMap { item in
+            InUse.reason(item, running: running, commandLines: commandLines).map { (item.id, $0) }
+        }
         let busyIDs = Set(busy.map(\.0))
         let items = prepared.filter { !busyIDs.contains($0.id) }
         if items.isEmpty && !busy.isEmpty {
@@ -807,6 +815,16 @@ final class ScanStore {
                 summary.failed += 1
                 summary.errors.append("\(item.url.lastPathComponent): close \(RunningApps.displayNames(for: runningOwners).joined(separator: ", ")) before cleaning")
                 continue
+            }
+            // Gradle can start while earlier items are being cleaned, so look
+            // again right before touching a Gradle folder.
+            if InUse.isGradleFolder(item) {
+                let lines = await Task.detached(priority: .userInitiated) { InUse.runningCommandLines() }.value
+                if let busy = InUse.gradleBusyReason(item, commandLines: lines) {
+                    summary.failed += 1
+                    summary.errors.append("Skipped \(busy)")
+                    continue
+                }
             }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
             guard let actionID = await Task.detached(priority: .utility, operation: {

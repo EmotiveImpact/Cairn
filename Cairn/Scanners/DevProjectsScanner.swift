@@ -38,6 +38,10 @@ struct DevProjectsScanner: CairnScanner {
     private let maxCandidates = 800
     /// Floor size for non-node_modules artifacts (node_modules uses ctx.minSizeBytes).
     private let smallFloor: Int64 = 1 * 1024 * 1024  // 1 MB
+    /// Time for one big single build folder (Rust target, SwiftPM .build, game
+    /// engine output). A Rust target can pass 8 GB and 100,000 files, so these
+    /// lift the file count and get longer than the usual 4 seconds.
+    static let bigBuildSeconds: TimeInterval = 10
 
     /// Directory names that, once matched, are pruned (never descended into).
     private static let targetNames: Set<String> = [
@@ -227,7 +231,9 @@ struct DevProjectsScanner: CairnScanner {
                 cleanMethod: .trash,
                 note: "Rust build output for \(project) — cargo clean",
                 selectedIfSafe: true,
-                maxFiles: 50_000
+                maxFiles: .max,
+                largeTree: true,
+                measureSeconds: Self.bigBuildSeconds
             )
 
         case ".venv", "venv":
@@ -282,7 +288,9 @@ struct DevProjectsScanner: CairnScanner {
                 cleanMethod: .trash,
                 note: "SwiftPM build for \(project) — swift build restores",
                 selectedIfSafe: true,
-                maxFiles: 50_000
+                maxFiles: .max,
+                largeTree: true,
+                measureSeconds: Self.bigBuildSeconds
             )
 
         case ".next", ".nuxt", ".output", ".turbo", ".svelte-kit", ".expo", "dist":
@@ -309,7 +317,9 @@ struct DevProjectsScanner: CairnScanner {
                 cleanMethod: .trash,
                 note: "\(engine) build output (\(dir.lastPathComponent)) for \(project) — regenerates on next build",
                 selectedIfSafe: true,
-                maxFiles: 50_000
+                maxFiles: .max,
+                largeTree: true,
+                measureSeconds: Self.bigBuildSeconds
             )
 
         default:
