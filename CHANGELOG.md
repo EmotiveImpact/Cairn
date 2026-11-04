@@ -6,7 +6,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
 ## Not yet merged
 
-### Developer caches found and counted properly
+### Developer caches found and counted properly (PR #24)
 
 - **Biggest first, none dropped.** Developer caches are measured three at a time, starting with the ones that are usually biggest (Homebrew, Gradle, pnpm, npm, Go, Cargo). If the scan runs out of time, every cache it did not reach gets its own "not measured" row. Before, only the first one did and the rest disappeared from the list.
 - **Full sizes for big caches.** Known package caches are no longer cut off at 100,000 files, so a large Gradle or pnpm cache shows its real size instead of a partial one.
