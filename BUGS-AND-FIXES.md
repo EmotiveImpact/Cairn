@@ -20,8 +20,13 @@ files its projects still share. Caches are now measured three at a time with
 the usual biggest first, every skipped cache keeps its own row, known caches
 are counted in full within their time limit, and pnpm files shared with a
 project are kept out of the number. A Gradle cache quiet for a day is one
-click and waits for Android Studio or IntelliJ to close. Fixture checks are
-in the reliability check; a look-only scan on a real Mac is still to do.
+click and waits for Android Studio or IntelliJ to close. A look-only scan on
+Edem's Mac also showed an 8.67 GB Rust build folder as 5.91 GB, because
+project build folders stopped at 50,000 files; Rust, SwiftPM and game engine
+build folders are now counted in full within 10 seconds each. Fixture checks
+are in the reliability check. The new build has not yet been run on a real
+Mac: the test Mac had under 6 GB free, and the Gradle, pnpm and npm caches had
+already been removed there.
 
 ## 30 October 2026 — Unreadable paths looked completely measured
 

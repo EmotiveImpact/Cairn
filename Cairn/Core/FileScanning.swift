@@ -40,7 +40,7 @@ enum FileScan {
     // time limit instead, so a big cache is measured in full, not cut short.
     private static let largeTreeFileLimit = 2_000_000
     private static let largeTreeEntryLimit = 3_000_000
-    private static let defaultMeasureSeconds: TimeInterval = 4
+    static let defaultMeasureSeconds: TimeInterval = 4
 
     private static let sizeKeys: Set<URLResourceKey> = [
         .totalFileAllocatedSizeKey,   // on-disk, incl. metadata/blocks

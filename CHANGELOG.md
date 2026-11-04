@@ -12,6 +12,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 - **Full sizes for big caches.** Known package caches are no longer cut off at 100,000 files, so a large Gradle or pnpm cache shows its real size instead of a partial one.
 - **Gradle in one click.** The Gradle cache is ticked when Gradle has not used it for a day. Cleaning waits until Android Studio or IntelliJ is closed. If Gradle ran in the last day, it stays for you to check.
 - **Honest pnpm number.** The pnpm store now counts only files no project links to, and says that pnpm removes only packages no project uses, so it can free less than the size shown.
+- **Big project build folders counted in full.** Rust `target`, SwiftPM `.build` and game engine build folders are no longer cut off at 50,000 files and get up to 10 seconds each. On Edem's Mac a Rust build folder of 8.67 GB had shown as 5.91 GB.
 - The npm cache is named "npm cache" in Look through, not "cacache".
 
 ## 27 October 2026
