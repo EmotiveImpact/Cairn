@@ -113,6 +113,8 @@ enum WorkspaceCheck {
             try file("expo/android/app/build.gradle"); try folder("expo/android/app/build/tmp")
             try file("Stray/package.json", "{}"); try file("Stray/proj/package.json", "{}")
             try folder("Deep/.git")
+            try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -100 * 86_400)],
+                                 ofItemAtPath: root.appendingPathComponent("site/wp-content/plugins/shop/composer.json").path)
             let appBuild = ScanItem(url: root.appendingPathComponent("expo/android/app/build"), allocatedSize: 70,
                                     categoryID: ProjectIndex.categoryID, severity: .safe)
             let pluginModules = ScanItem(url: root.appendingPathComponent("site/wp-content/plugins/shop/node_modules"), allocatedSize: 40,
@@ -125,6 +127,8 @@ enum WorkspaceCheck {
             let names = Set(grouped.map { rel($0.url) })
             check(names == ["expo", "Stray", "Stray/proj", "Developer/goapp", "site", "Deep"], "Projects group by their own folder, never by the home folder")
             check(grouped.first { $0.url.lastPathComponent == "site" }?.items.count == 1, "A WordPress plugin's build output belongs to its site")
+            check((grouped.first { $0.url.lastPathComponent == "site" }?.idleDays() ?? 0) >= 99,
+                  "A WordPress site's activity comes from its plugins' manifests")
             check(grouped.first { $0.url.lastPathComponent == "Deep" }.map { $0.isRepository && $0.items.count == 1 } == true,
                   "Build output ten folders down still joins its repository")
             check(grouped.first { $0.url.lastPathComponent == "goapp" }?.items.isEmpty == true, "A project with no build output is listed with nothing to free")

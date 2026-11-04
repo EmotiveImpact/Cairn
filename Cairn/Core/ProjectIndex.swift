@@ -192,6 +192,17 @@ enum ProjectIndex {
             } else { continue }
             if let date = (try? fm.attributesOfItem(atPath: path))?[.modificationDate] as? Date { dates.append(date) }
         }
+        // A WordPress site's own work is in its plugins and themes, so their
+        // manifests count too (one level down, never their build output).
+        if fm.fileExists(atPath: project.appendingPathComponent("wp-includes").path) {
+            let content = project.appendingPathComponent("wp-content")
+            for part in ["plugins", "themes"] {
+                let folder = content.appendingPathComponent(part)
+                for name in (try? fm.contentsOfDirectory(atPath: folder.path)) ?? [] {
+                    if let date = lastActivity(of: folder.appendingPathComponent(name)) { dates.append(date) }
+                }
+            }
+        }
         return dates.max()
     }
 }
