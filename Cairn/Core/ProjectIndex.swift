@@ -65,6 +65,8 @@ enum ProjectIndex {
         var groups: [String: (url: URL, repo: Bool, items: [ScanItem])] = [:]
         func project(for folder: URL) -> (URL, Bool)? {
             if let repo = repositoryRoot(from: folder, stopAt: home, cache: &rootCache) { return (repo, true) }
+            // A WordPress plugin or theme belongs to its site.
+            if let site = wordPressSite(around: folder) { return (site, false) }
             return projectTop(from: folder, stopAt: home, cache: &topCache).map { ($0, false) }
         }
         for item in items where item.categoryID == categoryID {
@@ -91,16 +93,19 @@ enum ProjectIndex {
         }
     }
 
-    /// Walks upwards a bounded number of levels looking for `.git`. A `.git`
-    /// file (worktree or submodule) counts as well as a directory. The home
-    /// folder itself is never a project, even when it holds a `.git` for
-    /// settings files, or every folder in it would join one repository.
+    /// Walks upwards looking for `.git`, as far as the home folder or the top
+    /// of the drive. A `.git` file (worktree or submodule) counts as well as a
+    /// directory. The home folder itself is never a project, even when it
+    /// holds a `.git` for settings files, or every folder in it would join one
+    /// repository.
     static func repositoryRoot(from start: URL, stopAt home: URL, cache: inout [String: URL?]) -> URL? {
         let homePath = home.standardizedFileURL.path
         var visited: [String] = []
         var current = start
         var result: URL?
-        for _ in 0..<8 {
+        // Deeper than the project walk ever goes, so build output at its
+        // deepest still finds a repository just below home.
+        for _ in 0..<(ProjectFinder.Limits().maxDepth + 6) {
             if current.path == homePath || current.path == "/" { break }
             if let cached = cache[current.path] { result = cached; break }
             visited.append(current.path)
@@ -144,6 +149,16 @@ enum ProjectIndex {
         }
         cache[start.path] = result
         return result
+    }
+
+    /// The WordPress site whose wp-content holds this folder, if any.
+    static func wordPressSite(around folder: URL) -> URL? {
+        let parts = folder.pathComponents
+        guard let index = parts.lastIndex(of: "wp-content"), index > 1 else { return nil }
+        var site = folder
+        for _ in index..<parts.count { site.deleteLastPathComponent() }
+        guard let names = entries(in: site), ProjectFinder.isWordPressSite(names) else { return nil }
+        return site
     }
 
     private static func entries(in folder: URL) -> Set<String>? {

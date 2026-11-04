@@ -70,6 +70,7 @@ enum WorkspaceCheck {
             try file("electron/package.json", "{}"); try file("electron/build/icon.icns")   // build here is source
             try file("java/pom.xml"); try folder("java/target/classes")
             try file("site/wp-config.php"); try folder("site/wp-includes"); try file("site/wp-content/plugins/shop/composer.json")
+            try folder("site/wp-content/plugins/shop/node_modules/x")
             try file("rails/Gemfile"); try folder("rails/vendor/bundle/ruby"); try folder("rails/vendor/javascript")
 
             let scanner = DevProjectsScanner()
@@ -85,6 +86,7 @@ enum WorkspaceCheck {
             check(!projects.contains { $0.hasPrefix("Tools.app") }, "App bundles are never walked")
             check(!projects.contains { $0.contains(".agents") }, "Folders inside hidden folders are not listed as projects")
             check(projects.contains("site") && !projects.contains { $0.hasPrefix("site/") }, "A WordPress site is one project, not one per plugin")
+            check(matched["site/wp-content/plugins/shop/node_modules"] == .nodeModules, "Build output inside a WordPress plugin is still found")
             check(matched["Developer/web/node_modules"] == .nodeModules && matched["android-app/build"] == .gradleBuild
                   && matched["java/target"] == .mavenTarget && matched["rails/vendor/bundle"] == .bundlerVendor,
                   "Gradle, Maven and Bundler output is matched beside its manifest")
@@ -110,13 +112,21 @@ enum WorkspaceCheck {
             try file("expo/package.json", "{}"); try file("expo/android/settings.gradle"); try file("expo/android/gradlew")
             try file("expo/android/app/build.gradle"); try folder("expo/android/app/build/tmp")
             try file("Stray/package.json", "{}"); try file("Stray/proj/package.json", "{}")
+            try folder("Deep/.git")
             let appBuild = ScanItem(url: root.appendingPathComponent("expo/android/app/build"), allocatedSize: 70,
                                     categoryID: ProjectIndex.categoryID, severity: .safe)
-            let grouped = ProjectIndex.build(from: [appBuild],
+            let pluginModules = ScanItem(url: root.appendingPathComponent("site/wp-content/plugins/shop/node_modules"), allocatedSize: 40,
+                                         categoryID: ProjectIndex.categoryID, severity: .safe)
+            let deepModules = ScanItem(url: root.appendingPathComponent("Deep/a/b/c/d/e/f/g/h/i/node_modules"), allocatedSize: 30,
+                                       categoryID: ProjectIndex.categoryID, severity: .safe)
+            let grouped = ProjectIndex.build(from: [appBuild, pluginModules, deepModules],
                                              roots: ["Stray", "Stray/proj", "Developer/goapp"].map { root.appendingPathComponent($0) },
                                              stopAt: root)
             let names = Set(grouped.map { rel($0.url) })
-            check(names == ["expo", "Stray", "Stray/proj", "Developer/goapp"], "Projects group by their own folder, never by the home folder")
+            check(names == ["expo", "Stray", "Stray/proj", "Developer/goapp", "site", "Deep"], "Projects group by their own folder, never by the home folder")
+            check(grouped.first { $0.url.lastPathComponent == "site" }?.items.count == 1, "A WordPress plugin's build output belongs to its site")
+            check(grouped.first { $0.url.lastPathComponent == "Deep" }.map { $0.isRepository && $0.items.count == 1 } == true,
+                  "Build output ten folders down still joins its repository")
             check(grouped.first { $0.url.lastPathComponent == "goapp" }?.items.isEmpty == true, "A project with no build output is listed with nothing to free")
             check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/obj"))
                   && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/obj/notes")),

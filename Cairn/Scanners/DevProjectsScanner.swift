@@ -97,19 +97,28 @@ struct DevProjectsScanner: CairnScanner {
     }
 
     /// One walk: matched build output to size, and the project folders passed.
-    /// Folders inside a hidden folder (.agents, .vite) are not recorded as
-    /// projects of their own, but build output in them is still found.
+    /// Folders inside a hidden folder (.agents, .vite) or a WordPress site
+    /// (its plugins and themes) are not recorded as projects of their own,
+    /// but build output in them is still found.
     func collect(roots: [URL], isCancelled: () -> Bool) -> ([Candidate], [URL], ProjectFinder.Summary) {
         var candidates: [Candidate] = []
         var projects: [URL] = []
+        var wordPressSites: [String] = []
         let summary = ProjectFinder.walk(roots: roots, limits: limits,
                                          isCancelled: { isCancelled() || candidates.count >= maxCandidates }) { folder in
             let names = folder.names
-            if folder.depth > 0, !folder.isHidden, projects.count < maxProjects, ProjectFinder.isProjectFolder(names) {
+            let path = folder.url.path
+            let insideSite = wordPressSites.contains { path.hasPrefix($0 + "/") }
+            if folder.depth > 0, !folder.isHidden, !insideSite, projects.count < maxProjects, ProjectFinder.isProjectFolder(names) {
                 projects.append(folder.url)
             }
-            // A WordPress site is one project; its plugins are not separate ones.
-            if ProjectFinder.isWordPressSite(names) { return .skipAll }
+            // A WordPress site is one project. WordPress's own code never
+            // holds build output, so only wp-content and the rest are walked.
+            var skipped: Set<String> = []
+            if ProjectFinder.isWordPressSite(names) {
+                wordPressSites.append(path)
+                skipped = ["wp-admin", "wp-includes"]
+            }
 
             let subfolderNames = Set(folder.subfolders.map(\.lastPathComponent))
             var matched = Set<String>()
@@ -128,7 +137,8 @@ struct DevProjectsScanner: CairnScanner {
                 candidates.append(Candidate(kind: found.kind, dir: found.url, parent: folder.url))
                 matched.insert(name)   // prune: never descend into matched build output
             }
-            return matched.isEmpty ? .all : .skipping(matched)
+            skipped.formUnion(matched)
+            return skipped.isEmpty ? .all : .skipping(skipped)
         }
         if candidates.count > maxCandidates { candidates = Array(candidates.prefix(maxCandidates)) }
         var result = summary
