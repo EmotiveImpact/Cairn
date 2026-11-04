@@ -769,7 +769,9 @@ import Darwin
             if let gradle, let npm {
                 check(InUse.reason(gradle, running: [], commandLines: [daemon])?.contains("Gradle is still running") == true
                         && InUse.reason(gradle, running: [], commandLines: ["/usr/bin/java -jar other.jar"]) == nil
-                        && InUse.reason(npm, running: [], commandLines: [daemon]) == nil,
+                        && InUse.reason(npm, running: [], commandLines: [daemon]) == nil
+                        && InUse.gradleBusyReason(gradle, commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(gradle, commandLines: []) == nil,
                       "Cleaning skips Gradle folders while Gradle runs, and only those")
             } else {
                 check(false, "Gradle and npm fixture caches were found")

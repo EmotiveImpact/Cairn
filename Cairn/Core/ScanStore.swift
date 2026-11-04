@@ -816,6 +816,16 @@ final class ScanStore {
                 summary.errors.append("\(item.url.lastPathComponent): close \(RunningApps.displayNames(for: runningOwners).joined(separator: ", ")) before cleaning")
                 continue
             }
+            // Gradle can start while earlier items are being cleaned, so look
+            // again right before touching a Gradle folder.
+            if InUse.isGradleFolder(item) {
+                let lines = await Task.detached(priority: .userInitiated) { InUse.runningCommandLines() }.value
+                if let busy = InUse.gradleBusyReason(item, commandLines: lines) {
+                    summary.failed += 1
+                    summary.errors.append("Skipped \(busy)")
+                    continue
+                }
+            }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
             guard let actionID = await Task.detached(priority: .utility, operation: {
                 journal.begin(path: item.resolvedURL.path, category: item.categoryID, affectedBytes: item.allocatedSize,

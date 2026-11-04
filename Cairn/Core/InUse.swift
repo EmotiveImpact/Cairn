@@ -84,6 +84,13 @@ enum InUse {
         item.resolvedURL.standardizedFileURL.path.contains("/.gradle/")
     }
 
+    /// Why a Gradle folder must wait, or nil. A Gradle build can read its caches
+    /// without changing them, so a quiet cache is not proof nothing uses it.
+    static func gradleBusyReason(_ item: ScanItem, commandLines: [String]) -> String? {
+        guard isGradleFolder(item), commandLines.contains(where: isGradleProcess) else { return nil }
+        return "\(item.resolvedURL.lastPathComponent) in \(item.resolvedURL.deletingLastPathComponent().lastPathComponent): Gradle is still running. Run gradle --stop, or wait for it to stop by itself (up to 3 hours), then clean again."
+    }
+
     /// True when the item holds this running copy of Cairn (its app or the
     /// build folder it runs from) or sits inside it. Never offered, never removed.
     static func holdsCairn(_ item: ScanItem) -> Bool {
@@ -103,11 +110,7 @@ enum InUse {
         if running.contains(where: { $0.hasPrefix(folder) }) {
             return "\(item.resolvedURL.lastPathComponent) in \(item.resolvedURL.deletingLastPathComponent().lastPathComponent): a running program uses it."
         }
-        // A Gradle build can read its caches without changing them, so a quiet
-        // cache is not proof that nothing is using it.
-        if isGradleFolder(item), commandLines.contains(where: isGradleProcess) {
-            return "\(item.resolvedURL.lastPathComponent) in \(item.resolvedURL.deletingLastPathComponent().lastPathComponent): Gradle is still running. Run gradle --stop, or wait for it to stop by itself (up to 3 hours), then clean again."
-        }
+        if let gradle = gradleBusyReason(item, commandLines: commandLines) { return gradle }
         if item.categoryID == "dev-projects", item.latestModified > .distantPast,
            now.timeIntervalSince(item.latestModified) < 15 * 60 {
             return "\(item.resolvedURL.lastPathComponent) in \(item.resolvedURL.deletingLastPathComponent().lastPathComponent): changed in the last 15 minutes, so a build may be running."
