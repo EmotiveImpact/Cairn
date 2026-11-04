@@ -4,6 +4,19 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
+## 4 November 2026
+
+### Projects finds every project, and more kinds of build output
+
+- **Every project is listed.** Projects used to show only folders that had build output Cairn knew about, so a repository with nothing to rebuild never appeared. It now lists every git repository and every folder with a project file (package.json, Cargo.toml, pyproject.toml, go.mod, an Xcode project, a Godot or Unreal project and so on). Projects with nothing to free sit under "Nothing to clear", most recently worked on first, with their git state.
+- **It no longer gives up early.** The search stopped after 40,000 folders, and on a Mac with many AI and editor tools those tool folders used most of that before ordinary project folders were reached. The search now goes breadth first, so every folder near the top of the home folder is looked at before any deep one, allows 150,000 folders or 60 seconds, and looks 10 folders down instead of 7. If it does stop early, Projects says so.
+- **Tool folders are never treated as projects.** Hidden folders directly in the home folder (such as `.codex`, `.claude`, `.vscode`, `.volta`), app bundles, other drives mounted inside the home folder, Conda and Micromamba installs and Go's module store are not searched. Before, a Node install inside `~/.volta` or an editor extension could show up as a project and its `node_modules` could be offered for cleaning.
+- **New kinds of build output**, each only when the matching project file sits beside it: Gradle `build` and `.gradle` (Android, Kotlin, Java), Maven and sbt `target`, Xcode `build` and in-project `DerivedData`, CMake build folders, .NET `bin` and `obj`, Elixir `_build`, Haskell `.stack-work` and `dist-newstyle`, Zig caches, Godot's import cache, Python tool caches (`.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`), web build caches (`.parcel-cache`, `.angular`, `storybook-static`, `.docusaurus`, `.nx`) and Carthage builds. Installed packages that some projects keep in git on purpose (PHP `vendor`, Ruby `vendor/bundle`, Elixir `deps`, Terraform's `.terraform`) are shown for review and never picked for you. A folder called `build` that holds source files, such as an Electron app's icons, is left alone.
+- **Projects group properly without git.** An Android app inside an Expo project, a Tauri `src-tauri` folder or a package in `packages/` now joins the project around it. A WordPress site counts as one project, not one per plugin. The home folder is never treated as one big repository.
+- **Wake-up commands cover the new kinds** (`mvn package`, `./gradlew build` from the folder that holds `gradlew`, `dotnet build`, `mix deps.get`, `bundle install`, `composer install`, `terraform init` and others), and a monorepo's packages are installed once from the folder with the lock file.
+- The git maintenance scan uses the same search, so it reaches the same projects and no longer reads editor extensions as old projects.
+- `cairn projects` and the AI tool's `list_projects` list every project too, and say when the search stopped early.
+
 ## 27 October 2026
 
 Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.

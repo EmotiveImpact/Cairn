@@ -1,9 +1,10 @@
 import SwiftUI
 import AppKit
 
-/// Developers think in projects, not folders. This groups the existing
-/// build-output findings by repository and shows how long each has been idle,
-/// with git's view of work that is not committed or pushed. Putting a project
+/// Developers think in projects, not folders. This lists every project folder
+/// the last scan walked past, groups the build-output findings by repository,
+/// and shows how long each has been idle, with git's view of work that is not
+/// committed or pushed. Putting a project
 /// to sleep selects its rebuildable output and keeps a note of how to bring it
 /// back. Selection flows into the shared ReviewSheet; nothing is removed from here.
 struct ProjectsWorkspace: View {
@@ -13,6 +14,7 @@ struct ProjectsWorkspace: View {
     var onReview: () -> Void
 
     @State private var projects: [ProjectSummary] = []
+    @State private var found: FoundProjects.Search?
     @State private var indexing = false
     @State private var expanded: Set<String> = CommandLine.arguments.contains("--preview-ui")
         ? [FileScan.home.appendingPathComponent("Developer/storefront-web").path] : []
@@ -37,8 +39,15 @@ struct ProjectsWorkspace: View {
     private var visible: [ProjectSummary] {
         let query = search.trimmingCharacters(in: .whitespaces).lowercased()
         return projects.filter { query.isEmpty || $0.name.lowercased().contains(query) || $0.url.path.lowercased().contains(query) }
-            .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
+            .sorted {
+                if $0.rebuildableBytes != $1.rebuildableBytes { return $0.rebuildableBytes > $1.rebuildableBytes }
+                // Projects with nothing to free: most recently worked on first.
+                let a = $0.lastActivity ?? .distantPast, b = $1.lastActivity ?? .distantPast
+                return a != b ? a > b : $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
     }
+    private var visibleWithOutput: [ProjectSummary] { visible.filter { $0.rebuildableBytes > 0 || !$0.items.isEmpty } }
+    private var visibleWithout: [ProjectSummary] { visible.filter { $0.rebuildableBytes == 0 && $0.items.isEmpty } }
     private var idle: [ProjectSummary] {
         projects.filter { ($0.idleDays() ?? 0) >= Self.idleDays && !$0.rebuildable.isEmpty }
     }
@@ -64,6 +73,12 @@ struct ProjectsWorkspace: View {
         return displayPath(URL(fileURLWithPath: top))
     }
 
+    /// Said when the last search for projects ran out of time or folders.
+    private var stoppedNote: String {
+        guard let stopped = found?.summary.stoppedEarly else { return "" }
+        return " Cairn stopped looking \(stopped), so a few may be missing."
+    }
+
     var body: some View {
         NightNumberPage(eyebrow: projects.isEmpty || commonRoot.isEmpty ? "Projects" : "Projects · \(commonRoot)",
                         number: idleBytes > 0 ? Fmt.size(idleBytes) : totalBytes > 0 ? Fmt.size(totalBytes) : "Projects",
@@ -72,7 +87,7 @@ struct ProjectsWorkspace: View {
                             ? "Untouched for a month. Sleeping clears what they can rebuild and keeps a note to bring it back."
                             : projects.isEmpty
                                 ? "Your coding projects, how long since you worked on them, and what can be rebuilt."
-                                : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched.") {
+                                : "Across \(projects.count) coding project\(projects.count == 1 ? "" : "s"). Your source code is never touched." + stoppedNote) {
             Button {
                 guard !preview else { return }
                 if store.isScanning { store.cancel() } else { store.rescan() }
@@ -193,20 +208,19 @@ struct ProjectsWorkspace: View {
         } else if projects.isEmpty && !asleep.isEmpty {
             NightList { asleepSection }
         } else if projects.isEmpty {
-            NightEmpty(title: store.hasScanned ? "No build output found" : "Nothing scanned yet",
+            NightEmpty(title: store.hasScanned ? "No projects found" : "Nothing scanned yet",
                        message: store.hasScanned
-                           ? "The last scan found no node_modules, build folders or virtual environments worth showing."
+                           ? "The last scan found no coding projects in your home folder."
                            : "Press Rescan and Cairn will list each project with the output you can rebuild.")
         } else if visible.isEmpty {
             NightEmpty(title: "No matching projects", message: "Try another name. Escape clears the filter.")
         } else {
             NightList {
-                ForEach(visible) { project in
-                    row(project)
-                    if expanded.contains(project.id) {
-                        sleepLine(project)
-                        ForEach(project.items) { item in itemRow(item, in: project) }
-                    }
+                ForEach(visibleWithOutput) { project in projectBlock(project) }
+                if !visibleWithout.isEmpty {
+                    Text("Nothing to clear · \(visibleWithout.count)").nightEyebrow()
+                        .padding(.top, visibleWithOutput.isEmpty ? 0 : 22).padding(.bottom, 8)
+                    ForEach(visibleWithout) { project in projectBlock(project) }
                 }
                 asleepSection
             }
@@ -215,6 +229,14 @@ struct ProjectsWorkspace: View {
                 Color.black
                 LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 28)
             })
+        }
+    }
+
+    @ViewBuilder private func projectBlock(_ project: ProjectSummary) -> some View {
+        row(project)
+        if expanded.contains(project.id) {
+            sleepLine(project)
+            ForEach(project.items) { item in itemRow(item, in: project) }
         }
     }
 
@@ -232,7 +254,8 @@ struct ProjectsWorkspace: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 NightMeter(share: Double(project.rebuildableBytes) / Double(largestBytes))
-                Text(Fmt.size(project.rebuildableBytes)).font(.system(size: 13, weight: .medium)).monospacedDigit()
+                Text(project.items.isEmpty ? "" : Fmt.size(project.rebuildableBytes))
+                    .font(.system(size: 13, weight: .medium)).monospacedDigit()
                     .frame(width: 90, alignment: .trailing)
                 Text(lastTouched(project)).font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                     .lineLimit(1).frame(width: 120, alignment: .leading)
@@ -261,7 +284,24 @@ struct ProjectsWorkspace: View {
         let warning = status?.warning?.components(separatedBy: ". Sleeping").first
         let strong: String
         let text: String
-        if let warning {
+        if project.rebuildable.isEmpty {
+            let nothing = project.items.isEmpty
+                ? "There is no build output here for Cairn to clear."
+                : "Its build output may not come back on its own, so Cairn leaves it to you."
+            if let warning {
+                strong = "This work is only on this Mac."
+                text = "\(warning). Push it to keep a copy somewhere else. \(nothing)"
+            } else if status != nil {
+                strong = "Everything is committed and pushed."
+                text = nothing
+            } else if project.isRepository {
+                strong = ""
+                text = "Cairn could not read this project's git status. \(nothing)"
+            } else {
+                strong = "Not in git,"
+                text = "so nothing here is backed up by git. \(nothing)"
+            }
+        } else if let warning {
             strong = "This work is only on this Mac."
             text = "\(warning). Push it first, or sleep anyway: sleeping only clears \(clears), never your code."
         } else if status != nil {
@@ -414,22 +454,44 @@ struct ProjectsWorkspace: View {
             sleeping = notes
         }
         let items = bucketItems
-        guard !items.isEmpty else { projects = []; return }
+        // The folders the scan walked past, so projects with no build output
+        // show too. Only after a scan in this session; nothing is walked here.
+        let latest = store.hasScanned ? FoundProjects.shared.latest : nil
+        found = latest
+        let roots = latest?.folders ?? []
+        guard !items.isEmpty || !roots.isEmpty else { projects = []; return }
         indexing = true
-        let built = await Task.detached(priority: .userInitiated) { ProjectIndex.build(from: items) }.value
+        let built = await Task.detached(priority: .userInitiated) { ProjectIndex.build(from: items, roots: roots) }.value
         guard !Task.isCancelled else { return }
         projects = built
         indexing = false
         guard !preview else { return }
-        // git status is read for repositories only, a few seconds each at most.
-        let repositories = built.filter(\.isRepository).sorted { $0.rebuildableBytes > $1.rebuildableBytes }.prefix(80).map(\.url)
+        // git status is read for repositories only, a few seconds each at most,
+        // four at a time: biggest build output first, then most recent work.
+        let repositories = built.filter(\.isRepository).sorted {
+            $0.rebuildableBytes != $1.rebuildableBytes ? $0.rebuildableBytes > $1.rebuildableBytes
+                : ($0.lastActivity ?? .distantPast) > ($1.lastActivity ?? .distantPast)
+        }.prefix(400).map(\.url)
         let statuses = await Task.detached(priority: .utility) { () -> [String: GitStatus] in
-            var found: [String: GitStatus] = [:]
-            for url in repositories {
-                if Task.isCancelled { break }
-                if let status = ProjectGit.status(of: url) { found[url.path] = status }
+            await withTaskGroup(of: (String, GitStatus?).self, returning: [String: GitStatus].self) { group in
+                var results: [String: GitStatus] = [:]
+                var next = 0
+                while next < min(4, repositories.count) {
+                    let url = repositories[next]
+                    group.addTask { (url.path, ProjectGit.status(of: url)) }
+                    next += 1
+                }
+                for await (path, status) in group {
+                    if let status { results[path] = status }
+                    if Task.isCancelled { group.cancelAll(); break }
+                    if next < repositories.count {
+                        let url = repositories[next]
+                        next += 1
+                        group.addTask { (url.path, ProjectGit.status(of: url)) }
+                    }
+                }
+                return results
             }
-            return found
         }.value
         guard !Task.isCancelled else { return }
         git = statuses

@@ -10,6 +10,23 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 4 November 2026 — Projects missed most projects
+
+🟠 A look-only check on a real Mac found about 370 coding projects in the home
+folder; Projects showed 15. Three causes: the search stopped after 40,000
+folders (reached in 8 seconds, mostly inside `.codex`, `.claude` and other tool
+folders, before `~/Developer` and 32 other top folders were looked at);
+Projects only listed folders with recognised build output (about 260 projects
+had none); and the search stopped 7 folders down. 🟠 Safety: three tool
+folders (`~/.volta/.../node/lib`, `~/.hermes/node/lib`, an app inside
+`~/.codex-chatgpt-web`) were listed as projects, so their `node_modules` could
+be offered for cleaning. Fix: a shared breadth-first search (`ProjectFinder`)
+that skips hidden home folders, bundles and mounted drives, allows 150,000
+folders or 60 seconds and 10 levels, and records every project folder it
+passes; Projects, `cairn projects` and `list_projects` list them all. Status:
+fixture checks added to `--workspacecheck`; still needs a preview-only run on
+the Mac that showed the problem.
+
 ## 30 October 2026 — Unreadable paths looked completely measured
 
 A failed root metadata read returned an exact zero-byte file count. Missing and

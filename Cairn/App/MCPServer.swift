@@ -92,7 +92,7 @@ enum MCPServer {
         ],
         [
             "name": "list_projects",
-            "description": "Repositories with build output that tools can rebuild (node_modules, target, .build, Pods, venvs, web build folders), how many bytes each holds, and days since the last git or manifest change.",
+            "description": "Coding projects in the home folder (git repositories and folders with a project manifest), the build output in each that tools can rebuild (node_modules, Rust, Maven and Gradle builds, .build, Pods, venvs, web build folders and more), how many bytes it holds, and days since the last git or manifest change. Projects with no build output are listed with 0 bytes.",
             "inputSchema": obj([
                 "type": "object",
                 "properties": obj([
@@ -183,16 +183,21 @@ enum MCPServer {
             let limit = boundedLimit(arguments["limit"])
             let minimumIdle = max(0, arguments["minIdleDays"] as? Int ?? 0)
             let measured = measure(ProjectIndex.categoryID)
-            let projects = ProjectIndex.build(from: measured.items)
+            let search = FoundProjects.shared.latest
+            let projects = ProjectIndex.build(from: measured.items, roots: search?.folders ?? [])
                 .filter { minimumIdle == 0 || ($0.idleDays() ?? 0) >= minimumIdle }
                 .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
-            return .success([
+            var result: [String: Any] = [
                 "projectCount": projects.count,
                 "rebuildableBytes": projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes },
                 "projects": projects.prefix(limit).map(describeProject),
                 "nextStep": "To free this space, call open_cairn with section projects and ask the user to review the selection.",
                 "measuredSecondsAgo": measured.age,
-            ])
+            ]
+            if let stopped = search?.summary.stoppedEarly {
+                result["searchStoppedEarly"] = "Cairn stopped looking \(stopped), so some projects may be missing."
+            }
+            return .success(result)
 
         case "find_reclaimable":
             let limit = boundedLimit(arguments["limit"])

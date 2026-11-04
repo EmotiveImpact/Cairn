@@ -39,6 +39,97 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Projects fixture could not be created: \(error)")
         }
+        // Finding projects: the walk reaches every ordinary folder, skips tool
+        // state and bundles, matches build output only beside its manifest,
+        // and lists projects that have no build output at all.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-finder-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            func folder(_ path: String) throws { try fm.createDirectory(at: root.appendingPathComponent(path), withIntermediateDirectories: true) }
+            func file(_ path: String, _ text: String = "") throws {
+                try folder((path as NSString).deletingLastPathComponent)
+                fm.createFile(atPath: root.appendingPathComponent(path).path, contents: Data(text.utf8))
+            }
+            // The fixture's own relative path, however the temporary folder is spelled.
+            func rel(_ url: URL) -> String {
+                let marker = root.lastPathComponent + "/"
+                return url.path.range(of: marker).map { String(url.path[$0.upperBound...]) } ?? url.path
+            }
+            try folder("Developer/web/.git"); try file("Developer/web/package.json", "{}"); try file("Developer/web/package-lock.json")
+            try file("Developer/web/node_modules/left-pad/index.js")
+            try file("Developer/goapp/go.mod")
+            try folder("Code/plain-repo/.git")
+            try file("build/inside-build/package.json", "{}")                       // a folder called build that holds a project
+            try file("Documents/a/b/c/d/e/f/g/deep/package.json", "{}")             // nine folders down
+            try file(".codex/sessions/tool/package.json", "{}"); try folder(".codex/sessions/tool/node_modules/x")
+            try file("Tools.app/Contents/Resources/package.json", "{}")
+            try file("Shop/.agents/skills/helper/requirements.txt")
+            try file("Shop/package.json", "{}")
+            try file("android-app/build.gradle"); try folder("android-app/build/intermediates")
+            try file("electron/package.json", "{}"); try file("electron/build/icon.icns")   // build here is source
+            try file("java/pom.xml"); try folder("java/target/classes")
+            try file("site/wp-config.php"); try folder("site/wp-includes"); try file("site/wp-content/plugins/shop/composer.json")
+            try file("rails/Gemfile"); try folder("rails/vendor/bundle/ruby"); try folder("rails/vendor/javascript")
+
+            let scanner = DevProjectsScanner()
+            let (candidates, found, summary) = scanner.collect(roots: [root], isCancelled: { false })
+            let projects = Set(found.map(rel))
+            let matched = Dictionary(candidates.map { (rel($0.dir), $0.kind) }, uniquingKeysWith: { first, _ in first })
+            check(projects.isSuperset(of: ["Developer/web", "Developer/goapp", "Code/plain-repo"]),
+                  "Projects with no build output are found, including a repository with no manifest")
+            check(projects.contains("build/inside-build"), "A folder named build is entered when it is not build output")
+            check(projects.contains("Documents/a/b/c/d/e/f/g/deep"), "Projects nine folders down are found")
+            check(!projects.contains { $0.hasPrefix(".codex") } && !matched.keys.contains { $0.hasPrefix(".codex") },
+                  "Hidden tool folders in the home folder are never walked")
+            check(!projects.contains { $0.hasPrefix("Tools.app") }, "App bundles are never walked")
+            check(!projects.contains { $0.contains(".agents") }, "Folders inside hidden folders are not listed as projects")
+            check(projects.contains("site") && !projects.contains { $0.hasPrefix("site/") }, "A WordPress site is one project, not one per plugin")
+            check(matched["Developer/web/node_modules"] == .nodeModules && matched["android-app/build"] == .gradleBuild
+                  && matched["java/target"] == .mavenTarget && matched["rails/vendor/bundle"] == .bundlerVendor,
+                  "Gradle, Maven and Bundler output is matched beside its manifest")
+            check(matched["electron/build"] == nil && matched["rails/vendor"] == nil, "A build folder of source files is never matched")
+            check(summary.stoppedEarly == nil && summary.foldersListed > 10, "A small home folder is walked to the end")
+
+            // Breadth first: a long chain cannot use up the budget before a
+            // project one folder down is reached.
+            // Twelve folders at the top and under 70 one level down, so 100 is
+            // enough for every folder two levels down but not for the whole tree.
+            for i in 1...60 { try folder("Chain/w\(i)/sub/deeper") }
+            try folder("Zebra/app/.git")
+            var tight = DevProjectsScanner()
+            tight.limits = ProjectFinder.Limits(maxDepth: 10, maxFolders: 100, timeBudget: 60)
+            let (_, shallow, capped) = tight.collect(roots: [root], isCancelled: { false })
+            check(shallow.contains { $0.path.hasSuffix("/Zebra/app") }, "Shallow projects are reached before deep folders use up the budget")
+            check(capped.stoppedEarly != nil, "A walk that runs out of folders says it stopped early")
+
+            // Grouping without git: an Android app joins the Expo project
+            // around it, a project in a folder that happens to hold a
+            // manifest stays on its own, and home is never a repository.
+            try folder(".git")
+            try file("expo/package.json", "{}"); try file("expo/android/settings.gradle"); try file("expo/android/gradlew")
+            try file("expo/android/app/build.gradle"); try folder("expo/android/app/build/tmp")
+            try file("Stray/package.json", "{}"); try file("Stray/proj/package.json", "{}")
+            let appBuild = ScanItem(url: root.appendingPathComponent("expo/android/app/build"), allocatedSize: 70,
+                                    categoryID: ProjectIndex.categoryID, severity: .safe)
+            let grouped = ProjectIndex.build(from: [appBuild],
+                                             roots: ["Stray", "Stray/proj", "Developer/goapp"].map { root.appendingPathComponent($0) },
+                                             stopAt: root)
+            let names = Set(grouped.map { rel($0.url) })
+            check(names == ["expo", "Stray", "Stray/proj", "Developer/goapp"], "Projects group by their own folder, never by the home folder")
+            check(grouped.first { $0.url.lastPathComponent == "goapp" }?.items.isEmpty == true, "A project with no build output is listed with nothing to free")
+            check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/obj"))
+                  && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/obj/notes")),
+                  "A generic build name only counts as build output when it is the item itself")
+
+            let wake = ProjectSleep.wakeCommand(for: root.appendingPathComponent("expo"),
+                                                cleared: [root.appendingPathComponent("expo/android/app/build")])
+            check(wake?.hasSuffix("&& (cd 'android' && ./gradlew build)") == true, "An Android module wakes with gradlew from its own folder")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("java"), cleared: [root.appendingPathComponent("java/target")])?
+                    .hasSuffix("&& mvn package") == true, "A Maven project wakes with mvn package")
+        } catch {
+            check(false, "Project finder fixture could not be created: \(error)")
+        }
         // Git status, project sleep notes, cleaning rules, AI models and the disk map.
         do {
             let parsed = GitStatus.parse("# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +3 -1\n1 .M N... 100644 100644 100644 a b src/app.ts\n? notes.txt\n")
