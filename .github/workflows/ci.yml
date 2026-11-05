@@ -104,11 +104,17 @@ jobs:
 
       # A ready-made copy for read-only checks on a Mac with little free space,
       # so nothing has to be compiled there. Not signed or notarised; kept 3 days.
+      # Packed with tar because artifact uploads drop the execute permission;
+      # unpack with `tar -xzf cairn-test-copy.tar.gz` and run ./Cairn.
+      - name: Pack test copy of the command line
+        continue-on-error: true
+        run: tar -czf cairn-test-copy.tar.gz -C .build/apple/Products/Release Cairn
+
       - name: Upload test copy of the command line
         continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: cairn-test-copy
-          path: .build/apple/Products/Release/Cairn
+          path: cairn-test-copy.tar.gz
           retention-days: 3
           if-no-files-found: ignore
