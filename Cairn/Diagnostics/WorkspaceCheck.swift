@@ -39,6 +39,219 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Projects fixture could not be created: \(error)")
         }
+        // Finding projects: the walk reaches every ordinary folder, skips tool
+        // state and bundles, matches build output only beside its manifest,
+        // and lists projects that have no build output at all.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-finder-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            func folder(_ path: String) throws { try fm.createDirectory(at: root.appendingPathComponent(path), withIntermediateDirectories: true) }
+            func file(_ path: String, _ text: String = "") throws {
+                try folder((path as NSString).deletingLastPathComponent)
+                fm.createFile(atPath: root.appendingPathComponent(path).path, contents: Data(text.utf8))
+            }
+            // The fixture's own relative path, however the temporary folder is spelled.
+            func rel(_ url: URL) -> String {
+                let marker = root.lastPathComponent + "/"
+                return url.path.range(of: marker).map { String(url.path[$0.upperBound...]) } ?? url.path
+            }
+            try folder("Developer/web/.git"); try file("Developer/web/package.json", "{}"); try file("Developer/web/package-lock.json")
+            try file("Developer/web/node_modules/left-pad/index.js")
+            try file("Developer/goapp/go.mod")
+            try folder("Code/plain-repo/.git")
+            try file("build/inside-build/package.json", "{}")                       // a folder called build that holds a project
+            try file("Documents/a/b/c/d/e/f/g/deep/package.json", "{}")             // nine folders down
+            try file(".codex/sessions/tool/package.json", "{}"); try folder(".codex/sessions/tool/node_modules/x")
+            try file("Tools.app/Contents/Resources/package.json", "{}")
+            try file("Shop/.agents/skills/helper/requirements.txt")
+            try file("Shop/package.json", "{}")
+            try file("android-app/build.gradle"); try folder("android-app/build/intermediates")
+            try file("electron/package.json", "{}"); try file("electron/build/icon.icns")   // build here is source
+            try file("java/pom.xml"); try folder("java/target/classes")
+            try file("site/wp-config.php"); try folder("site/wp-includes"); try file("site/wp-content/plugins/shop/composer.json")
+            try folder("site/wp-content/plugins/shop/node_modules/x")
+            try file("rails/Gemfile"); try folder("rails/vendor/bundle/ruby"); try folder("rails/vendor/javascript")
+            try file("cra/package.json", #"{"scripts":{"build":"react-scripts build"}}"#); try file("cra/build/asset-manifest.json", "{}")
+            try file("cra/.vercel/project.json", "{}"); try folder("cra/.vercel/output/static")
+
+            let scanner = DevProjectsScanner()
+            let (candidates, found, summary) = scanner.collect(roots: [root], isCancelled: { false })
+            let projects = Set(found.map(rel))
+            let matched = Dictionary(candidates.map { (rel($0.dir), $0.kind) }, uniquingKeysWith: { first, _ in first })
+            check(projects.isSuperset(of: ["Developer/web", "Developer/goapp", "Code/plain-repo"]),
+                  "Projects with no build output are found, including a repository with no manifest")
+            check(projects.contains("build/inside-build"), "A folder named build is entered when it is not build output")
+            check(projects.contains("Documents/a/b/c/d/e/f/g/deep"), "Projects nine folders down are found")
+            check(!projects.contains { $0.hasPrefix(".codex") } && !matched.keys.contains { $0.hasPrefix(".codex") },
+                  "Hidden tool folders in the home folder are never walked")
+            check(!projects.contains { $0.hasPrefix("Tools.app") }, "App bundles are never walked")
+            check(!projects.contains { $0.contains(".agents") }, "Folders inside hidden folders are not listed as projects")
+            check(projects.contains("site") && !projects.contains { $0.hasPrefix("site/") }, "A WordPress site is one project, not one per plugin")
+            check(matched["site/wp-content/plugins/shop/node_modules"] == .nodeModules, "Build output inside a WordPress plugin is still found")
+            check(matched["Developer/web/node_modules"] == .nodeModules && matched["android-app/build"] == .gradleBuild
+                  && matched["java/target"] == .mavenTarget && matched["rails/vendor/bundle"] == .bundlerVendor,
+                  "Gradle, Maven and Bundler output is matched beside its manifest")
+            check(matched["electron/build"] == nil && matched["rails/vendor"] == nil, "A build folder of source files is never matched")
+            check(matched["cra/build"] == .webBuild && matched["cra/.vercel/output"] == .vercelOutput && matched["cra/.vercel"] == nil,
+                  "A web app's build folder and Vercel output are matched, never the Vercel project link")
+            check(summary.stoppedEarly == nil && summary.foldersListed > 10, "A small home folder is walked to the end")
+
+            // Breadth first: a long chain cannot use up the budget before a
+            // project one folder down is reached.
+            // Thirteen folders at the top and under 70 one level down, so 100 is
+            // enough for every folder two levels down but not for the whole tree.
+            for i in 1...60 { try folder("Chain/w\(i)/sub/deeper") }
+            try folder("Zebra/app/.git")
+            var tight = DevProjectsScanner()
+            tight.limits = ProjectFinder.Limits(maxDepth: 10, maxFolders: 100, timeBudget: 60)
+            let (_, shallow, capped) = tight.collect(roots: [root], isCancelled: { false })
+            check(shallow.contains { $0.path.hasSuffix("/Zebra/app") }, "Shallow projects are reached before deep folders use up the budget")
+            check(capped.stoppedEarly != nil, "A walk that runs out of folders says it stopped early")
+
+            // Grouping without git: an Android app joins the Expo project
+            // around it, a project in a folder that happens to hold a
+            // manifest stays on its own, and home is never a repository.
+            try folder(".git")
+            try file("expo/package.json", "{}"); try file("expo/android/settings.gradle"); try file("expo/android/gradlew")
+            try file("expo/android/app/build.gradle"); try folder("expo/android/app/build/tmp")
+            try file("Stray/package.json", "{}"); try file("Stray/proj/package.json", "{}")
+            try folder("Deep/.git")
+            try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -100 * 86_400)],
+                                 ofItemAtPath: root.appendingPathComponent("site/wp-content/plugins/shop/composer.json").path)
+            // A plugin linked back to its own site must not loop.
+            try fm.createSymbolicLink(at: root.appendingPathComponent("site/wp-content/plugins/local-site"),
+                                      withDestinationURL: root.appendingPathComponent("site"))
+            let appBuild = ScanItem(url: root.appendingPathComponent("expo/android/app/build"), allocatedSize: 70,
+                                    categoryID: ProjectIndex.categoryID, severity: .safe)
+            let pluginModules = ScanItem(url: root.appendingPathComponent("site/wp-content/plugins/shop/node_modules"), allocatedSize: 40,
+                                         categoryID: ProjectIndex.categoryID, severity: .safe)
+            let deepModules = ScanItem(url: root.appendingPathComponent("Deep/a/b/c/d/e/f/g/h/i/node_modules"), allocatedSize: 30,
+                                       categoryID: ProjectIndex.categoryID, severity: .safe)
+            let grouped = ProjectIndex.build(from: [appBuild, pluginModules, deepModules],
+                                             roots: ["Stray", "Stray/proj", "Developer/goapp"].map { root.appendingPathComponent($0) },
+                                             stopAt: root)
+            let names = Set(grouped.map { rel($0.url) })
+            check(names == ["expo", "Stray", "Stray/proj", "Developer/goapp", "site", "Deep"], "Projects group by their own folder, never by the home folder")
+            check(grouped.first { $0.url.lastPathComponent == "site" }?.items.count == 1, "A WordPress plugin's build output belongs to its site")
+            check((grouped.first { $0.url.lastPathComponent == "site" }?.idleDays() ?? 0) >= 99,
+                  "A WordPress site's activity comes from its plugins' manifests")
+            check(grouped.first { $0.url.lastPathComponent == "Deep" }.map { $0.isRepository && $0.items.count == 1 } == true,
+                  "Build output ten folders down still joins its repository")
+            check(grouped.first { $0.url.lastPathComponent == "goapp" }?.items.isEmpty == true, "A project with no build output is listed with nothing to free")
+            check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/obj"))
+                  && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/obj/notes")),
+                  "A generic build name only counts as build output when it is the item itself")
+            check(SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/.vercel/output"))
+                  && !SafePaths.looksLikeProjectArtifact(URL(fileURLWithPath: "/Users/a/Documents/app/.vercel")),
+                  "Only Vercel's build output counts, never its project link")
+
+            let wake = ProjectSleep.wakeCommand(for: root.appendingPathComponent("expo"),
+                                                cleared: [root.appendingPathComponent("expo/android/app/build")])
+            check(wake?.hasSuffix("&& (cd 'android' && ./gradlew build)") == true, "An Android module wakes with gradlew from its own folder")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("java"), cleared: [root.appendingPathComponent("java/target")])?
+                    .hasSuffix("&& mvn package") == true, "A Maven project wakes with mvn package")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("cra"), cleared: [root.appendingPathComponent("cra/build")])?
+                    .hasSuffix("&& npm run build") == true, "A web app wakes with its own build script")
+            check(ProjectSleep.wakeCommand(for: root.appendingPathComponent("cra"),
+                                           cleared: [root.appendingPathComponent("cra/build"), root.appendingPathComponent("cra/.vercel/output")])?
+                    .hasSuffix("' && vercel build") == true, "Vercel output wakes with vercel build, once")
+        } catch {
+            check(false, "Project finder fixture could not be created: \(error)")
+        }
+        // Installed packages: links that pnpm or a workspace makes are rebuilt by
+        // an install, while a package linked in by hand from elsewhere is not.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-links-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            func file(_ path: String, _ text: String = "") throws {
+                let url = root.appendingPathComponent(path)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                fm.createFile(atPath: url.path, contents: Data(text.utf8))
+            }
+            func link(_ path: String, to destination: String) throws {
+                let url = root.appendingPathComponent(path)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try fm.createSymbolicLink(atPath: url.path, withDestinationPath: destination)
+            }
+            func verdict(_ project: String) -> Regenerability.Result {
+                Regenerability.evaluateNodeModules(projectDir: root.appendingPathComponent(project))
+            }
+            // pnpm: every package is a link into node_modules/.pnpm, scoped ones too.
+            try file("pnpm-app/package.json", "{}"); try file("pnpm-app/pnpm-lock.yaml")
+            try file("pnpm-app/node_modules/.pnpm/left-pad@1.0.0/node_modules/left-pad/index.js")
+            try file("pnpm-app/node_modules/.pnpm/@types+node@20.0.0/node_modules/@types/node/index.d.ts")
+            try link("pnpm-app/node_modules/left-pad", to: ".pnpm/left-pad@1.0.0/node_modules/left-pad")
+            try link("pnpm-app/node_modules/@types/node", to: "../.pnpm/@types+node@20.0.0/node_modules/@types/node")
+            let pnpm = verdict("pnpm-app")
+            check(pnpm.isRegenerable && pnpm.severity == .safe, "pnpm's own package links count as rebuilt by an install")
+            // A workspace: the root links its workspace packages, and a member links one it asks for.
+            try file("mono/package.json", #"{"workspaces": ["packages/*", "!packages/old"]}"#); try file("mono/package-lock.json")
+            try file("mono/packages/api/package.json", "{}")
+            try file("mono/packages/web/package.json", #"{"dependencies": {"api": "*"}}"#)
+            try link("mono/node_modules/api", to: "../packages/api")
+            try link("mono/packages/web/node_modules/api", to: "../../api")
+            check(verdict("mono").isRegenerable && verdict("mono/packages/web").isRegenerable,
+                  "Workspace package links inside the repository count as rebuilt by an install")
+            try file("pmono/package.json", "{}"); try file("pmono/pnpm-lock.yaml")
+            try file("pmono/pnpm-workspace.yaml", "packages:\n  - 'libs/**'\n  - \"!libs/legacy\"\n")
+            try file("pmono/libs/ui/button/package.json", "{}")
+            try link("pmono/node_modules/button", to: "../libs/ui/button")
+            check(verdict("pmono").isRegenerable, "pnpm-workspace.yaml packages count as workspace packages")
+            try file("mono/packages/old/package.json", "{}")
+            try link("mono/node_modules/old", to: "../packages/old")
+            check(!verdict("mono").isRegenerable && verdict("mono").note.contains("old"),
+                  "A folder the workspace leaves out is not a workspace package")
+            try fm.removeItem(at: root.appendingPathComponent("mono/node_modules/old"))
+            // pnpm's shared store, recorded in .modules.yaml, lives outside the project.
+            try file("store/links/is-odd/1.0.0/node_modules/is-odd/index.js")
+            try file("shared-store/package.json", "{}"); try file("shared-store/pnpm-lock.yaml")
+            try file("shared-store/node_modules/.modules.yaml", "layoutVersion: 5\nstoreDir: \(root.appendingPathComponent("store").path)\nvirtualStoreDir: .pnpm\n")
+            try link("shared-store/node_modules/is-odd", to: root.appendingPathComponent("store/links/is-odd/1.0.0/node_modules/is-odd").path)
+            check(verdict("shared-store").isRegenerable, "Links into pnpm's own shared store count as rebuilt by an install")
+            // npm link: the package points at a folder somewhere else.
+            try file("elsewhere/my-lib/package.json", "{}"); try file("elsewhere/tool/package.json", "{}")
+            try file("linked/package.json", "{}"); try file("linked/package-lock.json")
+            try link("linked/node_modules/my-lib", to: root.appendingPathComponent("elsewhere/my-lib").path)
+            let linked = verdict("linked")
+            check(!linked.isRegenerable && linked.severity == .review && linked.note.contains("my-lib"),
+                  "A package linked in by hand waits for review and is named")
+            try file("wide-store/package.json", "{}"); try file("wide-store/pnpm-lock.yaml")
+            try file("wide-store/node_modules/.modules.yaml", "storeDir: '\(root.path)'\n")
+            try link("wide-store/node_modules/my-lib", to: root.appendingPathComponent("elsewhere/my-lib").path)
+            check(!verdict("wide-store").isRegenerable, "A pnpm store set to a folder around the project never excuses a hand-made link")
+            // npm link goes through npm's global folder, even when the package's
+            // own folder is inside the project, so it never passes for local.
+            try file("chain/package.json", "{}"); try file("chain/package-lock.json")
+            try file("chain/tool-src/package.json", "{}")
+            try link("global/lib/node_modules/tool", to: root.appendingPathComponent("chain/tool-src").path)
+            try link("chain/node_modules/tool", to: root.appendingPathComponent("global/lib/node_modules/tool").path)
+            check(!verdict("chain").isRegenerable && verdict("chain").note.contains("tool"),
+                  "A package linked through npm's global folder waits for review")
+            // A declared package whose link goes through a local alias to a folder elsewhere.
+            try file("alias/package.json", #"{"dependencies": {"tool": "^1.0.0"}}"#); try file("alias/package-lock.json")
+            try link("alias/tool-alias", to: root.appendingPathComponent("elsewhere/tool").path)
+            try link("alias/node_modules/tool", to: "../tool-alias")
+            check(!verdict("alias").isRegenerable, "A link whose chain ends outside the project waits for review")
+            // packages/**/ui covers packages/ui as well as deeper ones.
+            try file("deep/package.json", #"{"workspaces": ["packages/**/ui"]}"#); try file("deep/yarn.lock")
+            try file("deep/packages/ui/package.json", "{}"); try file("deep/packages/web/ui/package.json", "{}")
+            try link("deep/node_modules/ui", to: "../packages/ui")
+            try link("deep/node_modules/web-ui", to: "../packages/web/ui")
+            check(verdict("deep").isRegenerable, "A ** workspace pattern matches packages at any depth, including none")
+            // A link to a sibling folder that nothing declares is gone after a fresh install.
+            try file("sib/package-lock.json"); try file("sib/app/package.json", "{}"); try file("sib/tool/package.json", "{}")
+            try link("sib/app/node_modules/tool", to: "../../tool")
+            check(!verdict("sib/app").isRegenerable && verdict("sib/app").note.contains("tool"),
+                  "A link to an undeclared folder in the same repository waits for review")
+            try file("scoped/package.json", "{}"); try file("scoped/yarn.lock")
+            try link("scoped/node_modules/@me/tool", to: "../../../elsewhere/tool")
+            let scoped = verdict("scoped")
+            check(!scoped.isRegenerable && scoped.note.contains("@me/tool"), "A scoped package linked in by hand waits for review")
+        } catch {
+            check(false, "Package link fixture could not be created: \(error)")
+        }
         // Git status, project sleep notes, cleaning rules, AI models and the disk map.
         do {
             let parsed = GitStatus.parse("# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +3 -1\n1 .M N... 100644 100644 100644 a b src/app.ts\n? notes.txt\n")

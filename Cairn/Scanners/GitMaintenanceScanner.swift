@@ -1,8 +1,8 @@
 import Foundation
 
-/// Git repository maintenance hunt. Walks the user's home with a bounded,
-/// directory-only DFS (mirroring DevProjectsScanner's traversal) looking for
-/// two things:
+/// Git repository maintenance hunt. Walks the user's home with
+/// `ProjectFinder` (the same breadth-first walk, limits and skipped folders as
+/// the project scanner) looking for two things:
 ///
 ///   1. Large `.git` directories (>= 200 MB) — a `.tool` item running
 ///      `git gc --prune=now`, which compacts history without losing commits.
@@ -27,10 +27,9 @@ struct GitMaintenanceScanner: CairnScanner {
 
     // MARK: - Tuning
 
-    /// Maximum directory depth (relative to a root) we descend before bailing.
-    private let maxDepth = 6
-    /// Hard cap on directories listed per root, so the scan always finishes fast.
-    private let maxDirsPerRoot = 30_000
+    /// Depth, folder and time limits for the walk. The time also covers
+    /// sizing each .git on the way, so it is longer than the project walk's.
+    var limits = ProjectFinder.Limits(timeBudget: 90)
     /// A `.git` directory must be at least this large to warrant a gc suggestion.
     private let gitBloatFloor: Int64 = 200 * 1024 * 1024  // 200 MB
     /// Files cap when sizing a `.git` tree.
@@ -41,23 +40,6 @@ struct GitMaintenanceScanner: CairnScanner {
     private let abandonedAfterDays: Double = 180
     /// Cap on abandoned-advice items emitted in one scan.
     private let maxAbandonedAdvice = 40
-
-    /// Hidden / system dirs we never descend into (would waste the walk or hit
-    /// protected state). Mirrors the DevProjectsScanner prune set.
-    private static let skipNames: Set<String> = [
-        ".git", ".hg", ".svn",
-        "Library",                 // caches/state (also iCloud Drive lives here)
-        "Applications", "Music", "Movies", "Pictures", "Public",  // heavy, never project roots
-        "Photos Library.photoslibrary",
-        ".Trash", ".Trashes",
-        ".cache", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".pyenv",
-        ".nvm", ".asdf", ".bun", ".deno", ".docker", ".ollama", ".conda",
-        // Editor extension stores: every extension has a package.json, which
-        // would otherwise read as dozens of abandoned projects.
-        ".vscode", ".vscode-insiders", ".cursor", ".windsurf", ".antigravity", ".kiro", ".trae",
-        ".Spotlight-V100", ".fseventsd", ".DocumentRevisions-V100", ".TemporaryItems",
-        "node_modules", "node_modules-internal",
-    ]
 
     // MARK: - Scan
 
@@ -73,128 +55,86 @@ struct GitMaintenanceScanner: CairnScanner {
         }
     }
 
-    /// Directory-only DFS with prune-on-match, depth bound, and a hard dir cap.
-    /// Children are listed with `isDirectory` PRE-CACHED so non-dir entries are
-    /// skipped with cheap cached reads (no per-file syscall). Never follows
-    /// symlinks.
+    /// Breadth-first walk that stops at each project root. Never follows
+    /// links, and never enters hidden folders directly in the home folder,
+    /// so an editor extension store cannot read as dozens of old projects.
     private func walk(root: URL, ctx: ScanContext, abandonedEmitted: inout Int) {
-        let fm = FileManager.default
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
-        var stack: [(url: URL, depth: Int)] = [(root, 0)]
-        var listed = 0
+        var emitted = abandonedEmitted
+        let summary = ProjectFinder.walk(roots: [root], limits: limits, isCancelled: { ctx.isCancelled() }) { folder in
+            let dir = folder.url
+            let childNames = folder.names
 
-        while let (dir, depth) = stack.popLast() {
-            if ctx.isCancelled() { return }
-            listed += 1
-            if listed > maxDirsPerRoot {
-                ctx.progress("Stopped after \(maxDirsPerRoot) folders")
-                return
-            }
-
-            autoreleasepool {
-                guard let children = try? fm.contentsOfDirectory(
-                    at: dir,
-                    includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
-                    options: []
-                ) else { return }
-
-                // Pre-scan children once: collect directory names + the dir subset we
-                // may descend into. This lets us detect a project root cheaply.
-                var childNames: Set<String> = []
-                var subdirs: [URL] = []
-                var dotGitDir: URL?
-                for child in children {
-                    let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                    let name = child.lastPathComponent
-                    childNames.insert(name)
-                    guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
-                    if name == ".git" {
-                        dotGitDir = child
-                        continue   // never descend into .git
-                    }
-                    subdirs.append(child)
-                }
-
-                // 1) Large .git → git gc, sized by what gc can actually free.
-                if let gitDir = dotGitDir {
-                    ctx.progress("Sizing .git in \(dir.lastPathComponent)")
-                    let stats = FileScan.measure(gitDir, maxFiles: gitMaxFiles)
-                    let saving = stats.allocatedSize >= gitBloatFloor ? gcSavingEstimate(gitDir) : 0
-                    if saving >= gcSavingFloor {
-                        let project = dir.lastPathComponent
-                        let kept = max(0, stats.allocatedSize - saving)
-                        var note = "Tidying git history for \(project) saves about \(Fmt.size(saving)); no commits are lost. The other \(Fmt.size(kept)) is real history and stays"
-                        if stats.truncated { note += " · large (partial size)" }
-                        // allocatedSize is the estimated saving, not the .git size:
-                        // Home, receipts and the de-duplicator all sum this field.
-                        let item = ScanItem(
-                            url: gitDir,
-                            allocatedSize: saving,
-                            itemCount: stats.fileCount,
-                            latestModified: stats.latestModified,
-                            categoryID: info.id,
-                            severity: .review,
-                            isRegenerable: false,
-                            requiresQuitBundleIDs: [],
-                            requiresRunning: false,
-                            cleanMethod: .tool(ToolCommand(
-                                tool: "git",
-                                arguments: ["-C", dir.path, "gc", "--prune=now"],
-                                display: "git gc --prune=now"
-                            )),
-                            note: note,
-                            permissionDenied: stats.permissionDenied,
-                            volumeURL: FileScan.volumeURL(of: gitDir),
-                            selected: false
-                        )
-                        ctx.emit(item)
-                    }
-                }
-
-                // 2) Project-root detection.
-                let isProjectRoot = isProjectRoot(childNames: childNames)
-                if isProjectRoot {
-                    if abandonedEmitted < maxAbandonedAdvice,
-                       let modified = (try? dir.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
-                        let ageDays = max(0, Date().timeIntervalSince(modified) / 86_400)
-                        if ageDays >= abandonedAfterDays {
-                            let name = dir.lastPathComponent
-                            let item = ScanItem(
-                                url: dir,
-                                allocatedSize: 0,
-                                itemCount: 0,
-                                latestModified: modified,
-                                categoryID: info.id,
-                                severity: .review,
-                                isRegenerable: false,
-                                requiresQuitBundleIDs: [],
-                                requiresRunning: false,
-                                cleanMethod: .adviceOnly,
-                                note: "Abandoned project '\(name)' — last touched \(Fmt.age(ageDays)); consider archiving",
-                                permissionDenied: false,
-                                volumeURL: FileScan.volumeURL(of: dir),
-                                selected: false
-                            )
-                            ctx.emit(item)
-                            abandonedEmitted += 1
-                        }
-                    }
-                    // A detected project root is not descended into further: its build
-                    // artifacts / nested repos are covered by other scanners.
-                    return
-                }
-
-                // 3) Otherwise descend into subdirectories (depth-bounded, pruning
-                //    hidden/system trees).
-                if depth + 1 < maxDepth {
-                    for sub in subdirs {
-                        let name = sub.lastPathComponent
-                        if Self.skipNames.contains(name) { continue }
-                        stack.append((sub, depth + 1))
-                    }
+            // 1) Large .git → git gc, sized by what gc can actually free.
+            let gitDir = dir.appendingPathComponent(".git")
+            if childNames.contains(".git"), (try? gitDir.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory == true {
+                ctx.progress("Sizing .git in \(dir.lastPathComponent)")
+                let stats = FileScan.measure(gitDir, maxFiles: gitMaxFiles)
+                let saving = stats.allocatedSize >= gitBloatFloor ? gcSavingEstimate(gitDir) : 0
+                if saving >= gcSavingFloor {
+                    let project = dir.lastPathComponent
+                    let kept = max(0, stats.allocatedSize - saving)
+                    var note = "Tidying git history for \(project) saves about \(Fmt.size(saving)); no commits are lost. The other \(Fmt.size(kept)) is real history and stays"
+                    if stats.truncated { note += " · large (partial size)" }
+                    // allocatedSize is the estimated saving, not the .git size:
+                    // Home, receipts and the de-duplicator all sum this field.
+                    let item = ScanItem(
+                        url: gitDir,
+                        allocatedSize: saving,
+                        itemCount: stats.fileCount,
+                        latestModified: stats.latestModified,
+                        categoryID: info.id,
+                        severity: .review,
+                        isRegenerable: false,
+                        requiresQuitBundleIDs: [],
+                        requiresRunning: false,
+                        cleanMethod: .tool(ToolCommand(
+                            tool: "git",
+                            arguments: ["-C", dir.path, "gc", "--prune=now"],
+                            display: "git gc --prune=now"
+                        )),
+                        note: note,
+                        permissionDenied: stats.permissionDenied,
+                        volumeURL: FileScan.volumeURL(of: gitDir),
+                        selected: false
+                    )
+                    ctx.emit(item)
                 }
             }
+
+            // 2) Project-root detection. Folders inside hidden folders (an
+            //    agent's skills, a tool's cache) are not the person's projects.
+            guard folder.depth > 0, !folder.isHidden, isProjectRoot(childNames: childNames) else { return .all }
+            if emitted < maxAbandonedAdvice,
+               let modified = (try? dir.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate {
+                let ageDays = max(0, Date().timeIntervalSince(modified) / 86_400)
+                if ageDays >= abandonedAfterDays {
+                    let name = dir.lastPathComponent
+                    let item = ScanItem(
+                        url: dir,
+                        allocatedSize: 0,
+                        itemCount: 0,
+                        latestModified: modified,
+                        categoryID: info.id,
+                        severity: .review,
+                        isRegenerable: false,
+                        requiresQuitBundleIDs: [],
+                        requiresRunning: false,
+                        cleanMethod: .adviceOnly,
+                        note: "Abandoned project '\(name)' — last touched \(Fmt.age(ageDays)); consider archiving",
+                        permissionDenied: false,
+                        volumeURL: FileScan.volumeURL(of: dir),
+                        selected: false
+                    )
+                    ctx.emit(item)
+                    emitted += 1
+                }
+            }
+            // A detected project root is not descended into further: its build
+            // artifacts / nested repos are covered by other scanners.
+            return .skipAll
         }
+        abandonedEmitted = emitted
+        if let stopped = summary.stoppedEarly { ctx.progress("Stopped looking \(stopped)") }
     }
 
     /// What `git gc --prune=now` can be expected to free. Packed history is

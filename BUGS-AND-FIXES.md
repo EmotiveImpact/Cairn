@@ -10,6 +10,78 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 5 November 2026 · pnpm projects' packages held back as hand-linked
+
+🟡 On the same Mac, 13 `node_modules` folders (3.3 GB) were held back for
+review as "npm-link symlinks", though every one had a lockfile. Cause: any
+symlink at the top of `node_modules` counted as a hand-made link, but pnpm
+makes every package a symlink into `node_modules/.pnpm`, and workspaces link
+their own packages. Fix: a link only counts when it points outside the folder
+that holds the lockfile and outside the pnpm store named in
+`node_modules/.modules.yaml`; packages inside `@scope` folders are checked too,
+and the note names the linked package. Yarn `portal:` dependencies are held
+back like `file:` and `link:` ones. Status: fixture checks added to
+`--workspacecheck`; needs a read-only run on that Mac.
+
+## 4 November 2026 — Projects missed most projects
+
+🟠 A look-only check on a real Mac found about 370 coding projects in the home
+folder; Projects showed 15. Three causes: the search stopped after 40,000
+folders (reached in 8 seconds, mostly inside `.codex`, `.claude` and other tool
+folders, before `~/Developer` and 32 other top folders were looked at);
+Projects only listed folders with recognised build output (about 260 projects
+had none); and the search stopped 7 folders down. 🟠 Safety: three tool
+folders (`~/.volta/.../node/lib`, `~/.hermes/node/lib`, an app inside
+`~/.codex-chatgpt-web`) were listed as projects, so their `node_modules` could
+be offered for cleaning. Fix: a shared breadth-first search (`ProjectFinder`)
+that skips hidden home folders, bundles and mounted drives, allows 150,000
+folders or 60 seconds and 10 levels, and records every project folder it
+passes; Projects, `cairn projects` and `list_projects` list them all. Status:
+fixture checks added to `--workspacecheck`; a read-only run of the CI test copy
+on that Mac (5 November) listed 434 projects and found 396 of its 420 project
+folders. The other 24 hold 1.5 MB in all and are tool folders (AI skills, pnpm
+temporary folders, Vite caches, Micromamba recipes).
+
+## 4 November 2026: Developer caches could drop off the list
+
+Developer caches were measured one at a time against one 18-second limit, in a
+fixed order that put Homebrew 25th. When the limit ran out, only the first
+cache left over got a "not measured" row and the rest vanished. Gradle caches
+with more than 100,000 files showed a partial size, and the pnpm store counted
+files its projects still share. Caches are now measured three at a time with
+the usual biggest first, every skipped cache keeps its own row, known caches
+are counted in full within their time limit, and pnpm files shared with a
+project are kept out of the number. A Gradle cache quiet for a day is one
+click and waits for Android Studio or IntelliJ to close; it is never cleaned
+while a Gradle build or Gradle's background process is running. A look-only scan on
+Edem's Mac also showed an 8.67 GB Rust build folder as 5.91 GB, because
+project build folders stopped at 50,000 files; Rust, SwiftPM and game engine
+build folders are now counted in full within 10 seconds each. Fixture checks
+are in the reliability check. The new build has not yet been run on a real
+Mac: the test Mac had under 6 GB free, and the Gradle, pnpm and npm caches had
+already been removed there.
+
+## 3 November 2026 — Saved licence only read from Settings
+
+🟠 A saved licence was read only when Settings › Licence was opened, so after
+every restart Pro stayed off until that page was visited. If Polar could not be
+reached (for example straight after login, before Wi-Fi was up) and the last
+check was over 14 days old, the page offered the key box as if the key had been
+lost, and nothing tried again. Hidden for now because Pro unlocks nothing yet.
+Cairn now reads a saved licence quietly about two seconds after opening (only on
+a Mac where a licence was saved), keeps Pro for 30 days offline, retries by itself
+when Polar can't be reached, and shows "Check now" instead of the key box while a
+key is saved. New `--licensecheck` runs in CI with an in-memory server and
+Keychain. PR #23. Not yet tried against live Polar or a real Keychain.
+
+## 30 October 2026 · Trash error floated over the finish screen ⚪
+
+If emptying the Trash from the finish screen failed, the message was drawn as an overlay in the middle of the page with no background, on top of the result. It now sits in the page under the result line. Fixed in PR #21; not yet seen on a real Mac.
+
+## 30 October 2026 · Disk map showed a blank gap ⚪
+
+After the disk map stopped counting unexplained space inside System Data, the bar ended in an unlabelled gap. Used space the measured parts miss (0.5 GB or more) now shows as its own "Not measured" part before Free, with a note saying what it can include. Fixed in PR #21, with two reliability checks.
+
 ## 30 October 2026 — Unreadable paths looked completely measured
 
 A failed root metadata read returned an exact zero-byte file count. Missing and

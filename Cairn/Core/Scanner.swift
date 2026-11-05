@@ -36,7 +36,9 @@ extension CairnScanner {
         cleanMethod: CleanMethod = .trash,
         note: String,
         selectedIfSafe: Bool = false,
-        maxFiles: Int = .max
+        maxFiles: Int = .max,
+        largeTree: Bool = false,
+        measureSeconds: TimeInterval = FileScan.defaultMeasureSeconds
     ) -> ScanItem? {
         // Never inspect or advertise conversation stores as cleanup candidates,
         // even when a broad cache scanner enumerates their parent directory.
@@ -44,7 +46,7 @@ extension CairnScanner {
         // Apple's own caches and parts of a shared model store are never listed.
         guard SafePaths.appleCacheReason(url) == nil, SafePaths.sharedModelStoreReason(url) == nil else { return nil }
         guard FileScan.exists(url) else { return nil }
-        let stats = FileScan.measure(url, maxFiles: maxFiles)
+        let stats = FileScan.measure(url, maxFiles: maxFiles, maxDuration: measureSeconds, largeTree: largeTree)
         if stats.allocatedSize < minSize && !cleanMethod.isPaid { return nil }
         let selected = selectedIfSafe && severity == .safe && isRegenerable && cleanMethod.isActionable
         let finalNote = stats.truncated ? note + " · large (partial size)" : note
@@ -80,12 +82,14 @@ enum ScanEvent {
 /// Bounded delivery and an explicit producer lifetime. Cancelling a consumer
 /// alone does not await a detached task, so the gate owner must call stopAndWait.
 struct ScanEventPipeline {
+    /// Events a scan may queue for the store before it stops at the result limit.
+    static let defaultBufferLimit = 2048
     let stream: AsyncStream<ScanEvent>
     let overflow = CancelBox()
     private let worker: Task<Void, Never>
 
     init(scanners: [CairnScanner], fdaGranted: Bool, includeExternal: Bool,
-         minSize: Int64, bufferLimit: Int = 2048) {
+         minSize: Int64, bufferLimit: Int = ScanEventPipeline.defaultBufferLimit) {
         let (stream, continuation) = AsyncStream.makeStream(of: ScanEvent.self,
             bufferingPolicy: .bufferingOldest(max(1, bufferLimit)))
         self.stream = stream

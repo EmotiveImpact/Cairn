@@ -1,19 +1,19 @@
 import Foundation
 
 /// Whole-disk hunt for regenerable per-project build artifacts (SPEC §3.3).
-/// Walks the user's home — and, when enabled, each mounted external volume —
-/// with a manual `FileManager` enumerator that PRUNES on match: the moment a
-/// target directory (node_modules / target / .venv / venv / Pods / .build) is
-/// found and emitted, `skipDescendants()` stops recursion so we never descend
-/// into nested node_modules or re-walk a matched tree. The walk is depth-bounded
-/// and skips hidden/system trees that can never hold a project artifact.
+/// Walks the user's home and, when enabled, each mounted external volume with
+/// `ProjectFinder`: breadth-first, so every folder near the top is looked at
+/// before any deep tree, and pruned on match, so a found node_modules, target
+/// or build folder is never descended into. The same walk records every
+/// project folder it passes, with or without build output, for the Projects
+/// page.
 ///
 /// These artifacts live in plain user-owned project dirs → no Full Disk Access.
 struct DevProjectsScanner: CairnScanner {
     let info = CategoryInfo(
         id: "dev-projects",
         title: "Project Build Artifacts",
-        subtitle: "node_modules, Rust target, venvs, Pods, SwiftPM .build…",
+        subtitle: "node_modules, Rust and Gradle builds, venvs, Pods, SwiftPM .build…",
         systemImage: "folder.fill.badge.gearshape",
         group: .developer,
         requiresFDA: false
@@ -28,60 +28,41 @@ struct DevProjectsScanner: CairnScanner {
 
     // MARK: - Tuning
 
-    /// Maximum directory depth (relative to a root) we descend before bailing.
-    private let maxDepth = 7
-    /// Hard cap on directories listed per root, so the default scan always
-    /// finishes fast even on a huge home tree (BUG-014). The dedicated
-    /// Dev-Project Explorer (v2) can lift this for a deeper hunt.
-    private let maxDirsPerRoot = 40_000
+    /// Depth, folder and time limits for the walk.
+    var limits = ProjectFinder.Limits()
     /// Cap on matched artifacts we size in one scan (sizing is the real cost).
-    private let maxCandidates = 800
+    private let maxCandidates = 1_500
+    /// Cap on project folders remembered for the Projects page.
+    private let maxProjects = 5_000
     /// Floor size for non-node_modules artifacts (node_modules uses ctx.minSizeBytes).
     private let smallFloor: Int64 = 1 * 1024 * 1024  // 1 MB
-
-    /// Directory names that, once matched, are pruned (never descended into).
-    private static let targetNames: Set<String> = [
-        "node_modules", "target", ".venv", "venv", "Pods", ".build",
-        // JS/web build outputs (gated by a package.json sibling in evaluate)
-        ".next", ".nuxt", ".output", ".turbo", ".svelte-kit", ".expo", "dist",
-    ]
-
-    /// Hidden / system dirs we never descend into (would waste the walk or hit
-    /// protected state). `.venv`/`venv` are NOT here — they are matchable targets.
-    private static let skipNames: Set<String> = [
-        ".git", ".hg", ".svn",
-        "Library",                 // caches/state, covered by other scanners (also iCloud Drive lives here)
-        "Applications", "Music", "Movies", "Pictures", "Public",  // never hold build artifacts; heavy
-        "Photos Library.photoslibrary",
-        ".Trash", ".Trashes",
-        ".cache", ".npm", ".cargo", ".rustup", ".gradle", ".m2", ".pyenv",
-        ".nvm", ".asdf", ".bun", ".deno", ".docker", ".ollama", ".conda",
-        ".Spotlight-V100", ".fseventsd", ".DocumentRevisions-V100", ".TemporaryItems",
-        "node_modules-internal",
-    ]
+    /// Time for one big single build folder (Rust target, SwiftPM .build, game
+    /// engine output). A Rust target can pass 8 GB and 100,000 files, so these
+    /// lift the file count and get longer than the usual 4 seconds.
+    static let bigBuildSeconds: TimeInterval = 10
 
     // MARK: - Scan
 
-    private struct Candidate { let target: String; let dir: URL; let parent: URL }
+    struct Candidate { let kind: ProjectFinder.Kind; let dir: URL; let parent: URL }
 
     func scan(_ ctx: ScanContext) async {
         var roots: [URL] = [FileScan.home]
         if ctx.includeExternalVolumes {
             roots.append(contentsOf: Volumes.mountedExternalVolumes())
         }
+        roots = roots.filter(FileScan.exists)
 
-        // 1) Fast traversal — collect matched artifacts WITHOUT sizing them.
+        // 1) Fast traversal — collect matched artifacts WITHOUT sizing them,
+        //    and every project folder on the way.
         let tCollect = Date()
-        var candidates: [Candidate] = []
-        for root in roots {
-            if ctx.isCancelled() { return }
-            guard FileScan.exists(root) else { continue }
-            ctx.progress("Hunting in \(root.lastPathComponent)")
-            collect(root: root, ctx: ctx, into: &candidates)
-            if candidates.count >= maxCandidates { break }
+        ctx.progress("Looking for your projects")
+        let (candidates, projects, summary) = collect(roots: roots, isCancelled: { ctx.isCancelled() })
+        if ctx.isCancelled() { return }
+        FoundProjects.shared.record(.init(folders: projects, summary: summary, date: Date()))
+        if let stopped = summary.stoppedEarly {
+            ctx.progress("Stopped looking \(stopped); some folders were not looked in")
         }
-        if candidates.count > maxCandidates { candidates = Array(candidates.prefix(maxCandidates)) }
-        debugLog("collected \(candidates.count) candidates in \(ms(since: tCollect))ms")
+        debugLog("looked in \(summary.foldersListed) folders, found \(projects.count) projects and \(candidates.count) candidates in \(ms(since: tCollect))ms\(summary.stoppedEarly.map { ", stopped early " + $0 } ?? "")")
 
         // 2) Size them IN PARALLEL across cores (sizing each tree is the cost —
         //    BUG-014). Each measure is file-capped. Emit as each completes.
@@ -98,7 +79,7 @@ struct DevProjectsScanner: CairnScanner {
             var next = 0
             while next < min(limit, candidates.count) {
                 let c = candidates[next]
-                group.addTask { evaluate(target: c.target, dir: c.dir, parent: c.parent, ctx: ctx) }
+                group.addTask { evaluate(c.kind, dir: c.dir, parent: c.parent, ctx: ctx) }
                 next += 1
             }
             for await item in group {
@@ -107,7 +88,7 @@ struct DevProjectsScanner: CairnScanner {
                 if next < candidates.count {
                     let c = candidates[next]
                     next += 1
-                    group.addTask { evaluate(target: c.target, dir: c.dir, parent: c.parent, ctx: ctx) }
+                    group.addTask { evaluate(c.kind, dir: c.dir, parent: c.parent, ctx: ctx) }
                 }
             }
         }
@@ -119,69 +100,56 @@ struct DevProjectsScanner: CairnScanner {
         FileHandle.standardError.write("  [dev-projects] \(s)\n".data(using: .utf8)!)
     }
 
-    /// Directory-only DFS with prune-on-match, depth bound, and a hard dir cap.
-    /// We list each directory's children with `isDirectory` PRE-CACHED, so file
-    /// entries are skipped with a cheap cached read (no per-file syscall) — the
-    /// fix for BUG-014, where the old recursive enumerator stat'd every file in
-    /// the home tree. Sizing is deferred to the parallel pass in `scan`.
-    private func collect(root: URL, ctx: ScanContext, into candidates: inout [Candidate]) {
-        let fm = FileManager.default
-        let keys: [URLResourceKey] = [.isDirectoryKey, .isSymbolicLinkKey]
-        var stack: [(url: URL, depth: Int)] = [(root, 0)]
-        var listed = 0
-
-        while let (dir, depth) = stack.popLast() {
-            if ctx.isCancelled() { return }
-            if candidates.count >= maxCandidates { return }
-            listed += 1
-            if listed > maxDirsPerRoot {
-                ctx.progress("Stopped after \(maxDirsPerRoot) folders — deeper hunt coming to the Explorer")
-                return
+    /// One walk: matched build output to size, and the project folders passed.
+    /// Folders inside a hidden folder (.agents, .vite) or a WordPress site
+    /// (its plugins and themes) are not recorded as projects of their own,
+    /// but build output in them is still found.
+    func collect(roots: [URL], isCancelled: () -> Bool) -> ([Candidate], [URL], ProjectFinder.Summary) {
+        var candidates: [Candidate] = []
+        var projects: [URL] = []
+        var wordPressSites: [String] = []
+        let summary = ProjectFinder.walk(roots: roots, limits: limits,
+                                         isCancelled: { isCancelled() || candidates.count >= maxCandidates }) { folder in
+            let names = folder.names
+            let path = folder.url.path
+            let insideSite = wordPressSites.contains { path.hasPrefix($0 + "/") }
+            if folder.depth > 0, !folder.isHidden, !insideSite, projects.count < maxProjects, ProjectFinder.isProjectFolder(names) {
+                projects.append(folder.url)
+            }
+            // A WordPress site is one project. WordPress's own code never
+            // holds build output, so only wp-content and the rest are walked.
+            var skipped: Set<String> = []
+            if ProjectFinder.isWordPressSite(names) {
+                wordPressSites.append(path)
+                skipped = ["wp-admin", "wp-includes"]
             }
 
-            autoreleasepool {
-                guard let children = try? fm.contentsOfDirectory(
-                    at: dir,
-                    includingPropertiesForKeys: keys,   // pre-caches isDirectory → cheap reads below
-                    options: []
-                ) else { return }
-
-                // Game-engine / Flutter project roots: capture their (regenerable)
-                // build dirs and don't descend into them. Gated by marker siblings so
-                // a generic "Library"/"build"/"Saved" folder isn't misread (and ~/Library
-                // is never a Unity root, so it stays pruned below).
-                let childNames = Set(children.map { $0.lastPathComponent })
-                var capturedHere = Set<String>()
-                func capture(_ marker: Bool, _ tag: String, _ subdirs: [String]) {
-                    guard marker else { return }
-                    for sub in subdirs where childNames.contains(sub) {
-                        candidates.append(Candidate(target: tag, dir: dir.appendingPathComponent(sub), parent: dir))
-                        capturedHere.insert(sub)
-                    }
-                }
-                capture(childNames.contains("Assets") && childNames.contains("ProjectSettings"),
-                        "fw-unity", ["Library", "Temp", "Logs", "obj"])
-                capture(childNames.contains(where: { $0.hasSuffix(".uproject") }),
-                        "fw-unreal", ["Saved", "Intermediate", "DerivedDataCache"])
-                capture(childNames.contains("pubspec.yaml"),
-                        "fw-flutter", ["build", ".dart_tool"])
-
-                for child in children {
-                    let rv = try? child.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey])
-                    guard rv?.isDirectory == true, rv?.isSymbolicLink != true else { continue }
-
-                    let name = child.lastPathComponent
-                    if capturedHere.contains(name) { continue }   // already captured as a framework artifact
-
-                    if Self.targetNames.contains(name) {
-                        candidates.append(Candidate(target: name, dir: child, parent: dir))
-                        continue   // prune — never descend into a matched target
-                    }
-                    if Self.skipNames.contains(name) { continue }
-                    if depth + 1 < maxDepth { stack.append((child, depth + 1)) }
+            let subfolderNames = Set(folder.subfolders.map(\.lastPathComponent))
+            var matched = Set<String>()
+            // Game-engine and Flutter roots: their build folders have generic
+            // names, so the project marker decides (~/Library is never a Unity
+            // root, because the walk never enters it).
+            for engine in ProjectFinder.engineOutput(names) {
+                for sub in engine.folders where subfolderNames.contains(sub) && !matched.contains(sub) {
+                    candidates.append(Candidate(kind: engine.kind, dir: folder.url.appendingPathComponent(sub), parent: folder.url))
+                    matched.insert(sub)
                 }
             }
+            for sub in folder.subfolders {
+                let name = sub.lastPathComponent
+                guard !matched.contains(name), let found = ProjectFinder.match(name, at: sub, siblings: names) else { continue }
+                candidates.append(Candidate(kind: found.kind, dir: found.url, parent: folder.url))
+                matched.insert(name)   // prune: never descend into matched build output
+            }
+            skipped.formUnion(matched)
+            return skipped.isEmpty ? .all : .skipping(skipped)
         }
+        if candidates.count > maxCandidates { candidates = Array(candidates.prefix(maxCandidates)) }
+        var result = summary
+        if result.stoppedEarly == nil, candidates.count >= maxCandidates {
+            result.stoppedEarly = "after finding \(maxCandidates.formatted()) build folders"
+        }
+        return (candidates, projects, result)
     }
 
     // MARK: - Per-target evaluation
@@ -201,10 +169,28 @@ struct DevProjectsScanner: CairnScanner {
         return Date().timeIntervalSince(last) >= Double(Self.idleDays) * 86_400
     }
 
-    private func evaluate(target: String, dir: URL, parent: URL, ctx: ScanContext) -> ScanItem? {
+    private func evaluate(_ kind: ProjectFinder.Kind, dir: URL, parent: URL, ctx: ScanContext) -> ScanItem? {
         let project = parent.lastPathComponent
-        switch target {
-        case "node_modules":
+        let name = dir.lastPathComponent
+        func has(_ file: String) -> Bool { FileScan.exists(parent.appendingPathComponent(file)) }
+        /// Build output the tool makes again on its own: safe, and counted in
+        /// Home's one-click number.
+        /// `big` is for one large build folder (Rust target, SwiftPM .build, game
+        /// engine output): no file cap and a longer time limit, so it is fully counted.
+        func rebuilt(_ note: String, big: Bool = false) -> ScanItem? {
+            makeItem(at: dir, severity: .safe, minSize: smallFloor, isRegenerable: true, cleanMethod: .trash,
+                     note: note, selectedIfSafe: true, maxFiles: big ? .max : 50_000,
+                     largeTree: big, measureSeconds: big ? Self.bigBuildSeconds : FileScan.defaultMeasureSeconds)
+        }
+        /// Installed packages: they come back with an install step, but only
+        /// the same versions when a lock file pins them, and some projects keep
+        /// them in git on purpose, so they always wait for the person.
+        func installed(_ note: String, locked: Bool) -> ScanItem? {
+            makeItem(at: dir, severity: .review, minSize: smallFloor, isRegenerable: locked, cleanMethod: .trash,
+                     note: note, selectedIfSafe: false, maxFiles: 50_000)
+        }
+        switch kind {
+        case .nodeModules:
             let r = Regenerability.evaluateNodeModules(projectDir: parent)
             return makeItem(
                 at: dir,
@@ -217,23 +203,13 @@ struct DevProjectsScanner: CairnScanner {
                 maxFiles: 50_000
             )
 
-        case "target":
-            guard FileScan.exists(parent.appendingPathComponent("Cargo.toml")) else { return nil }
-            return makeItem(
-                at: dir,
-                severity: .safe,
-                minSize: smallFloor,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: "Rust build output for \(project) — cargo clean",
-                selectedIfSafe: true,
-                maxFiles: 50_000
-            )
+        case .cargoTarget:
+            return rebuilt("Rust build output for \(project) — cargo clean", big: true)
 
-        case ".venv", "venv":
+        case .venv:
             let cfgInside = FileScan.exists(dir.appendingPathComponent("pyvenv.cfg"))
-            let reqSibling = FileScan.exists(parent.appendingPathComponent("requirements.txt"))
-            let pyprojectSibling = FileScan.exists(parent.appendingPathComponent("pyproject.toml"))
+            let reqSibling = has("requirements.txt")
+            let pyprojectSibling = has("pyproject.toml")
             guard cfgInside || reqSibling || pyprojectSibling else { return nil }
             let recreatable = reqSibling || pyprojectSibling
             // A recreatable venv in a project nobody has worked on for a month
@@ -259,61 +235,70 @@ struct DevProjectsScanner: CairnScanner {
                 maxFiles: 50_000
             )
 
-        case "Pods":
-            guard FileScan.exists(parent.appendingPathComponent("Podfile")) else { return nil }
-            return makeItem(
-                at: dir,
-                severity: .safe,
-                minSize: smallFloor,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: "CocoaPods install for \(project) — pod install restores",
-                selectedIfSafe: true,
-                maxFiles: 50_000
-            )
+        case .pods:
+            return rebuilt("CocoaPods install for \(project) — pod install restores")
 
-        case ".build":
-            guard FileScan.exists(parent.appendingPathComponent("Package.swift")) else { return nil }
-            return makeItem(
-                at: dir,
-                severity: .safe,
-                minSize: smallFloor,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: "SwiftPM build for \(project) — swift build restores",
-                selectedIfSafe: true,
-                maxFiles: 50_000
-            )
+        case .swiftBuild:
+            return rebuilt("SwiftPM build for \(project) — swift build restores", big: true)
 
-        case ".next", ".nuxt", ".output", ".turbo", ".svelte-kit", ".expo", "dist":
-            // JS/web bundler output — only when this really is a JS project.
-            guard FileScan.exists(parent.appendingPathComponent("package.json")) else { return nil }
-            return makeItem(
-                at: dir,
-                severity: .safe,
-                minSize: smallFloor,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: "Web build output (\(target)) for \(project) — your bundler regenerates it",
-                selectedIfSafe: true,
-                maxFiles: 50_000
-            )
+        case .webBuild:
+            return rebuilt("Web build output (\(name)) for \(project) — your bundler regenerates it")
 
-        case "fw-unity", "fw-unreal", "fw-flutter":
-            let engine = target == "fw-unity" ? "Unity" : (target == "fw-unreal" ? "Unreal" : "Flutter")
-            return makeItem(
-                at: dir,
-                severity: .safe,
-                minSize: smallFloor,
-                isRegenerable: true,
-                cleanMethod: .trash,
-                note: "\(engine) build output (\(dir.lastPathComponent)) for \(project) — regenerates on next build",
-                selectedIfSafe: true,
-                maxFiles: 50_000
-            )
+        case .unity, .unreal, .flutter:
+            let engine = kind == .unity ? "Unity" : (kind == .unreal ? "Unreal" : "Flutter")
+            return rebuilt("\(engine) build output (\(name)) for \(project) — regenerates on next build", big: true)
 
-        default:
-            return nil
+        case .mavenTarget:
+            return rebuilt("Maven build output for \(project), made again by mvn package")
+        case .sbtTarget:
+            return rebuilt("sbt build output for \(project), made again on the next build")
+        case .gradleBuild:
+            return rebuilt("Gradle build output for \(project), made again on the next build")
+        case .gradleCache:
+            return rebuilt("Gradle project cache for \(project), made again on the next build")
+        case .xcodeBuild:
+            return rebuilt("Xcode build output (\(name)) for \(project), made again on the next build")
+        case .cmakeBuild:
+            return rebuilt("CMake build folder (\(name)) for \(project), made again by cmake")
+        case .dotnet:
+            return rebuilt(".NET build output (\(name)) for \(project), made again by dotnet build")
+        case .elixirBuild:
+            return rebuilt("Elixir build output for \(project), made again by mix compile")
+        case .stackWork:
+            return rebuilt("Haskell Stack build output for \(project), made again by stack build")
+        case .cabal:
+            return rebuilt("Cabal build output for \(project), made again by cabal build")
+        case .zig:
+            return rebuilt("Zig build output (\(name)) for \(project), made again by zig build")
+        case .godot:
+            return rebuilt("Godot import cache for \(project), made again when Godot next opens it")
+        case .pythonCache:
+            return rebuilt("Python tool cache (\(name)) for \(project), made again on the next run")
+        case .vercelOutput:
+            return rebuilt("Vercel build output for \(project), made again by vercel build. The link to your Vercel project stays")
+        case .webCache:
+            return rebuilt("Web build cache (\(name)) for \(project), made again on the next build")
+        case .carthage:
+            return rebuilt("Carthage builds for \(project), made again by carthage build")
+
+        case .elixirDeps:
+            let locked = has("mix.lock")
+            return installed(locked ? "Elixir packages for \(project), fetched again by mix deps.get"
+                                    : "Elixir packages for \(project) with no mix.lock, so the same versions may not come back",
+                             locked: locked)
+        case .composerVendor:
+            let locked = has("composer.lock")
+            return installed(locked ? "PHP packages for \(project), installed again by composer install. Check they are not kept in git on purpose"
+                                    : "PHP packages for \(project) with no composer.lock, so the same versions may not come back",
+                             locked: locked)
+        case .bundlerVendor:
+            let locked = has("Gemfile.lock")
+            return installed(locked ? "Ruby gems for \(project), installed again by bundle install"
+                                    : "Ruby gems for \(project) with no Gemfile.lock, so the same versions may not come back",
+                             locked: locked)
+        case .terraform:
+            return installed("Terraform providers and modules for \(project), downloaded again by terraform init",
+                             locked: has(".terraform.lock.hcl"))
         }
     }
 }

@@ -4,7 +4,9 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import tempfile
+import time
 
 repo = Path(__file__).resolve().parents[2]
 shim = '''#!/usr/bin/env python3
@@ -58,18 +60,50 @@ with tempfile.TemporaryDirectory(prefix="cairn-packaging-") as temporary:
             previous.write_text("previous executable")
             archive = work / "dist/Cairn.zip"
             archive.write_text("previous archive")
-            env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"], ARCH="arm64", FIXTURE_FAILURE=failure)
-            result = subprocess.run(["bash", script], cwd=work, env=env, capture_output=True, text=True)
+            # Earlier builds, oldest first: five finished, one failed two days
+            # ago, one failed (or still running) just now, and one finished
+            # build whose app is open.
+            prefix = "local" if script == "build_local.sh" else "release"
+            now = time.time()
+            earlier = {}
+            for index, (name, incomplete, age) in enumerate([
+                ("running", False, 9), ("old1", False, 8), ("old2", False, 7), ("old3", False, 6),
+                ("old4", False, 5), ("old5", False, 4), ("failed-old", True, 3 * 86_400), ("failed-new", True, 60),
+            ]):
+                folder = work / "dist" / f"{prefix}.{name}"
+                executable = folder / "Cairn.app/Contents/MacOS/Cairn"
+                executable.parent.mkdir(parents=True)
+                executable.write_text("earlier executable")
+                stamp = now - (3 * 86_400 if name == "failed-old" else 3_600 - index * 60)
+                if incomplete:
+                    (folder / "INCOMPLETE").touch()
+                    os.utime(folder / "INCOMPLETE", (stamp, stamp))
+                os.utime(folder, (stamp, stamp))
+                earlier[name] = folder
+            running = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(120)",
+                                        str(earlier["running"] / "Cairn.app/Contents/MacOS/Cairn")])
+            try:
+                env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ["PATH"], ARCH="arm64", FIXTURE_FAILURE=failure)
+                result = subprocess.run(["bash", script], cwd=work, env=env, capture_output=True, text=True)
+            finally:
+                running.terminate(); running.wait()
             assert (result.returncode != 0) == bool(failure), result.stdout + result.stderr
             if failure in ["entitlements-read", "unsafe-entitlement", "missing-runtime"]:
                 assert "notarytool" not in (work / "fixture-tools.log").read_text()
             assert previous.read_text() == "previous executable"
             assert archive.read_text() == "previous archive"
-            outputs = list((work / "dist").glob("local.*" if script == "build_local.sh" else "release.*"))
+            outputs = [path for path in (work / "dist").glob(prefix + ".*") if path not in earlier.values()]
             assert len(outputs) == 1
             assert (outputs[0] / "INCOMPLETE").exists() == bool(failure)
-            if not failure:
+            remaining = {name for name, folder in earlier.items() if folder.exists()}
+            if failure:
+                assert remaining == set(earlier), remaining
+            else:
                 assert (outputs[0] / "Cairn.app/Contents/MacOS/Cairn").read_text() == "new executable"
                 if script == "build_release.sh":
                     assert (outputs[0] / "Cairn.zip").exists()
-            print(f"PASS {script}: {failure or 'success'} preserves prior app/archive; completion marker is correct")
+                # This build plus the two newest finished ones stay, the failed
+                # build from just now stays, the open app stays; the rest go.
+                assert remaining == {"old5", "old4", "failed-new", "running"}, (remaining, result.stdout)
+            print(f"PASS {script}: {failure or 'success'} preserves prior app/archive; completion marker is correct; "
+                  + ("keeps every earlier build" if failure else "keeps the newest builds and any open app"))

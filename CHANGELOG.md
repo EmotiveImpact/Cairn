@@ -4,6 +4,78 @@ What changed in Cairn, newest first. Cairn has not had a public release yet, so 
 
 Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 
+## 4 November 2026
+
+### Projects finds every project, and more kinds of build output
+
+- **Every project is listed.** Projects used to show only folders that had build output Cairn knew about, so a repository with nothing to rebuild never appeared. It now lists every git repository and every folder with a project file (package.json, Cargo.toml, pyproject.toml, go.mod, an Xcode project, a Godot or Unreal project and so on). Projects with nothing to free sit under "Nothing to clear", most recently worked on first, with their git state.
+- **It no longer gives up early.** The search stopped after 40,000 folders, and on a Mac with many AI and editor tools those tool folders used most of that before ordinary project folders were reached. The search now goes breadth first, so every folder near the top of the home folder is looked at before any deep one, allows 150,000 folders or 60 seconds, and looks 10 folders down instead of 7. If it does stop early, Projects says so.
+- **Tool folders are never treated as projects.** Hidden folders directly in the home folder (such as `.codex`, `.claude`, `.vscode`, `.volta`), app bundles, other drives mounted inside the home folder, Conda and Micromamba installs and Go's module store are not searched. Before, a Node install inside `~/.volta` or an editor extension could show up as a project and its `node_modules` could be offered for cleaning.
+- **New kinds of build output**, each only when the matching project file sits beside it: Gradle `build` and `.gradle` (Android, Kotlin, Java), Maven and sbt `target`, Xcode `build` and in-project `DerivedData`, CMake build folders, .NET `bin` and `obj`, Elixir `_build`, Haskell `.stack-work` and `dist-newstyle`, Zig caches, Godot's import cache, Python tool caches (`.pytest_cache`, `.mypy_cache`, `.ruff_cache`, `.tox`, `.nox`), web build caches (`.parcel-cache`, `.angular`, `storybook-static`, `.docusaurus`, `.nx`), a Create React App `build` folder (only when it holds `asset-manifest.json`), Vercel's `.vercel/output` (never `.vercel/project.json`, which links the site) and Carthage builds. Installed packages that some projects keep in git on purpose (PHP `vendor`, Ruby `vendor/bundle`, Elixir `deps`, Terraform's `.terraform`) are shown for review and never picked for you. A folder called `build` that holds source files, such as an Electron app's icons, is left alone.
+- **Projects group properly without git.** An Android app inside an Expo project, a Tauri `src-tauri` folder or a package in `packages/` now joins the project around it. A WordPress site counts as one project, not one per plugin. The home folder is never treated as one big repository.
+- **Wake-up commands cover the new kinds** (`mvn package`, `./gradlew build` from the folder that holds `gradlew`, `dotnet build`, `mix deps.get`, `bundle install`, `composer install`, `terraform init` and others), and a monorepo's packages are installed once from the folder with the lock file.
+- The git maintenance scan uses the same search, so it reaches the same projects and no longer reads editor extensions as old projects.
+- `cairn projects` and the AI tool's `list_projects` list every project too, and say when the search stopped early.
+- **pnpm projects' packages can be cleared again.** pnpm installs every package as a link into its own `.pnpm` folder, and Cairn read those links as packages linked in by hand, so it held the whole `node_modules` back. A link now only holds it back when it points outside the project and outside pnpm's own store, and the note names the package. Workspace packages linked inside the same repository count as rebuilt by an install too.
+
+### Developer caches found and counted properly (PR #24)
+
+- **Biggest first, none dropped.** Developer caches are measured three at a time, starting with the ones that are usually biggest (Homebrew, Gradle, pnpm, npm, Go, Cargo). If the scan runs out of time, every cache it did not reach gets its own "not measured" row. Before, only the first one did and the rest disappeared from the list.
+- **Full sizes for big caches.** Known package caches are no longer cut off at 100,000 files, so a large Gradle or pnpm cache usually shows its real size. If one still runs out of time, it says it is a partial size.
+- **Gradle in one click.** The Gradle cache is ticked when Gradle has not used it for a day and is not running. Cleaning waits until Android Studio or IntelliJ is closed, and skips the cache if a Gradle build or Gradle's background process is running at that moment. If Gradle ran in the last day, it stays for you to check.
+- **Honest pnpm number.** The pnpm store now counts only files no project links to, and says that pnpm removes only packages no project uses, so it can free less than the size shown.
+- **Big project build folders counted in full.** Rust `target`, SwiftPM `.build` and game engine build folders are no longer cut off at 50,000 files and get up to 10 seconds each. One that needs longer is marked as a partial size. On Edem's Mac a Rust build folder of 8.67 GB had shown as 5.91 GB.
+- The npm cache is named "npm cache" in Look through, not "cacache".
+
+## 3 November 2026
+
+### Licence key asked for once (PR #23)
+
+- **Pro is on as soon as Cairn opens.** A saved licence is read quietly in the background a couple of seconds after the window appears, so there is no need to visit Settings › Licence after a restart. Only Macs where a licence was saved have their Keychain read at launch.
+- **No internet is fine.** If Cairn can't reach the licence server, for example straight after login, it keeps the saved key, keeps Pro on for up to 30 days (was 14), and tries again by itself.
+- **The key box stays away.** While a key is saved, Settings shows "Check now" instead of asking for the key again. A refunded or cancelled licence still switches Pro off.
+
+## 31 October 2026
+
+### Fast-drop alert and a wider watch list
+
+- **An alert when space goes fast.** The low-space alert only spoke once you were already below your reserve, so losing 20 GB in an hour while still above it said nothing. Settings › Monitoring now has **Alert when space drops fast** (off until you turn it on). While Cairn is open it checks free space every five minutes. If 5 GB or more goes within half an hour, or at that rate your reserve is less than two hours away, it quickly measures the usual places (30 seconds at most, quick ones first), compares each with its last size, and sends one notification such as "12.4 GB less free space in 25 minutes. Swap (memory kept on disk) grew by 6 GB and Docker disk grew by 4.2 GB." If none of them grew, it says the space most likely went somewhere Cairn doesn't watch, and if some places had no earlier size yet it says it can't tell rather than guessing. To have something to compare with, it keeps those places' sizes up to date while it's open. At most one alert an hour. During quiet hours the report still appears on Changes but no notification is sent, and a drop still going after 08:00 gets its notification then.
+- **What it found stays on Changes** for a day, with when each place started growing. Each figure covers its own time, so they aren't added up to explain the whole drop. Nothing is removed, and swap and snapshots never become something to clean.
+- **Swap and local Time Machine snapshots on Changes.** Known locations now starts with how big swap is and how many local snapshots there are, read straight from macOS, with a line saying macOS or Time Machine manages them.
+- **Ten more places watched** for growth: iPhone and iPad simulators, Ollama, Hugging Face and LM Studio models, Docker's disk, OrbStack and Colima disks, Claude Code data (`~/.claude`), Cursor worktrees and Conductor workspaces. Claude Code data, worktrees and the virtual machine disks are watch-only: measuring them never makes anything inside them cleanable, and the worktree protection is unchanged. Docker and OrbStack disks are only measured with Full Disk Access, so macOS never asks about other apps' data in the background. Codex worktrees are already covered by Codex local data. Claude Code's own `--worktree` folders sit inside each project, so they aren't on the list yet.
+- **Each watched place keeps its own history.** Saved readings are now capped per place (48 each) as well as overall, so a place that rarely changes, such as a model folder, keeps the size a later reading is compared with.
+- **Build scripts tidy `dist/`.** `build_local.sh` and `build_release.sh` now keep this build and the two before it (set `KEEP_BUILDS` to change that) and remove older ones. A failed build is kept for a day so its error can be read, a build whose app is open is never touched, and nothing outside `dist/local.*` or `dist/release.*` is removed. The CI packaging check covers all three.
+- **Growth threshold uses Cairn's own switcher.** In Settings › Monitoring it was the only row with the plain macOS up and down arrows. It now picks 1, 2, 5, 10 or 20 GB with the same switcher as Appearance, and has a line saying what it does. An older in-between choice shows as the nearest step until you pick one.
+- **Home lines up with the other pages.** "This Mac" uses the same small capitals as every page's top line, the big number and the words after it use the same size as the other number pages, the Rescan, Make room, I need space and History buttons sit at the same height and the same right-hand edge as other pages' top buttons (Home no longer stops at 1,200 points wide on a big window), and the line under the number runs the width of the page and wraps by itself.
+- **No box behind sidebar items.** A chosen or hovered sidebar item no longer gets a grey box. The chosen one keeps its blue icon and brighter name, and hovering just brightens the name.
+- Not yet tried on a real Mac: a real fast drop, the notification and the Changes card with live data. CI checks the rules, the wording, the watch list and the build script tidy-up with test data.
+
+## 30 October 2026
+
+### Safer cleaning, measured numbers and a disk map you can stop (PR #20)
+
+- **Choose how each clean removes things.** The review now has Smart, Delete now and Move to Trash at the top, starting from your choice in Settings › Cleaning. If Delete now would remove your own files for good, a tick box saying you understand must be ticked before the button works. Protected things (system files, passwords, Mail, Messages, Photos, iCloud, `.git`, SSH keys, AI chats) stay blocked whatever you pick.
+- **Every row on the Clean pages opens.** "Review item" or "Why / options" explains the item and offers Review this item and Show in Finder. For things Cairn can't remove, a button goes to the place that can: Apps, Games, Chat apps, or Final Cut Pro, Lightroom and Logic. Large Files has a Select for cleanup button in its side panel.
+- **"Freed" now means measured.** A receipt only says "freed" when macOS's own free-space figure went up after the clean. Files sent to the Trash count for nothing until the Trash is emptied.
+- **Emptying the Trash from a receipt or Activity** goes one item at a time with a record of each, checks each item is the very one Cairn put there, and marks only those that really went as Deleted. Anything that fails is explained.
+- **Safer moves to the Trash.** If macOS doesn't say where an item landed in the Trash, Cairn stops and deletes nothing. If an item swapped at the last moment can't be put back, Cairn says so instead of claiming it was.
+- **Disk map** waits for other scans, has a Stop button, and keeps the last map when stopped. Space Cairn can't put a name to is no longer counted inside System Data.
+- **Folders Cairn can't read** show as incomplete (≥) instead of empty.
+- **Licence check.** An odd reply from the licence server no longer switches Pro off; Cairn tries again later.
+- **Smaller fixes.** Home's buttons move to a second row in a narrow window, file names stay visible beside the Large Files side panel, VoiceOver reads the tick boxes, and the app stays responsive while scan results arrive.
+- **Build scripts** write each build to a new folder under `dist/` (for example `dist/release.ab12cd`), never replace the last good build, and leave an `INCOMPLETE` file when something fails. The release script stops before notarising if it can't read the app's entitlements.
+- **More checks in CI:** packaging failures, reliability, scan crash recovery and a universal (Apple silicon and Intel) build.
+
+### Plain words, and the disk map's gap labelled (PR #21)
+
+- **Plain words again.** The review, Large Files, the disk map, receipts, rules and the Trash and Put Back messages say things simply ("deleted for good", "can't be put back", "freed") instead of terms such as "measured capacity increase" or "Trash item's identity". The review's safety line reads "Passwords, your emails, Photos, your code history and AI chats are never included." It says emails rather than Mail because Cairn does offer the copies Mail keeps of attachments you have opened; the emails keep the originals. Settings and the rules list say the same now.
+- **Not measured is back on the disk map** as its own part, just before Free, so the bar has no blank gap. It shows only when at least 0.5 GB is unaccounted for, and its note says what it can include (local Time Machine snapshots, other accounts on this Mac, folders Cairn can't open) without claiming which.
+- **Review sheet.** The line under the big number wraps onto more lines instead of stopping at "…". Smart, Delete now and Move to Trash use the same quiet switcher as Settings, the "I understand" box is Cairn's own tick box, and Cancel no longer opens with a blue macOS focus ring.
+- **Finish screen.** If emptying the Trash goes wrong, the message now sits under the result instead of floating over the middle of the page.
+- **CI's universal build check** works again. `lipo` had its words in the wrong order, which turned every run red after the build itself had passed.
+- **CI's scan stress test is steady.** It scans 12,000 test files twelve times and checks every one is kept. On a slow GitHub Mac the app sometimes fell more than 2,048 files behind, so the scan stopped at its safety limit and the test failed by chance. The test now leaves room for all its files; the limit itself is unchanged in the app and still has its own test.
+- **Installed for testing.** The signed test build from 30 October is in `/Applications/Cairn.app`. It isn't notarised, so right-click and choose Open the first time.
+
 ## 27 October 2026
 
 Every open pull request landed today: #18 on its own, then #11, #12, #14, #15 and #6 together through PR #19, which fixed where they clashed with each other and with #16 and #17.

@@ -18,9 +18,33 @@ struct ObservedRoot: Codable, Identifiable, Equatable, Sendable {
             ("chrome-cache", "Chrome disk cache", "Library/Caches/Google/Chrome", "globe", false),
             ("safari-cache", "Safari disk cache", "Library/Caches/com.apple.Safari", "globe", false),
             ("downloads", "Downloads", "Downloads", "arrow.down.circle", true),
-            ("codex-state", "Codex local data", ".codex", "lock.shield", true)
+            ("codex-state", "Codex local data", ".codex", "lock.shield", true),
+            // The places that grow fastest on a coding Mac. Watch-only where the
+            // data is protected (AI chats, worktrees, VM disks): measuring them
+            // never makes anything inside them cleanable.
+            ("simulators", "iPhone and iPad simulators", "Library/Developer/CoreSimulator/Devices", "iphone", false),
+            ("ollama-models", "Ollama models", ".ollama/models", "cpu", false),
+            ("huggingface", "Hugging Face downloads", ".cache/huggingface", "cpu", false),
+            ("lmstudio-models", "LM Studio models", ".lmstudio/models", "cpu", false),
+            ("docker-disk", "Docker disk", "Library/Containers/com.docker.docker/Data/vms", "shippingbox", true),
+            ("orbstack-disk", "OrbStack disk", "Library/Group Containers/HUAQ24HBR6.dev.orbstack/data", "shippingbox", true),
+            ("colima-disk", "Colima disks", ".colima/_lima", "shippingbox", true),
+            ("claude-data", "Claude Code data", ".claude", "lock.shield", true),
+            ("cursor-worktrees", "Cursor worktrees", ".cursor/worktrees", "arrow.triangle.branch", true),
+            ("conductor-workspaces", "Conductor workspaces", "conductor/workspaces", "arrow.triangle.branch", true)
         ]
         return entries.map { ObservedRoot(id: $0.0, title: $0.1, path: home.appendingPathComponent($0.2).path, icon: $0.3, observationOnly: $0.4) }
+    }
+
+    /// Roots inside other apps' containers. Opening them without Full Disk
+    /// Access can make macOS ask "Cairn would like to access data from other
+    /// apps", so background work leaves them alone until access is granted.
+    static let fullDiskAccessIDs: Set<String> = ["docker-disk", "orbstack-disk"]
+    var needsFullDiskAccess: Bool { Self.fullDiskAccessIDs.contains(id) }
+
+    /// The catalogue Cairn may measure right now, one entry per tree.
+    static func measurable(fullDiskAccess: Bool, home: URL = FileManager.default.homeDirectoryForCurrentUser) -> [ObservedRoot] {
+        nonOverlapping(catalogue(home: home).filter { fullDiskAccess || !$0.needsFullDiskAccess })
     }
 
     static func lexicalPath(_ path: String) -> String {
@@ -123,18 +147,30 @@ enum LocationComparison {
             $0.max { $0.ended < $1.ended }
         }.sorted { $0.root.title < $1.root.title }
     }
+    /// The newest complete (or proven absent) reading of each root: the only
+    /// kind a later reading can be compared with.
+    static func latestComparable(_ readings: [LocationReading]) -> [String: LocationReading] {
+        latest(readings.filter { $0.valid && $0.coverage.comparable })
+            .reduce(into: [:]) { $0[$1.root.id] = $1 }
+    }
+    /// Whether a later reading of a place can be compared with an earlier one:
+    /// both complete or proven absent, measured the same way on the same disk,
+    /// and the same folder. A proven absence can follow a present root. A
+    /// replaced present root starts a new baseline; matching the path alone is
+    /// insufficient.
+    static func compatible(_ before: LocationReading, _ after: LocationReading) -> Bool {
+        before.valid && after.valid && before.coverage.comparable && after.coverage.comparable
+            && before.ended < after.started && before.volumeID == after.volumeID
+            && before.root == after.root && before.scope == after.scope
+            && before.metric == after.metric && before.adapterVersion == after.adapterVersion
+            && before.parentIdentity == after.parentIdentity
+            && (before.identity == after.identity || after.coverage == .absent || before.coverage == .absent)
+    }
     static func changes(_ readings: [LocationReading]) -> [LocationChange] {
         Dictionary(grouping: readings, by: { $0.root.id }).values.compactMap { group -> LocationChange? in
             let pair = group.sorted { $0.ended < $1.ended }.suffix(2)
             guard pair.count == 2, let before = pair.first, let after = pair.last,
-                  before.valid, after.valid, before.coverage.comparable, after.coverage.comparable,
-                  before.ended < after.started, before.volumeID == after.volumeID,
-                  before.root == after.root, before.scope == after.scope,
-                  before.metric == after.metric, before.adapterVersion == after.adapterVersion,
-                  before.parentIdentity == after.parentIdentity else { return nil }
-            // A proven absence can follow a present root. A replaced present root
-            // starts a new baseline; matching the path alone is insufficient.
-            guard before.identity == after.identity || after.coverage == .absent || before.coverage == .absent else { return nil }
+                  compatible(before, after) else { return nil }
             return LocationChange(before: before, after: after)
         }.sorted { abs($0.delta) == abs($1.delta) ? $0.id < $1.id : abs($0.delta) > abs($1.delta) }
     }

@@ -29,7 +29,13 @@ struct ProStatusCard: View {
                     Button("Check again") { Task { await license.reloadStorage() } }
                         .buttonStyle(ControlPanelButtonStyle()).disabled(license.isLoading || license.isBusy)
                 }
-                if license.hasRequestedStorage && !license.isLoading && license.storageMessage == nil && !license.isPro {
+                if license.hasRequestedStorage && !license.isLoading && license.storageMessage == nil && !license.isPro && license.waitingToConfirm {
+                    // A saved key is never asked for again, even when Pro is paused.
+                    Text("Your licence key is saved on this Mac, so there is nothing to type in again. Cairn could not reach the licence server to confirm it, so Pro is paused until it can. Cairn keeps trying by itself.")
+                        .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
+                    Button("Check now") { Task { await license.refresh() } }
+                        .buttonStyle(ControlPanelButtonStyle()).disabled(license.isBusy || license.isLoading)
+                } else if license.hasRequestedStorage && !license.isLoading && license.storageMessage == nil && !license.isPro {
                     Text("Purchases are not offered in this build. Broad tool cleanups are review-only while their safety checks are completed; supported actions remain available without an upgrade.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textSecondary).fixedSize(horizontal: false, vertical: true)
                     Button(showKeyField ? "Hide key" : "Enter existing key") { showKeyField.toggle() }.buttonStyle(GhostButtonStyle())
@@ -68,10 +74,11 @@ struct ProStatusCard: View {
     }
 
     private var statusLine: String {
-        if !license.hasRequestedStorage { return "Your license is checked here when needed" }
+        if !license.hasRequestedStorage { return "Reading your saved licence" }
         if license.isLoading { return "Checking saved license · Cairn remains available" }
         if license.storageMessage != nil { return "Saved license unavailable · free features available" }
         if license.isPro { return "Active licence · supported actions available" }
+        if license.waitingToConfirm { return "Licence saved · waiting to confirm online" }
         return "Supported actions available without an upgrade"
     }
     private var statusColor: Color {

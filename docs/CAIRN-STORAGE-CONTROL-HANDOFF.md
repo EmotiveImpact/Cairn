@@ -24,7 +24,7 @@ The older `docs/FEATURES.md` is not a reliable list of currently enabled capabil
 - Do not modify the older `/Users/augustusedem/CLEANSTUFF` app/repository or other products. Do not scan all repositories to generate test data.
 - Resolve current app/process paths before launching or quitting. Different Cairn copies can share a bundle identifier. Use the full workspace bundle path, not `open -a Cairn`.
 - Do not overwrite the executable inode used by a running app. Packaging changes need atomic replacement or a safe stopped process. Respect current user selections/results when deciding whether to relaunch.
-- Do not run the release script casually: inspect it first; it rebuilds `dist/Cairn.app` and can submit a release artifact for notarization.
+- Do not run the release script casually: inspect it first; it writes a new `dist/release.XXXXXX` folder and can submit a release artifact for notarization.
 - No personal-file deletion/movement, drive formatting/encryption, external-drive writes, tool-setting changes, service shutdown, system-security changes, payment transaction or public deployment is implied by an instruction to implement the PRD. Build and test with disposable fixtures. Ask only when the concrete next operation requires missing authorization.
 - This app has no need for a Rust rewrite or a web UI replacement. No new agents/tasks/model switches are implied unless the user asks for them.
 

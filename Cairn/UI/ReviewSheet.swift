@@ -54,7 +54,7 @@ struct ReviewSheet: View {
     /// Says plainly what can and cannot be put back afterwards.
     private var trashNote: String? {
         if hasPersonalFilesToDelete {
-            return "Selected files will be permanently deleted. They may be your only copies; Put Back will not be available."
+            return "These files will be deleted for good. They may be your only copies, and they can't be put back."
         }
         if freedNow > 0 && toTrash > 0 {
             return "\(Fmt.size(freedNow)) of caches and build files is freed straight away. They rebuild on their own when needed. "
@@ -78,7 +78,9 @@ struct ReviewSheet: View {
                 Text(cleaning ? "Freeing space · keep Cairn open" : "Check once, then free").nightEyebrow()
                 Text(title).font(.system(size: 30, weight: .light)).tracking(-0.6)
                 if let trashNote {
+                    // Wraps onto more lines rather than cutting off with "…".
                     Text(trashNote).font(.system(size: 13)).foregroundStyle(Brand.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             ScrollView {
@@ -90,22 +92,27 @@ struct ReviewSheet: View {
             // A short list leaves no empty band above the buttons; a long one scrolls.
             .frame(height: min(listHeight ?? Self.listRoom, Self.listRoom))
             if runnable.contains(where: { $0.cleanMethod == .trash }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Picker("For this cleanup", selection: $mode) {
-                        ForEach(RemovalMode.allCases) { option in
-                            Text(option.title).tag(option)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .disabled(cleaning || sample != nil || goalPlan != nil)
+                VStack(alignment: .leading, spacing: 10) {
+                    // The same switcher, heading and spacing as Settings › Appearance and Cleaning.
+                    Text("For this clean").font(.system(size: 13, weight: .medium))
+                    CairnSegmentedControl(label: "For this clean", selection: $mode,
+                                          options: RemovalMode.allCases.map { ($0.title, $0) })
+                        .frame(width: 360)
+                        .disabled(cleaning || sample != nil || goalPlan != nil)
                     Text(goalPlan == nil
-                         ? "Applies to these selected files only. Tool commands and Trash emptying remain permanent."
-                         : "This goal review keeps its original removal mode. Review files from their category to choose a different mode.")
+                         ? "Just for this clean. Tool commands and emptying the Trash can't be put back, whichever you pick."
+                         : "This clean keeps the choice it was planned with. To pick differently, review the files from their own page.")
                         .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                     if hasPersonalFilesToDelete {
-                        Toggle("I understand these personal files will be permanently deleted, with no Put Back.",
-                               isOn: $acknowledgedPermanentDeletion)
-                            .font(.system(size: 12)).disabled(cleaning)
+                        HStack(alignment: .top, spacing: 10) {
+                            NightCheck(on: acknowledgedPermanentDeletion, enabled: !cleaning) { acknowledgedPermanentDeletion.toggle() }
+                                .accessibilityLabel("I understand my own files here will be deleted for good and can't be put back")
+                            Text("I understand my own files here will be deleted for good and can't be put back.")
+                                .font(.system(size: 12)).foregroundStyle(Brand.textPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .onTapGesture { if !cleaning { acknowledgedPermanentDeletion.toggle() } }
+                        }
                     }
                 }
             }
@@ -222,7 +229,7 @@ struct ReviewSheet: View {
             else if runnable.isEmpty { lines.append(("Nothing here can be removed by Cairn.", Brand.amber)) }
         }
         if hasPersonalFilesToDelete {
-            lines.append(("Delete now is selected for this cleanup. Your own files here will be permanently deleted, with no Put Back.", Brand.amber))
+            lines.append(("Delete now is picked, so your own files here are deleted for good, not sent to the Trash.", Brand.amber))
         }
         if !skipped.isEmpty {
             lines.append(("\(skipped.count) advice-only \(skipped.count == 1 ? "item is" : "items are") left alone.", Brand.textMuted))
@@ -235,6 +242,7 @@ struct ReviewSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(noteLines.indices, id: \.self) { i in
                     Text(noteLines[i].text).foregroundStyle(noteLines[i].tint)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
             .font(.system(size: 12))
@@ -246,14 +254,17 @@ struct ReviewSheet: View {
             HStack(spacing: 8) {
                 Image(systemName: "checkmark.shield").font(.system(size: 12))
                 Text(runningBlockers.isEmpty
-                     ? "Protected system data, credentials and AI conversations remain blocked."
+                     ? "Passwords, your emails, Photos, your code history and AI chats are never included."
                      : "Items from \(runningBlockers.joined(separator: ", ")) are skipped while it is open.")
                     .fixedSize(horizontal: false, vertical: true)
             }
             .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
             Spacer(minLength: 12)
+            // No blue macOS focus ring when the sheet opens: these look like
+            // every other button in Cairn. Escape still cancels.
             Button("Cancel") { dismiss() }
                 .buttonStyle(ControlPanelButtonStyle(size: .large))
+                .focusEffectDisabled()
                 .keyboardShortcut(.cancelAction).disabled(cleaning)
             Button {
                 Task { await runClean() }
@@ -264,6 +275,7 @@ struct ReviewSheet: View {
                 }
             }
             .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
+            .focusEffectDisabled()
             // Deliberately no Return shortcut: removing files takes a click, never a stray key press.
             .disabled(!canClean)
         }
