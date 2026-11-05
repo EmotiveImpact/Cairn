@@ -19,14 +19,11 @@ enum Regenerability {
         let nm = projectDir.appendingPathComponent("node_modules")
         let root = workspaceRootWithLockfile(startingAt: projectDir)
 
-        // A package linked in by hand (npm link, yarn link, pnpm link --global)
-        // points outside the project, and an install won't bring it back. The
-        // package managers' own links stay inside the folder that holds the
-        // lockfile (pnpm's .pnpm folder, workspace packages) or in pnpm's own
-        // store, and an install makes them again, so those are fine.
-        if let linked = linkPointingOutside(nm, allowed: [root ?? projectDir] + pnpmStores(nm)) {
+        // A package linked in by hand (npm link, yarn link, pnpm link --global,
+        // or a link to a folder nobody declared) won't come back with an install.
+        if let root, let linked = handMadeLink(nm, projectDir: projectDir, root: root) {
             return Result(isRegenerable: false, severity: .review,
-                          note: "\(linked) is linked from outside this project, so reinstalling won't bring it back")
+                          note: "\(linked) was linked in by hand, so reinstalling won't bring it back")
         }
 
         // patch-package patches → patched state may not reproduce identically.
@@ -54,13 +51,23 @@ enum Regenerability {
 
     // MARK: - helpers
 
-    /// The first package in `node_modules` (or inside an @scope folder) that is
-    /// a link to somewhere outside every allowed folder, or nil. Bounded probe.
-    private static func linkPointingOutside(_ nodeModules: URL, allowed: [URL]) -> String? {
+    /// The first package in `node_modules` (or inside an @scope folder) that was
+    /// linked in by hand, or nil. A link an install makes again points into a
+    /// package manager's own folder (a `node_modules` inside the lockfile's
+    /// folder, such as pnpm's `.pnpm`, or pnpm's store), or to a workspace
+    /// package or declared dependency inside the lockfile's folder. Anything
+    /// else is by hand: `npm link` goes through npm's global folder, and a link
+    /// to a sibling folder nobody declared is gone after a fresh install. Only
+    /// the link itself is read, never the links behind it, so a package linked
+    /// through the global folder can't pass for a local one. Bounded probe.
+    private static func handMadeLink(_ nodeModules: URL, projectDir: URL, root: URL) -> String? {
         let fm = FileManager.default
-        let bases = allowed.map { $0.resolvingSymlinksInPath().path }
-        func inside(_ path: String) -> Bool {
-            bases.contains { path == $0 || path.hasPrefix($0.hasSuffix("/") ? $0 : $0 + "/") }
+        let rootPath = root.resolvingSymlinksInPath().path
+        let stores = pnpmStores(nodeModules).map { $0.resolvingSymlinksInPath().path }
+        let declared = declaredDependencies(projectDir)
+        let members = workspacePatterns(root)
+        func within(_ path: String, _ base: String) -> Bool {
+            path == base || path.hasPrefix(base.hasSuffix("/") ? base : base + "/")
         }
         func isLink(_ url: URL) -> Bool {
             (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true
@@ -80,13 +87,84 @@ enum Regenerability {
                     if scope.isEmpty && name.hasPrefix("@") { queue.append((e, name + "/")) }
                     continue
                 }
-                guard let dest = try? fm.destinationOfSymbolicLink(atPath: e.path) else { return scope + name }
-                let target = dest.hasPrefix("/") ? URL(fileURLWithPath: dest)
-                                                 : e.deletingLastPathComponent().appendingPathComponent(dest)
-                if !inside(target.standardizedFileURL.resolvingSymlinksInPath().path) { return scope + name }
+                let linkName = scope + name
+                guard let dest = try? fm.destinationOfSymbolicLink(atPath: e.path) else { return linkName }
+                let target = (dest.hasPrefix("/") ? URL(fileURLWithPath: dest)
+                                                  : e.deletingLastPathComponent().appendingPathComponent(dest)).standardizedFileURL
+                // Spell the folder the link names the same way as the roots,
+                // without following the link's own target any further.
+                let path = target.deletingLastPathComponent().resolvingSymlinksInPath()
+                    .appendingPathComponent(target.lastPathComponent).path
+                if stores.contains(where: { within(path, $0) }) { continue }
+                guard within(path, rootPath) else { return linkName }
+                let relative = String(path.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                if relative.split(separator: "/").contains("node_modules") { continue }
+                if declared.contains(linkName) || members(relative) { continue }
+                return linkName
             }
         }
         return nil
+    }
+
+    /// Every package the project's package.json asks for, by name.
+    private static func declaredDependencies(_ projectDir: URL) -> Set<String> {
+        guard let data = try? Data(contentsOf: projectDir.appendingPathComponent("package.json")),
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
+        var names = Set<String>()
+        for key in ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] {
+            if let deps = json[key] as? [String: Any] { names.formUnion(deps.keys) }
+        }
+        return names
+    }
+
+    /// Whether a folder (relative to the workspace root) is one of its
+    /// workspace packages, from package.json "workspaces" or
+    /// pnpm-workspace.yaml "packages". `*` matches within one folder, `**`
+    /// across folders, and a pattern starting with `!` leaves folders out.
+    private static func workspacePatterns(_ root: URL) -> (String) -> Bool {
+        var globs: [String] = []
+        if let data = try? Data(contentsOf: root.appendingPathComponent("package.json")),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let list = json["workspaces"] as? [String] { globs += list }
+            if let object = json["workspaces"] as? [String: Any], let list = object["packages"] as? [String] { globs += list }
+        }
+        if let text = try? String(contentsOf: root.appendingPathComponent("pnpm-workspace.yaml"), encoding: .utf8) {
+            var inPackages = false
+            for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+                let line = raw.trimmingCharacters(in: .whitespaces)
+                if raw.hasPrefix("packages:") { inPackages = true; continue }
+                guard inPackages else { continue }
+                if line.isEmpty || line.hasPrefix("#") { continue }
+                guard line.hasPrefix("-") else { if !raw.hasPrefix(" ") && !raw.hasPrefix("\t") { inPackages = false }; continue }
+                globs.append(line.dropFirst().trimmingCharacters(in: .whitespaces)
+                    .trimmingCharacters(in: CharacterSet(charactersIn: "'\"")))
+            }
+        }
+        func regex(_ glob: String) -> NSRegularExpression? {
+            var g = glob
+            while g.hasPrefix("./") { g.removeFirst(2) }
+            while g.hasSuffix("/") { g.removeLast() }
+            guard !g.isEmpty else { return nil }
+            var pattern = "^"
+            var chars = Array(g)[...]
+            while let c = chars.first {
+                chars = chars.dropFirst()
+                if c == "*" {
+                    if chars.first == "*" { chars = chars.dropFirst(); pattern += ".*" } else { pattern += "[^/]*" }
+                } else if c == "?" {
+                    pattern += "[^/]"
+                } else {
+                    pattern += NSRegularExpression.escapedPattern(for: String(c))
+                }
+            }
+            return try? NSRegularExpression(pattern: pattern + "$")
+        }
+        let include = globs.filter { !$0.hasPrefix("!") }.compactMap(regex)
+        let exclude = globs.filter { $0.hasPrefix("!") }.compactMap { regex(String($0.dropFirst())) }
+        func matches(_ list: [NSRegularExpression], _ path: String) -> Bool {
+            list.contains { $0.firstMatch(in: path, range: NSRange(path.startIndex..., in: path)) != nil }
+        }
+        return { path in matches(include, path) && !matches(exclude, path) }
     }
 
     /// Where pnpm keeps the real package folders when they live outside the

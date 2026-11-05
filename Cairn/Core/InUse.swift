@@ -79,9 +79,16 @@ enum InUse {
         runningCommandLines().contains(where: isGradleProcess)
     }
 
-    /// Folders that Gradle reads while it builds: everything under `~/.gradle`.
+    /// Folders that Gradle reads while it builds: everything under `~/.gradle`,
+    /// a project's own `.gradle` folder, and `build` beside a Gradle build file.
     static func isGradleFolder(_ item: ScanItem) -> Bool {
-        item.resolvedURL.standardizedFileURL.path.contains("/.gradle/")
+        let url = item.resolvedURL.standardizedFileURL
+        if url.path.contains("/.gradle/") || url.lastPathComponent == ".gradle" { return true }
+        guard url.lastPathComponent == "build" else { return false }
+        let project = url.deletingLastPathComponent()
+        return ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"].contains {
+            FileManager.default.fileExists(atPath: project.appendingPathComponent($0).path)
+        }
     }
 
     /// Why a Gradle folder must wait, or nil. A Gradle build can read its caches

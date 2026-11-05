@@ -147,7 +147,9 @@ jobs:
       # The full app from the same build, so it can be opened on a Mac that has
       # no room to compile. Signed only with a local (ad-hoc) signature, not
       # Developer ID and not notarised, so Full Disk Access must be granted to
-      # it separately. Kept 3 days. Unpack with `tar -xzf cairn-app.tar.gz`.
+      # it separately. The hardened runtime and the release entitlements are on,
+      # as in build_release.sh, so no other program can slip code into it and
+      # borrow that access. Kept 3 days. Unpack with `tar -xzf cairn-app.tar.gz`.
       - name: Pack test copy of the app
         continue-on-error: true
         run: |
@@ -160,8 +162,9 @@ jobs:
           cp Cairn/Resources/Cairn.icns Cairn/Resources/CairnMark.png "$APP/Contents/Resources/"
           for f in hero.png SampleCoastFilm.png; do [ -f "Cairn/Resources/$f" ] && cp "Cairn/Resources/$f" "$APP/Contents/Resources/"; done
           for m in Cairn/Resources/logo-*.svg; do [ -f "$m" ] && cp "$m" "$APP/Contents/Resources/"; done
-          codesign --force --sign - "$APP"
+          codesign --force --options runtime --entitlements Cairn/Cairn-dist.entitlements --sign - "$APP"
           codesign --verify --strict --verbose=2 "$APP"
+          codesign -d --verbose=2 "$APP" 2>&1 | grep -q "flags=.*runtime" || { echo "The hardened runtime is not on."; exit 1; }
           tar -czf cairn-app.tar.gz -C "$RUNNER_TEMP/app" Cairn.app
 
       - name: Upload test copy of the app

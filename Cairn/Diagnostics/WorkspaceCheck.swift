@@ -186,13 +186,24 @@ enum WorkspaceCheck {
             try link("pnpm-app/node_modules/@types/node", to: "../.pnpm/@types+node@20.0.0/node_modules/@types/node")
             let pnpm = verdict("pnpm-app")
             check(pnpm.isRegenerable && pnpm.severity == .safe, "pnpm's own package links count as rebuilt by an install")
-            // A workspace: the root and a member both link to packages in the same repository.
-            try file("mono/package.json", "{}"); try file("mono/package-lock.json")
-            try file("mono/packages/api/package.json", "{}"); try file("mono/packages/web/package.json", "{}")
+            // A workspace: the root links its workspace packages, and a member links one it asks for.
+            try file("mono/package.json", #"{"workspaces": ["packages/*", "!packages/old"]}"#); try file("mono/package-lock.json")
+            try file("mono/packages/api/package.json", "{}")
+            try file("mono/packages/web/package.json", #"{"dependencies": {"api": "*"}}"#)
             try link("mono/node_modules/api", to: "../packages/api")
             try link("mono/packages/web/node_modules/api", to: "../../api")
             check(verdict("mono").isRegenerable && verdict("mono/packages/web").isRegenerable,
                   "Workspace package links inside the repository count as rebuilt by an install")
+            try file("pmono/package.json", "{}"); try file("pmono/pnpm-lock.yaml")
+            try file("pmono/pnpm-workspace.yaml", "packages:\n  - 'libs/**'\n  - \"!libs/legacy\"\n")
+            try file("pmono/libs/ui/button/package.json", "{}")
+            try link("pmono/node_modules/button", to: "../libs/ui/button")
+            check(verdict("pmono").isRegenerable, "pnpm-workspace.yaml packages count as workspace packages")
+            try file("mono/packages/old/package.json", "{}")
+            try link("mono/node_modules/old", to: "../packages/old")
+            check(!verdict("mono").isRegenerable && verdict("mono").note.contains("old"),
+                  "A folder the workspace leaves out is not a workspace package")
+            try fm.removeItem(at: root.appendingPathComponent("mono/node_modules/old"))
             // pnpm's shared store, recorded in .modules.yaml, lives outside the project.
             try file("store/links/is-odd/1.0.0/node_modules/is-odd/index.js")
             try file("shared-store/package.json", "{}"); try file("shared-store/pnpm-lock.yaml")
@@ -210,6 +221,19 @@ enum WorkspaceCheck {
             try file("wide-store/node_modules/.modules.yaml", "storeDir: '\(root.path)'\n")
             try link("wide-store/node_modules/my-lib", to: root.appendingPathComponent("elsewhere/my-lib").path)
             check(!verdict("wide-store").isRegenerable, "A pnpm store set to a folder around the project never excuses a hand-made link")
+            // npm link goes through npm's global folder, even when the package's
+            // own folder is inside the project, so it never passes for local.
+            try file("chain/package.json", "{}"); try file("chain/package-lock.json")
+            try file("chain/tool-src/package.json", "{}")
+            try link("global/lib/node_modules/tool", to: root.appendingPathComponent("chain/tool-src").path)
+            try link("chain/node_modules/tool", to: root.appendingPathComponent("global/lib/node_modules/tool").path)
+            check(!verdict("chain").isRegenerable && verdict("chain").note.contains("tool"),
+                  "A package linked through npm's global folder waits for review")
+            // A link to a sibling folder that nothing declares is gone after a fresh install.
+            try file("sib/package-lock.json"); try file("sib/app/package.json", "{}"); try file("sib/tool/package.json", "{}")
+            try link("sib/app/node_modules/tool", to: "../../tool")
+            check(!verdict("sib/app").isRegenerable && verdict("sib/app").note.contains("tool"),
+                  "A link to an undeclared folder in the same repository waits for review")
             try file("scoped/package.json", "{}"); try file("scoped/yarn.lock")
             try link("scoped/node_modules/@me/tool", to: "../../../elsewhere/tool")
             let scoped = verdict("scoped")

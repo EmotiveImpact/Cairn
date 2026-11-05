@@ -785,6 +785,17 @@ import Darwin
                         && InUse.gradleBusyReason(gradle, commandLines: [daemon]) != nil
                         && InUse.gradleBusyReason(gradle, commandLines: []) == nil,
                       "Cleaning skips Gradle folders while Gradle runs, and only those")
+                // A project's own .gradle and Gradle build output wait too; a
+                // build folder without a Gradle build file beside it does not.
+                let android = home.appendingPathComponent("Code/android-app")
+                try? fm.createDirectory(at: android.appendingPathComponent("build"), withIntermediateDirectories: true)
+                try? fm.createDirectory(at: home.appendingPathComponent("Code/site/build"), withIntermediateDirectories: true)
+                fm.createFile(atPath: android.appendingPathComponent("build.gradle.kts").path, contents: Data())
+                func folder(_ url: URL) -> ScanItem { ScanItem(url: url, allocatedSize: 1, categoryID: "fixture", severity: .safe) }
+                check(InUse.gradleBusyReason(folder(android.appendingPathComponent(".gradle")), commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(folder(android.appendingPathComponent("build")), commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(folder(home.appendingPathComponent("Code/site/build")), commandLines: [daemon]) == nil,
+                      "A project's .gradle and Gradle build output also wait while Gradle runs")
             } else {
                 check(false, "Gradle and npm fixture caches were found")
             }

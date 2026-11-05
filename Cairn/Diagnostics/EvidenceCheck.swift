@@ -190,10 +190,10 @@ enum EvidenceCheck {
     }
 
     static func fixtureReading(_ id: String, _ bytes: Int64, at date: Date, volume: String = "fixture-volume",
-                               coverage: LocationCoverage = .complete) -> LocationReading {
+                               coverage: LocationCoverage = .complete, inode: UInt64 = 2) -> LocationReading {
         let root = ObservedRoot(id: id, title: id == "docker-disk" ? "Docker disk" : id, path: "/fixture/" + id, icon: "folder", observationOnly: true)
         return LocationReading(id: UUID(), root: root, started: date.addingTimeInterval(-1), ended: date, volumeID: volume,
-            identity: .init(device: 1, inode: 2), parentIdentity: .init(device: 1, inode: 1), scope: "fixture-scope",
+            identity: .init(device: 1, inode: inode), parentIdentity: .init(device: 1, inode: 1), scope: "fixture-scope",
             coverage: coverage, allocated: bytes, logical: bytes, entries: 3, hardLinksSkipped: 0, source: "fixture",
             metric: "allocated-and-logical-v1", adapterVersion: 1)
     }
@@ -289,11 +289,12 @@ enum EvidenceCheck {
         check(quietTiming.cooldownFrom == night && dayTiming.cooldownFrom == delivered && dayTiming.floor == night,
               "Quiet-hours checks only start the cooldown while quiet hours last")
 
-        let names: [String] = ["seen", "late", "new", "gone", "locked", "empty", "unreached"]
+        let names: [String] = ["seen", "late", "new", "gone", "locked", "empty", "unreached", "replaced"]
         let watched: [ObservedRoot] = names.map {
             ObservedRoot(id: $0, title: $0, path: "/fixture/" + $0, icon: "folder", observationOnly: true)
         }
-        let earlier: [String: LocationReading] = ["seen": fixtureReading("seen", gb, at: t0), "late": fixtureReading("late", gb, at: t0)]
+        let earlier: [String: LocationReading] = ["seen": fixtureReading("seen", gb, at: t0), "late": fixtureReading("late", gb, at: t0),
+                                                  "replaced": fixtureReading("replaced", gb, at: t0)]
         let measuredAt: Date = t0.addingTimeInterval(600)
         let fresh: [LocationReading] = [
             fixtureReading("seen", gb, at: measuredAt),
@@ -302,10 +303,11 @@ enum EvidenceCheck {
             fixtureReading("gone", 0, at: measuredAt, coverage: .unavailable),
             fixtureReading("locked", 0, at: measuredAt, coverage: .unavailable),
             fixtureReading("empty", 0, at: measuredAt, coverage: .absent),
+            fixtureReading("replaced", 6 * gb, at: measuredAt, inode: 99),
         ]
         let unknown = FastDropPolicy.unknowns(roots: watched, previous: earlier, readings: fresh, missing: ["gone"])
-        check(unknown.unfinished == ["late", "unreached"] && unknown.uncompared == ["new", "locked"],
-              "Only places that are really not there, empty or excluded are ruled out; unreadable ones stay unknown")
+        check(unknown.unfinished == ["late", "unreached"] && unknown.uncompared == ["new", "locked", "replaced"],
+              "Only places that are really not there, empty or excluded are ruled out; unreadable or replaced ones stay unknown")
         let near = FastDropReport.make(drop: close!, before: nil, after: nil, changes: [], reserve: 30 * gb, note: nil)
         let reservePhrase: String = "reach your " + Fmt.size(30 * gb) + " reserve in about 20 minutes"
         check(near.body.contains(reservePhrase), "Report says when the reserve is close")

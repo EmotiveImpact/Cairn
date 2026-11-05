@@ -153,18 +153,24 @@ enum LocationComparison {
         latest(readings.filter { $0.valid && $0.coverage.comparable })
             .reduce(into: [:]) { $0[$1.root.id] = $1 }
     }
+    /// Whether a later reading of a place can be compared with an earlier one:
+    /// both complete or proven absent, measured the same way on the same disk,
+    /// and the same folder. A proven absence can follow a present root. A
+    /// replaced present root starts a new baseline; matching the path alone is
+    /// insufficient.
+    static func compatible(_ before: LocationReading, _ after: LocationReading) -> Bool {
+        before.valid && after.valid && before.coverage.comparable && after.coverage.comparable
+            && before.ended < after.started && before.volumeID == after.volumeID
+            && before.root == after.root && before.scope == after.scope
+            && before.metric == after.metric && before.adapterVersion == after.adapterVersion
+            && before.parentIdentity == after.parentIdentity
+            && (before.identity == after.identity || after.coverage == .absent || before.coverage == .absent)
+    }
     static func changes(_ readings: [LocationReading]) -> [LocationChange] {
         Dictionary(grouping: readings, by: { $0.root.id }).values.compactMap { group -> LocationChange? in
             let pair = group.sorted { $0.ended < $1.ended }.suffix(2)
             guard pair.count == 2, let before = pair.first, let after = pair.last,
-                  before.valid, after.valid, before.coverage.comparable, after.coverage.comparable,
-                  before.ended < after.started, before.volumeID == after.volumeID,
-                  before.root == after.root, before.scope == after.scope,
-                  before.metric == after.metric, before.adapterVersion == after.adapterVersion,
-                  before.parentIdentity == after.parentIdentity else { return nil }
-            // A proven absence can follow a present root. A replaced present root
-            // starts a new baseline; matching the path alone is insufficient.
-            guard before.identity == after.identity || after.coverage == .absent || before.coverage == .absent else { return nil }
+                  compatible(before, after) else { return nil }
             return LocationChange(before: before, after: after)
         }.sorted { abs($0.delta) == abs($1.delta) ? $0.id < $1.id : abs($0.delta) > abs($1.delta) }
     }
