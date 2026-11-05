@@ -25,6 +25,8 @@ actor StorageEvidenceStore {
             FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support"))
             .appendingPathComponent("Cairn", isDirectory: true)
     }
+    /// 48 readings for each of up to 21 places fits the 1,024-row history cap.
+    static let readingsPerLocation = 48
     let url: URL
     let legacyURL: URL
     private var db: OpaquePointer?
@@ -149,6 +151,10 @@ actor StorageEvidenceStore {
             try execute("DELETE FROM \(table) WHERE time < \(oldest)")
         }
         try execute("DELETE FROM capacity WHERE time < \(fine) AND id NOT IN (SELECT id FROM capacity WHERE time < \(fine) GROUP BY root, CAST(time/86400 AS INTEGER) HAVING time=MAX(time))")
+        // Each place keeps its own newest readings, so one that rarely changes
+        // (a Docker disk, a model folder) keeps the size a later reading is
+        // compared with, however often busier places are measured.
+        try execute("DELETE FROM locations WHERE id NOT IN (SELECT id FROM (SELECT id, ROW_NUMBER() OVER (PARTITION BY root ORDER BY time DESC) AS n FROM locations) WHERE n <= \(Self.readingsPerLocation))")
         for (table, cap) in [("capacity", 2_300), ("candidates", 32), ("locations", 1_024)] {
             try execute("DELETE FROM \(table) WHERE id NOT IN (SELECT id FROM \(table) ORDER BY time DESC LIMIT \(cap))")
         }

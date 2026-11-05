@@ -112,7 +112,17 @@ struct PreferencesWorkspace: View {
                     }
                     if !preview { StorageControl.shared.configureMonitoring() }
                 }
-            option("Watch known folders", "Observe metadata for build output, package and browser caches, Downloads and Codex local data. No file contents are read and no cleanup runs.", $settings.locationMonitoringEnabled)
+            option("Alert when space drops fast", "Alert when 5 GB or more goes within half an hour, or less when your reserve is near, and say which watched places grew. Their sizes are kept up to date to compare. Nothing is removed.", preview ? .constant(true) : $settings.fastDropAlertsEnabled)
+                .onChange(of: settings.fastDropAlertsEnabled) { _, enabled in
+                    if enabled && !preview {
+                        settings.reservePaused = false
+                        Notify.requestAuth()
+                        StorageControl.shared.start()
+                        Task { await StorageControl.shared.refreshCapacity(); await StorageControl.shared.refreshNotificationStatus() }
+                    }
+                    if !preview { StorageControl.shared.configureMonitoring() }
+                }
+            option("Watch known folders", "Keep the sizes of build output, package and browser caches, simulators, AI models, Docker, Claude Code data, agent worktrees, Downloads and Codex local data up to date. Only sizes are read, never what's inside files, and nothing is cleaned.", $settings.locationMonitoringEnabled)
                 .onChange(of: settings.locationMonitoringEnabled) { _, _ in
                     if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
                 }
@@ -121,11 +131,13 @@ struct PreferencesWorkspace: View {
                     if !preview { StorageControl.shared.start(); StorageControl.shared.configureMonitoring() }
                 }
             if settings.growthSuggestionsEnabled || preview {
-                HStack {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("Growth threshold").font(.system(size: 13, weight: .medium))
-                    Spacer()
-                    Stepper("\(settings.growthSuggestionGB) GB", value: $settings.growthSuggestionGB, in: 1...20)
-                        .frame(width: 145)
+                    CairnSegmentedControl(label: "Growth threshold", selection: growthThreshold,
+                                          options: Self.growthSteps.map { ("\($0) GB", $0) })
+                        .frame(width: 360)
+                    Text("How much a folder has to grow before Cairn suggests a look.").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
                 }.nightRow()
                 ForEach(ObservedRoot.catalogue().filter { GrowthSuggestions.selectableIDs.contains($0.id) }) { root in
                     option(root.title, root.id == "downloads" ? "Personal files: suggestion opens an inspection only." : "Suggest an inspection when this location grows by the chosen amount.",
@@ -139,10 +151,10 @@ struct PreferencesWorkspace: View {
                 }
                 fixed("Suggestion state", settings.locationMonitoringEnabled ? "Cairn will suggest inspections from recent compatible measurements. You can also measure known locations manually in Changes." : "Turn on Watch known folders for background measurements, or measure manually in Changes. Suggestions do not trigger cleanup.")
             }
-            if preview || settings.reserveEnabled {
-                option("Quiet hours · 22:00–08:00", "Keep in-app reserve status visible but send no reserve notifications during these local hours.", $settings.reserveQuietHours)
+            if preview || settings.reserveEnabled || settings.fastDropAlertsEnabled {
+                option("Quiet hours · 22:00–08:00", "Keep reserve and fast-drop status visible in Cairn but send no notifications during these local hours.", $settings.reserveQuietHours)
             }
-            if preview || settings.reserveEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled) {
+            if preview || settings.reserveEnabled || settings.fastDropAlertsEnabled || (settings.locationMonitoringEnabled && settings.growthSuggestionsEnabled) {
                 if !preview {
                     HStack(spacing: 16) {
                         if settings.reservePaused {
@@ -237,6 +249,12 @@ struct PreferencesWorkspace: View {
         }
     }
     /// A setting as a reference row: name and grey line on the left, switch on the right.
+    static let growthSteps = [1, 2, 5, 10, 20]
+    /// Shows an older in-between value (say 3 GB) as the nearest step until a step is picked.
+    private var growthThreshold: Binding<Int> {
+        Binding(get: { Self.growthSteps.min { abs($0 - settings.growthSuggestionGB) < abs($1 - settings.growthSuggestionGB) } ?? 1 },
+                set: { settings.growthSuggestionGB = $0 })
+    }
     private func option(_ title: String, _ detail: String, _ value: Binding<Bool>) -> some View {
         HStack(spacing: 20) {
             VStack(alignment: .leading, spacing: 2) {
