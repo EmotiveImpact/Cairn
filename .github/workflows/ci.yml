@@ -101,3 +101,14 @@ jobs:
           swift build -c release -j 2 --arch arm64 --arch x86_64
           lipo .build/apple/Products/Release/Cairn -verify_arch arm64 x86_64
           .build/apple/Products/Release/Cairn --reliabilitycheck
+
+      # A ready-made copy for read-only checks on a Mac with little free space,
+      # so nothing has to be compiled there. Not signed or notarised; kept 3 days.
+      - name: Upload test copy of the command line
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: cairn-test-copy
+          path: .build/apple/Products/Release/Cairn
+          retention-days: 3
+          if-no-files-found: ignore
