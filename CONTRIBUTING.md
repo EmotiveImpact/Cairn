@@ -17,7 +17,7 @@ BIN="$(swift build --show-bin-path)/Cairn"
 "$BIN" --safetycheck
 ```
 
-Additional bounded checks live in `Cairn/Diagnostics/`: `--reliabilitycheck`, `--lifecyclecheck`, `--hashmemorycheck`, `--loadcheck`, `--evidencecheck` and `--native-reliability-check`. Select checks appropriate to the change. Native checks need a macOS graphical session; filesystem event checks may require a less restrictive test environment. Do not substitute legacy `--selftest` or personal `--readonlycheck` for disposable fixture checks.
+Additional bounded checks live in `Cairn/Diagnostics/`: `--reliabilitycheck`, `--licensecheck`, `--lifecyclecheck`, `--hashmemorycheck`, `--loadcheck`, `--evidencecheck` and `--native-reliability-check`. Select checks appropriate to the change. Native checks need a macOS graphical session; filesystem event checks may require a less restrictive test environment. Do not substitute legacy `--selftest` or personal `--readonlycheck` for disposable fixture checks.
 
 ## Native component preview
 

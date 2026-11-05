@@ -317,6 +317,12 @@ struct AppShell: View {
                 return parts.joined(separator: "  ")
             }
         }
+        // A saved licence is read quietly once the window is up, so Pro is on
+        // without visiting Settings and the key is never asked for again.
+        .task {
+            guard !previewMode else { return }
+            await license.loadAfterLaunch()
+        }
         // AI tools reach the running app through this bridge to plan and run cleanups.
         .task {
             guard !previewMode else { return }

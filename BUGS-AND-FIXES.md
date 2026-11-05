@@ -42,6 +42,19 @@ on that Mac (5 November) listed 434 projects and found 396 of its 420 project
 folders. The other 24 hold 1.5 MB in all and are tool folders (AI skills, pnpm
 temporary folders, Vite caches, Micromamba recipes).
 
+## 3 November 2026 — Saved licence only read from Settings
+
+🟠 A saved licence was read only when Settings › Licence was opened, so after
+every restart Pro stayed off until that page was visited. If Polar could not be
+reached (for example straight after login, before Wi-Fi was up) and the last
+check was over 14 days old, the page offered the key box as if the key had been
+lost, and nothing tried again. Hidden for now because Pro unlocks nothing yet.
+Cairn now reads a saved licence quietly about two seconds after opening (only on
+a Mac where a licence was saved), keeps Pro for 30 days offline, retries by itself
+when Polar can't be reached, and shows "Check now" instead of the key box while a
+key is saved. New `--licensecheck` runs in CI with an in-memory server and
+Keychain. PR #23. Not yet tried against live Polar or a real Keychain.
+
 ## 30 October 2026 · Trash error floated over the finish screen ⚪
 
 If emptying the Trash from the finish screen failed, the message was drawn as an overlay in the middle of the page with no background, on top of the result. It now sits in the page under the result line. Fixed in PR #21; not yet seen on a real Mac.

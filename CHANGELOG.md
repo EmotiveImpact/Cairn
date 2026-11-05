@@ -18,6 +18,14 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 - `cairn projects` and the AI tool's `list_projects` list every project too, and say when the search stopped early.
 - **pnpm projects' packages can be cleared again.** pnpm installs every package as a link into its own `.pnpm` folder, and Cairn read those links as packages linked in by hand, so it held the whole `node_modules` back. A link now only holds it back when it points outside the project and outside pnpm's own store, and the note names the package. Workspace packages linked inside the same repository count as rebuilt by an install too.
 
+## 3 November 2026
+
+### Licence key asked for once (PR #23)
+
+- **Pro is on as soon as Cairn opens.** A saved licence is read quietly in the background a couple of seconds after the window appears, so there is no need to visit Settings › Licence after a restart. Only Macs where a licence was saved have their Keychain read at launch.
+- **No internet is fine.** If Cairn can't reach the licence server, for example straight after login, it keeps the saved key, keeps Pro on for up to 30 days (was 14), and tries again by itself.
+- **The key box stays away.** While a key is saved, Settings shows "Check now" instead of asking for the key again. A refunded or cancelled licence still switches Pro off.
+
 ## 31 October 2026
 
 ### Fast-drop alert and a wider watch list

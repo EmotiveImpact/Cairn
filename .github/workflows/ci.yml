@@ -40,6 +40,12 @@ jobs:
         run: |
           "$(swift build --show-bin-path)/Cairn" --workspacecheck
 
+      # In-memory licence server and Keychain: the key is asked for once only.
+      - name: Licence check
+        timeout-minutes: 2
+        run: |
+          "$(swift build --show-bin-path)/Cairn" --licensecheck
+
       # A picture of the Make room page with sample data, to compare with the mock.
       - name: Make room screenshot
         continue-on-error: true
