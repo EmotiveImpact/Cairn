@@ -159,6 +159,64 @@ enum WorkspaceCheck {
         } catch {
             check(false, "Project finder fixture could not be created: \(error)")
         }
+        // Installed packages: links that pnpm or a workspace makes are rebuilt by
+        // an install, while a package linked in by hand from elsewhere is not.
+        do {
+            let fm = FileManager.default
+            let root = fm.temporaryDirectory.appendingPathComponent("cairn-links-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: root) }
+            func file(_ path: String, _ text: String = "") throws {
+                let url = root.appendingPathComponent(path)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                fm.createFile(atPath: url.path, contents: Data(text.utf8))
+            }
+            func link(_ path: String, to destination: String) throws {
+                let url = root.appendingPathComponent(path)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try fm.createSymbolicLink(atPath: url.path, withDestinationPath: destination)
+            }
+            func verdict(_ project: String) -> Regenerability.Result {
+                Regenerability.evaluateNodeModules(projectDir: root.appendingPathComponent(project))
+            }
+            // pnpm: every package is a link into node_modules/.pnpm, scoped ones too.
+            try file("pnpm-app/package.json", "{}"); try file("pnpm-app/pnpm-lock.yaml")
+            try file("pnpm-app/node_modules/.pnpm/left-pad@1.0.0/node_modules/left-pad/index.js")
+            try file("pnpm-app/node_modules/.pnpm/@types+node@20.0.0/node_modules/@types/node/index.d.ts")
+            try link("pnpm-app/node_modules/left-pad", to: ".pnpm/left-pad@1.0.0/node_modules/left-pad")
+            try link("pnpm-app/node_modules/@types/node", to: "../.pnpm/@types+node@20.0.0/node_modules/@types/node")
+            let pnpm = verdict("pnpm-app")
+            check(pnpm.isRegenerable && pnpm.severity == .safe, "pnpm's own package links count as rebuilt by an install")
+            // A workspace: the root and a member both link to packages in the same repository.
+            try file("mono/package.json", "{}"); try file("mono/package-lock.json")
+            try file("mono/packages/api/package.json", "{}"); try file("mono/packages/web/package.json", "{}")
+            try link("mono/node_modules/api", to: "../packages/api")
+            try link("mono/packages/web/node_modules/api", to: "../../api")
+            check(verdict("mono").isRegenerable && verdict("mono/packages/web").isRegenerable,
+                  "Workspace package links inside the repository count as rebuilt by an install")
+            // pnpm's shared store, recorded in .modules.yaml, lives outside the project.
+            try file("store/links/is-odd/1.0.0/node_modules/is-odd/index.js")
+            try file("shared-store/package.json", "{}"); try file("shared-store/pnpm-lock.yaml")
+            try file("shared-store/node_modules/.modules.yaml", "layoutVersion: 5\nstoreDir: \(root.appendingPathComponent("store").path)\nvirtualStoreDir: .pnpm\n")
+            try link("shared-store/node_modules/is-odd", to: root.appendingPathComponent("store/links/is-odd/1.0.0/node_modules/is-odd").path)
+            check(verdict("shared-store").isRegenerable, "Links into pnpm's own shared store count as rebuilt by an install")
+            // npm link: the package points at a folder somewhere else.
+            try file("elsewhere/my-lib/package.json", "{}"); try file("elsewhere/tool/package.json", "{}")
+            try file("linked/package.json", "{}"); try file("linked/package-lock.json")
+            try link("linked/node_modules/my-lib", to: root.appendingPathComponent("elsewhere/my-lib").path)
+            let linked = verdict("linked")
+            check(!linked.isRegenerable && linked.severity == .review && linked.note.contains("my-lib"),
+                  "A package linked in by hand waits for review and is named")
+            try file("wide-store/package.json", "{}"); try file("wide-store/pnpm-lock.yaml")
+            try file("wide-store/node_modules/.modules.yaml", "storeDir: '\(root.path)'\n")
+            try link("wide-store/node_modules/my-lib", to: root.appendingPathComponent("elsewhere/my-lib").path)
+            check(!verdict("wide-store").isRegenerable, "A pnpm store set to a folder around the project never excuses a hand-made link")
+            try file("scoped/package.json", "{}"); try file("scoped/yarn.lock")
+            try link("scoped/node_modules/@me/tool", to: "../../../elsewhere/tool")
+            let scoped = verdict("scoped")
+            check(!scoped.isRegenerable && scoped.note.contains("@me/tool"), "A scoped package linked in by hand waits for review")
+        } catch {
+            check(false, "Package link fixture could not be created: \(error)")
+        }
         // Git status, project sleep notes, cleaning rules, AI models and the disk map.
         do {
             let parsed = GitStatus.parse("# branch.oid abc\n# branch.head main\n# branch.upstream origin/main\n# branch.ab +3 -1\n1 .M N... 100644 100644 100644 a b src/app.ts\n? notes.txt\n")

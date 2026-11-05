@@ -24,8 +24,23 @@ be offered for cleaning. Fix: a shared breadth-first search (`ProjectFinder`)
 that skips hidden home folders, bundles and mounted drives, allows 150,000
 folders or 60 seconds and 10 levels, and records every project folder it
 passes; Projects, `cairn projects` and `list_projects` list them all. Status:
-fixture checks added to `--workspacecheck`; still needs a preview-only run on
-the Mac that showed the problem.
+fixture checks added to `--workspacecheck`; a read-only run of the CI test copy
+on that Mac (5 November) listed 434 projects and found 396 of its 420 project
+folders. The other 24 hold 1.5 MB in all and are tool folders (AI skills, pnpm
+temporary folders, Vite caches, Micromamba recipes).
+
+## 5 November 2026 · pnpm projects' packages held back as hand-linked
+
+🟡 On the same Mac, 13 `node_modules` folders (3.3 GB) were held back for
+review as "npm-link symlinks", though every one had a lockfile. Cause: any
+symlink at the top of `node_modules` counted as a hand-made link, but pnpm
+makes every package a symlink into `node_modules/.pnpm`, and workspaces link
+their own packages. Fix: a link only counts when it points outside the folder
+that holds the lockfile and outside the pnpm store named in
+`node_modules/.modules.yaml`; packages inside `@scope` folders are checked too,
+and the note names the linked package. Yarn `portal:` dependencies are held
+back like `file:` and `link:` ones. Status: fixture checks added to
+`--workspacecheck`; needs a read-only run on that Mac.
 
 ## 30 October 2026 — Unreadable paths looked completely measured
 

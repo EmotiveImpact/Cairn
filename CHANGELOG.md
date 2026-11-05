@@ -16,6 +16,7 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 - **Wake-up commands cover the new kinds** (`mvn package`, `./gradlew build` from the folder that holds `gradlew`, `dotnet build`, `mix deps.get`, `bundle install`, `composer install`, `terraform init` and others), and a monorepo's packages are installed once from the folder with the lock file.
 - The git maintenance scan uses the same search, so it reaches the same projects and no longer reads editor extensions as old projects.
 - `cairn projects` and the AI tool's `list_projects` list every project too, and say when the search stopped early.
+- **pnpm projects' packages can be cleared again.** pnpm installs every package as a link into its own `.pnpm` folder, and Cairn read those links as packages linked in by hand, so it held the whole `node_modules` back. A link now only holds it back when it points outside the project and outside pnpm's own store, and the note names the package. Workspace packages linked inside the same repository count as rebuilt by an install too.
 
 ## 27 October 2026
 
