@@ -233,7 +233,7 @@ struct DeveloperCleanupView: View {
               }
               .disabled(previewMode || store.isScanning || store.isCleaning)
               if canSelect && item.cleanMethod == .trash {
-                  Text("Choose Move to Trash or Delete now in the review. Protected files remain blocked.")
+                  Text("In the review you can choose Move to Trash or Delete now. Protected files are always left alone.")
                       .font(.system(size: 12)).foregroundStyle(Brand.textMuted)
               }
           }

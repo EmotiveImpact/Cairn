@@ -10,6 +10,19 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 5 November 2026 · pnpm projects' packages held back as hand-linked
+
+🟡 On the same Mac, 13 `node_modules` folders (3.3 GB) were held back for
+review as "npm-link symlinks", though every one had a lockfile. Cause: any
+symlink at the top of `node_modules` counted as a hand-made link, but pnpm
+makes every package a symlink into `node_modules/.pnpm`, and workspaces link
+their own packages. Fix: a link only counts when it points outside the folder
+that holds the lockfile and outside the pnpm store named in
+`node_modules/.modules.yaml`; packages inside `@scope` folders are checked too,
+and the note names the linked package. Yarn `portal:` dependencies are held
+back like `file:` and `link:` ones. Status: fixture checks added to
+`--workspacecheck`; needs a read-only run on that Mac.
+
 ## 4 November 2026 — Projects missed most projects
 
 🟠 A look-only check on a real Mac found about 370 coding projects in the home
@@ -29,18 +42,13 @@ on that Mac (5 November) listed 434 projects and found 396 of its 420 project
 folders. The other 24 hold 1.5 MB in all and are tool folders (AI skills, pnpm
 temporary folders, Vite caches, Micromamba recipes).
 
-## 5 November 2026 · pnpm projects' packages held back as hand-linked
+## 30 October 2026 · Trash error floated over the finish screen ⚪
 
-🟡 On the same Mac, 13 `node_modules` folders (3.3 GB) were held back for
-review as "npm-link symlinks", though every one had a lockfile. Cause: any
-symlink at the top of `node_modules` counted as a hand-made link, but pnpm
-makes every package a symlink into `node_modules/.pnpm`, and workspaces link
-their own packages. Fix: a link only counts when it points outside the folder
-that holds the lockfile and outside the pnpm store named in
-`node_modules/.modules.yaml`; packages inside `@scope` folders are checked too,
-and the note names the linked package. Yarn `portal:` dependencies are held
-back like `file:` and `link:` ones. Status: fixture checks added to
-`--workspacecheck`; needs a read-only run on that Mac.
+If emptying the Trash from the finish screen failed, the message was drawn as an overlay in the middle of the page with no background, on top of the result. It now sits in the page under the result line. Fixed in PR #21; not yet seen on a real Mac.
+
+## 30 October 2026 · Disk map showed a blank gap ⚪
+
+After the disk map stopped counting unexplained space inside System Data, the bar ended in an unlabelled gap. Used space the measured parts miss (0.5 GB or more) now shows as its own "Not measured" part before Free, with a note saying what it can include. Fixed in PR #21, with two reliability checks.
 
 ## 30 October 2026 — Unreadable paths looked completely measured
 

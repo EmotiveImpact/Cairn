@@ -92,14 +92,14 @@ enum Cleaner {
         // was swapped at the last instant: put it straight back and stop.
         guard let trashed = resulting, let moved = SourceIdentity.read(trashed) else {
             return Outcome(bytesAffected: 0, usedTool: false,
-                           error: "macOS did not provide a verifiable Trash destination. No permanent deletion was attempted. Inspect the original location and Trash before retrying.")
+                           error: "macOS didn't say where in the Trash this item went, so Cairn stopped and deleted nothing. Check the item's folder and the Trash before trying again.")
         }
         if moved.device == scanned.device && moved != scanned {
             let restored = renamex_np(trashed.path, item.resolvedURL.path, UInt32(RENAME_EXCL)) == 0
             return Outcome(bytesAffected: 0, usedTool: false,
                            error: restored
                              ? "The item changed while Cairn was moving it, so it was put back and nothing was deleted. Run a fresh scan."
-                             : "The item changed while Cairn was moving it. Nothing was permanently deleted, but Put Back failed. Inspect the original location and Trash: \(trashed.path)")
+                             : "The item changed while Cairn was moving it. Nothing was deleted, but Put Back failed, so look for it in the Trash: \(trashed.path)")
         }
         // Cross-volume Trash copies have a different identity. Keep them
         // recoverable instead of permanently deleting an unverified object.
@@ -120,7 +120,7 @@ enum Cleaner {
             return Outcome(bytesAffected: 0, usedTool: false, error: "Only items directly inside a Trash folder can be emptied.")
         }
         guard let scanned = item.sourceIdentity, SourceIdentity.read(url) == scanned else {
-            return Outcome(bytesAffected: 0, usedTool: false, error: "This Trash item's identity is missing or changed. Run a fresh scan.")
+            return Outcome(bytesAffected: 0, usedTool: false, error: "This item in the Trash changed since the scan, or Cairn can't tell it's the same one. Run a fresh scan.")
         }
         guard FileScan.exists(url) else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "This item is no longer in the Trash.")

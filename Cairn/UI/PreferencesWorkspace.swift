@@ -83,7 +83,7 @@ struct PreferencesWorkspace: View {
                     .fixedSize(horizontal: false, vertical: true)
             }.nightRow()
             fixed("Tool cleans", "Docker, pnpm, Go, Homebrew, conda, simctl, git gc and Time Machine snapshots are cleaned with each tool's own command, so nothing is deleted behind the tool's back.")
-            fixed("Always protected", "System files, credentials, Mail, Messages, Photos, iCloud, source repositories and AI conversation history are never removed, whichever mode you choose.")
+            fixed("Always protected", "System files, credentials, your emails, Messages, Photos, iCloud, source repositories and AI conversation history are never removed, whichever mode you choose.")
         case "Rules":
             RulesPanel()
         case "Scanning":
