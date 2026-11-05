@@ -57,9 +57,10 @@ enum Regenerability {
     /// folder, such as pnpm's `.pnpm`, or pnpm's store), or to a workspace
     /// package or declared dependency inside the lockfile's folder. Anything
     /// else is by hand: `npm link` goes through npm's global folder, and a link
-    /// to a sibling folder nobody declared is gone after a fresh install. Only
-    /// the link itself is read, never the links behind it, so a package linked
-    /// through the global folder can't pass for a local one. Bounded probe.
+    /// to a sibling folder nobody declared is gone after a fresh install. The
+    /// link itself is judged, so a package linked through the global folder
+    /// can't pass for a local one, and the end of its chain must also stay in
+    /// the project or pnpm's store. Bounded probe.
     private static func handMadeLink(_ nodeModules: URL, projectDir: URL, root: URL) -> String? {
         let fm = FileManager.default
         let rootPath = root.resolvingSymlinksInPath().path
@@ -95,6 +96,10 @@ enum Regenerability {
                 // without following the link's own target any further.
                 let path = target.deletingLastPathComponent().resolvingSymlinksInPath()
                     .appendingPathComponent(target.lastPathComponent).path
+                // The whole chain must also end inside the project or pnpm's store,
+                // so a local alias to a folder elsewhere can't pass either.
+                let end = target.resolvingSymlinksInPath().path
+                guard within(end, rootPath) || stores.contains(where: { within(end, $0) }) else { return linkName }
                 if stores.contains(where: { within(path, $0) }) { continue }
                 guard within(path, rootPath) else { return linkName }
                 let relative = String(path.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
@@ -120,7 +125,8 @@ enum Regenerability {
     /// Whether a folder (relative to the workspace root) is one of its
     /// workspace packages, from package.json "workspaces" or
     /// pnpm-workspace.yaml "packages". `*` matches within one folder, `**`
-    /// across folders, and a pattern starting with `!` leaves folders out.
+    /// across any number of folders (including none before a `/`), and a
+    /// pattern starting with `!` leaves folders out.
     private static func workspacePatterns(_ root: URL) -> (String) -> Bool {
         var globs: [String] = []
         if let data = try? Data(contentsOf: root.appendingPathComponent("package.json")),
@@ -150,7 +156,13 @@ enum Regenerability {
             while let c = chars.first {
                 chars = chars.dropFirst()
                 if c == "*" {
-                    if chars.first == "*" { chars = chars.dropFirst(); pattern += ".*" } else { pattern += "[^/]*" }
+                    if chars.first == "*" {
+                        chars = chars.dropFirst()
+                        // `**/` also matches no folder at all, so packages/**/ui matches packages/ui.
+                        if chars.first == "/" { chars = chars.dropFirst(); pattern += "(?:.*/)?" } else { pattern += ".*" }
+                    } else {
+                        pattern += "[^/]*"
+                    }
                 } else if c == "?" {
                     pattern += "[^/]"
                 } else {

@@ -229,6 +229,17 @@ enum WorkspaceCheck {
             try link("chain/node_modules/tool", to: root.appendingPathComponent("global/lib/node_modules/tool").path)
             check(!verdict("chain").isRegenerable && verdict("chain").note.contains("tool"),
                   "A package linked through npm's global folder waits for review")
+            // A declared package whose link goes through a local alias to a folder elsewhere.
+            try file("alias/package.json", #"{"dependencies": {"tool": "^1.0.0"}}"#); try file("alias/package-lock.json")
+            try link("alias/tool-alias", to: root.appendingPathComponent("elsewhere/tool").path)
+            try link("alias/node_modules/tool", to: "../tool-alias")
+            check(!verdict("alias").isRegenerable, "A link whose chain ends outside the project waits for review")
+            // packages/**/ui covers packages/ui as well as deeper ones.
+            try file("deep/package.json", #"{"workspaces": ["packages/**/ui"]}"#); try file("deep/yarn.lock")
+            try file("deep/packages/ui/package.json", "{}"); try file("deep/packages/web/ui/package.json", "{}")
+            try link("deep/node_modules/ui", to: "../packages/ui")
+            try link("deep/node_modules/web-ui", to: "../packages/web/ui")
+            check(verdict("deep").isRegenerable, "A ** workspace pattern matches packages at any depth, including none")
             // A link to a sibling folder that nothing declares is gone after a fresh install.
             try file("sib/package-lock.json"); try file("sib/app/package.json", "{}"); try file("sib/tool/package.json", "{}")
             try link("sib/app/node_modules/tool", to: "../../tool")
