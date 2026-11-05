@@ -36,6 +36,10 @@ struct DevProjectsScanner: CairnScanner {
     private let maxProjects = 5_000
     /// Floor size for non-node_modules artifacts (node_modules uses ctx.minSizeBytes).
     private let smallFloor: Int64 = 1 * 1024 * 1024  // 1 MB
+    /// Time for one big single build folder (Rust target, SwiftPM .build, game
+    /// engine output). A Rust target can pass 8 GB and 100,000 files, so these
+    /// lift the file count and get longer than the usual 4 seconds.
+    static let bigBuildSeconds: TimeInterval = 10
 
     // MARK: - Scan
 
@@ -171,9 +175,12 @@ struct DevProjectsScanner: CairnScanner {
         func has(_ file: String) -> Bool { FileScan.exists(parent.appendingPathComponent(file)) }
         /// Build output the tool makes again on its own: safe, and counted in
         /// Home's one-click number.
-        func rebuilt(_ note: String) -> ScanItem? {
+        /// `big` is for one large build folder (Rust target, SwiftPM .build, game
+        /// engine output): no file cap and a longer time limit, so it is fully counted.
+        func rebuilt(_ note: String, big: Bool = false) -> ScanItem? {
             makeItem(at: dir, severity: .safe, minSize: smallFloor, isRegenerable: true, cleanMethod: .trash,
-                     note: note, selectedIfSafe: true, maxFiles: 50_000)
+                     note: note, selectedIfSafe: true, maxFiles: big ? .max : 50_000,
+                     largeTree: big, measureSeconds: big ? Self.bigBuildSeconds : FileScan.defaultMeasureSeconds)
         }
         /// Installed packages: they come back with an install step, but only
         /// the same versions when a lock file pins them, and some projects keep
@@ -197,7 +204,7 @@ struct DevProjectsScanner: CairnScanner {
             )
 
         case .cargoTarget:
-            return rebuilt("Rust build output for \(project) — cargo clean")
+            return rebuilt("Rust build output for \(project) — cargo clean", big: true)
 
         case .venv:
             let cfgInside = FileScan.exists(dir.appendingPathComponent("pyvenv.cfg"))
@@ -232,14 +239,14 @@ struct DevProjectsScanner: CairnScanner {
             return rebuilt("CocoaPods install for \(project) — pod install restores")
 
         case .swiftBuild:
-            return rebuilt("SwiftPM build for \(project) — swift build restores")
+            return rebuilt("SwiftPM build for \(project) — swift build restores", big: true)
 
         case .webBuild:
             return rebuilt("Web build output (\(name)) for \(project) — your bundler regenerates it")
 
         case .unity, .unreal, .flutter:
             let engine = kind == .unity ? "Unity" : (kind == .unreal ? "Unreal" : "Flutter")
-            return rebuilt("\(engine) build output (\(name)) for \(project) — regenerates on next build")
+            return rebuilt("\(engine) build output (\(name)) for \(project) — regenerates on next build", big: true)
 
         case .mavenTarget:
             return rebuilt("Maven build output for \(project), made again by mvn package")

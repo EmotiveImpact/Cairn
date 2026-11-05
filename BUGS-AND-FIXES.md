@@ -42,6 +42,25 @@ on that Mac (5 November) listed 434 projects and found 396 of its 420 project
 folders. The other 24 hold 1.5 MB in all and are tool folders (AI skills, pnpm
 temporary folders, Vite caches, Micromamba recipes).
 
+## 4 November 2026: Developer caches could drop off the list
+
+Developer caches were measured one at a time against one 18-second limit, in a
+fixed order that put Homebrew 25th. When the limit ran out, only the first
+cache left over got a "not measured" row and the rest vanished. Gradle caches
+with more than 100,000 files showed a partial size, and the pnpm store counted
+files its projects still share. Caches are now measured three at a time with
+the usual biggest first, every skipped cache keeps its own row, known caches
+are counted in full within their time limit, and pnpm files shared with a
+project are kept out of the number. A Gradle cache quiet for a day is one
+click and waits for Android Studio or IntelliJ to close; it is never cleaned
+while a Gradle build or Gradle's background process is running. A look-only scan on
+Edem's Mac also showed an 8.67 GB Rust build folder as 5.91 GB, because
+project build folders stopped at 50,000 files; Rust, SwiftPM and game engine
+build folders are now counted in full within 10 seconds each. Fixture checks
+are in the reliability check. The new build has not yet been run on a real
+Mac: the test Mac had under 6 GB free, and the Gradle, pnpm and npm caches had
+already been removed there.
+
 ## 3 November 2026 — Saved licence only read from Settings
 
 🟠 A saved licence was read only when Settings › Licence was opened, so after

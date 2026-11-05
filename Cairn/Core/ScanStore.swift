@@ -721,8 +721,13 @@ final class ScanStore {
             return item
         }
         // Leave alone anything a running program or a build in progress is using.
-        let running = await Task.detached(priority: .userInitiated) { InUse.runningExecutables() }.value
-        let busy = prepared.compactMap { item in InUse.reason(item, running: running).map { (item.id, $0) } }
+        let needsCommandLines = prepared.contains(where: InUse.isGradleFolder)
+        let (running, commandLines) = await Task.detached(priority: .userInitiated) {
+            (InUse.runningExecutables(), needsCommandLines ? InUse.runningCommandLines() : [])
+        }.value
+        let busy = prepared.compactMap { item in
+            InUse.reason(item, running: running, commandLines: commandLines).map { (item.id, $0) }
+        }
         let busyIDs = Set(busy.map(\.0))
         let items = prepared.filter { !busyIDs.contains($0.id) }
         if items.isEmpty && !busy.isEmpty {
@@ -810,6 +815,16 @@ final class ScanStore {
                 summary.failed += 1
                 summary.errors.append("\(item.url.lastPathComponent): close \(RunningApps.displayNames(for: runningOwners).joined(separator: ", ")) before cleaning")
                 continue
+            }
+            // Gradle can start while earlier items are being cleaned, so look
+            // again right before touching a Gradle folder.
+            if InUse.isGradleFolder(item) {
+                let lines = await Task.detached(priority: .userInitiated) { InUse.runningCommandLines() }.value
+                if let busy = InUse.gradleBusyReason(item, commandLines: lines) {
+                    summary.failed += 1
+                    summary.errors.append("Skipped \(busy)")
+                    continue
+                }
             }
             let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
             guard let actionID = await Task.detached(priority: .utility, operation: {

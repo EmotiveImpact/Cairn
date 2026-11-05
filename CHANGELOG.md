@@ -18,6 +18,15 @@ Known problems and their fixes live in [BUGS-AND-FIXES.md](BUGS-AND-FIXES.md).
 - `cairn projects` and the AI tool's `list_projects` list every project too, and say when the search stopped early.
 - **pnpm projects' packages can be cleared again.** pnpm installs every package as a link into its own `.pnpm` folder, and Cairn read those links as packages linked in by hand, so it held the whole `node_modules` back. A link now only holds it back when it points outside the project and outside pnpm's own store, and the note names the package. Workspace packages linked inside the same repository count as rebuilt by an install too.
 
+### Developer caches found and counted properly (PR #24)
+
+- **Biggest first, none dropped.** Developer caches are measured three at a time, starting with the ones that are usually biggest (Homebrew, Gradle, pnpm, npm, Go, Cargo). If the scan runs out of time, every cache it did not reach gets its own "not measured" row. Before, only the first one did and the rest disappeared from the list.
+- **Full sizes for big caches.** Known package caches are no longer cut off at 100,000 files, so a large Gradle or pnpm cache usually shows its real size. If one still runs out of time, it says it is a partial size.
+- **Gradle in one click.** The Gradle cache is ticked when Gradle has not used it for a day and is not running. Cleaning waits until Android Studio or IntelliJ is closed, and skips the cache if a Gradle build or Gradle's background process is running at that moment. If Gradle ran in the last day, it stays for you to check.
+- **Honest pnpm number.** The pnpm store now counts only files no project links to, and says that pnpm removes only packages no project uses, so it can free less than the size shown.
+- **Big project build folders counted in full.** Rust `target`, SwiftPM `.build` and game engine build folders are no longer cut off at 50,000 files and get up to 10 seconds each. One that needs longer is marked as a partial size. On Edem's Mac a Rust build folder of 8.67 GB had shown as 5.91 GB.
+- The npm cache is named "npm cache" in Look through, not "cacache".
+
 ## 3 November 2026
 
 ### Licence key asked for once (PR #23)
