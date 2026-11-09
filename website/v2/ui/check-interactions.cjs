@@ -84,7 +84,11 @@ const escape = () => d.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Esca
  assert.equal(d.querySelectorAll('.cairn-navigation nav a').length,5);
  assert(d.querySelector('.cairn-navigation nav a[href="docs-preview/index.html"]'));
  escape(); await tick(); assert.equal(menu.getAttribute('aria-expanded'),'false'); assert.equal(d.activeElement,menu);
- menu.click(); await tick(); d.querySelector('.cairn-navigation nav a').click(); await tick();
+ menu.click(); await tick();
+ const firstNavLink=d.querySelector('.cairn-navigation nav a');
+ assert.equal(firstNavLink.getAttribute('href'),'features.html','mobile menu uses the new product page');
+ d.addEventListener('click',event=>event.preventDefault(),{once:true}); // jsdom has no page navigation
+ firstNavLink.click(); await tick();
  assert.equal(menu.getAttribute('aria-expanded'),'false');
  const showcase=d.querySelector('#inside-cairn');
  let showcaseTop=76;
