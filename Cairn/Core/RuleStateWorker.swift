@@ -43,7 +43,7 @@ enum RuleStateWorker {
             saved = RuleConsentStore.shared.revoke(next.kind)
         } else {
             next.paused = rule.paused
-            next.consentID = UUID().uuidString()
+            next.consentID = UUID().uuidString
             next.consentSeal = SettingsSeal.seal(next.consentValue, for: CleaningRules.key)
             saved = RuleConsentStore.shared.install(next)
         }
@@ -59,7 +59,7 @@ enum RuleStateWorker {
         }
         var next = current
         next.approved = true; next.paused = false; next.approvedAt = Date()
-        next.consentID = UUID().uuidString()
+        next.consentID = UUID().uuidString
         next.consentSeal = SettingsSeal.seal(next.consentValue, for: CleaningRules.key)
         return persist(next, base: base, saved: RuleConsentStore.shared.install(next))
     }

@@ -17,7 +17,7 @@ enum CleaningRuleCheck {
               "Unsaved-rule risk acceptance cannot bypass active file-operation protection")
         var approved = CleaningRule(kind: .xcodeBuild)
         approved.approved = true
-        approved.consentID = UUID().uuidString()
+        approved.consentID = UUID().uuidString
         approved.consentSeal = "fixture-seal"
         let payload = approved.consentValue
         // Inject only cryptographic verification: exercise the real persistence,
@@ -41,7 +41,7 @@ enum CleaningRuleCheck {
         changed = approved; changed.schedule = .daily; variants.append(("changed schedule", changed))
         changed = approved; changed.paused = true; variants.append(("paused run", changed))
         changed = approved; changed.approved = false; variants.append(("switched-off run", changed))
-        changed = approved; changed.consentID = UUID().uuidString(); variants.append(("replaced approval", changed))
+        changed = approved; changed.consentID = UUID().uuidString; variants.append(("replaced approval", changed))
         changed = approved; changed.lastRun = Date(); variants.append(("tampered scheduling receipt", changed))
         for (label, rule) in variants {
             check(!loaded(rule).approved && !run.isAuthorized(current: rule, verify: verify), "Rule rejects \(label)")
@@ -55,7 +55,7 @@ enum CleaningRuleCheck {
         for changeCap in [true, false] {
             var newer = original
             if changeCap { newer.capGB += 1 } else { newer.minAgeDays += 1 }
-            newer.consentID = UUID().uuidString()
+            newer.consentID = UUID().uuidString
             newer.consentSeal = newer.consentValue
             check(newer.isVerified(using: exact) && !inPreview.isAuthorized(current: newer, verify: exact),
                   "Fresh valid approval cannot authorize old preview items")
