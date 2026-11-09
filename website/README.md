@@ -1,3 +1,7 @@
+# Current website
+
+The owner confirmed `v2/story.html`, the cinematic scroll homepage, on 9 November 2026. Use it, not `v2/night.html` or Beam/Wave. See `v2/README.md` for the complete site, preservation boundary and checks. Earlier notes below are retained as history.
+
 # Cairn website
 
 The active website is [v2/night.html](v2/night.html). [v2/night-beam.html](v2/night-beam.html) is the same page, images and footer included, restyled around a light-beam hero (headline on top, real app screenshot below with the beam landing on it). "How it works" is now four clickable steps with the real app screens instead of the long scroll story. Styling lives in `beam-hero.css` and `beam-hero.js`.

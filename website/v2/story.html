@@ -4,6 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="theme-color" content="#090b0d" />
+    <meta name="description" content="See Cairn’s cinematic storage story, then explore its features, cleanup workflow, protection, planned pricing and development status." />
     <title>Cairn: a Mac cleaner for developers</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -18,6 +19,8 @@
     <link rel="stylesheet" href="story.css?v=43" />
     <script src="beam-hero.js?v=7" defer></script>
     <script src="story.js?v=43" defer></script>
+      <link rel="stylesheet" href="site/home-navigation.css">
+    <script src="site/home-navigation.js" defer></script>
   </head>
   <body class="story-page">
     <a class="skip-link" href="#main">Skip to content</a>
@@ -27,9 +30,8 @@
         <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-navigation" hidden>Menu</button>
         <nav class="main-nav" id="main-navigation" aria-label="Main navigation">
           <a href="#number">Why Cairn</a><a href="#disk">How it works</a><a href="#ask">AI tools</a><a href="#app">The app</a><a href="docs-preview/index.html">Docs</a>
-        </nav>
-        <span class="header-status">In development</span>
-        <a class="button button-light header-action" href="#close"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download app</span></a>
+        </nav><!-- Site navigation start --><details class="site-explore" id="site-explore"><summary>Explore <span aria-hidden="true">⌄</span></summary><nav class="site-explore-panel" aria-label="Explore Cairn"><div><p>Explore</p><a href="features.html">Features</a><a href="how-it-works.html">How it works</a><a href="protection.html">Protection</a><a href="pricing.html">Pricing</a></div><div><p>Get started</p><a href="download.html">Download status</a><a href="docs-preview/index.html">Documentation</a><a href="support.html">Support & FAQ</a></div><div><p>Cairn</p><a href="about.html">About</a><a href="changelog.html">Changelog</a><a href="privacy.html">Privacy information</a><a href="terms.html">Licensing information</a></div><div class="explore-chapters"><p>On this page</p><a href="#number">Why Cairn</a><a href="#disk">The disk story</a><a href="#ask">AI tools</a><a href="#app">The app</a></div></nav></details><!-- Site navigation end --><span class="header-status">In development</span>
+        <a class="button button-light header-action" href="download.html"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download app</span></a>
       </div>
     </header>
 
@@ -44,7 +46,7 @@
               <h1 id="open-title" class="reveal"><b>Cairn</b> <span>finds the junk in your coding projects.</span></h1>
               <p class="open-lead reveal">And works with your AI coding tools. Build files and caches go. Your code and AI conversations are never touched.</p>
             </div>
-            <a class="open-cta reveal" href="#close">Download for Mac</a>
+            <a class="open-cta reveal" href="download.html">Download for Mac</a>
           </div>
           <div class="open-foot reveal">
             <dl class="open-stats">
@@ -229,7 +231,7 @@
     <div id="close"></div>
     <footer class="site-footer">
       <div class="shell footer-hero" aria-labelledby="closing-title"><p class="section-label">For the work ahead</p><h2 id="closing-title">More room.<br />Keep your momentum.</h2><p>Your next idea needs room. Your current work needs care.<br /> Cairn looks after both.</p>
-        <div class="footer-actions"><a class="button button-light" href="#download"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download for Mac</span></a><a class="button button-ghost" href="#buy">Buy Cairn Pro · £35.99</a></div>
+        <div class="footer-actions"><a class="button button-light" href="download.html"><svg class="apple" viewBox="0 0 384 512" width="13" height="15" aria-hidden="true"><path fill="currentColor" d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z"/></svg><span>Download for Mac</span></a><a class="button button-ghost" href="pricing.html">Buy Cairn Pro · £35.99</a></div>
         <p class="footer-price">Pay once and your licence never runs out. Cairn 1 gets free updates for every new macOS for at least two years after you buy. Cairn 2, when it comes, will be a small upgrade fee, and Cairn 1 keeps working if you skip it.</p>
         <p class="footer-availability">For macOS 14 Sonoma or later, on Apple silicon and Intel Macs.</p></div>
       <div class="shell footer-main">
@@ -239,6 +241,7 @@
           <div><h2>Cairn</h2><details class="footer-name" id="name"><summary>Why “Cairn”?</summary><p>A cairn is a stack of stones that marks a path. The idea behind our name: a clearer next step when your Mac is full.</p></details><a href="docs-preview/index.html">Documentation</a><a href="#top">Back to top</a></div>
         </nav>
       </div>
+      <!-- Site directory start --><nav class="shell site-directory" aria-label="All Cairn pages"><a href="features.html">Features</a><a href="how-it-works.html">How it works</a><a href="protection.html">Protection</a><a href="pricing.html">Pricing</a><a href="download.html">Download status</a><a href="docs-preview/index.html">Documentation</a><a href="support.html">Support & FAQ</a><a href="about.html">About</a><a href="changelog.html">Changelog</a><a href="privacy.html">Privacy information</a><a href="terms.html">Licensing information</a></nav><!-- Site directory end -->
       <div class="shell footer-bottom"><span>© 2026 Cairn</span><span>Your code and AI conversations are never touched.</span></div>
     </footer>
 

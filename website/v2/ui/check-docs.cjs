@@ -23,7 +23,7 @@ for(const route of routes){
   assert(fs.existsSync(target),`broken local reference in ${route}: ${url}`);
  }
 }
-const website=new JSDOM(fs.readFileSync(path.join(root,'night.html'),'utf8')).window.document;
+const website=new JSDOM(fs.readFileSync(path.join(root,'story.html'),'utf8')).window.document;
 assert(website.querySelector('.main-nav a[href="docs-preview/index.html"]'));
 assert(website.querySelector('.footer-links a[href="docs-preview/index.html"]'));
 console.log(`PASS: ${routes.length} Mintlify pages, generated navigation, local links/assets, and website entry points.`);
