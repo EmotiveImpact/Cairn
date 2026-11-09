@@ -6,6 +6,8 @@ import SwiftUI
 struct RulesPanel: View {
     @Bindable private var settings = AppSettings.shared
     @State private var previews: [CleaningRule.Kind: [ScanItem]] = [:]
+    @State private var previewScopes: [CleaningRule.Kind: String] = [:]
+    @State private var previewGeneration = UUID()
     @State private var checking: CleaningRule.Kind?
     @State private var pendingApproval: CleaningRule.Kind?
     private var runner: RuleRunner { .shared }
@@ -15,10 +17,19 @@ struct RulesPanel: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Approve once. Rules only clear files that rebuild themselves, skip anything in use, and leave a receipt in Activity.")
+            Text("Approve each scope. Rules move rebuildable files to Trash, skip anything in use, and leave a receipt in Activity. Trash does not free space until emptied.")
                 .font(.system(size: 13.5)).foregroundStyle(Brand.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.vertical, 16)
+            if let error = runner.consentError {
+                Text(error).font(.system(size: 12)).foregroundStyle(Brand.amber)
+                    .fixedSize(horizontal: false, vertical: true).padding(.bottom, 12)
+                if runner.consentErrorKind != nil {
+                    NightLink(title: "Retry saving rule off") { runner.retrySavingOff() }
+                        .padding(.bottom, 12)
+                }
+            }
+            if runner.isUpdating { Text("Saving rule settings. Keep Cairn open until this finishes.").font(.system(size: 12)).foregroundStyle(Brand.textMuted) }
             lowSpace
             ForEach(runner.rules) { rule in row(rule) }
         }
@@ -101,7 +112,7 @@ struct RulesPanel: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             Toggle(rule.kind.title, isOn: Binding(get: { rule.approved || pendingApproval == rule.kind }, set: { on in
-                if on { startApproval(rule) } else { pendingApproval = nil; editing = nil; var next = rule; next.approved = false; runner.update(next) }
+                if on { startApproval(rule) } else { previewGeneration = UUID(); pendingApproval = nil; editing = nil; var next = rule; next.approved = false; runner.update(next) }
             }))
             .labelsHidden().toggleStyle(.switch).controlSize(.small)
         }
@@ -157,20 +168,22 @@ struct RulesPanel: View {
                     ProgressView().controlSize(.small)
                     Text("Measuring what this rule would clear today…").font(.system(size: 12)).foregroundStyle(Brand.textMuted)
                 }
-            } else if let items = previews[rule.kind] {
+            } else if let items = previews[rule.kind], previewScopes[rule.kind] == rule.scope {
                 let total = items.reduce(Int64(0)) { $0 + $1.allocatedSize }
                 NightNote(strong: items.isEmpty ? "" : "Today this rule would clear \(Fmt.size(total))",
                           text: items.isEmpty ? "Today this rule would clear nothing. It will check again on its schedule."
                               : "in \(items.count) item\(items.count == 1 ? "" : "s"), for example \(items.prefix(3).map { $0.resolvedURL.lastPathComponent }.joined(separator: ", ")).") {
-                    NightLink(title: "Cancel") { pendingApproval = nil }
+                    NightLink(title: "Cancel") { previewGeneration = UUID(); pendingApproval = nil }
                     Button("Approve rule") {
                         var next = rule
                         next.approved = true
                         next.paused = false
-                        runner.update(next)
+                        runner.approve(next)
                         pendingApproval = nil
-                    }.buttonStyle(ControlPanelButtonStyle(primary: true))
+                    }.buttonStyle(ControlPanelButtonStyle(primary: true)).disabled(runner.isUpdating)
                 }
+            } else {
+                NightLink(title: "Measure again before approving") { startApproval(rule) }
             }
         }
         .padding(.top, 10)
@@ -178,27 +191,39 @@ struct RulesPanel: View {
 
     private func settingsLine(_ rule: CleaningRule) -> some View {
         HStack(spacing: 18) {
-            CairnSegmentedControl(label: "How often", selection: Binding(get: { rule.schedule }, set: { var next = rule; next.schedule = $0; runner.update(next) }),
+            CairnSegmentedControl(label: "How often", selection: Binding(get: { rule.schedule }, set: { var next = rule; next.schedule = $0; changeScope(next) }),
                                   options: CleaningRule.Schedule.allCases.map { ($0.title, $0) })
                 .frame(width: 220)
             if rule.kind != .browserCaches && rule.kind != .appCaches {
-                Stepper("\(rule.kind.ageLabel) \(rule.minAgeDays) days", value: Binding(get: { rule.minAgeDays }, set: { var next = rule; next.minAgeDays = $0; runner.update(next); previews[rule.kind] = nil }),
+                Stepper("\(rule.kind.ageLabel) \(rule.minAgeDays) days", value: Binding(get: { rule.minAgeDays }, set: { var next = rule; next.minAgeDays = $0; changeScope(next) }),
                         in: rule.kind == .idleProjects ? 7...365 : 1...365, step: rule.kind == .idleProjects ? 7 : 1)
                     .font(.system(size: 12))
             }
-            Stepper("Up to \(rule.capGB) GB a run", value: Binding(get: { rule.capGB }, set: { var next = rule; next.capGB = $0; runner.update(next); previews[rule.kind] = nil }),
+            Stepper("Up to \(rule.capGB) GB a run", value: Binding(get: { rule.capGB }, set: { var next = rule; next.capGB = $0; changeScope(next) }),
                     in: 1...200)
                 .font(.system(size: 12))
         }
     }
 
+    private func changeScope(_ rule: CleaningRule) {
+        runner.update(rule)
+        startApproval(rule)
+    }
+
     private func startApproval(_ rule: CleaningRule) {
+        let generation = UUID()
+        previewGeneration = generation
+        previews[rule.kind] = nil
+        previewScopes[rule.kind] = nil
         pendingApproval = rule.kind
-        guard !preview else { previews[rule.kind] = []; return }
+        guard !preview else { previews[rule.kind] = []; previewScopes[rule.kind] = rule.scope; return }
         checking = rule.kind
         Task {
-            let items = await runner.preview(rule) ?? []
+            let items = await runner.preview(rule)
+            guard previewGeneration == generation, pendingApproval == rule.kind,
+                  runner.rules.first(where: { $0.kind == rule.kind })?.scope == rule.scope else { return }
             previews[rule.kind] = items
+            previewScopes[rule.kind] = items == nil ? nil : rule.scope
             if checking == rule.kind { checking = nil }
         }
     }

@@ -6,7 +6,8 @@ import Foundation
 /// run measures fresh, takes only items the scanner proved safe and
 /// rebuildable (the same test AI tools are held to), stops at the rule's
 /// size cap, goes through the normal executor and journal, and leaves a
-/// receipt in Activity. Pausing or switching a rule off stops it at once.
+/// receipt in Activity. Pausing or switching a rule off stops further actions; an atomic move
+/// already in progress is allowed to settle and is recorded.
 struct CleaningRule: Codable, Identifiable, Equatable, Sendable {
     enum Kind: String, Codable, CaseIterable, Sendable {
         case xcodeBuild, packageCaches, idleProjects, browserCaches, appCaches, logs
@@ -72,6 +73,8 @@ struct CleaningRule: Codable, Identifiable, Equatable, Sendable {
     var minAgeDays: Int
     /// The most one run may clear.
     var capGB: Int = 20
+    var consentID: String?
+    var consentSeal: String?
     var approvedAt: Date?
     var lastRun: Date?
     var lastRunBytes: Int64 = 0
@@ -79,7 +82,19 @@ struct CleaningRule: Codable, Identifiable, Equatable, Sendable {
     var lastResult = ""
 
     var id: String { kind.rawValue }
-    var capBytes: Int64 { Int64(capGB) * 1_000_000_000 }
+    var validScope: Bool { (1...200).contains(capGB) && (0...365).contains(minAgeDays)
+        && (kind != .idleProjects || minAgeDays >= 7) }
+    var capBytes: Int64 { validScope ? Int64(capGB) * 1_000_000_000 : 0 }
+    // Version the policy as well as the settings: new semantics require new approval.
+    var scope: String { "v2|trash-only|\(kind.rawValue)|\(schedule.rawValue)|\(minAgeDays)|\(capGB)" }
+    var consentValue: String { "\(scope)|\(approved)|\(paused)|\(consentID ?? "")|\(lastRun.map { String($0.timeIntervalSince1970.rounded(.down)) } ?? "never")" }
+    var verified: Bool { isVerified() }
+    func isVerified(using verify: ((String, String, String?) -> Bool)? = nil) -> Bool {
+        guard validScope, approved, consentID != nil else { return false }
+        if let verify { return verify(consentValue, CleaningRules.key, consentSeal) }
+        return SettingsSeal.isSealed(consentValue, for: CleaningRules.key, seal: consentSeal)
+            && RuleConsentStore.shared.matches(self)
+    }
     var active: Bool { approved && !paused }
 
     init(kind: Kind) {
@@ -101,6 +116,7 @@ struct CleaningRule: Codable, Identifiable, Equatable, Sendable {
     /// The items one run would clear, largest first, up to the cap. Only
     /// findings an AI tool would also be allowed to clean qualify.
     func select(_ found: [ScanItem], now: Date = Date(), home: URL = FileScan.home) -> [ScanItem] {
+        guard validScope else { return [] }
         var candidates: [ScanItem]
         if kind == .idleProjects {
             candidates = ProjectIndex.build(from: found, stopAt: home)
@@ -115,7 +131,7 @@ struct CleaningRule: Codable, Identifiable, Equatable, Sendable {
         var chosen: [ScanItem] = []
         var total: Int64 = 0
         for item in candidates.filter(AgentCleanup.eligible).sorted(by: { $0.allocatedSize > $1.allocatedSize }) {
-            guard total + item.allocatedSize <= capBytes else { continue }
+            guard case .trash = item.cleanMethod, item.allocatedSize >= 0, item.allocatedSize <= capBytes - total else { continue }
             if chosen.count >= AgentCleanup.maxItems { break }
             chosen.append(item)
             total += item.allocatedSize
@@ -128,9 +144,17 @@ enum CleaningRules {
     static let key = "cairn.cleaningRules.v1"
 
     /// Every kind, approved or not, in a fixed order.
-    static func load(_ defaults: UserDefaults = .standard) -> [CleaningRule] {
+    static func load(_ defaults: UserDefaults = .standard,
+                     verify: ((String, String, String?) -> Bool)? = nil) -> [CleaningRule] {
         let saved = defaults.data(forKey: key).flatMap { try? decoder.decode([CleaningRule].self, from: $0) } ?? []
-        return CleaningRule.Kind.allCases.map { kind in saved.first { $0.kind == kind } ?? CleaningRule(kind: kind) }
+        return CleaningRule.Kind.allCases.map { kind in
+            var rule = saved.first { $0.kind == kind } ?? CleaningRule(kind: kind)
+            if saved.filter({ $0.kind == kind }).count > 1 || !rule.isVerified(using: verify) {
+                rule.approved = false
+                rule.consentSeal = nil
+            }
+            return rule
+        }
     }
 
     static func save(_ rules: [CleaningRule], _ defaults: UserDefaults = .standard) {
@@ -140,4 +164,38 @@ enum CleaningRules {
 
     private static var encoder: JSONEncoder { let e = JSONEncoder(); e.dateEncodingStrategy = .iso8601; return e }
     private static var decoder: JSONDecoder { let d = JSONDecoder(); d.dateDecodingStrategy = .iso8601; return d }
+}
+
+/// One run's immutable approval, paired with revocation shared with detached work.
+/// Never authorizes tool commands or permanent deletion.
+final class CleaningRuleRun: @unchecked Sendable {
+    let rule: CleaningRule
+    private let cancellation = CancelBox()
+    private let current: @Sendable () -> CleaningRule?
+    private let verify: (@Sendable (String, String, String?) -> Bool)?
+    init(_ rule: CleaningRule,
+         current: (@Sendable () -> CleaningRule?)? = nil,
+         verify: (@Sendable (String, String, String?) -> Bool)? = nil) {
+        self.rule = rule
+        self.current = current ?? { CleaningRules.load().first { $0.kind == rule.kind } }
+        self.verify = verify
+    }
+    func cancel() { cancellation.cancel() }
+    func isAuthorized(current: CleaningRule?,
+                      verify: ((String, String, String?) -> Bool)? = nil) -> Bool {
+        guard !cancellation.isCancelled, let current, current.active, current.isVerified(using: verify) else { return false }
+        return current.consentValue == rule.consentValue && current.consentSeal == rule.consentSeal
+            && !cancellation.isCancelled // Revocation may race a slow protected-state read.
+    }
+    var isAuthorized: Bool {
+        guard !cancellation.isCancelled else { return false }
+        return isAuthorized(current: current(), verify: verify)
+    }
+    func authorized() async -> Bool { await RuleStateWorker.run { self.isAuthorized } }
+    func permitsAsync(_ items: [ScanItem]) async -> Bool { await RuleStateWorker.run { self.permits(items) } }
+    func permits(_ items: [ScanItem]) -> Bool {
+        guard isAuthorized, !items.isEmpty, items.count <= AgentCleanup.maxItems else { return false }
+        let selected = rule.select(items)
+        return selected.count == items.count && Set(selected.map(\.id)) == Set(items.map(\.id))
+    }
 }

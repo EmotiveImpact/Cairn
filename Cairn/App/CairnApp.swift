@@ -143,16 +143,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard CairnMenuBar.shared.scanStatus().operationBusy else { return .terminateNow }
+        if CairnMenuBar.shared.scanStatus().operationBusy {
+            MenuBarRoute.shared.openWindow?()
+            let alert = NSAlert()
+            alert.messageText = "An operation is still in progress"
+            alert.informativeText = "Finish or cancel the operation in Cairn before quitting. Your files and recovery records need time to finish safely."
+            alert.addButton(withTitle: "Return to Cairn")
+            if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }), window.attachedSheet == nil {
+                alert.beginSheetModal(for: window)
+            }
+            return .terminateCancel
+        }
+        let ruleState = RuleRunner.shared.quitState
+        guard !ruleState.permitsTermination(operationBusy: false) else { return .terminateNow }
         MenuBarRoute.shared.openWindow?()
         let alert = NSAlert()
-        alert.messageText = "An operation is still in progress"
-        alert.informativeText = "Finish or cancel the operation in Cairn before quitting. Your files and recovery records need time to finish safely."
+        alert.alertStyle = .warning
+        alert.messageText = ruleState == .saving ? "Rule changes are still being saved" : "Rule changes could not be saved"
+        alert.informativeText = "Cairn has stopped affected runs for this session, but quitting before their protected settings are saved may leave an earlier approval active. Scheduled cleaning could run again when you reopen Cairn. Return to Cairn and wait for saving to finish, or unlock your login Keychain and use Retry saving rule off. Choose Quit Without Saving only if you accept that risk."
         alert.addButton(withTitle: "Return to Cairn")
-        if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == "main" }), window.attachedSheet == nil {
-            alert.beginSheetModal(for: window)
-        }
-        return .terminateCancel
+        alert.addButton(withTitle: "Quit Without Saving").keyEquivalent = ""
+        let acceptedRisk = alert.runModal() == .alertSecondButtonReturn
+        // The modal event loop may let another operation start. Explicit risk
+        // acceptance never bypasses the existing file-operation quit guard.
+        return acceptedRisk && ruleState.permitsTermination(
+            operationBusy: CairnMenuBar.shared.scanStatus().operationBusy, acceptingUnsavedRisk: true)
+            ? .terminateNow : .terminateCancel
     }
     func applicationDidFinishLaunching(_ notification: Notification) {
         CairnMenuBar.shared.setVisible(AppSettings.shared.showMenuBarItem)

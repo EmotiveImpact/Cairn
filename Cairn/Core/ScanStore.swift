@@ -710,10 +710,23 @@ final class ScanStore {
     /// Clean the given items through the safety chokepoint. Runs off-main, then
     /// removes succeeded items from their buckets and records affected sizes.
     func clean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan? = nil,
-               removal: RemovalMode? = nil, runKind: String? = nil) async -> CleanSummary {
+               removal: RemovalMode? = nil, runKind: String? = nil, ruleRun: CleaningRuleRun? = nil) async -> CleanSummary {
+        await withTaskCancellationHandler {
+            await performClean(items, proEnabled: proEnabled, reviewedPlan: reviewedPlan,
+                               removal: removal, runKind: runKind, ruleRun: ruleRun)
+        } onCancel: {
+            ruleRun?.cancel()
+        }
+    }
+
+    private func performClean(_ items: [ScanItem], proEnabled: Bool, reviewedPlan: ReviewedSpacePlan?,
+                              removal: RemovalMode?, runKind: String?, ruleRun: CleaningRuleRun?) async -> CleanSummary {
         // Advice and risky findings never execute. Drop them and run the rest
         // rather than refusing the whole reviewed selection.
-        let mode = removal ?? AppSettings.shared.removalMode
+        if let ruleRun, !(await ruleRun.permitsAsync(items)) {
+            return CleanSummary(failed: items.count, errors: ["The rule approval changed. Review it again."])
+        }
+        let mode = ruleRun == nil ? (removal ?? AppSettings.shared.removalMode) : .trash
         let skipped = items.filter { !$0.isActionable || $0.severity == .risky }
         let prepared = items.filter { $0.isActionable && $0.severity != .risky }.map { item -> ScanItem in
             var item = item
@@ -798,7 +811,8 @@ final class ScanStore {
                 summary.interrupted = true; summary.errors.append(receiptError ?? "Receipt checkpoint unavailable."); break
             }
             var logEntry: RemovalLogEntry?
-            if Task.isCancelled { summary.interrupted = true; break }
+            let ruleAllowed = await ruleRun?.authorized() ?? true
+            if Task.isCancelled || !ruleAllowed { summary.interrupted = true; break }
             if let reviewedPlan {
                 if let reason = reviewedPlan.invalidReason(itemIDs: Set(items.map(\.id)), scanStarted: scanStartedAt,
                     exclusions: AppSettings.shared.excludedPaths, fullDiskAccess: FullDiskAccess.isGranted(),
@@ -826,7 +840,7 @@ final class ScanStore {
                     continue
                 }
             }
-            let roots = rootsByCategory[item.categoryID] ?? [FileScan.home]
+            let roots = rootsByCategory[item.categoryID] ?? (item.categoryID == LocalModels.categoryID ? LocalModels.storeRoots() : [FileScan.home])
             guard let actionID = await Task.detached(priority: .utility, operation: {
                 journal.begin(path: item.resolvedURL.path, category: item.categoryID, affectedBytes: item.allocatedSize,
                               actionKind: Self.actionKind(item), runID: runID)
@@ -837,7 +851,11 @@ final class ScanStore {
             }
             lifecycleCheckpoint("intent")
             let outcome = await Task.detached(priority: .userInitiated) {
-                execute(item, roots, proEnabled, reviewedPlan?.sources[item.id])
+                if let ruleRun {
+                    return Cleaner.clean(item, allowedRoots: roots, proEnabled: proEnabled,
+                                         mutationAllowed: { ruleRun.isAuthorized })
+                }
+                return execute(item, roots, proEnabled, reviewedPlan?.sources[item.id])
             }.value
             let journalSaved = await Task.detached(priority: .utility) {
                 journal.finish(actionID, succeeded: outcome.ok,
@@ -874,6 +892,11 @@ final class ScanStore {
             if !journalSaved {
                 summary.interrupted = true
                 summary.errors.append(journal.error ?? "Action outcome could not be recorded; further cleanup stopped.")
+                break
+            }
+            let ruleStillAllowed = await ruleRun?.authorized() ?? true
+            if Task.isCancelled || !ruleStillAllowed {
+                summary.interrupted = true
                 break
             }
         }

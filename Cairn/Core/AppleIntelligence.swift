@@ -315,18 +315,44 @@ enum AppleIntelligence {
         /// Asks the service to remove each set, one at a time, so one it refuses
         /// doesn't stop the rest. A set whose asset type isn't the one Cairn
         /// knows on this macOS is left alone. Returns what stayed, with why.
-        static func remove(_ names: [String]) async -> [(set: String, reason: String)] {
+        static func remove(_ names: [String],
+                           consent: @Sendable (String) -> Bool = { name in
+                               let installed = Profile.installed()
+                               return installed.on && installed.sets.contains(name)
+                           },
+                           type: @Sendable (String) -> String? = { assetType(of: $0) },
+                           request: @Sendable (String) async -> Outcome = { await reset($0) },
+                           pause: @Sendable (Double) async throws -> Void = { try await Task.sleep(for: .seconds($0)) }) async -> [(set: String, reason: String)] {
+            let targets = requestable(names)
+            guard await ScanGate.shared.acquire(.cleanup) else {
+                return targets.map { ($0, "cancelled before removal") }
+            }
+            // An in-flight service operation cannot be recalled. Keep the lease
+            // until its answer/timeout, then stop before any further request.
+            defer { ScanGate.shared.release() }
             var stayed: [(set: String, reason: String)] = []
-            for name in requestable(names) {
+            for name in targets {
                 guard let known = sets.first(where: { $0.id == name }) else { continue }
-                guard assetType(of: name) == known.assetType else {
+                guard !Task.isCancelled, consent(name) else {
+                    stayed.append((name, "cancelled or profile approval withdrawn")); continue
+                }
+                guard type(name) == known.assetType else {
                     stayed.append((name, "not found on this version of macOS, so it was left alone"))
                     continue
                 }
-                var outcome = await reset(name)
+                // Recheck after metadata lookup as well as after each retry wait.
+                guard !Task.isCancelled, consent(name) else {
+                    stayed.append((name, "cancelled or profile approval withdrawn")); continue
+                }
+                var outcome = await request(name)
                 for delay in [5.0, 15.0] where outcome == .locked {
-                    try? await Task.sleep(for: .seconds(delay))
-                    outcome = await reset(name)
+                    do { try await pause(delay) } catch { break }
+                    guard !Task.isCancelled, consent(name), type(name) == known.assetType else { break }
+                    outcome = await request(name)
+                }
+                if Task.isCancelled || !consent(name) {
+                    stayed.append((name, "stopped; a request already sent to macOS may still finish"))
+                    continue
                 }
                 switch outcome {
                 case .done: break
@@ -338,7 +364,10 @@ enum AppleIntelligence {
             return stayed
         }
 
-        static func reset(_ name: String, timeout: TimeInterval = 120) async -> Outcome {
+        private static func reset(_ name: String, timeout: TimeInterval = 120) async -> Outcome {
+            guard !Task.isCancelled, Profile.installed().on, Profile.installed().sets.contains(name) else {
+                return .failed("cancelled or profile approval withdrawn")
+            }
             guard requestable([name]) == [name] else { return .failed("not one of Apple Intelligence's model sets") }
             guard let interface = runtime("UAFXPCProxyServiceInterface")?.defaultInterface?() ?? nil else {
                 return .failed("macOS's asset service isn't available")
@@ -361,6 +390,9 @@ enum AppleIntelligence {
                     continuation.resume(returning: outcome)
                 }
                 let proxy = connection.remoteObjectProxyWithErrorHandler { finish(AssetService.outcome(of: $0 as NSError)) }
+                guard !Task.isCancelled, Profile.installed().on, Profile.installed().sets.contains(name) else {
+                    finish(.failed("cancelled or profile approval withdrawn")); return
+                }
                 let request: NSDictionary = ["Operation": "ResetAssetSets", "AssetSets": [name]]
                 unsafeBitCast(proxy as AnyObject, to: UAFOperations.self).operation(config: request) { error in
                     finish(error.map { AssetService.outcome(of: $0) } ?? .done)

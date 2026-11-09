@@ -6,7 +6,7 @@ import AppKit
 /// person approves in System Settings and macOS's own asset service; Cairn
 /// never touches a file under /System.
 struct AppleIntelligenceWorkspace: View {
-    private enum Phase: Equatable { case idle, approving, removing, undoing }
+    private enum Phase: Equatable { case idle, approving, removing, stopping, undoing }
 
     private let preview = CommandLine.arguments.contains("--preview-ui")
     @State private var sizes: [String: Int64]?
@@ -16,6 +16,7 @@ struct AppleIntelligenceWorkspace: View {
     @State private var phase: Phase = .idle
     @State private var confirming = false
     @State private var waiting: Task<Void, Never>?
+    @State private var removalTask: Task<Void, Never>?
     @State private var note: String?
 
     private var features: [AppleIntelligence.Feature] { preview ? AppleIntelligence.features : AppleIntelligence.availableFeatures }
@@ -70,7 +71,7 @@ struct AppleIntelligenceWorkspace: View {
                          onConfirm: { confirming = false; turnOff() })
         }
         .task { await measure() }
-        .onDisappear { waiting?.cancel(); waiting = nil; phase = .idle }
+        .onDisappear { waiting?.cancel(); removalTask?.cancel() }
     }
 
     private var lead: String {
@@ -144,6 +145,11 @@ struct AppleIntelligenceWorkspace: View {
             ProgressView().controlSize(.small)
             NightTotal(strong: "Removing", rest: "macOS is taking the models off this Mac", large: true)
             Spacer()
+            Button("Undo") { undo() }.buttonStyle(ControlPanelButtonStyle(size: .large))
+        case .stopping:
+            ProgressView().controlSize(.small)
+            NightTotal(strong: "Stopping", rest: "waiting for the request already sent to macOS before opening System Settings", large: true)
+            Spacer()
         case .undoing:
             NightTotal(strong: "Waiting", rest: "for you in System Settings: select Cairn's profile and click Remove", large: true)
             Spacer()
@@ -156,7 +162,7 @@ struct AppleIntelligenceWorkspace: View {
                 NightTotal(strong: left > 0 ? Fmt.size(left) : "Off", rest: left > 0 ? "of models still here" : "Apple Intelligence is off", large: true)
                 Spacer()
                 if left > 0 {
-                    Button("Remove the models") { Task { await removeModels() } }
+                    Button("Remove the models") { startRemoval() }
                         .buttonStyle(ControlPanelButtonStyle(size: .large))
                         .disabled(preview)
                 }
@@ -201,34 +207,44 @@ struct AppleIntelligenceWorkspace: View {
             guard !Task.isCancelled else { return }
             installed = AppleIntelligence.Profile.installed()
             phase = .idle
-            if approved { await removeModels() }
+            if approved { startRemoval() }
             else { note = "The profile wasn't installed, so nothing has changed." }
         }
     }
 
-    private func removeModels() async {
+    private func startRemoval() {
         let targets = removing
-        guard !preview, installed.on, !targets.isEmpty else { return }
+        guard !preview, installed.on, !targets.isEmpty, removalTask == nil else { return }
         phase = .removing
-        let stayed = await Task.detached(priority: .userInitiated) { await AppleIntelligence.AssetService.remove(targets) }.value
-        phase = .idle
-        await measure()
-        if stayed.isEmpty {
-            note = "macOS is removing the models. Storage in System Settings can keep counting them for a while before the space shows."
-        } else {
-            note = stayed.map { item in
-                "\(AppleIntelligence.sets.first { $0.id == item.set }?.title ?? item.set) stayed: \(item.reason)"
-            }.joined(separator: " ") + " The features are still off and won't download again."
+        removalTask = Task { @MainActor in
+            defer { removalTask = nil }
+            let stayed = await AppleIntelligence.AssetService.remove(targets)
+            guard !Task.isCancelled else { if phase == .removing { phase = .idle }; return }
+            await measure()
+            guard !Task.isCancelled else { if phase == .removing { phase = .idle }; return }
+            phase = .idle
+            if stayed.isEmpty {
+                note = "macOS accepted the removal requests. Storage can take a while to reflect them."
+            } else {
+                note = stayed.map { item in
+                    "\(AppleIntelligence.sets.first { $0.id == item.set }?.title ?? item.set): \(item.reason)"
+                }.joined(separator: " ")
+            }
         }
     }
 
     private func undo() {
         guard !preview else { return }
-        AppleIntelligence.Profile.openSettings()
+        removalTask?.cancel()
+        let pendingRemoval = removalTask
         note = nil
-        phase = .undoing
+        phase = pendingRemoval == nil ? .undoing : .stopping
         waiting?.cancel()
         waiting = Task { @MainActor in
+            await pendingRemoval?.value
+            guard !Task.isCancelled else { return }
+            phase = .undoing
+            AppleIntelligence.Profile.openSettings()
             let removed = await Self.wait { !AppleIntelligence.Profile.installed().on }
             guard !Task.isCancelled else { return }
             installed = AppleIntelligence.Profile.installed()

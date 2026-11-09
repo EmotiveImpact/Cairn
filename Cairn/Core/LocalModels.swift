@@ -20,6 +20,15 @@ struct LocalModel: Identifiable, Sendable, Equatable {
     /// True when the size stopped at a measuring limit and is a lower bound.
     var partial = false
 
+    let source: SourceSnapshot?
+
+    init(url: URL, name: String, tool: String, bytes: Int64, updated: Date?,
+         removal: Removal, partial: Bool = false) {
+        self.url = url; self.name = name; self.tool = tool; self.bytes = bytes
+        self.updated = updated; self.removal = removal; self.partial = partial
+        self.source = SourceSnapshot.read(url)
+    }
+
     var id: String { url.path }
 }
 
@@ -178,16 +187,33 @@ enum LocalModels {
          "Library/Containers/com.liuliu.draw-things/Data/Documents/Models"].map { home.appendingPathComponent($0) }
     }
 
-    /// Moves one model to the Trash after the same safety check every clean
-    /// uses. Returns the Trash location. The space comes back once the Trash
-    /// is emptied, so callers must not report it as freed.
-    static func moveToTrash(_ model: LocalModel, home: URL = FileScan.home) throws -> URL? {
-        guard model.removal == .trash, FileManager.default.fileExists(atPath: model.url.path) else { return nil }
-        if case .reject(let reason) = SafePaths.evaluate(model.url, allowedRoots: storeRoots(home: home)) {
-            throw CocoaError(.fileWriteNoPermission, userInfo: [NSLocalizedDescriptionKey: "Cairn will not move this model: \(reason)."])
+    static let categoryID = "local-models"
+
+    /// Conversion preserves the discovery identity. Never silently capture a
+    /// replacement at confirmation time, or permit shared Ollama layers.
+    static func reviewedItem(_ model: LocalModel, home: URL = FileScan.home) throws -> ScanItem {
+        guard model.removal == .trash, let source = model.source, source.matches(model.url),
+              SafePaths.evaluate(model.url, allowedRoots: storeRoots(home: home)).isAllowed else {
+            throw CocoaError(.fileWriteNoPermission, userInfo: [NSLocalizedDescriptionKey:
+                "The model changed or is outside a removable store. Look again and review it."])
         }
-        var trashed: NSURL?
-        try FileManager.default.trashItem(at: model.url, resultingItemURL: &trashed)
-        return trashed as URL?
+        return ScanItem(url: model.url, resolvedURL: URL(fileURLWithPath: source.resolvedPath),
+                        allocatedSize: model.bytes, latestModified: model.updated ?? .distantPast,
+                        categoryID: categoryID, severity: .review, isRegenerable: false,
+                        sourceIdentity: source.identity)
+    }
+}
+
+extension ScanStore {
+    /// Uses the same gate, identity checks, journal, receipt and Put Back history
+    /// as reviewed cleanup. The page's confirmation is Trash-only, regardless of
+    /// the global permanent-removal preference.
+    func trashLocalModel(_ model: LocalModel, home: URL = FileScan.home) async -> CleanSummary {
+        do {
+            let item = try LocalModels.reviewedItem(model, home: home)
+            return await clean([item], proEnabled: false, removal: .trash, runKind: "AI model")
+        } catch {
+            return CleanSummary(failed: 1, errors: [error.localizedDescription])
+        }
     }
 }
