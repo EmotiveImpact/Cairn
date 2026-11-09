@@ -143,6 +143,7 @@ import AppKit
         setbuf(stdout, nil)
         var failures = 0
         func check(_ result: Bool, _ label: String) { print("\(result ? "PASS" : "FAIL") \(label)"); if !result { failures += 1 } }
+        await CleaningRuleCheck.runCancellation(check: check)
         let fm = FileManager.default
         let root = fm.temporaryDirectory.resolvingSymlinksInPath().appendingPathComponent("cairn-lifecycle-\(UUID().uuidString)")
         do {

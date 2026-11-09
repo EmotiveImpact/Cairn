@@ -10,7 +10,7 @@ import Darwin
             let version: Int
             let entries: [ActionJournal.Entry]
         }
-        var failures = 0
+        var failures = await ModelSafetyCheck.run()
         func check(_ good: Bool, _ label: String) {
             print("\(good ? "PASS" : "FAIL") \(label)"); if !good { failures += 1 }
         }

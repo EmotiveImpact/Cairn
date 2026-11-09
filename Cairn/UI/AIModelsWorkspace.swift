@@ -6,7 +6,9 @@ import AppKit
 /// to fetch again, so nothing is selected for you. Removing one goes to the
 /// Trash, or through the tool's own command where models share files.
 struct AIModelsWorkspace: View {
+    let store: ScanStore
     var search: String = ""
+    @State private var trashing = false
 
     @State private var models: [LocalModel] = []
     @State private var total: Int64 = 0
@@ -37,7 +39,7 @@ struct AIModelsWorkspace: View {
                 Label(loading ? "Looking…" : "Look again", systemImage: "arrow.clockwise")
             }
             .buttonStyle(ControlPanelButtonStyle(size: .small))
-            .disabled(loading)
+            .disabled(loading || trashing)
         } content: {
             VStack(alignment: .leading, spacing: 18) {
                 if !models.isEmpty { toolStrip }
@@ -56,7 +58,7 @@ struct AIModelsWorkspace: View {
                         .help("Ollama models share files, so Ollama's own command frees exactly the right ones. Paste it into Terminal.")
                 case .trash:
                     // Sample data never reaches the Trash, but the button looks as it really does.
-                    Button("Move to Trash") { if !preview { confirmTrash = model } }
+                    Button("Move to Trash") { if !preview && !trashing { confirmTrash = model } }
                         .buttonStyle(ControlPanelButtonStyle(primary: true, size: .large))
                 }
             } else {
@@ -192,14 +194,21 @@ struct AIModelsWorkspace: View {
     private func trash(_ model: LocalModel) {
         confirmTrash = nil
         guard !preview else { return }
-        do {
-            _ = try LocalModels.moveToTrash(model)
-            models.removeAll { $0.id == model.id }
-            total = max(0, total - model.bytes)
+        guard !trashing else { return }
+        trashing = true
+        Task { @MainActor in
+            defer { trashing = false }
+            let result = await store.trashLocalModel(model)
             selected = nil
-            message = "\(model.name) is in the Trash. Empty the Trash to get the \(Fmt.size(model.bytes)) back."
-        } catch {
-            message = "\(model.name) was not moved: \(error.localizedDescription)"
+            if result.failed == 0, !result.interrupted, result.errors.isEmpty,
+               result.recoverableCount == 1, result.restorable.count == 1 {
+                models.removeAll { $0.id == model.id }
+                total = max(0, total - model.bytes)
+                message = "\(model.name) is in the Trash. Put it back in Activity & Recovery. No space has been freed yet."
+            } else {
+                message = result.errors.joined(separator: " ")
+                if message.isEmpty { message = "Removal was not confirmed. Check Activity & Recovery before trying again." }
+            }
         }
     }
 

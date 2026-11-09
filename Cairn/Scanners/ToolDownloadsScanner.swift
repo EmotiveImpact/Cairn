@@ -228,9 +228,9 @@ struct ToolDownloadsScanner: CairnScanner {
         return (group: parts[..<index].joined(separator: "-"), version: parts[index])
     }
 
-    /// Older versions of gems you also have a newer version of, cleared with
-    /// `gem cleanup`. Only for a Ruby you installed (Homebrew, rbenv, asdf…):
-    /// the system Ruby's gems belong to macOS.
+    /// Older versions are advice only: `gem cleanup` discovers its own scope,
+    /// which may differ from the roots and versions measured here. Only inspect
+    /// a Ruby you installed; the system Ruby's gems belong to macOS.
     private func emitOldGems(_ ctx: ScanContext) {
         guard let gem = ToolRunner.resolve("gem"), !gem.hasPrefix("/usr/bin/"), !gem.hasPrefix("/System/") else { return }
         ctx.progress("Ruby gems")
@@ -239,40 +239,48 @@ struct ToolDownloadsScanner: CairnScanner {
         let paths = result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
             .split(separator: ":").map(String.init)
             .filter { $0.hasPrefix(home + "/") || $0.hasPrefix("/opt/homebrew/") || $0.hasPrefix("/usr/local/") }
+        if let item = oldGemAdvice(in: paths.map { URL(fileURLWithPath: $0).appendingPathComponent("gems") },
+                                   minSizeBytes: ctx.minSizeBytes, isCancelled: ctx.isCancelled) {
+            ctx.emit(item)
+        }
+    }
+
+    /// Kept separate from tool discovery so disposable roots can exercise the
+    /// same advice-only result without invoking Ruby or inspecting real stores.
+    func oldGemAdvice(in roots: [URL], minSizeBytes: Int64, isCancelled: () -> Bool = { false }) -> ScanItem? {
         var oldFolders: [URL] = []
         var firstRoot: URL?
-        for path in paths {
-            let gems = URL(fileURLWithPath: path).appendingPathComponent("gems")
+        for gems in roots {
+            if isCancelled() { return nil }
             let folders = Self.subdirectories(of: gems)
             let old = Self.olderVersions(folders.map(\.lastPathComponent), key: Self.gemKey).old
             guard !old.isEmpty else { continue }
             if firstRoot == nil { firstRoot = gems }
             oldFolders += folders.filter { old.contains($0.lastPathComponent) }
         }
-        guard let root = firstRoot else { return }
+        guard let root = firstRoot else { return nil }
         var total: Int64 = 0
         var latest = Date.distantPast
         for folder in oldFolders {
-            if ctx.isCancelled() { return }
+            if isCancelled() { return nil }
             let stats = FileScan.measure(folder, maxFiles: 20_000, maxDuration: 1)
             total += stats.allocatedSize
             latest = max(latest, stats.latestModified)
         }
-        guard total >= ctx.minSizeBytes else { return }
-        let cleanup = ToolCommand(tool: "gem", arguments: ["cleanup"], display: "gem cleanup")
-        ctx.emit(ScanItem(
+        guard !isCancelled(), total >= minSizeBytes else { return nil }
+        return ScanItem(
             url: root,
             allocatedSize: total,
             itemCount: oldFolders.count,
             latestModified: latest,
             categoryID: info.id,
             severity: .review,
-            isRegenerable: true,
-            cleanMethod: .tool(cleanup),
-            note: "\(oldFolders.count) older gem versions. gem cleanup keeps the newest of each, and keeps an old one another gem still needs",
+            isRegenerable: false,
+            cleanMethod: .adviceOnly,
+            note: "Estimated size of \(oldFolders.count) older gem versions. Cairn leaves these in place because gem cleanup can affect versions and stores outside this scan. Review the installed Ruby environment and project dependencies directly in RubyGems.",
             volumeURL: FileScan.volumeURL(of: root),
             selected: false
-        ))
+        )
     }
 
     // MARK: - Command Line Tools SDKs

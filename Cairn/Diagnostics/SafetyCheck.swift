@@ -396,6 +396,68 @@ enum SafetyCheck {
             key: ToolDownloadsScanner.gemKey)
         rule(gems.old == ["rails-7.0.8", "nokogiri-1.15.0-arm64-darwin"], "only older gem versions are counted")
 
+        // RubyGems chooses its own environment at execution. Both newly
+        // scanned advice and stale executable items must refuse removal, even
+        // if roots or installed versions changed since the review.
+        let gemFixture = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cairn-gem-advice-\(UUID().uuidString)")
+        do {
+            let fm = FileManager.default
+            try fm.createDirectory(at: gemFixture, withIntermediateDirectories: false)
+            defer { try? fm.removeItem(at: gemFixture) }
+            let roots = [gemFixture.appendingPathComponent("ruby-a/gems"), gemFixture.appendingPathComponent("ruby-b/gems")]
+            func fixtureGem(_ root: URL, _ name: String) throws {
+                let folder = root.appendingPathComponent(name)
+                try fm.createDirectory(at: folder, withIntermediateDirectories: true)
+                try Data(repeating: 1, count: 4096).write(to: folder.appendingPathComponent("fixture.rb"))
+            }
+            try fixtureGem(roots[0], "rails-7.0.8")
+            try fixtureGem(roots[0], "rails-7.1.3")
+            try fixtureGem(roots[1], "rake-13.0.0")
+            try fixtureGem(roots[1], "rake-13.1.0")
+            let scanner = ToolDownloadsScanner()
+            let advice = scanner.oldGemAdvice(in: roots, minSizeBytes: 0)
+            rule(advice?.itemCount == 2 && advice?.cleanMethod == .adviceOnly && advice?.selected == false,
+                 "older gems across multiple Ruby roots are unselected advice only")
+            if let advice {
+                let result = Cleaner.clean(advice, allowedRoots: roots, proEnabled: true)
+                rule(!result.ok && !result.usedTool && !result.deleted && result.bytesAffected == 0,
+                     "gem advice cannot invoke a cleanup or claim reclaimed bytes")
+            } else { rule(false, "gem advice fixture was emitted") }
+            try fixtureGem(roots[0], "rails-8.0.0")
+            let changedVersions = scanner.oldGemAdvice(in: roots, minSizeBytes: 0)
+            rule(changedVersions?.itemCount == 3 && changedVersions?.cleanMethod == .adviceOnly,
+                 "a changed gem version set stays advice only")
+            let changedRoots = scanner.oldGemAdvice(in: [roots[1]], minSizeBytes: 0)
+            rule(changedRoots?.itemCount == 1 && changedRoots?.cleanMethod == .adviceOnly,
+                 "a changed Ruby root set stays advice only")
+            rule(scanner.oldGemAdvice(in: roots, minSizeBytes: 0, isCancelled: { true }) == nil,
+                 "cancelled gem inspection emits no stale result")
+
+            let staleCommands = [
+                ToolCommand(tool: "gem", arguments: ["cleanup"], display: "gem cleanup"),
+                ToolCommand(tool: "gem", arguments: ["--norc", "cleanup", "rails"], display: "gem cleanup rails"),
+                ToolCommand(tool: "gem", arguments: ["cleanup", "--install-dir", roots[1].path], display: "gem cleanup --install-dir")
+            ]
+            rule(staleCommands.allSatisfy { Cleaner.toolPolicyRejection($0)?.contains("advice-only") == true },
+                 "legacy gem cleanup commands are refused regardless of version or root arguments")
+            // An impossible absolute tool path makes this safe even if the
+            // guard regresses: ToolRunner itself refuses non-plain tool names.
+            let stale = ScanItem(url: roots[0], allocatedSize: 8192, categoryID: scanner.info.id,
+                                 severity: .review, cleanMethod: .tool(ToolCommand(
+                                     tool: gemFixture.appendingPathComponent("not-an-executable/gem").path,
+                                     arguments: ["cleanup"], display: "gem cleanup")))
+            let staleResult = Cleaner.clean(stale, allowedRoots: roots, proEnabled: true)
+            rule(!staleResult.ok && staleResult.bytesAffected == 0 && !staleResult.deleted
+                 && staleResult.error?.contains("advice-only") == true,
+                 "executor refuses stale gem cleanup before resolving or starting a tool")
+            rule(fm.fileExists(atPath: roots[0].appendingPathComponent("rails-7.0.8/fixture.rb").path)
+                 && fm.fileExists(atPath: roots[1].appendingPathComponent("rake-13.0.0/fixture.rb").path),
+                 "gem advice and stale execution leave both stores unchanged")
+        } catch {
+            rule(false, "gem advice fixture failed: \(error.localizedDescription)")
+        }
+
         // "I need X GB" never plans your own files, games, chat apps, advice or
         // anything risky; caches come first and it stops once the goal is met.
         func planned(_ id: String, _ group: CategoryGroup, _ gb: Double, _ severity: Severity = .safe,

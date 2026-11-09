@@ -10,6 +10,25 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 9 November 2026 · Cleanup consent, model recovery and Ruby scope
+
+Scheduled rules previously trusted preference approvals and could continue after
+pause/off or scope edits. Versioned consent and a revocable run snapshot now
+bind their settings; changed scopes require a matching preview. Rules are
+narrowed to recoverable Trash-only actions, with checks immediately before each
+move. An admitted move may finish and is recorded; Trash is not immediate reclaim.
+
+Local model removal now preserves discovery identity and uses the shared
+journal, receipt and Put Back path instead of a direct Trash bypass. UI success
+requires a recorded recoverable result. Apple asset removal holds the shared
+gate, tracks cancellation and rechecks profile approval before service requests
+and retries. Requests already accepted by macOS cannot be recalled.
+
+Old Ruby gem versions now remain advice only. The executor also refuses old
+`gem cleanup` commands because their runtime scope was broader than the measured
+folders. Disposable diagnostics cover these boundaries. Native CI and real-Mac
+acceptance remain separate gates; no personal cleanup was performed.
+
 ## 9 November 2026 · Incomplete package-link checks could allow cleanup
 
 The package-link check treated its 2,000-entry limit and failed folder reads as

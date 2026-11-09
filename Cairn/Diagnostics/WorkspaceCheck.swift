@@ -5,6 +5,7 @@ enum WorkspaceCheck {
     static func run() {
         var failures = 0
         func check(_ good: Bool, _ label: String) { print("\(good ? "PASS" : "FAIL") \(label)"); if !good { failures += 1 } }
+        CleaningRuleCheck.run(check: check)
         // Projects grouping: a monorepo's packages collapse to the repository,
         // a loose folder stands alone, and build output never dates activity.
         do {
@@ -358,11 +359,11 @@ enum WorkspaceCheck {
             check(models.contains { $0.name == "org/tiny" && $0.tool == "Hugging Face" && $0.removal == .trash }, "Hugging Face models are listed by name")
             check(models.contains { $0.name == "base.pt" } && !models.contains { $0.name == "tiny.pt" }, "Small files are not counted as models")
             var refusedOllama = false
-            if let llama { refusedOllama = (try? LocalModels.moveToTrash(llama, home: home)) == nil && fm.fileExists(atPath: manifest.path) }
+            if let llama { refusedOllama = (try? LocalModels.reviewedItem(llama, home: home)) == nil && fm.fileExists(atPath: manifest.path) }
             check(refusedOllama, "Ollama models are never moved to the Trash, only removed with ollama rm")
             let outside = LocalModel(url: home.appendingPathComponent(".ollama/models/manifests"), name: "x", tool: "x", bytes: 1, updated: nil, removal: .trash)
             var refusedOutside = false
-            do { _ = try LocalModels.moveToTrash(outside, home: home) } catch { refusedOutside = true }
+            do { _ = try LocalModels.reviewedItem(outside, home: home) } catch { refusedOutside = true }
             check(refusedOutside && fm.fileExists(atPath: outside.url.path), "Only folders inside a known model store can be moved to the Trash")
 
             // Disk map: small items fold together so the map stays readable.

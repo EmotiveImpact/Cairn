@@ -18,11 +18,15 @@ enum Cleaner {
 
     /// Perform the clean appropriate to the item's `cleanMethod`.
     static func clean(_ item: ScanItem, allowedRoots: [URL], proEnabled: Bool, reviewedSource: ReviewedSource? = nil,
+                      mutationAllowed: @Sendable () -> Bool = { true },
                       moveToTrash: @Sendable (URL) throws -> URL? = { url in
                           var result: NSURL?
                           try FileManager.default.trashItem(at: url, resultingItemURL: &result)
                           return result as URL?
                       }) -> Outcome {
+        guard mutationAllowed() else {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "Cleanup approval was revoked; nothing was removed.")
+        }
         if item.severity == .risky {
             return Outcome(movedToTrashURL: nil, bytesAffected: 0, usedTool: false,
                            error: "Risky data is review-only; Cairn will not remove it.")
@@ -33,7 +37,7 @@ enum Cleaner {
                            error: "This is an advice item — nothing to delete here.")
 
         case .trash:
-            return trash(item, allowedRoots: allowedRoots, reviewedSource: reviewedSource, moveToTrash: moveToTrash)
+            return trash(item, allowedRoots: allowedRoots, reviewedSource: reviewedSource, mutationAllowed: mutationAllowed, moveToTrash: moveToTrash)
 
         case .emptyTrash:
             return deleteFromTrash(item)
@@ -45,7 +49,7 @@ enum Cleaner {
 
     // MARK: - Trash (and optional immediate deletion)
 
-    private static func trash(_ item: ScanItem, allowedRoots: [URL], reviewedSource: ReviewedSource?, moveToTrash: @Sendable (URL) throws -> URL?) -> Outcome {
+    private static func trash(_ item: ScanItem, allowedRoots: [URL], reviewedSource: ReviewedSource?, mutationAllowed: @Sendable () -> Bool, moveToTrash: @Sendable (URL) throws -> URL?) -> Outcome {
         guard item.url.resolvingSymlinksInPath().standardizedFileURL == item.resolvedURL.standardizedFileURL else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The location changed since scanning. Run a fresh scan.")
         }
@@ -77,6 +81,9 @@ enum Cleaner {
               SourceIdentity.read(item.resolvedURL) == scanned else {
             return Outcome(bytesAffected: 0, usedTool: false, error: "The file at this location changed since scanning. Run a fresh scan.")
         }
+        guard mutationAllowed() else {
+            return Outcome(bytesAffected: 0, usedTool: false, error: "Cleanup approval was revoked; nothing was removed.")
+        }
         let resulting: URL?
         do {
             // Moving first is an atomic rename: the original path disappears at
@@ -103,7 +110,7 @@ enum Cleaner {
         }
         // Cross-volume Trash copies have a different identity. Keep them
         // recoverable instead of permanently deleting an unverified object.
-        guard item.deleteImmediately, moved.device == scanned.device else {
+        guard item.deleteImmediately, moved.device == scanned.device, mutationAllowed() else {
             return Outcome(movedToTrashURL: trashed, bytesAffected: item.allocatedSize, usedTool: false, error: nil)
         }
         if removeTree(trashed) {
@@ -170,8 +177,8 @@ enum Cleaner {
     // MARK: - Tool commands
 
     private static func runTool(_ command: ToolCommand, for item: ScanItem) -> Outcome {
-        if command.destroysData {
-            return Outcome(bytesAffected: 0, usedTool: true, error: "This command destroys data and is review-only.")
+        if let rejection = toolPolicyRejection(command) {
+            return Outcome(bytesAffected: 0, usedTool: true, error: rejection)
         }
         guard ToolRunner.isAvailable(command.tool) else {
             return Outcome(bytesAffected: 0, usedTool: true, error: "\(command.tool) was not found on this Mac.")
@@ -191,6 +198,20 @@ enum Cleaner {
         } catch {
             return Outcome(bytesAffected: 0, usedTool: true, error: "\(command.display) could not start: \(error.localizedDescription)")
         }
+    }
+
+    /// Old review items must not retain access to an adapter that has been
+    /// withdrawn. RubyGems cleanup discovers roots and versions at execution,
+    /// rather than being bound to the folders the person reviewed.
+    static func toolPolicyRejection(_ command: ToolCommand) -> String? {
+        if command.destroysData {
+            return "This command destroys data and is review-only."
+        }
+        if URL(fileURLWithPath: command.tool).lastPathComponent == "gem",
+           command.arguments.contains("cleanup") {
+            return "Ruby gem cleanup is advice-only because its removal scope is not bound to the scanned versions and stores."
+        }
+        return nil
     }
 
     /// Restore a previously-trashed item to its original location.

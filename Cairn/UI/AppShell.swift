@@ -584,7 +584,7 @@ struct AppShell: View {
         case .games:
             GamesWorkspace(store: store, onReview: { if !previewMode { showReview = true } }, onOpen: { section = $0 })
         case .ai:
-            AIModelsWorkspace(search: developerSearch)
+            AIModelsWorkspace(store: store, search: developerSearch)
         case .smartScan, .general, .browsers, .developer, .creative:
             DeveloperCleanupView(store: store, section: section,
                                  searchText: developerSearch, inspectorVisible: $showDeveloperInspector,
