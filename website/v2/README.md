@@ -1,3 +1,21 @@
+## Complete site — 9 November 2026
+
+The approved homepage remains `night.html`. Its navigation now connects to Features, How it works, Protection, Pricing, Download status, Support & FAQ, Changelog, About, Privacy information and Licensing information. `404.html` provides a useful missing-page destination. The earlier homepage variants remain unchanged.
+
+- Page copy and structure: `site/content.cjs`.
+- Shared static template and homepage navigation: `site/build.cjs`.
+- Shared styling and progressive enhancement: `site/site.css` and `site/site.js`.
+- Existing six-page documentation: `docs/`, generated to `docs-preview/`.
+- Source references, release boundaries and verification: `../../artifacts/site-completion-20261109/`.
+
+Run `npm run verify:site` for page/docs generation, existing bundles, homepage interactions, docs, storage-story and site-wide checks. No installation is needed when the existing dependencies are present. The site-wide check also accepts an exported output directory: `node site/check.cjs /absolute/export/path`.
+
+Run `npm run export:site -- /absolute/new/output/path` for a portable static copy. Without an argument it creates `dist/`. The exporter refuses to overwrite an existing output directory. The output contains the approved homepage as `index.html` and `night.html`, all active pages, docs and local assets. It omits archived HTML studies and source dependencies. Configure a future host to serve `404.html` with HTTP 404 for unknown routes; the file has root-relative asset resolution in the export. Publication is a separate action and has not been performed.
+
+All routes, FAQs and screenshot links work without JavaScript. JavaScript enhances narrow-screen navigation and opens a directly linked FAQ answer. There are no pretend download, checkout, signup or support-submission actions. Pricing, availability and commercial/legal unknowns are explicitly labelled.
+
+Browser QA covered desktop views and all 12 main pages (homepage, ten content pages and 404) at 320, 390, 768 and 1024 px frame widths, plus mobile navigation, Escape/focus return, native FAQs, Back/Forward, 404 recovery and a no-JavaScript fallback. See the verification report for exact limits.
+
 ## Documentation — 30 September
 
 The active `night.html` links to a new [local documentation area](docs-preview/index.html) from its header and footer. The source is a six-page [Mintlify project](docs/README.md) with `docs.json` navigation and MDX pages. `npm run build:docs` regenerates the offline HTML preview from those same pages; `npm run test:docs` checks page routes, local links, assets, and website entry points. The docs describe an in-development macOS product and do not offer a public download. Mintlify hosting is not configured.
