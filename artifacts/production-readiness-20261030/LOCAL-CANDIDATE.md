@@ -2,6 +2,14 @@
 
 30 October 2026. Local acceptance build, **not notarized or publicly released**.
 
+**Installed 30 October 2026 at the owner's request.** local.Wi820o was copied with
+`ditto` to `/Applications/Cairn.app`, which did not exist before. The copy passed
+strict signature verification (Developer ID, team FC88M2P4F9, hardened runtime)
+and its executable SHA-256 matches the one below. `spctl` rejects it as
+unnotarized Developer ID, as expected. No Cairn process was running; the app was
+not launched and no settings or AI tool configuration were changed. The /tmp
+source was left in place.
+
 ## Latest candidate (includes accessibility and disk-map fixes)
 
 Mac path: `/private/tmp/cairn-readiness.mzoBdc/dist/local.Wi820o/Cairn.app`.

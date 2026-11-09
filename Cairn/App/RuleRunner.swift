@@ -97,7 +97,9 @@ import Foundation
             rule.lastRunBytes = summary.freedBytes
             rule.lastRunItems = summary.accounting.completedCount
             let trashed = summary.accounting.movedToTrashBytes
-            var parts = ["\(summary.accounting.completedCount) items cleaned", "\(Fmt.size(summary.freedBytes)) measured capacity increase"]
+            let count = summary.accounting.completedCount
+            var parts = ["Cleared \(count) \(count == 1 ? "item" : "items")"]
+            if summary.freedBytes > 0 { parts.append("\(Fmt.size(summary.freedBytes)) freed") }
             if trashed > 0 { parts.append("\(Fmt.size(trashed)) moved to the Trash") }
             if summary.failed > 0 { parts.append("\(summary.failed) skipped") }
             rule.lastResult = parts.joined(separator: " · ")

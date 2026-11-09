@@ -13,6 +13,7 @@ Cairn is a Mac app that shows you what is filling your disk and frees space safe
 - **Cleans each tool the proper way.** Docker, Homebrew, pnpm, Go, conda, git and Xcode simulators are cleaned with their own commands, so nothing breaks.
 - **Proves what it freed.** Every clean leaves a receipt. When macOS confirms the free space went up, the receipt says Verified.
 - **Keeps watch from the menu bar.** It shows space ready to free, idle projects and anything that has grown fast.
+- **Tells you when space goes fast.** Turn on **Settings › Monitoring › Alert when space drops fast** and, if 5 GB or more goes within half an hour (or your reserve is close at that rate), Cairn checks swap, Time Machine snapshots, Docker, simulators, AI models, Claude Code data, agent worktrees and its other watched folders, then sends one notification saying which grew. It only looks; nothing is removed.
 - **Makes room three ways.** The Make room page gives each big item one choice: the Bin, an external SSD or the cloud. Moves to a drive check every file before the original goes, and app data keeps a link so the app still finds it. iPhone backups, simulators, Docker, AI models and your own folders can all move, and come back later.
 - **Plans the space you need.** Type how much room you need, or pick a macOS update, Xcode or Premiere, and Cairn picks the safest set that gets there, caches first.
 - **Knows games and chat apps.** A Games page finds Steam, Epic and CrossOver games and the ones a launcher left behind. A Chat apps page measures WhatsApp and Telegram and opens their own storage screens; Cairn never deletes chats.
@@ -51,10 +52,18 @@ Setup details are in [docs/CLAUDE-CODE.md](docs/CLAUDE-CODE.md).
 
 ## What's next
 
-The actionable queue is in [the Claude handoff roadmap](docs/ROADMAP-CLAUDE.md).
-Start with the installed Mac build and runtime acceptance gates, then release
-preparation. The roadmap separates source implementation, checks actually run,
-and work that still needs hardware, owner decisions or explicit authorization.
+In rough order of priority:
+
+1. **Try the installed test build.** A signed copy is in Applications (not notarised yet, so right-click and choose Open the first time). Then connect the AI tools to it.
+2. **A proper download.** A signed and notarised app with automatic updates (Sparkle), then a small private beta.
+3. **Buying a licence** on the website at cairnmac.com: £35.99 once, no trial.
+4. **Test the Apple Intelligence switch** on a Mac that has Apple Intelligence (macOS 15.1 or later).
+5. **Match the approved designs exactly** on every screen, checked side by side with real screenshots.
+6. **Update the website screenshots** to the new look.
+7. **System Data explained** on the disk map, including Apple Intelligence, and a map of any drive.
+8. **Larger text.** Cairn uses fixed text sizes, so the macOS text size setting doesn't change it yet.
+
+The detailed checklist for each step, with what has been tested and what still needs a real Mac, is in [docs/ROADMAP-CLAUDE.md](docs/ROADMAP-CLAUDE.md).
 
 ## For developers
 

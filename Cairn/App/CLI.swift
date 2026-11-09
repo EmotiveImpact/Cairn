@@ -134,19 +134,28 @@ enum CLI {
 
     private static func projects(json: Bool, idleDays: Int?) {
         let minimumIdle = max(0, idleDays ?? 0)
-        let projects = ProjectIndex.build(from: collect(category: ProjectIndex.categoryID))
+        let items = collect(category: ProjectIndex.categoryID)
+        let search = FoundProjects.shared.latest
+        let projects = ProjectIndex.build(from: items, roots: search?.folders ?? [])
             .filter { minimumIdle == 0 || ($0.idleDays() ?? 0) >= minimumIdle }
             .sorted { $0.rebuildableBytes > $1.rebuildableBytes }
         if json {
-            printJSON(["projects": projects.map { project -> [String: Any] in
+            var output: [String: Any] = ["projects": projects.map { project -> [String: Any] in
                 var entry: [String: Any] = ["name": project.name, "path": project.url.path,
                                             "repository": project.isRepository, "rebuildableBytes": project.rebuildableBytes]
                 if let days = project.idleDays() { entry["idleDays"] = days }
                 return entry
-            }])
+            }]
+            if let search {
+                var searched: [String: Any] = ["foldersLookedIn": search.summary.foldersListed,
+                                               "seconds": (search.summary.seconds * 10).rounded() / 10]
+                if let stopped = search.summary.stoppedEarly { searched["stoppedEarly"] = stopped }
+                output["search"] = searched
+            }
+            printJSON(output)
             return
         }
-        guard !projects.isEmpty else { print("No projects with rebuildable build output found."); return }
+        guard !projects.isEmpty else { print("No coding projects found."); return }
         for project in projects.prefix(30) {
             let idle = project.idleDays().map { "\($0)d idle" } ?? "activity unknown"
             print("\(Fmt.size(project.rebuildableBytes).padding(toLength: 10, withPad: " ", startingAt: 0)) \(idle.padding(toLength: 18, withPad: " ", startingAt: 0)) \(project.url.path)")
@@ -154,6 +163,9 @@ enum CLI {
         if projects.count > 30 { print("… and \(projects.count - 30) more") }
         let total = projects.reduce(Int64(0)) { $0 + $1.rebuildableBytes }
         print("\nRebuildable across \(projects.count) projects: \(Fmt.size(total)). Review and remove it in Cairn → Projects.")
+        if let stopped = search?.summary.stoppedEarly {
+            print("Cairn stopped looking \(stopped), so a few projects may be missing.")
+        }
     }
 
     private static func categories() {
@@ -171,7 +183,7 @@ enum CLI {
           cairn clean --safe               preview eligible Trash candidates only
           cairn categories                 list scanner ids
           cairn rules                      everything Cairn looks for, as Markdown
-          cairn projects [--idle <days>]   repositories and their rebuildable build output
+          cairn projects [--idle <days>]   coding projects and their rebuildable build output
           cairn mcp                        MCP server for coding agents (read-only)
 
         Flags

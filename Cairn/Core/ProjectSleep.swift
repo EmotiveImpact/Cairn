@@ -72,32 +72,118 @@ enum ProjectSleep {
     }
 
     /// The command that rebuilds what was cleared, from the project's own
-    /// manifests. Nil when Cairn cannot tell.
+    /// manifests. Each step runs in the folder that held what it rebuilds, so
+    /// an Android app inside an Expo project gets its own Gradle step. Nil
+    /// when Cairn cannot tell.
     static func wakeCommand(for project: URL, cleared: [URL], fileManager: FileManager = .default) -> String? {
-        func has(_ name: String) -> Bool { fileManager.fileExists(atPath: project.appendingPathComponent(name).path) }
-        let names = Set(cleared.map(\.lastPathComponent))
+        let root = project.standardizedFileURL
+        var byFolder: [String: Set<String>] = [:]
+        var order: [String] = []
+        for url in cleared.map(\.standardizedFileURL) {
+            var folder = url.deletingLastPathComponent()
+            var name = url.lastPathComponent
+            // vendor/bundle and Carthage/Build are rebuilt from the folder above.
+            if folder.lastPathComponent == "vendor" && name == "bundle" { folder.deleteLastPathComponent(); name = "vendor/bundle" }
+            if folder.lastPathComponent == "Carthage" && name == "Build" { folder.deleteLastPathComponent(); name = "Carthage/Build" }
+            if folder.lastPathComponent == ".vercel" && name == "output" { folder.deleteLastPathComponent(); name = ".vercel/output" }
+            // A package's node_modules is installed from the workspace root
+            // that holds the lock file, once for the whole workspace, and a
+            // Gradle module is built from the folder that holds gradlew.
+            if name == "node_modules", let found = nearest(lockfiles, from: folder, upTo: root, fileManager) { folder = found }
+            if name == "build" || name == ".gradle", !fileManager.fileExists(atPath: folder.appendingPathComponent("pubspec.yaml").path),
+               let found = nearest(["gradlew"], from: folder, upTo: root, fileManager) { folder = found }
+            if byFolder[folder.path] == nil { order.append(folder.path) }
+            byFolder[folder.path, default: []].insert(name)
+        }
         var steps: [String] = []
-        if names.contains("node_modules") || has("package.json") && names.contains(".next") {
-            if has("pnpm-lock.yaml") { steps.append("pnpm install") }
-            else if has("yarn.lock") { steps.append("yarn install") }
-            else if has("bun.lockb") || has("bun.lock") { steps.append("bun install") }
-            else if has("package.json") { steps.append("npm install") }
+        // The project folder first, then its parts in a stable order.
+        for path in order.sorted(by: { ($0 == root.path ? "" : $0) < ($1 == root.path ? "" : $1) }) {
+            let folder = URL(fileURLWithPath: path)
+            let commands = wakeSteps(in: folder, cleared: byFolder[path] ?? [], fileManager)
+            guard !commands.isEmpty else { continue }
+            let joined = commands.joined(separator: " && ")
+            if path == root.path {
+                steps.append(joined)
+            } else if path.hasPrefix(root.path + "/") {
+                steps.append("(cd \(CLIInstallPolicy.quoteForShell(String(path.dropFirst(root.path.count + 1)))) && \(joined))")
+            }
+        }
+        guard !steps.isEmpty else { return nil }
+        return "cd \(CLIInstallPolicy.quoteForShell(project.path)) && " + steps.joined(separator: " && ")
+    }
+
+    private static let lockfiles = ["pnpm-lock.yaml", "yarn.lock", "bun.lockb", "bun.lock", "package-lock.json", "npm-shrinkwrap.json"]
+
+    /// The nearest folder from `start` up to the project root that holds one
+    /// of `files`.
+    private static func nearest(_ files: [String], from start: URL, upTo root: URL, _ fm: FileManager) -> URL? {
+        var current = start
+        for _ in 0..<6 {
+            if files.contains(where: { fm.fileExists(atPath: current.appendingPathComponent($0).path) }) { return current }
+            if current.path == root.path || !current.path.hasPrefix(root.path + "/") { return nil }
+            current.deleteLastPathComponent()
+        }
+        return nil
+    }
+
+    /// The install or build steps for what was cleared from one folder.
+    private static func wakeSteps(in folder: URL, cleared names: Set<String>, _ fm: FileManager) -> [String] {
+        func has(_ name: String) -> Bool { fm.fileExists(atPath: folder.appendingPathComponent(name).path) }
+        func hasFile(endingWith ending: String) -> Bool {
+            ((try? fm.contentsOfDirectory(atPath: folder.path)) ?? []).contains { $0.hasSuffix(ending) }
+        }
+        func hasScript(_ script: String) -> Bool {
+            guard let data = fm.contents(atPath: folder.appendingPathComponent("package.json").path),
+                  let json = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+                  let scripts = json["scripts"] as? [String: Any] else { return false }
+            return scripts[script] != nil
+        }
+        var steps: [String] = []
+        let runner: String? = has("pnpm-lock.yaml") ? "pnpm" : has("yarn.lock") ? "yarn"
+            : (has("bun.lockb") || has("bun.lock")) ? "bun" : (has("package.json") || has("package-lock.json")) ? "npm" : nil
+        if let runner, names.contains("node_modules") || has("package.json") && names.contains(".next") {
+            steps.append("\(runner) install")
+        }
+        // Web build output comes back from the project's own build script,
+        // or from vercel build, which runs that script and writes its output.
+        if names.contains(".vercel/output") {
+            steps.append("vercel build")
+        } else if let runner, !names.isDisjoint(with: [".next", ".nuxt", ".output", ".svelte-kit", "dist", "build"]),
+                  hasScript("build") {
+            steps.append("\(runner) run build")
         }
         if names.contains("Pods"), has("Podfile") { steps.append("pod install") }
         if !names.isDisjoint(with: [".venv", "venv"]) {
             if has("uv.lock") { steps.append("uv sync") }
             else if has("poetry.lock") { steps.append("poetry install") }
             else if has("requirements.txt") {
-                let folder = names.contains(".venv") ? ".venv" : "venv"
-                steps.append("python3 -m venv \(folder) && \(folder)/bin/pip install -r requirements.txt")
+                let venv = names.contains(".venv") ? ".venv" : "venv"
+                steps.append("python3 -m venv \(venv) && \(venv)/bin/pip install -r requirements.txt")
             }
         }
-        if names.contains("target"), has("Cargo.toml") { steps.append("cargo build") }
+        if names.contains("target") {
+            if has("Cargo.toml") { steps.append("cargo build") }
+            else if has("pom.xml") { steps.append(has("mvnw") ? "./mvnw package" : "mvn package") }
+            else if has("build.sbt") { steps.append("sbt compile") }
+        }
         if names.contains(".build"), has("Package.swift") { steps.append("swift build") }
         if names.contains(".dart_tool"), has("pubspec.yaml") { steps.append("flutter pub get") }
-        if names.contains("vendor"), has("go.mod") { steps.append("go mod vendor") }
+        if names.contains("vendor") {
+            if has("go.mod") { steps.append("go mod vendor") }
+            else if has("composer.json") { steps.append("composer install") }
+        }
+        if names.contains("vendor/bundle"), has("Gemfile") { steps.append("bundle install") }
         if !names.isDisjoint(with: [".gradle", "build"]), has("gradlew") { steps.append("./gradlew build") }
-        guard !steps.isEmpty else { return nil }
-        return "cd \(CLIInstallPolicy.quoteForShell(project.path)) && " + steps.joined(separator: " && ")
+        if !names.isDisjoint(with: ["bin", "obj"]), hasFile(endingWith: ".csproj") || hasFile(endingWith: ".fsproj") {
+            steps.append("dotnet build")
+        }
+        if names.contains("deps"), has("mix.exs") { steps.append("mix deps.get") }
+        if names.contains("_build"), has("mix.exs") { steps.append("mix compile") }
+        if names.contains(".stack-work"), has("stack.yaml") { steps.append("stack build") }
+        if names.contains("dist-newstyle") { steps.append("cabal build") }
+        if !names.isDisjoint(with: ["zig-cache", ".zig-cache", "zig-out"]), has("build.zig") { steps.append("zig build") }
+        if names.contains(".terraform") { steps.append("terraform init") }
+        if names.contains("Carthage/Build"), has("Cartfile") { steps.append("carthage build") }
+        return steps
     }
 }

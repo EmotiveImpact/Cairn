@@ -41,6 +41,18 @@ import Darwin
               "Invalid capacity does not fabricate chart proportions")
         check(DiskMap.barFractions(partialChartAreas).allSatisfy { $0.isFinite && $0 >= 0 },
               "Nested estimates have finite nonnegative proportions")
+        let gb: Int64 = 1_000_000_000
+        let gapReading = DiskMap.Reading(total: 10 * gb, free: 2 * gb,
+                                         areas: [DiskArea(id: "a", title: "A", kind: .files, bytes: 5 * gb),
+                                                 DiskArea(id: "free", title: "Free", kind: .free, bytes: 2 * gb)], date: Date())
+        let withGap = DiskMap.areasWithUnmeasured(gapReading)
+        let gapIDs = withGap.map(\.id)
+        let gapFill: Double = DiskMap.barFractions(withGap, capacity: (gapReading.total, gapReading.free)).reduce(0, +)
+        check(gapIDs == ["a", "unmeasured", "free"] && withGap[1].bytes == 3 * gb && withGap[1].kind == .other,
+              "Used space the parts miss is its own Not measured part, before Free")
+        check(abs(gapFill - 1) < 0.00001, "With a Not measured part the disk bar has no blank gap")
+        check(DiskMap.areasWithUnmeasured(DiskMap.Reading(total: 100, free: 20, areas: chartAreas, date: Date())) == chartAreas,
+              "Overlapping estimates add no Not measured part")
 
         var mixed = ScanStore.CleanSummary()
         mixed.accounting.record(.init(movedToTrashURL: URL(fileURLWithPath: "/fixture/trash"), bytesAffected: 800, usedTool: false), recoveryRecorded: true)
@@ -698,6 +710,117 @@ import Darwin
             try corruptBytes.write(to: journal)
             check(try !(await reloaded.prepareRemovalLog()) && Data(contentsOf: journal) == corruptBytes, "External history change is not overwritten")
         } catch { check(false, "Fixture failure: \(error.localizedDescription)") }
+
+        // Developer caches: each common cache is found, the usual big ones are
+        // measured first, every cache the time limit skips keeps its own row,
+        // Gradle is one click only once it has been quiet for a day, and pnpm
+        // files shared with a project are not counted as space to free.
+        do {
+            let fm = FileManager.default
+            let home = fm.temporaryDirectory.appendingPathComponent("cairn-devcaches-\(UUID().uuidString)").standardizedFileURL
+            defer { try? fm.removeItem(at: home) }
+            func put(_ rel: String, bytes: Int = 4096, ageDays: Double = 0) throws -> URL {
+                let url = home.appendingPathComponent(rel)
+                try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+                try Data(repeating: 7, count: bytes).write(to: url)
+                if ageDays > 0 {
+                    try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -ageDays * 86_400)], ofItemAtPath: url.path)
+                }
+                return url
+            }
+            func scan(_ scanner: DevCachesScanner) async -> [ScanItem] {
+                let found = SelfTest.Collector()
+                let context = ScanContext(fdaGranted: false, includeExternalVolumes: false, minSizeBytes: 0,
+                                          emit: { found.add($0) }, progress: { _ in }, isCancelled: { false })
+                await scanner.scan(context)
+                return found.items
+            }
+            func item(_ items: [ScanItem], _ rel: String) -> ScanItem? {
+                let path = home.appendingPathComponent(rel).path
+                return items.first { $0.url.path == path }
+            }
+            _ = try put("Library/Caches/Homebrew/downloads/bottle.tar.gz")
+            _ = try put(".npm/_cacache/content-v2/sha512/aa/entry")
+            _ = try put(".gradle/caches/modules-2/files-2.1/library.jar", ageDays: 3)
+            let shared = try put("Library/pnpm/store/v10/files/00/shared", bytes: 16_384)
+            _ = try put("Library/pnpm/store/v10/files/01/unused", bytes: 8192)
+            let linked = home.appendingPathComponent("app/node_modules/.pnpm/pkg/shared")
+            try fm.createDirectory(at: linked.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try fm.linkItem(at: shared, to: linked)
+
+            check(DevCachesScanner.targets.prefix(3).map(\.label) == ["Homebrew cache", "Gradle caches", "pnpm store"],
+                  "The usual biggest developer caches are measured first")
+            let found = await scan(DevCachesScanner(home: home, gradleRunning: { false }))
+            let brew = item(found, "Library/Caches/Homebrew"), npm = item(found, ".npm/_cacache")
+            let gradle = item(found, ".gradle/caches"), pnpm = item(found, "Library/pnpm/store")
+            check(brew?.severity == .safe && brew?.selected == true && brew?.cleanMethod.isPaid == true,
+                  "Homebrew download cache is found, ticked, and cleaned with Homebrew's own command")
+            check(npm?.severity == .safe && npm?.selected == true && npm.map(LookThrough.shortName) == "npm cache",
+                  "npm cache is found, ticked and named plainly")
+            check(gradle?.severity == .safe && gradle?.selected == true
+                    && gradle?.requiresQuitBundleIDs.contains("com.google.android.studio") == true,
+                  "A Gradle cache quiet for a day is one click, and waits for Android Studio to close")
+            let storeURL = home.appendingPathComponent("Library/pnpm/store")
+            let whole = FileScan.measure(storeURL)
+            let split = FileScan.measure(storeURL, separateSharedLinks: true)
+            check(split.sharedLinkBytes > 0 && split.allocatedSize > 0
+                    && split.allocatedSize + split.sharedLinkBytes == whole.allocatedSize,
+                  "Hard-linked files are kept apart from space a removal would free")
+            check(pnpm?.allocatedSize == split.allocatedSize && pnpm?.severity == .review
+                    && pnpm?.note.contains("shared with your projects") == true
+                    && pnpm?.note.contains("can free less") == true,
+                  "pnpm store counts only files no project links to, and says pnpm may free less")
+
+            // A Gradle build can read a day-old cache without changing it, so a
+            // running Gradle keeps the cache for review and cleaning skips it.
+            let gradleOn = item(await scan(DevCachesScanner(home: home, gradleRunning: { true })), ".gradle/caches")
+            check(gradleOn?.severity == .review && gradleOn?.selected == false
+                    && gradleOn?.note.contains("Gradle is running") == true,
+                  "A quiet Gradle cache stays for review while Gradle is running")
+            let daemon = "/usr/bin/java -Xmx2g -cp gradle-launcher-8.10.jar org.gradle.launcher.daemon.bootstrap.GradleDaemon 8.10"
+            if let gradle, let npm {
+                check(InUse.reason(gradle, running: [], commandLines: [daemon])?.contains("Gradle is still running") == true
+                        && InUse.reason(gradle, running: [], commandLines: ["/usr/bin/java -jar other.jar"]) == nil
+                        && InUse.reason(npm, running: [], commandLines: [daemon]) == nil
+                        && InUse.gradleBusyReason(gradle, commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(gradle, commandLines: []) == nil,
+                      "Cleaning skips Gradle folders while Gradle runs, and only those")
+                // A project's own .gradle and Gradle build output wait too; a
+                // build folder without a Gradle build file beside it does not.
+                let android = home.appendingPathComponent("Code/android-app")
+                try? fm.createDirectory(at: android.appendingPathComponent("build"), withIntermediateDirectories: true)
+                try? fm.createDirectory(at: home.appendingPathComponent("Code/site/build"), withIntermediateDirectories: true)
+                fm.createFile(atPath: android.appendingPathComponent("build.gradle.kts").path, contents: Data())
+                func folder(_ url: URL) -> ScanItem { ScanItem(url: url, allocatedSize: 1, categoryID: "fixture", severity: .safe) }
+                check(InUse.gradleBusyReason(folder(android.appendingPathComponent(".gradle")), commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(folder(android.appendingPathComponent("build")), commandLines: [daemon]) != nil
+                        && InUse.gradleBusyReason(folder(home.appendingPathComponent("Code/site/build")), commandLines: [daemon]) == nil,
+                      "A project's .gradle and Gradle build output also wait while Gradle runs")
+            } else {
+                check(false, "Gradle and npm fixture caches were found")
+            }
+            var procArgs: [UInt8] = [2, 0, 0, 0]  // argument count, little-endian on every Mac
+            for part in ["/usr/bin/java", "", "", "java", "org.gradle.launcher.GradleMain", "PATH=/usr/bin"] {
+                procArgs += Array(part.utf8) + [0]
+            }
+            check(InUse.commandLine(fromProcArgs: procArgs, size: procArgs.count) == "java org.gradle.launcher.GradleMain",
+                  "A process's arguments are read without its path or environment")
+            check(InUse.runningCommandLines().contains { $0.contains("--reliabilitycheck") },
+                  "Cairn can read the command lines of this user's processes")
+
+            _ = try put(".gradle/caches/journal-1/file-access.bin")
+            let busy = item(await scan(DevCachesScanner(home: home, gradleRunning: { false })), ".gradle/caches")
+            check(busy?.severity == .review && busy?.selected == false && busy?.note.contains("last day") == true,
+                  "A Gradle cache used in the last day stays for the user to check")
+            check(!DevCachesScanner.gradleIsQuiet(latestModified: .distantPast)
+                    && !DevCachesScanner.gradleIsQuiet(latestModified: Date(timeIntervalSinceNow: -3_600))
+                    && DevCachesScanner.gradleIsQuiet(latestModified: Date(timeIntervalSinceNow: -90_000)),
+                  "Gradle counts as quiet only after a full day without use")
+
+            let late = await scan(DevCachesScanner(home: home, timeLimit: 0, gradleRunning: { false }))
+            check(late.count == 4 && late.allSatisfy { !$0.isActionable && $0.allocatedSize == 0 && $0.note.contains("Not measured") },
+                  "Every cache the time limit skips keeps its own row")
+        } catch { check(false, "Developer cache fixture: \(error.localizedDescription)") }
 
         do {
             let start = Date()

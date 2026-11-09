@@ -16,7 +16,14 @@ enum LicenseConfig {
     /// Polar organization "Emotive Impact" — public (appears in checkout URLs).
     static let organizationID = "033c682c-186b-46fd-8f3a-03a686e96cba"
     /// How long Pro keeps working fully offline before a required online re-check.
-    static let offlineGrace: TimeInterval = 60 * 60 * 24 * 14
+    /// Generous on purpose: a lifetime licence should not lapse because a Mac
+    /// spent a few weeks away from the internet.
+    static let offlineGrace: TimeInterval = 60 * 60 * 24 * 30
+    /// Set once a licence has been saved on this Mac. Opening Cairn reads the
+    /// Keychain only when this is set, so people without a licence never have
+    /// their Keychain touched at login. Not a secret: changing it from outside
+    /// only makes Cairn look for a saved licence, which it then checks properly.
+    static let savedHintKey = "cairn.licence.saved"
     /// Where buyers without a key purchase Cairn Pro.
     static let purchaseURL = URL(string: "https://cairnmac.com/#pricing")!
     static let price = "£35.99"
@@ -244,7 +251,7 @@ struct PolarClient {
         switch json["status"] as? String {
         case "granted": return true
         case "revoked", "disabled": return false
-        default: throw PolarError(message: "The licensing server returned an invalid status. Please try again later.")
+        default: throw PolarError(message: "Cairn couldn't check your licence just now. It will try again later.")
         }
     }
 
@@ -277,6 +284,11 @@ struct PolarClient {
 
 // MARK: - License manager
 
+/// The licence key is typed in once. After that Cairn reads it from the
+/// Keychain by itself shortly after opening, confirms it with Polar quietly,
+/// and never asks for it again: not at login, not after a restart, not after
+/// an update. When Polar can't be reached Cairn keeps the saved key, keeps Pro
+/// on for the offline grace period, and tries again on its own.
 @MainActor
 final class LicenseManager: ObservableObject {
     @Published private(set) var isPro = false
@@ -288,15 +300,34 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var hasRequestedStorage = false
     @Published private(set) var isLoading = false
     @Published private(set) var storageMessage: String?
-    private let client = PolarClient(organizationID: LicenseConfig.organizationID)
-    private var stored: StoredLicense?
+    /// A licence is saved on this Mac but the last online check could not
+    /// reach Polar. Cairn is retrying by itself; the key is never asked for.
+    @Published private(set) var waitingToConfirm = false
+    /// A licence key is saved on this Mac (whatever Polar last said about it).
+    @Published private(set) var hasSavedLicense = false
+    private let client: PolarClient
+    private var stored: StoredLicense? { didSet { hasSavedLicense = stored != nil } }
     private let loadLocal: () throws -> LocalLicenseState
+    private let saveLocal: (StoredLicense) throws -> Void
+    private let defaults: UserDefaults
     private let checkOnline: Bool
     private let honorDevUnlock: Bool
+    /// Waits between quiet retries when Polar can't be reached. The last one repeats.
+    private let retryDelays: [TimeInterval]
+    private var retryTask: Task<Void, Never>?
+    private var retryCount = 0
 
     init(loadLocal: @escaping () throws -> LocalLicenseState = LicenseStorageWorker.load,
+         saveLocal: @escaping (StoredLicense) throws -> Void = LicenseStore.save,
+         client: PolarClient = PolarClient(organizationID: LicenseConfig.organizationID),
+         defaults: UserDefaults = .standard,
+         retryDelays: [TimeInterval] = [30, 120, 300, 900],
          automatic: Bool = false, checkOnline: Bool = true, honorDevUnlock: Bool = true) {
         self.loadLocal = loadLocal
+        self.saveLocal = saveLocal
+        self.client = client
+        self.defaults = defaults
+        self.retryDelays = retryDelays
         self.checkOnline = checkOnline
         self.honorDevUnlock = honorDevUnlock
         guard !CommandLine.arguments.contains("--preview-ui"), automatic else { return }
@@ -304,8 +335,18 @@ final class LicenseManager: ObservableObject {
         Task { await reloadStorage() }
     }
 
-    /// Only the licence settings surface requests a check. Returning to the
-    /// view never queues another Security read after a slow or failed attempt.
+    /// Called once when Cairn opens. Waits for the window to be up, then reads
+    /// a saved licence in the background so Pro is on without visiting
+    /// Settings. Does nothing when no licence was ever saved on this Mac.
+    func loadAfterLaunch(delay: TimeInterval = 2) async {
+        guard defaults.bool(forKey: LicenseConfig.savedHintKey) else { return }
+        try? await Task.sleep(nanoseconds: UInt64(max(0, delay) * 1_000_000_000))
+        guard !Task.isCancelled else { return }
+        await loadIfNeeded()
+    }
+
+    /// Settings › Licence and the launch read both come here. Whichever runs
+    /// first does the read; returning to the view never queues another one.
     func loadIfNeeded() async {
         guard !hasRequestedStorage, !CommandLine.arguments.contains("--preview-ui") else { return }
         await reloadStorage()
@@ -325,6 +366,9 @@ final class LicenseManager: ObservableObject {
         do {
             let state = try await LicenseStorageWorker.run(loadLocal)
             stored = state.license
+            // A licence saved before this hint existed is found the first time
+            // Settings is opened; from then on it is read at every launch.
+            if state.license != nil { defaults.set(true, forKey: LicenseConfig.savedHintKey) }
             isPro = state.license?.grantsOffline ?? false
             if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true }
             storageMessage = nil
@@ -356,8 +400,10 @@ final class LicenseManager: ObservableObject {
             let granted = try await client.validate(key: key, activationID: activationID)
             var license = StoredLicense(key: key, activationID: activationID, lastValidated: Date(), granted: granted)
             license.reseal()
-            let saved = license
-            try await LicenseStorageWorker.run { try LicenseStore.save(saved) }; stored = saved
+            let saved = license, save = saveLocal
+            try await LicenseStorageWorker.run { try save(saved) }; stored = saved
+            defaults.set(true, forKey: LicenseConfig.savedHintKey)
+            stopRetrying()
             isPro = granted; recompute()
             if !granted { lastError = "This license is not active." }
             return isPro
@@ -373,13 +419,16 @@ final class LicenseManager: ObservableObject {
         do {
             try await client.deactivate(key: s.key, activationID: s.activationID)
             isPro = false; recompute()
+            stopRetrying()
             do {
                 try await LicenseStorageWorker.run { try LicenseStore.clear() }
                 stored = nil
+                defaults.set(false, forKey: LicenseConfig.savedHintKey)
             } catch { storageMessage = error.localizedDescription; throw error }
         } catch { lastError = error.localizedDescription }
     }
 
+    /// "Check now" in Settings, and the quiet retries.
     func refresh() async {
         guard !isBusy, !isLoading else { return }
         isBusy = true; defer { isBusy = false }
@@ -390,19 +439,45 @@ final class LicenseManager: ObservableObject {
         defer { recompute() }
         // Never let a network round-trip revoke the local dev unlock.
         if honorDevUnlock && LicenseConfig.devProUnlock { isPro = true; return }
-        guard let s = stored else { isPro = false; return }
+        guard let s = stored else { isPro = false; stopRetrying(); return }
+        let save = saveLocal
         do {
             let granted = try await client.validate(key: s.key, activationID: s.activationID)
             var u = s; u.granted = granted; u.lastValidated = Date(); u.reseal()
             stored = u; isPro = granted
-            do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
+            stopRetrying()
+            do { try await LicenseStorageWorker.run { try save(u) } }
             catch { storageMessage = error.localizedDescription }
         } catch let e as PolarClient.PolarError where e.isDefinitiveRejection {
             isPro = false; var u = s; u.granted = false; u.reseal(); stored = u
-            do { try await LicenseStorageWorker.run { try LicenseStore.save(u) } }
+            stopRetrying()
+            do { try await LicenseStorageWorker.run { try save(u) } }
             catch { storageMessage = error.localizedDescription }
         } catch {
+            // No internet yet (common straight after login), or Polar is busy.
+            // Keep the saved key, use the offline grace, and try again quietly.
             isPro = s.grantsOffline
+            waitingToConfirm = true
+            retryQuietly()
         }
+    }
+
+    private func retryQuietly() {
+        retryTask?.cancel()
+        guard !retryDelays.isEmpty else { return }
+        let wait = retryDelays[min(retryCount, retryDelays.count - 1)]
+        retryCount += 1
+        retryTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(max(0, wait) * 1_000_000_000))
+            guard !Task.isCancelled, let self else { return }
+            // Settings may be mid-check; try again after the next wait instead.
+            if self.isBusy || self.isLoading { self.retryQuietly() } else { await self.refresh() }
+        }
+    }
+
+    private func stopRetrying() {
+        retryTask?.cancel(); retryTask = nil
+        retryCount = 0
+        waitingToConfirm = false
     }
 }

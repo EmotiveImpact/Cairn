@@ -7,7 +7,7 @@ import AppKit
 @main
 struct CairnMain {
     static func main() {
-        let isolated = ["--evidencecheck", "--hashmemorycheck", "--loadcheck", "--reliabilitycheck", "--workspacecheck", "--safetycheck", "--lifecyclecheck", "--native-reliability-check", "--lease-probe", "--recovery-child"]
+        let isolated = ["--evidencecheck", "--hashmemorycheck", "--loadcheck", "--reliabilitycheck", "--licensecheck", "--workspacecheck", "--safetycheck", "--lifecyclecheck", "--native-reliability-check", "--lease-probe", "--recovery-child"]
         let command = CommandLine.arguments.dropFirst().first ?? ""
         // Diagnostic flags bypass live-store ownership only when unambiguous.
         // In particular, --readonlycheck must not borrow --safetycheck's bypass.
@@ -66,6 +66,11 @@ struct CairnMain {
         }
         if CommandLine.arguments.contains("--reliabilitycheck") {
             Task { @MainActor in await ReliabilityCheck.run() }
+            RunLoop.main.run()
+            return
+        }
+        if CommandLine.arguments.contains("--licensecheck") {
+            Task { @MainActor in await LicenseCheck.run() }
             RunLoop.main.run()
             return
         }

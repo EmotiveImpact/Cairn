@@ -17,7 +17,7 @@ BIN="$(swift build --show-bin-path)/Cairn"
 "$BIN" --safetycheck
 ```
 
-Additional bounded checks live in `Cairn/Diagnostics/`: `--reliabilitycheck`, `--lifecyclecheck`, `--hashmemorycheck`, `--loadcheck`, `--evidencecheck` and `--native-reliability-check`. Select checks appropriate to the change. Native checks need a macOS graphical session; filesystem event checks may require a less restrictive test environment. Do not substitute legacy `--selftest` or personal `--readonlycheck` for disposable fixture checks.
+Additional bounded checks live in `Cairn/Diagnostics/`: `--reliabilitycheck`, `--licensecheck`, `--lifecyclecheck`, `--hashmemorycheck`, `--loadcheck`, `--evidencecheck` and `--native-reliability-check`. Select checks appropriate to the change. Native checks need a macOS graphical session; filesystem event checks may require a less restrictive test environment. Do not substitute legacy `--selftest` or personal `--readonlycheck` for disposable fixture checks.
 
 ## Native component preview
 
@@ -29,7 +29,7 @@ Run from the repository root. This opens sample components, not real cleanup act
 
 ## Packaging and release
 
-`build_local.sh` assembles and signs a local bundle; `build_release.sh` additionally invokes notarization. Both are operational scripts, not ordinary compile checks. Each invocation writes a unique `dist/local.XXXXXX` or `dist/release.XXXXXX` directory, leaving previous bundles and archives untouched. Failed builds keep an `INCOMPLETE` marker; only artifacts without that marker passed all script checks. Compilation defaults to two workers; set `BUILD_JOBS` to override. The release script refuses to proceed if signed entitlements cannot be inspected. Use the exact output path printed by the script. Installation and publishing remain separate operations.
+`build_local.sh` assembles and signs a local bundle; `build_release.sh` additionally invokes notarization. Both are operational scripts, not ordinary compile checks. Each invocation writes a unique `dist/local.XXXXXX` or `dist/release.XXXXXX` directory and never replaces an earlier one. After a successful build the script keeps that build and the two finished builds before it (set `KEEP_BUILDS` to keep more) and removes older finished builds of the same kind, so `dist/` stops growing by a full app on every run. A failed build is kept for a day, a build whose app is running is never removed, and nothing outside `dist/local.*` or `dist/release.*` is touched. Failed builds keep an `INCOMPLETE` marker; only artifacts without that marker passed all script checks. Compilation defaults to two workers; set `BUILD_JOBS` to override. The release script refuses to proceed if signed entitlements cannot be inspected. Use the exact output path printed by the script. Installation and publishing remain separate operations.
 
 Signing/notarization credentials are machine-local. Never commit key files, keychain exports or environment secrets. Public upload, App Store submission and personal cleanup require a separate explicit instruction.
 

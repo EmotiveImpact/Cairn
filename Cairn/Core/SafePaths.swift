@@ -182,7 +182,28 @@ enum SafePaths {
     static let projectArtifactNames: Set<String> = [
         "node_modules", "target", ".venv", "venv", "Pods", ".build", ".next", ".nuxt", ".output",
         ".turbo", ".svelte-kit", ".expo", "dist", "build", "DerivedData", "__pycache__", ".gradle",
+        // Build output ProjectFinder matches only beside its own manifest.
+        ".parcel-cache", ".angular", "storybook-static", ".docusaurus", ".nx", "_build",
+        ".stack-work", "dist-newstyle", "zig-cache", ".zig-cache", "zig-out", ".godot", ".import",
+        ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox", ".terraform", "DerivedDataCache", ".dart_tool",
     ]
+    /// Generic names that only mark build output when they are the item
+    /// itself (a Unity project's Library, a .NET project's bin), never when
+    /// they merely appear higher up the path.
+    static let projectArtifactLeafNames: Set<String> = [
+        "bin", "obj", "deps", "vendor", "Library", "Temp", "Logs", "Saved", "Intermediate",
+    ]
+
+    /// True when a rebuildable item's own path reads as project build output.
+    static func looksLikeProjectArtifact(_ url: URL) -> Bool {
+        let parts = url.pathComponents
+        if parts.contains(where: projectArtifactNames.contains) { return true }
+        guard let leaf = parts.last else { return false }
+        if projectArtifactLeafNames.contains(leaf) || leaf.hasPrefix("cmake-build-") { return true }
+        let parent = parts.dropLast().last
+        return (leaf == "bundle" && parent == "vendor") || (leaf == "Build" && parent == "Carthage")
+            || (leaf == "output" && parent == ".vercel")
+    }
 
     static func rebuildableAncestorReason(_ url: URL) -> String? {
         let paths = [url.standardizedFileURL, url.resolvingSymlinksInPath().standardizedFileURL]
@@ -235,7 +256,7 @@ enum SafePaths {
             for spelling in spellings {
                 // Project build output inside ~/Documents is still build output.
                 if rebuildable && rel == "Documents" && spelling.path.lowercased() != denied.lowercased()
-                    && spelling.pathComponents.contains(where: projectArtifactNames.contains) { continue }
+                    && looksLikeProjectArtifact(spelling) { continue }
                 if isUnderIgnoringCase(spelling.path, denied) {
                     return .reject("protected data location (~/\(rel))")
                 }
