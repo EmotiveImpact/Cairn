@@ -10,6 +10,16 @@ Severity legend: 🔴 critical (data loss / crash) · 🟠 high · 🟡 medium �
 
 Current continuation queue: [Claude roadmap](docs/ROADMAP-CLAUDE.md). The dated status below is historical; source implementation does not establish Mac runtime acceptance.
 
+## 9 November 2026 · Incomplete package-link checks could allow cleanup
+
+The package-link check treated its 2,000-entry limit and failed folder reads as
+success. A declared registry dependency could also excuse a manually linked
+local replacement that an install would not recreate. These cases now require
+review. Workspace and package-store links must end in a recognised location,
+and a missing link target also requires review. Disposable workspace fixtures
+cover the limit, failed package and scope listings, local overrides, workspace
+aliases and dangling links. macOS CI must pass before merging this fix.
+
 ## 5 November 2026 · pnpm projects' packages held back as hand-linked
 
 🟡 On the same Mac, 13 `node_modules` folders (3.3 GB) were held back for

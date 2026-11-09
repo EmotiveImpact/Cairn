@@ -14,16 +14,16 @@ enum Regenerability {
     private static let lockfiles = ["pnpm-lock.yaml", "yarn.lock", "package-lock.json", "bun.lockb", "npm-shrinkwrap.json"]
 
     /// Evaluate a `node_modules` directory given its containing project dir.
-    static func evaluateNodeModules(projectDir: URL) -> Result {
+    static func evaluateNodeModules(projectDir: URL, packageLinkLimit: Int = 2_000) -> Result {
         let fm = FileManager.default
         let nm = projectDir.appendingPathComponent("node_modules")
         let root = workspaceRootWithLockfile(startingAt: projectDir)
 
         // A package linked in by hand (npm link, yarn link, pnpm link --global,
         // or a link to a folder nobody declared) won't come back with an install.
-        if let root, let linked = handMadeLink(nm, projectDir: projectDir, root: root) {
+        if let root, let reason = packageLinkReviewReason(nm, root: root, limit: packageLinkLimit) {
             return Result(isRegenerable: false, severity: .review,
-                          note: "\(linked) was linked in by hand, so reinstalling won't bring it back")
+                          note: reason)
         }
 
         // patch-package patches → patched state may not reproduce identically.
@@ -51,45 +51,47 @@ enum Regenerability {
 
     // MARK: - helpers
 
-    /// The first package in `node_modules` (or inside an @scope folder) that was
-    /// linked in by hand, or nil. A link an install makes again points into a
+    /// A reason this folder needs review, or nil only after every package link
+    /// was checked. A link an install makes again points into a
     /// package manager's own folder (a `node_modules` inside the lockfile's
     /// folder, such as pnpm's `.pnpm`, or pnpm's store), or to a workspace
-    /// package or declared dependency inside the lockfile's folder. Anything
+    /// package inside the lockfile's folder. A dependency name alone does not
+    /// prove that an install recreates a local override. Anything
     /// else is by hand: `npm link` goes through npm's global folder, and a link
     /// to a sibling folder nobody declared is gone after a fresh install. The
     /// link itself is judged, so a package linked through the global folder
     /// can't pass for a local one, and the end of its chain must also stay in
     /// the project or pnpm's store. Bounded probe.
-    private static func handMadeLink(_ nodeModules: URL, projectDir: URL, root: URL) -> String? {
+    private static func packageLinkReviewReason(_ nodeModules: URL, root: URL, limit: Int) -> String? {
         let fm = FileManager.default
         let rootPath = root.resolvingSymlinksInPath().path
         let stores = pnpmStores(nodeModules).map { $0.resolvingSymlinksInPath().path }
-        let declared = declaredDependencies(projectDir)
         let members = workspacePatterns(root)
         func within(_ path: String, _ base: String) -> Bool {
             path == base || path.hasPrefix(base.hasSuffix("/") ? base : base + "/")
         }
-        func isLink(_ url: URL) -> Bool {
-            (try? url.resourceValues(forKeys: [.isSymbolicLinkKey]))?.isSymbolicLink == true
+        func handMade(_ name: String) -> String {
+            "\(name) was linked in by hand, so reinstalling won't bring it back"
         }
-        func entries(_ dir: URL) -> [URL] {
-            (try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey], options: [])) ?? []
-        }
-        var budget = 2_000
+        let incomplete = "Cairn couldn't check every package link, so review this folder before removing it"
+        var budget = max(0, limit)
         var queue = [(nodeModules, "")]
         while !queue.isEmpty {
             let (dir, scope) = queue.removeFirst()
-            for e in entries(dir) {
+            guard let entries = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isSymbolicLinkKey], options: [])
+            else { return incomplete }
+            for e in entries {
                 budget -= 1
-                if budget < 0 { return nil }
+                if budget < 0 { return incomplete }
                 let name = e.lastPathComponent
-                guard isLink(e) else {
+                guard let values = try? e.resourceValues(forKeys: [.isSymbolicLinkKey]),
+                      let isLink = values.isSymbolicLink else { return incomplete }
+                guard isLink else {
                     if scope.isEmpty && name.hasPrefix("@") { queue.append((e, name + "/")) }
                     continue
                 }
                 let linkName = scope + name
-                guard let dest = try? fm.destinationOfSymbolicLink(atPath: e.path) else { return linkName }
+                guard let dest = try? fm.destinationOfSymbolicLink(atPath: e.path) else { return incomplete }
                 let target = (dest.hasPrefix("/") ? URL(fileURLWithPath: dest)
                                                   : e.deletingLastPathComponent().appendingPathComponent(dest)).standardizedFileURL
                 // Spell the folder the link names the same way as the roots,
@@ -99,27 +101,20 @@ enum Regenerability {
                 // The whole chain must also end inside the project or pnpm's store,
                 // so a local alias to a folder elsewhere can't pass either.
                 let end = target.resolvingSymlinksInPath().path
-                guard within(end, rootPath) || stores.contains(where: { within(end, $0) }) else { return linkName }
-                if stores.contains(where: { within(path, $0) }) { continue }
-                guard within(path, rootPath) else { return linkName }
+                guard fm.fileExists(atPath: end) else { return incomplete }
+                guard within(end, rootPath) || stores.contains(where: { within(end, $0) }) else { return handMade(linkName) }
+                if stores.contains(where: { within(path, $0) && within(end, $0) }) { continue }
+                guard within(path, rootPath) else { return handMade(linkName) }
                 let relative = String(path.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-                if relative.split(separator: "/").contains("node_modules") { continue }
-                if declared.contains(linkName) || members(relative) { continue }
-                return linkName
+                let endRelative = String(end.dropFirst(rootPath.count)).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                let endsInPackages = within(end, rootPath) && endRelative.split(separator: "/").contains("node_modules")
+                if relative.split(separator: "/").contains("node_modules"),
+                   endsInPackages || stores.contains(where: { within(end, $0) }) { continue }
+                if within(end, rootPath), members(relative), members(endRelative) { continue }
+                return handMade(linkName)
             }
         }
         return nil
-    }
-
-    /// Every package the project's package.json asks for, by name.
-    private static func declaredDependencies(_ projectDir: URL) -> Set<String> {
-        guard let data = try? Data(contentsOf: projectDir.appendingPathComponent("package.json")),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [] }
-        var names = Set<String>()
-        for key in ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"] {
-            if let deps = json[key] as? [String: Any] { names.formUnion(deps.keys) }
-        }
-        return names
     }
 
     /// Whether a folder (relative to the workspace root) is one of its

@@ -249,6 +249,35 @@ enum WorkspaceCheck {
             try link("scoped/node_modules/@me/tool", to: "../../../elsewhere/tool")
             let scoped = verdict("scoped")
             check(!scoped.isRegenerable && scoped.note.contains("@me/tool"), "A scoped package linked in by hand waits for review")
+            // A registry dependency name cannot prove a hand-linked override is reproducible.
+            try file("override/package.json", #"{"dependencies":{"tool":"^1.0.0"}}"#)
+            try file("override/package-lock.json"); try file("override/custom-tool/package.json", "{}")
+            try link("override/node_modules/tool", to: "../custom-tool")
+            check(!verdict("override").isRegenerable && verdict("override").note.contains("tool"),
+                  "A declared registry dependency linked to local source waits for review")
+            // A workspace member alias must not escape into undeclared source in the same repository.
+            try file("member-alias/package.json", #"{"workspaces":["packages/*"]}"#)
+            try file("member-alias/package-lock.json"); try file("member-alias/custom-tool/package.json", "{}")
+            try link("member-alias/packages/tool", to: "../custom-tool")
+            try link("member-alias/node_modules/tool", to: "../packages/tool")
+            check(!verdict("member-alias").isRegenerable, "Workspace aliases to undeclared local source wait for review")
+            // Reaching a bound or failing a read is unknown, never proof of rebuildability.
+            try file("bounded/package.json", "{}"); try file("bounded/package-lock.json")
+            try file("bounded/node_modules/one/index.js"); try file("bounded/node_modules/two/index.js")
+            let bounded = Regenerability.evaluateNodeModules(projectDir: root.appendingPathComponent("bounded"), packageLinkLimit: 1)
+            check(!bounded.isRegenerable && bounded.severity == .review && bounded.note.contains("couldn't check"),
+                  "An exhausted package-link budget waits for review")
+            check(Regenerability.evaluateNodeModules(projectDir: root.appendingPathComponent("bounded"), packageLinkLimit: 2).isRegenerable,
+                  "A complete package-link check exactly at its limit can pass")
+            try file("unreadable/package.json", "{}"); try file("unreadable/package-lock.json")
+            try file("unreadable/node_modules", "not a directory")
+            check(!verdict("unreadable").isRegenerable, "A failed package-folder listing waits for review")
+            try file("bad-scope/package.json", "{}"); try file("bad-scope/package-lock.json")
+            try file("bad-scope/node_modules/@broken", "not a directory")
+            check(!verdict("bad-scope").isRegenerable, "A failed scoped-package listing waits for review")
+            try file("dangling/package.json", "{}"); try file("dangling/package-lock.json")
+            try link("dangling/node_modules/tool", to: ".pnpm/missing/node_modules/tool")
+            check(!verdict("dangling").isRegenerable, "An unverifiable dangling package link waits for review")
         } catch {
             check(false, "Package link fixture could not be created: \(error)")
         }
