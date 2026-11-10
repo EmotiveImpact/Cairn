@@ -47,6 +47,7 @@ async function measure(page,label,staged=false){
     await page.locator('.product-screen').click();
     const note=page.locator('.radix-preview .preview-note');
     await note.waitFor({state:'visible'});
+    await page.locator('.radix-preview').evaluate(async el=>Promise.all(el.getAnimations({subtree:true}).map(a=>a.finished)));
     assert((await note.textContent()).includes('No guarantee that every code file or conversation is protected.'));
     const box=await note.boundingBox();
     if(!box||box.x<0||box.y<0||box.x+box.width>width+1||box.y+box.height>height+1)report.failures.push(`${width}: gallery limitation outside viewport`);
