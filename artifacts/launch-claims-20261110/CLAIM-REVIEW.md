@@ -229,6 +229,8 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 | `website/v2/site/content.cjs` | Receipts distinguish measured space freed from items moved to Trash. | Receipts distinguish items moved to Trash, action-size estimates and later available-space readings. | [accounting](#accounting) |
 | `website/v2/ui/interactions.jsx` | Sample data. Disk actions are disabled in these native app captures. | Development capture with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action. | [sample](#sample) |
 | `website/v2/site/content.cjs` | Native app preview · Sample data | Development preview · Sample data · Protection and recovery have limits | [sample](#sample) |
+| `website/v2/story.html` | Free space and how it changed, with your next step ready. | Free-space history, with next steps. | [accounting](#accounting) |
+| `website/v2/story.html` | Web caches that pile up as you browse. Each browser makes them again as needed. | Review rebuildable browser caches. | [scope](#scope) |
 
 ## Validation
 

@@ -582,6 +582,20 @@
       "new": "Development preview · Sample data · Protection and recovery have limits",
       "count": 1,
       "evidence": "sample"
+    },
+    {
+      "file": "website/v2/story.html",
+      "old": "Free space and how it changed, with your next step ready.",
+      "new": "Free-space history, with next steps.",
+      "count": 1,
+      "evidence": "accounting"
+    },
+    {
+      "file": "website/v2/story.html",
+      "old": "Web caches that pile up as you browse. Each browser makes them again as needed.",
+      "new": "Review rebuildable browser caches.",
+      "count": 1,
+      "evidence": "scope"
     }
   ]
 }
