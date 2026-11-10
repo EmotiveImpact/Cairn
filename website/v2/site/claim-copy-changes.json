@@ -187,14 +187,14 @@
     {
       "file": "website/v2/story.html",
       "old": "Cairn found build files and caches your tools can rebuild on their own:",
-      "new": "Example candidates to review for rebuildability:",
+      "new": "Sample candidates. Review first:",
       "count": 1,
       "evidence": "scope"
     },
     {
       "file": "website/v2/story.html",
       "old": "38.6 GB<span>you can get back</span>",
-      "new": "38.6 GB<span>example total, including npm cache</span>",
+      "new": "38.6 GB<span>sample incl. npm</span>",
       "count": 1,
       "evidence": "sample"
     },

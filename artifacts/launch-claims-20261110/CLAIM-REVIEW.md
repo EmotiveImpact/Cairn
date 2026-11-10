@@ -172,8 +172,8 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 | `website/v2/story.html` | &lt;b&gt;Nothing moves until you say so.&lt;/b&gt; Every clean is reviewed first. | &lt;b&gt;Cleaning is off by default.&lt;/b&gt; Choose review or permitted automation. | [agent](#agent) |
 | `website/v2/story.html` | &lt;b&gt;Your code and conversations are never included.&lt;/b&gt; | &lt;b&gt;Known working locations have protection checks.&lt;/b&gt; | [protection](#protection) |
 | `website/v2/story.html` | Claude Code chat: asked what is taking up space, Cairn lists Xcode build files 14.2 GB, Docker build cache 9.8 GB and node_modules 9.5 GB, 38.6 GB in total. | Illustrative AI-tool conversation with sample sizes, not a live result. The 38.6 GB total includes 5.1 GB of npm cache not shown in the three rows. | [sample](#sample) |
-| `website/v2/story.html` | Cairn found build files and caches your tools can rebuild on their own: | Example candidates to review for rebuildability: | [scope](#scope) |
-| `website/v2/story.html` | 38.6 GB&lt;span&gt;you can get back&lt;/span&gt; | 38.6 GB&lt;span&gt;example total, including npm cache&lt;/span&gt; | [sample](#sample) |
+| `website/v2/story.html` | Cairn found build files and caches your tools can rebuild on their own: | Sample candidates. Review first: | [scope](#scope) |
+| `website/v2/story.html` | 38.6 GB&lt;span&gt;you can get back&lt;/span&gt; | 38.6 GB&lt;span&gt;sample incl. npm&lt;/span&gt; | [sample](#sample) |
 | `website/v2/story.html` | Then review it and free it, &lt;span&gt;in one calm place.&lt;/span&gt; | Then review what can go, &lt;span&gt;in one calm place.&lt;/span&gt; | [accounting](#accounting) |
 | `website/v2/story.html` | Exact paths and sizes. Folders you work in stay protected. | Inspect paths, sizes and requirements before acting. | [protection](#protection) |
 | `website/v2/story.html` | Every clean is recorded, with the way back for each one. | Inspect action records. Recovery depends on the method. | [recovery](#recovery) |

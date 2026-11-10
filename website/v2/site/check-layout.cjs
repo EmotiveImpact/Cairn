@@ -11,7 +11,7 @@ const server=http.createServer((req,res)=>{
  fs.readFile(file,(err,data)=>{res.writeHead(err?404:200,{'Content-Type':types[path.extname(file)]||'application/octet-stream'});res.end(err?'Not found':data);});
 });
 const report={viewports:[],errors:[],failures:[],limits:'Chromium viewport emulation, not physical Safari/iPhone or native Mac acceptance.'};
-const changedSelectors='.open-lead,.open-stats,.open-more,.open-cta,.dive-words h2,.dive-words .label,.story-disk .centre,.legend,.disk-done,.promises,.story-ask .lead,.ans,.got,.app-steps,.app-sample,.more-list,.more-also,.touches-foot,.footer-price,.footer-availability';
+const changedSelectors='.open-lead,.open-stats,.open-more,.open-cta,.dive-words h2,.dive-words .label,.story-disk .centre,.legend,.disk-done,.promises,.story-ask .lead,.ans,.got,.ask-btns,.chat-tabs,.app-steps,.app-sample,.more-list,.more-also,.touches-foot,.footer-price,.footer-availability';
 async function measure(page,label,staged=false){
  const value=await page.evaluate(({selectors,staged})=>{
   const visible=e=>{for(let p=e;p;p=p.parentElement){const s=getComputedStyle(p);if(s.display==='none'||s.visibility==='hidden'||+s.opacity<0.95)return false;}return true;};
