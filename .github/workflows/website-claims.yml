@@ -1,0 +1,41 @@
+name: Website claims and layout
+on:
+  pull_request:
+    paths:
+      - 'website/v2/**'
+      - '.github/workflows/website-claims.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: website/v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: website/v2/package-lock.json
+      - run: npm ci
+      - run: npm run verify:site
+      - run: npm run export:site
+      - name: Verify exported content
+        run: |
+          node site/check.cjs dist
+          node site/check-scroll-site.cjs dist
+          node site/check-claims.cjs dist
+      - run: npx playwright install --with-deps chromium
+      - name: Render desktop and mobile layouts
+        run: node site/check-layout.cjs
+      - name: Keep layout evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: website-layout-evidence
+          path: artifacts/launch-claims-20261110/browser
+          retention-days: 14

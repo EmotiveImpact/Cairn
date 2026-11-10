@@ -19,8 +19,8 @@ const output = `<!doctype html>
 <footer class="site-footer content-footer"><div class="shell footer-main"><div class="footer-about"><a class="brand" href="story.html" aria-label="Cairn home">${brand}</a><p>Mac cleaning built around<br>the work behind every build.</p><p class="small-copy">In development for macOS.</p></div><nav class="footer-links" aria-label="Footer navigation">${footerNav(page.slug)}</nav></div><div class="shell footer-bottom"><span>Native app previews use sample data.</span><a href="#top">Back to top ↑</a><span>Cairn / 2026</span></div></footer></body></html>`;
 fs.writeFileSync(path.join(root,`${page.slug}.html`), output);
 }
-// The user confirmed story.html. Preserve its chapters, copy and animation files.
-// Add only metadata, an Explore menu and working page destinations.
+// Preserve the confirmed story.html design and its reviewed factual copy.
+// Only navigation, metadata and destinations are managed by this generator.
 const homePath = path.join(root,'story.html');
 let home = fs.readFileSync(homePath,'utf8');
 const explore = `<details class="site-explore" id="site-explore"><summary>Explore <span aria-hidden="true">⌄</span></summary><nav class="site-explore-panel" aria-label="Explore Cairn">${footerGroups.map(([title,links])=>`<div><p>${title}</p>${links.map(([slug,label])=>navLink(slug,label,'story')).join('')}</div>`).join('')}<div class="explore-chapters"><p>On this page</p><a href="#number">Why Cairn</a><a href="#disk">The disk story</a><a href="#ask">AI tools</a><a href="#app">The app</a></div></nav></details>`;
@@ -30,7 +30,7 @@ else home=home.replace('<span class="header-status">',menuMarkup+'<span class="h
 if(!home.includes('name="description"')) home=home.replace('<title>', '<meta name="description" content="See Cairn’s cinematic storage story, then explore its features, cleanup workflow, protection, planned pricing and development status." />\n    <title>');
 if(!home.includes('site/home-navigation.css')) home=home.replace('</head>','    <link rel="stylesheet" href="site/home-navigation.css">\n    <script src="site/home-navigation.js" defer></script>\n  </head>');
 home=home.replaceAll('href="#download"','href="download.html"').replaceAll('href="#buy"','href="pricing.html"');
-// The original hero/header CTAs retain their exact wording and now reach availability.
+// Hero/header CTAs reach availability; the copy lives in story.html.
 home=home.replace(/(class="(?:button button-light header-action|open-cta reveal)" href=")#close"/g,'$1download.html"');
 const directory=`<nav class="shell site-directory" aria-label="All Cairn pages">${footerGroups.flatMap(([,links])=>links).map(([slug,label])=>navLink(slug,label,'story')).join('')}</nav>`;
 const directoryMarkup=`<!-- Site directory start -->${directory}<!-- Site directory end -->`;
