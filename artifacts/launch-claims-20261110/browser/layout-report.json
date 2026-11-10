@@ -1,0 +1,4737 @@
+{
+  "viewports": [
+    {
+      "width": 320,
+      "height": 568,
+      "frames": [
+        {
+          "label": "320 stop 0",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "open-lead reveal",
+              "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+              "x": 20,
+              "y": 194.875,
+              "right": 300,
+              "bottom": 294.0625,
+              "width": 280,
+              "height": 99.1875,
+              "staged": true
+            },
+            {
+              "selector": "open-cta reveal",
+              "text": "Check availability",
+              "x": 20,
+              "y": 324.0625,
+              "right": 196,
+              "bottom": 369.0625,
+              "width": 176,
+              "height": 45,
+              "staged": true
+            },
+            {
+              "selector": "open-stats",
+              "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+              "x": 20,
+              "y": 405.0625,
+              "right": 300,
+              "bottom": 513.125,
+              "width": 280,
+              "height": 108.0625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 8510.890625,
+              "right": 300,
+              "bottom": 8597.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 9126.5625,
+              "right": 300,
+              "bottom": 9227.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 9235.265625,
+              "right": 300,
+              "bottom": 9296.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 1",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "label reveal",
+              "text": "An illustrative scan",
+              "x": 20,
+              "y": 151.859375,
+              "right": 300,
+              "bottom": 172.25,
+              "width": 280,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "reveal",
+              "text": "What a scan could find. Example figures. Your results will vary.",
+              "x": 20,
+              "y": 318.75,
+              "right": 300,
+              "bottom": 414.140625,
+              "width": 280,
+              "height": 95.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 7857.890625,
+              "right": 300,
+              "bottom": 7944.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 8473.5625,
+              "right": 300,
+              "bottom": 8574.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 8582.265625,
+              "right": 300,
+              "bottom": 8643.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 2",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 20,
+              "y": 42.359375,
+              "right": 300,
+              "bottom": 174.140625,
+              "width": 280,
+              "height": 131.78125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 20,
+              "y": 398.140625,
+              "right": 300,
+              "bottom": 440.140625,
+              "width": 280,
+              "height": 42,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 7204.890625,
+              "right": 300,
+              "bottom": 7291.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 7820.5625,
+              "right": 300,
+              "bottom": 7921.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 7929.265625,
+              "right": 300,
+              "bottom": 7990.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 3",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 20,
+              "y": 42.359375,
+              "right": 300,
+              "bottom": 174.140625,
+              "width": 280,
+              "height": 131.78125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 20,
+              "y": 398.140625,
+              "right": 300,
+              "bottom": 440.140625,
+              "width": 280,
+              "height": 42,
+              "staged": true
+            },
+            {
+              "selector": "disk-done",
+              "text": "Illustrative change. Actual space varies. Trash alone frees none.",
+              "x": 20,
+              "y": 509.640625,
+              "right": 300,
+              "bottom": 560.640625,
+              "width": 280,
+              "height": 51,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 6550.890625,
+              "right": 300,
+              "bottom": 6637.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 7166.5625,
+              "right": 300,
+              "bottom": 7267.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 7275.265625,
+              "right": 300,
+              "bottom": 7336.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 4",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "lead reveal",
+              "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+              "x": 20,
+              "y": 196.296875,
+              "right": 300,
+              "bottom": 282.6875,
+              "width": 280,
+              "height": 86.390625,
+              "staged": true
+            },
+            {
+              "selector": "promises reveal",
+              "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+              "x": 20,
+              "y": 310.6875,
+              "right": 300,
+              "bottom": 499.6875,
+              "width": 280,
+              "height": 189,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 5897.890625,
+              "right": 300,
+              "bottom": 5984.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 6513.5625,
+              "right": 300,
+              "bottom": 6614.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 6622.265625,
+              "right": 300,
+              "bottom": 6683.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 5",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "chat-tabs",
+              "text": "Claude CodeCodexCursor",
+              "x": 20,
+              "y": 18.78125,
+              "right": 300,
+              "bottom": 50.78125,
+              "width": 280,
+              "height": 32,
+              "staged": true
+            },
+            {
+              "selector": "ans step on",
+              "text": "Sample candidates. Review first:",
+              "x": 35,
+              "y": 231.15625,
+              "right": 285,
+              "bottom": 252.84375,
+              "width": 250,
+              "height": 21.6875,
+              "staged": true
+            },
+            {
+              "selector": "got step on",
+              "text": "38.6 GBsample incl. npm",
+              "x": 35,
+              "y": 444.03125,
+              "right": 285,
+              "bottom": 490.53125,
+              "width": 250,
+              "height": 46.5,
+              "staged": true
+            },
+            {
+              "selector": "ask-btns step on",
+              "text": "Review in CairnNot now",
+              "x": 35,
+              "y": 500.8047790527344,
+              "right": 285,
+              "bottom": 542.4923095703125,
+              "width": 250,
+              "height": 41.687530517578125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 5244.890625,
+              "right": 300,
+              "bottom": 5331.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 5860.5625,
+              "right": 300,
+              "bottom": 5961.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 5969.265625,
+              "right": 300,
+              "bottom": 6030.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 6",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 66,
+              "y": 398.578125,
+              "right": 254,
+              "bottom": 516.578125,
+              "width": 188,
+              "height": 118,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 66,
+              "y": 526.578125,
+              "right": 254,
+              "bottom": 567.359375,
+              "width": 188,
+              "height": 40.78125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 4591.890625,
+              "right": 300,
+              "bottom": 4678.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 5207.5625,
+              "right": 300,
+              "bottom": 5308.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 5316.265625,
+              "right": 300,
+              "bottom": 5377.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 7",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 66,
+              "y": 398.578125,
+              "right": 254,
+              "bottom": 516.578125,
+              "width": 188,
+              "height": 118,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 66,
+              "y": 526.578125,
+              "right": 254,
+              "bottom": 567.359375,
+              "width": 188,
+              "height": 40.78125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 3937.890625,
+              "right": 300,
+              "bottom": 4024.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 4553.5625,
+              "right": 300,
+              "bottom": 4654.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 4662.265625,
+              "right": 300,
+              "bottom": 4723.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 8",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 66,
+              "y": 400.828125,
+              "right": 254,
+              "bottom": 514.328125,
+              "width": 188,
+              "height": 113.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 66,
+              "y": 524.328125,
+              "right": 254,
+              "bottom": 565.109375,
+              "width": 188,
+              "height": 40.78125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 3284.890625,
+              "right": 300,
+              "bottom": 3371.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 3900.5625,
+              "right": 300,
+              "bottom": 4001.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 4009.265625,
+              "right": 300,
+              "bottom": 4070.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 stop 9",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 20,
+              "y": 176.140625,
+              "right": 300,
+              "bottom": 559.4375,
+              "width": 280,
+              "height": 383.296875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 2631.890625,
+              "right": 300,
+              "bottom": 2718.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 3247.5625,
+              "right": 300,
+              "bottom": 3348.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 3356.265625,
+              "right": 300,
+              "bottom": 3417.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 protection",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 20,
+              "y": -303.859375,
+              "right": 300,
+              "bottom": 79.4375,
+              "width": 280,
+              "height": 383.296875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 2151.890625,
+              "right": 300,
+              "bottom": 2238.265625,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 2767.5625,
+              "right": 300,
+              "bottom": 2868.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 2876.265625,
+              "right": 300,
+              "bottom": 2937.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 commercial",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": -382.109375,
+              "right": 300,
+              "bottom": -295.734375,
+              "width": 280,
+              "height": 86.375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 233.5625,
+              "right": 300,
+              "bottom": 334.265625,
+              "width": 280,
+              "height": 100.703125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 342.265625,
+              "right": 300,
+              "bottom": 403.4375,
+              "width": 280,
+              "height": 61.171875,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "320 features.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 how-it-works.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 protection.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 pricing.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 download.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 support.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 changelog.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 about.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 privacy.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 terms.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 404.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/index.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/guide/reading-space.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/guide/reviewing.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/guide/protection.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/guide/activity-recovery.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "320 docs-preview/reference/faq.html",
+          "width": 320,
+          "height": 568,
+          "documentWidth": 320,
+          "fontLoaded": true,
+          "boxes": []
+        }
+      ]
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "frames": [
+        {
+          "label": "390 stop 0",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "open-lead reveal",
+              "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+              "x": 20,
+              "y": 490.53125,
+              "right": 370,
+              "bottom": 564.921875,
+              "width": 350,
+              "height": 74.390625,
+              "staged": true
+            },
+            {
+              "selector": "open-cta reveal",
+              "text": "Check availability",
+              "x": 20,
+              "y": 594.921875,
+              "right": 196,
+              "bottom": 639.921875,
+              "width": 176,
+              "height": 45,
+              "staged": true
+            },
+            {
+              "selector": "open-stats",
+              "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+              "x": 20,
+              "y": 675.921875,
+              "right": 370,
+              "bottom": 740,
+              "width": 350,
+              "height": 64.078125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 11471.796875,
+              "right": 370,
+              "bottom": 11536.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 12025.0625,
+              "right": 370,
+              "bottom": 12105.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 12113.625,
+              "right": 370,
+              "bottom": 12154.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 1",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "label reveal",
+              "text": "An illustrative scan",
+              "x": 20,
+              "y": 283.20001220703125,
+              "right": 370,
+              "bottom": 303.59063720703125,
+              "width": 350,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "reveal",
+              "text": "What a scan could find. Example figures. Your results will vary.",
+              "x": 20,
+              "y": 450.09063720703125,
+              "right": 370,
+              "bottom": 558.1843872070312,
+              "width": 350,
+              "height": 108.09375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 10500.796875,
+              "right": 370,
+              "bottom": 10565.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 11054.0625,
+              "right": 370,
+              "bottom": 11134.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 11142.625,
+              "right": 370,
+              "bottom": 11183.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 2",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 20,
+              "y": 197,
+              "right": 370,
+              "bottom": 341.484375,
+              "width": 350,
+              "height": 144.484375,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 20,
+              "y": 581.484375,
+              "right": 370,
+              "bottom": 623.484375,
+              "width": 350,
+              "height": 42,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 9530.796875,
+              "right": 370,
+              "bottom": 9595.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 10084.0625,
+              "right": 370,
+              "bottom": 10164.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 10172.625,
+              "right": 370,
+              "bottom": 10213.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 3",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 20,
+              "y": 197,
+              "right": 370,
+              "bottom": 341.484375,
+              "width": 350,
+              "height": 144.484375,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 20,
+              "y": 581.484375,
+              "right": 370,
+              "bottom": 623.484375,
+              "width": 350,
+              "height": 42,
+              "staged": true
+            },
+            {
+              "selector": "disk-done",
+              "text": "Illustrative change. Actual space varies. Trash alone frees none.",
+              "x": 20,
+              "y": 692.984375,
+              "right": 370,
+              "bottom": 743.984375,
+              "width": 350,
+              "height": 51,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 8559.796875,
+              "right": 370,
+              "bottom": 8624.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 9113.0625,
+              "right": 370,
+              "bottom": 9193.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 9201.625,
+              "right": 370,
+              "bottom": 9242.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 4",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "lead reveal",
+              "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+              "x": 20,
+              "y": 346.53125,
+              "right": 370,
+              "bottom": 432.921875,
+              "width": 350,
+              "height": 86.390625,
+              "staged": true
+            },
+            {
+              "selector": "promises reveal",
+              "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+              "x": 20,
+              "y": 460.921875,
+              "right": 370,
+              "bottom": 649.921875,
+              "width": 350,
+              "height": 189,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 7589.796875,
+              "right": 370,
+              "bottom": 7654.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 8143.0625,
+              "right": 370,
+              "bottom": 8223.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 8231.625,
+              "right": 370,
+              "bottom": 8272.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 5",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "chat-tabs",
+              "text": "Claude CodeCodexCursor",
+              "x": 20,
+              "y": 135.59375,
+              "right": 370,
+              "bottom": 167.59375,
+              "width": 350,
+              "height": 32,
+              "staged": true
+            },
+            {
+              "selector": "ans step on",
+              "text": "Sample candidates. Review first:",
+              "x": 41,
+              "y": 340.59375,
+              "right": 349,
+              "bottom": 363.84375,
+              "width": 308,
+              "height": 23.25,
+              "staged": true
+            },
+            {
+              "selector": "got step on",
+              "text": "38.6 GBsample incl. npm",
+              "x": 41,
+              "y": 591.71875,
+              "right": 349,
+              "bottom": 653.71875,
+              "width": 308,
+              "height": 62,
+              "staged": true
+            },
+            {
+              "selector": "ask-btns step on",
+              "text": "Review in CairnNot now",
+              "x": 41,
+              "y": 669.992431640625,
+              "right": 349,
+              "bottom": 711.679931640625,
+              "width": 308,
+              "height": 41.6875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 6618.796875,
+              "right": 370,
+              "bottom": 6683.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 7172.0625,
+              "right": 370,
+              "bottom": 7252.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 7260.625,
+              "right": 370,
+              "bottom": 7301.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 6",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 20,
+              "y": 661.65625,
+              "right": 370,
+              "bottom": 733.15625,
+              "width": 350,
+              "height": 71.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 20,
+              "y": 743.15625,
+              "right": 370,
+              "bottom": 763.546875,
+              "width": 350,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 5648.796875,
+              "right": 370,
+              "bottom": 5713.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 6202.0625,
+              "right": 370,
+              "bottom": 6282.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 6290.625,
+              "right": 370,
+              "bottom": 6331.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 7",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 20,
+              "y": 661.65625,
+              "right": 370,
+              "bottom": 733.15625,
+              "width": 350,
+              "height": 71.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 20,
+              "y": 743.15625,
+              "right": 370,
+              "bottom": 763.546875,
+              "width": 350,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 4677.796875,
+              "right": 370,
+              "bottom": 4742.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 5231.0625,
+              "right": 370,
+              "bottom": 5311.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 5319.625,
+              "right": 370,
+              "bottom": 5360.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 8",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 20,
+              "y": 651.15625,
+              "right": 370,
+              "bottom": 743.65625,
+              "width": 350,
+              "height": 92.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 20,
+              "y": 753.65625,
+              "right": 370,
+              "bottom": 774.046875,
+              "width": 350,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 3707.796875,
+              "right": 370,
+              "bottom": 3772.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 4261.0625,
+              "right": 370,
+              "bottom": 4341.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 4349.625,
+              "right": 370,
+              "bottom": 4390.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 stop 9",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 20,
+              "y": 258.140625,
+              "right": 370,
+              "bottom": 700.515625,
+              "width": 350,
+              "height": 442.375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 20,
+              "y": 700.515625,
+              "right": 370,
+              "bottom": 786.296875,
+              "width": 350,
+              "height": 85.78125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 2736.796875,
+              "right": 370,
+              "bottom": 2801.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 3290.0625,
+              "right": 370,
+              "bottom": 3370.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 3378.625,
+              "right": 370,
+              "bottom": 3419.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 protection",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 20,
+              "y": -1132.46875,
+              "right": 370,
+              "bottom": -690.09375,
+              "width": 350,
+              "height": 442.375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 20,
+              "y": -690.09375,
+              "right": 370,
+              "bottom": -604.3125,
+              "width": 350,
+              "height": 85.78125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": 1345.796875,
+              "right": 370,
+              "bottom": 1410.578125,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 1899.0625,
+              "right": 370,
+              "bottom": 1979.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 1987.625,
+              "right": 370,
+              "bottom": 2028.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 commercial",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 20,
+              "y": -171.203125,
+              "right": 370,
+              "bottom": -106.421875,
+              "width": 350,
+              "height": 64.78125,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 20,
+              "y": 382.0625,
+              "right": 370,
+              "bottom": 462.625,
+              "width": 350,
+              "height": 80.5625,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 20,
+              "y": 470.625,
+              "right": 370,
+              "bottom": 511.40625,
+              "width": 350,
+              "height": 40.78125,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "390 features.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 how-it-works.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 protection.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 pricing.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 download.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 support.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 changelog.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 about.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 privacy.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 terms.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 404.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/index.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/guide/reading-space.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/guide/reviewing.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/guide/protection.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/guide/activity-recovery.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "390 docs-preview/reference/faq.html",
+          "width": 390,
+          "height": 844,
+          "documentWidth": 390,
+          "fontLoaded": true,
+          "boxes": []
+        }
+      ]
+    },
+    {
+      "width": 768,
+      "height": 1024,
+      "frames": [
+        {
+          "label": "768 stop 0",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "open-lead reveal",
+              "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+              "x": 32,
+              "y": 750.625,
+              "right": 472,
+              "bottom": 825.015625,
+              "width": 440,
+              "height": 74.390625,
+              "staged": true
+            },
+            {
+              "selector": "open-cta reveal",
+              "text": "Check availability",
+              "x": 32,
+              "y": 855.015625,
+              "right": 208,
+              "bottom": 900.015625,
+              "width": 176,
+              "height": 45,
+              "staged": true
+            },
+            {
+              "selector": "open-stats",
+              "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+              "x": 32,
+              "y": 936.015625,
+              "right": 736,
+              "bottom": 984,
+              "width": 704,
+              "height": 47.984375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 12180.40625,
+              "right": 736,
+              "bottom": 12223.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 12694.84375,
+              "right": 736,
+              "bottom": 12735.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 12743.125,
+              "right": 736,
+              "bottom": 12763.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 1",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "label reveal",
+              "text": "An illustrative scan",
+              "x": 32,
+              "y": 329.45001220703125,
+              "right": 736,
+              "bottom": 349.84063720703125,
+              "width": 704,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "reveal",
+              "text": "What a scan could find. Example figures. Your results will vary.",
+              "x": 32,
+              "y": 515.8718872070312,
+              "right": 736,
+              "bottom": 587.9343872070312,
+              "width": 704,
+              "height": 72.0625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 11002.40625,
+              "right": 736,
+              "bottom": 11045.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 11516.84375,
+              "right": 736,
+              "bottom": 11557.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 11565.125,
+              "right": 736,
+              "bottom": 11585.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 2",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 32,
+              "y": 302.015625,
+              "right": 736,
+              "bottom": 410.46875,
+              "width": 704,
+              "height": 108.453125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 32,
+              "y": 650.46875,
+              "right": 736,
+              "bottom": 666.46875,
+              "width": 704,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 9825.40625,
+              "right": 736,
+              "bottom": 9868.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 10339.84375,
+              "right": 736,
+              "bottom": 10380.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 10388.125,
+              "right": 736,
+              "bottom": 10408.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 3",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 32,
+              "y": 302.015625,
+              "right": 736,
+              "bottom": 410.46875,
+              "width": 704,
+              "height": 108.453125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 32,
+              "y": 650.46875,
+              "right": 736,
+              "bottom": 666.46875,
+              "width": 704,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "disk-done",
+              "text": "Illustrative change. Actual space varies. Trash alone frees none.",
+              "x": 32,
+              "y": 735.96875,
+              "right": 736,
+              "bottom": 761.46875,
+              "width": 704,
+              "height": 25.5,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 8647.40625,
+              "right": 736,
+              "bottom": 8690.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 9161.84375,
+              "right": 736,
+              "bottom": 9202.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 9210.125,
+              "right": 736,
+              "bottom": 9230.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 4",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "lead reveal",
+              "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+              "x": 32,
+              "y": 127.015625,
+              "right": 592,
+              "bottom": 184.609375,
+              "width": 560,
+              "height": 57.59375,
+              "staged": true
+            },
+            {
+              "selector": "promises reveal",
+              "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+              "x": 32,
+              "y": 212.609375,
+              "right": 736,
+              "bottom": 344.609375,
+              "width": 704,
+              "height": 132,
+              "staged": true
+            },
+            {
+              "selector": "chat-tabs",
+              "text": "Claude CodeCodexCursor",
+              "x": 32,
+              "y": 384.609375,
+              "right": 736,
+              "bottom": 416.609375,
+              "width": 704,
+              "height": 32,
+              "staged": true
+            },
+            {
+              "selector": "ans step on",
+              "text": "Sample candidates. Review first:",
+              "x": 53,
+              "y": 589.609375,
+              "right": 715,
+              "bottom": 612.859375,
+              "width": 662,
+              "height": 23.25,
+              "staged": true
+            },
+            {
+              "selector": "got step on",
+              "text": "38.6 GBsample incl. npm",
+              "x": 53,
+              "y": 840.734375,
+              "right": 715,
+              "bottom": 902.734375,
+              "width": 662,
+              "height": 62,
+              "staged": true
+            },
+            {
+              "selector": "ask-btns step on",
+              "text": "Review in CairnNot now",
+              "x": 53,
+              "y": 919.008056640625,
+              "right": 715,
+              "bottom": 960.695556640625,
+              "width": 662,
+              "height": 41.6875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 7469.40625,
+              "right": 736,
+              "bottom": 7512.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 7983.84375,
+              "right": 736,
+              "bottom": 8024.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 8032.125,
+              "right": 736,
+              "bottom": 8052.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 5",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 765.625,
+              "right": 736,
+              "bottom": 858.125,
+              "width": 704,
+              "height": 92.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 32,
+              "y": 868.125,
+              "right": 736,
+              "bottom": 888.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 6292.40625,
+              "right": 736,
+              "bottom": 6335.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 6806.84375,
+              "right": 736,
+              "bottom": 6847.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 6855.125,
+              "right": 736,
+              "bottom": 6875.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 6",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 765.625,
+              "right": 736,
+              "bottom": 858.125,
+              "width": 704,
+              "height": 92.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 32,
+              "y": 868.125,
+              "right": 736,
+              "bottom": 888.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 5114.40625,
+              "right": 736,
+              "bottom": 5157.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 5628.84375,
+              "right": 736,
+              "bottom": 5669.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 5677.125,
+              "right": 736,
+              "bottom": 5697.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 7",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 765.625,
+              "right": 736,
+              "bottom": 858.125,
+              "width": 704,
+              "height": 92.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 32,
+              "y": 868.125,
+              "right": 736,
+              "bottom": 888.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 3937.40625,
+              "right": 736,
+              "bottom": 3980.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 4451.84375,
+              "right": 736,
+              "bottom": 4492.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 4500.125,
+              "right": 736,
+              "bottom": 4520.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 stop 8",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 32,
+              "y": 326.328125,
+              "right": 736,
+              "bottom": 808.671875,
+              "width": 704,
+              "height": 482.34375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 32,
+              "y": 808.671875,
+              "right": 736,
+              "bottom": 876.046875,
+              "width": 704,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 2759.40625,
+              "right": 736,
+              "bottom": 2802.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 3273.84375,
+              "right": 736,
+              "bottom": 3314.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 3322.125,
+              "right": 736,
+              "bottom": 3342.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 protection",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 32,
+              "y": -609.671875,
+              "right": 736,
+              "bottom": -127.328125,
+              "width": 704,
+              "height": 482.34375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 32,
+              "y": -127.328125,
+              "right": 736,
+              "bottom": -59.953125,
+              "width": 704,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 1823.40625,
+              "right": 736,
+              "bottom": 1866.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 2337.84375,
+              "right": 736,
+              "bottom": 2378.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 2386.125,
+              "right": 736,
+              "bottom": 2406.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 commercial",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": -22.59375,
+              "right": 736,
+              "bottom": 20.59375,
+              "width": 704,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 32,
+              "y": 491.84375,
+              "right": 736,
+              "bottom": 532.125,
+              "width": 704,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 540.125,
+              "right": 736,
+              "bottom": 560.515625,
+              "width": 704,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "768 features.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 how-it-works.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 protection.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 pricing.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 download.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 support.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 changelog.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 about.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 privacy.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 terms.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 404.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/index.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/guide/reading-space.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/guide/reviewing.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/guide/protection.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/guide/activity-recovery.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "768 docs-preview/reference/faq.html",
+          "width": 768,
+          "height": 1024,
+          "documentWidth": 768,
+          "fontLoaded": true,
+          "boxes": []
+        }
+      ]
+    },
+    {
+      "width": 1024,
+      "height": 768,
+      "frames": [
+        {
+          "label": "1024 stop 0",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "open-lead reveal",
+              "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+              "x": 32,
+              "y": 367.359375,
+              "right": 472,
+              "bottom": 441.75,
+              "width": 440,
+              "height": 74.390625,
+              "staged": true
+            },
+            {
+              "selector": "open-cta reveal",
+              "text": "Check availability",
+              "x": 32,
+              "y": 471.75,
+              "right": 208,
+              "bottom": 516.75,
+              "width": 176,
+              "height": 45,
+              "staged": true
+            },
+            {
+              "selector": "open-stats",
+              "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+              "x": 32,
+              "y": 669.765625,
+              "right": 992,
+              "bottom": 728,
+              "width": 960,
+              "height": 58.234375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 8933.328125,
+              "right": 992,
+              "bottom": 8976.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 9449.359375,
+              "right": 872,
+              "bottom": 9489.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 9497.640625,
+              "right": 992,
+              "bottom": 9518.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 1",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "label reveal",
+              "text": "An illustrative scan",
+              "x": 32,
+              "y": 189.859375,
+              "right": 992,
+              "bottom": 210.25,
+              "width": 960,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "reveal",
+              "text": "What a scan could find. Example figures. Your results will vary.",
+              "x": 32,
+              "y": 417.609375,
+              "right": 992,
+              "bottom": 513.140625,
+              "width": 960,
+              "height": 95.53125,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 8050.328125,
+              "right": 992,
+              "bottom": 8093.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 8566.359375,
+              "right": 872,
+              "bottom": 8606.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 8614.640625,
+              "right": 992,
+              "bottom": 8635.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 2",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 32,
+              "y": 162.28125,
+              "right": 992,
+              "bottom": 294.203125,
+              "width": 960,
+              "height": 131.921875,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 32,
+              "y": 534.203125,
+              "right": 992,
+              "bottom": 550.203125,
+              "width": 960,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 7166.328125,
+              "right": 992,
+              "bottom": 7209.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 7682.359375,
+              "right": 872,
+              "bottom": 7722.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 7730.640625,
+              "right": 992,
+              "bottom": 7751.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 3",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 32,
+              "y": 162.28125,
+              "right": 992,
+              "bottom": 294.203125,
+              "width": 960,
+              "height": 131.921875,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 32,
+              "y": 534.203125,
+              "right": 992,
+              "bottom": 550.203125,
+              "width": 960,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "disk-done",
+              "text": "Illustrative change. Actual space varies. Trash alone frees none.",
+              "x": 32,
+              "y": 619.703125,
+              "right": 992,
+              "bottom": 645.203125,
+              "width": 960,
+              "height": 25.5,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 6283.328125,
+              "right": 992,
+              "bottom": 6326.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 6799.359375,
+              "right": 872,
+              "bottom": 6839.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 6847.640625,
+              "right": 992,
+              "bottom": 6868.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 4",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "lead reveal",
+              "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+              "x": 32,
+              "y": 328.140625,
+              "right": 328,
+              "bottom": 414.53125,
+              "width": 296,
+              "height": 86.390625,
+              "staged": true
+            },
+            {
+              "selector": "promises reveal",
+              "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+              "x": 32,
+              "y": 442.53125,
+              "right": 328,
+              "bottom": 631.53125,
+              "width": 296,
+              "height": 189,
+              "staged": true
+            },
+            {
+              "selector": "chat-tabs",
+              "text": "Claude CodeCodexCursor",
+              "x": 392,
+              "y": 75.59375,
+              "right": 992,
+              "bottom": 107.59375,
+              "width": 600,
+              "height": 32,
+              "staged": true
+            },
+            {
+              "selector": "ans step on",
+              "text": "Sample candidates. Review first:",
+              "x": 419,
+              "y": 286.59375,
+              "right": 965,
+              "bottom": 309.84375,
+              "width": 546,
+              "height": 23.25,
+              "staged": true
+            },
+            {
+              "selector": "got step on",
+              "text": "38.6 GBsample incl. npm",
+              "x": 419,
+              "y": 537.71875,
+              "right": 965,
+              "bottom": 599.71875,
+              "width": 546,
+              "height": 62,
+              "staged": true
+            },
+            {
+              "selector": "ask-btns step on",
+              "text": "Review in CairnNot now",
+              "x": 419,
+              "y": 615.9923095703125,
+              "right": 965,
+              "bottom": 657.6798095703125,
+              "width": 546,
+              "height": 41.6875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 5400.328125,
+              "right": 992,
+              "bottom": 5443.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 5916.359375,
+              "right": 872,
+              "bottom": 5956.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 5964.640625,
+              "right": 992,
+              "bottom": 5985.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 5",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 320.4375,
+              "right": 432,
+              "bottom": 594.9375,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 483.1875,
+              "y": 639.9375,
+              "right": 992,
+              "bottom": 660.328125,
+              "width": 508.8125,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 4517.328125,
+              "right": 992,
+              "bottom": 4560.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 5033.359375,
+              "right": 872,
+              "bottom": 5073.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 5081.640625,
+              "right": 992,
+              "bottom": 5102.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 6",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 320.4375,
+              "right": 432,
+              "bottom": 594.9375,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 483.1875,
+              "y": 639.9375,
+              "right": 992,
+              "bottom": 660.328125,
+              "width": 508.8125,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 3633.328125,
+              "right": 992,
+              "bottom": 3676.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 4149.359375,
+              "right": 872,
+              "bottom": 4189.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 4197.640625,
+              "right": 992,
+              "bottom": 4218.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 7",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 32,
+              "y": 320.4375,
+              "right": 432,
+              "bottom": 594.9375,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 483.1875,
+              "y": 639.9375,
+              "right": 992,
+              "bottom": 660.328125,
+              "width": 508.8125,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 2750.328125,
+              "right": 992,
+              "bottom": 2793.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 3266.359375,
+              "right": 872,
+              "bottom": 3306.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 3314.640625,
+              "right": 992,
+              "bottom": 3335.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 stop 8",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 493.4375,
+              "y": 91.328125,
+              "right": 992,
+              "bottom": 600.484375,
+              "width": 498.5625,
+              "height": 509.15625,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 493.4375,
+              "y": 600.484375,
+              "right": 992,
+              "bottom": 667.859375,
+              "width": 498.5625,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 1867.328125,
+              "right": 992,
+              "bottom": 1910.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 2383.359375,
+              "right": 872,
+              "bottom": 2423.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 2431.640625,
+              "right": 992,
+              "bottom": 2452.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 protection",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 493.4375,
+              "y": -576.671875,
+              "right": 992,
+              "bottom": -67.515625,
+              "width": 498.5625,
+              "height": 509.15625,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 493.4375,
+              "y": -67.515625,
+              "right": 992,
+              "bottom": -0.140625,
+              "width": 498.5625,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": 1199.328125,
+              "right": 992,
+              "bottom": 1242.515625,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 1715.359375,
+              "right": 872,
+              "bottom": 1755.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 1763.640625,
+              "right": 992,
+              "bottom": 1784.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 commercial",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 32,
+              "y": -152.671875,
+              "right": 992,
+              "bottom": -109.484375,
+              "width": 960,
+              "height": 43.1875,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 152,
+              "y": 363.359375,
+              "right": 872,
+              "bottom": 403.640625,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 32,
+              "y": 411.640625,
+              "right": 992,
+              "bottom": 432.03125,
+              "width": 960,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1024 features.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 how-it-works.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 protection.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 pricing.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 download.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 support.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 changelog.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 about.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 privacy.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 terms.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 404.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/index.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/guide/reading-space.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/guide/reviewing.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/guide/protection.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/guide/activity-recovery.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1024 docs-preview/reference/faq.html",
+          "width": 1024,
+          "height": 768,
+          "documentWidth": 1024,
+          "fontLoaded": true,
+          "boxes": []
+        }
+      ]
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "frames": [
+        {
+          "label": "1440 stop 0",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "open-lead reveal",
+              "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+              "x": 90,
+              "y": 452.78125,
+              "right": 530,
+              "bottom": 527.171875,
+              "width": 440,
+              "height": 74.390625,
+              "staged": true
+            },
+            {
+              "selector": "open-cta reveal",
+              "text": "Check availability",
+              "x": 90,
+              "y": 557.171875,
+              "right": 266,
+              "bottom": 602.171875,
+              "width": 176,
+              "height": 45,
+              "staged": true
+            },
+            {
+              "selector": "open-stats",
+              "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+              "x": 90,
+              "y": 801.765625,
+              "right": 1350,
+              "bottom": 860,
+              "width": 1260,
+              "height": 58.234375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 10210.34375,
+              "right": 1350,
+              "bottom": 10231.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 10750.5,
+              "right": 1080,
+              "bottom": 10790.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 10798.78125,
+              "right": 1350,
+              "bottom": 10819.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 1",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "label reveal",
+              "text": "An illustrative scan",
+              "x": 90,
+              "y": 215.578125,
+              "right": 1350,
+              "bottom": 235.96875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "reveal",
+              "text": "What a scan could find. Example figures. Your results will vary.",
+              "x": 90,
+              "y": 496.46875,
+              "right": 1350,
+              "bottom": 619.40625,
+              "width": 1260,
+              "height": 122.9375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 9175.34375,
+              "right": 1350,
+              "bottom": 9196.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 9715.5,
+              "right": 1080,
+              "bottom": 9755.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 9763.78125,
+              "right": 1350,
+              "bottom": 9784.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 2",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 90,
+              "y": 214.578125,
+              "right": 1350,
+              "bottom": 373.90625,
+              "width": 1260,
+              "height": 159.328125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 90,
+              "y": 613.90625,
+              "right": 1350,
+              "bottom": 629.90625,
+              "width": 1260,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 8140.34375,
+              "right": 1350,
+              "bottom": 8161.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 8680.5,
+              "right": 1080,
+              "bottom": 8720.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 8728.78125,
+              "right": 1350,
+              "bottom": 8749.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 3",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "centre",
+              "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+              "x": 90,
+              "y": 214.578125,
+              "right": 1350,
+              "bottom": 373.90625,
+              "width": 1260,
+              "height": 159.328125,
+              "staged": true
+            },
+            {
+              "selector": "legend",
+              "text": "CandidatesLeft aloneKnown protected pathsFree space",
+              "x": 90,
+              "y": 613.90625,
+              "right": 1350,
+              "bottom": 629.90625,
+              "width": 1260,
+              "height": 16,
+              "staged": true
+            },
+            {
+              "selector": "disk-done",
+              "text": "Illustrative change. Actual space varies. Trash alone frees none.",
+              "x": 90,
+              "y": 699.40625,
+              "right": 1350,
+              "bottom": 724.90625,
+              "width": 1260,
+              "height": 25.5,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 7105.34375,
+              "right": 1350,
+              "bottom": 7126.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 7645.5,
+              "right": 1080,
+              "bottom": 7685.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 7693.78125,
+              "right": 1350,
+              "bottom": 7714.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 4",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "lead reveal",
+              "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+              "x": 90,
+              "y": 426.859375,
+              "right": 650,
+              "bottom": 484.453125,
+              "width": 560,
+              "height": 57.59375,
+              "staged": true
+            },
+            {
+              "selector": "promises reveal",
+              "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+              "x": 90,
+              "y": 512.453125,
+              "right": 686,
+              "bottom": 644.453125,
+              "width": 596,
+              "height": 132,
+              "staged": true
+            },
+            {
+              "selector": "chat-tabs",
+              "text": "Claude CodeCodexCursor",
+              "x": 750,
+              "y": 141.59375,
+              "right": 1350,
+              "bottom": 173.59375,
+              "width": 600,
+              "height": 32,
+              "staged": true
+            },
+            {
+              "selector": "ans step on",
+              "text": "Sample candidates. Review first:",
+              "x": 777,
+              "y": 352.59375,
+              "right": 1323,
+              "bottom": 375.84375,
+              "width": 546,
+              "height": 23.25,
+              "staged": true
+            },
+            {
+              "selector": "got step on",
+              "text": "38.6 GBsample incl. npm",
+              "x": 777,
+              "y": 603.71875,
+              "right": 1323,
+              "bottom": 665.71875,
+              "width": 546,
+              "height": 62,
+              "staged": true
+            },
+            {
+              "selector": "ask-btns step on",
+              "text": "Review in CairnNot now",
+              "x": 777,
+              "y": 681.9921875,
+              "right": 1323,
+              "bottom": 723.6796875,
+              "width": 546,
+              "height": 41.6875,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 6070.34375,
+              "right": 1350,
+              "bottom": 6091.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 6610.5,
+              "right": 1080,
+              "bottom": 6650.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 6658.78125,
+              "right": 1350,
+              "bottom": 6679.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 5",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 90,
+              "y": 392.796875,
+              "right": 490,
+              "bottom": 667.296875,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 562,
+              "y": 750.53125,
+              "right": 1350,
+              "bottom": 770.921875,
+              "width": 788,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 5035.34375,
+              "right": 1350,
+              "bottom": 5056.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 5575.5,
+              "right": 1080,
+              "bottom": 5615.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 5623.78125,
+              "right": 1350,
+              "bottom": 5644.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 6",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 90,
+              "y": 392.796875,
+              "right": 490,
+              "bottom": 667.296875,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 562,
+              "y": 750.53125,
+              "right": 1350,
+              "bottom": 770.921875,
+              "width": 788,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 4000.34375,
+              "right": 1350,
+              "bottom": 4021.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 4540.5,
+              "right": 1080,
+              "bottom": 4580.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 4588.78125,
+              "right": 1350,
+              "bottom": 4609.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 7",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "app-steps",
+              "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+              "x": 90,
+              "y": 392.796875,
+              "right": 490,
+              "bottom": 667.296875,
+              "width": 400,
+              "height": 274.5,
+              "staged": true
+            },
+            {
+              "selector": "app-sample",
+              "text": "Sample data. Protection has limits.",
+              "x": 562,
+              "y": 750.53125,
+              "right": 1350,
+              "bottom": 770.921875,
+              "width": 788,
+              "height": 20.390625,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 2965.34375,
+              "right": 1350,
+              "bottom": 2986.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 3505.5,
+              "right": 1080,
+              "bottom": 3545.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 3553.78125,
+              "right": 1350,
+              "bottom": 3574.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 stop 8",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 576.390625,
+              "y": 171.140625,
+              "right": 1350,
+              "bottom": 653.484375,
+              "width": 773.609375,
+              "height": 482.34375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 576.390625,
+              "y": 653.484375,
+              "right": 1350,
+              "bottom": 720.859375,
+              "width": 773.609375,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 1930.34375,
+              "right": 1350,
+              "bottom": 1951.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 2470.5,
+              "right": 1080,
+              "bottom": 2510.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 2518.78125,
+              "right": 1350,
+              "bottom": 2539.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 protection",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "more-list",
+              "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+              "x": 576.390625,
+              "y": -790.859375,
+              "right": 1350,
+              "bottom": -308.515625,
+              "width": 773.609375,
+              "height": 482.34375,
+              "staged": true
+            },
+            {
+              "selector": "more-also",
+              "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+              "x": 576.390625,
+              "y": -308.515625,
+              "right": 1350,
+              "bottom": -241.140625,
+              "width": 773.609375,
+              "height": 67.375,
+              "staged": true
+            },
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": 968.34375,
+              "right": 1350,
+              "bottom": 989.9375,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 1508.5,
+              "right": 1080,
+              "bottom": 1548.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 1556.78125,
+              "right": 1350,
+              "bottom": 1577.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 commercial",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": [
+            {
+              "selector": "touches-foot",
+              "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+              "x": 90,
+              "y": -110.65625,
+              "right": 1350,
+              "bottom": -89.0625,
+              "width": 1260,
+              "height": 21.59375,
+              "staged": false
+            },
+            {
+              "selector": "footer-price",
+              "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+              "x": 360,
+              "y": 429.5,
+              "right": 1080,
+              "bottom": 469.78125,
+              "width": 720,
+              "height": 40.28125,
+              "staged": false
+            },
+            {
+              "selector": "footer-availability",
+              "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+              "x": 90,
+              "y": 477.78125,
+              "right": 1350,
+              "bottom": 498.171875,
+              "width": 1260,
+              "height": 20.390625,
+              "staged": false
+            }
+          ]
+        },
+        {
+          "label": "1440 features.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 how-it-works.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 protection.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 pricing.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 download.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 support.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 changelog.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 about.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 privacy.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 terms.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 404.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/index.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/guide/reading-space.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/guide/reviewing.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/guide/protection.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/guide/activity-recovery.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        },
+        {
+          "label": "1440 docs-preview/reference/faq.html",
+          "width": 1440,
+          "height": 900,
+          "documentWidth": 1440,
+          "fontLoaded": true,
+          "boxes": []
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "failures": [],
+  "limits": "Chromium viewport emulation, not physical Safari/iPhone or native Mac acceptance.",
+  "reducedMotion": {
+    "label": "390 reduced motion",
+    "width": 390,
+    "height": 844,
+    "documentWidth": 390,
+    "fontLoaded": true,
+    "boxes": [
+      {
+        "selector": "open-lead reveal",
+        "text": "Review build files and caches, with optional AI-tool connections. Known working locations have protection checks.",
+        "x": 20,
+        "y": 554.53125,
+        "right": 370,
+        "bottom": 628.921875,
+        "width": 350,
+        "height": 74.390625,
+        "staged": true
+      },
+      {
+        "selector": "open-cta reveal",
+        "text": "Check availability",
+        "x": 20,
+        "y": 658.921875,
+        "right": 196,
+        "bottom": 703.921875,
+        "width": 176,
+        "height": 45,
+        "staged": true
+      },
+      {
+        "selector": "open-stats",
+        "text": "38.6 GBillustrative scan, not a benchmark\n              AI toolsoptional local connections\n              Review firstcheck each path and requirement",
+        "x": 20,
+        "y": 739.921875,
+        "right": 370,
+        "bottom": 804,
+        "width": 350,
+        "height": 64.078125,
+        "staged": true
+      },
+      {
+        "selector": "label reveal",
+        "text": "An illustrative scan",
+        "x": 20,
+        "y": 1065.5,
+        "right": 370,
+        "bottom": 1085.890625,
+        "width": 350,
+        "height": 20.390625,
+        "staged": true
+      },
+      {
+        "selector": "reveal",
+        "text": "What a scan could find. Example figures. Your results will vary.",
+        "x": 20,
+        "y": 1232.390625,
+        "right": 370,
+        "bottom": 1340.484375,
+        "width": 350,
+        "height": 108.09375,
+        "staged": true
+      },
+      {
+        "selector": "centre",
+        "text": "An illustrative disk\n          A view of your disk. Inspect candidates and scan coverage.",
+        "x": 20,
+        "y": 1896.75,
+        "right": 370,
+        "bottom": 2041.234375,
+        "width": 350,
+        "height": 144.484375,
+        "staged": true
+      },
+      {
+        "selector": "lead reveal",
+        "text": "Connect Claude Code, Codex or Cursor to inspect storage. This conversation shows sample data.",
+        "x": 20,
+        "y": 2756.453125,
+        "right": 370,
+        "bottom": 2842.84375,
+        "width": 350,
+        "height": 86.390625,
+        "staged": true
+      },
+      {
+        "selector": "promises reveal",
+        "text": "Sizes, with their limits. Estimates and partial scans are labelled.\n              Cleaning is off by default. Choose review or permitted automation.\n              Known working locations have protection checks.",
+        "x": 20,
+        "y": 2870.84375,
+        "right": 370,
+        "bottom": 3059.84375,
+        "width": 350,
+        "height": 189,
+        "staged": true
+      },
+      {
+        "selector": "chat-tabs",
+        "text": "Claude CodeCodexCursor",
+        "x": 20,
+        "y": 3099.84375,
+        "right": 370,
+        "bottom": 3131.84375,
+        "width": 350,
+        "height": 32,
+        "staged": true
+      },
+      {
+        "selector": "ans step on",
+        "text": "Sample candidates. Review first:",
+        "x": 41,
+        "y": 3304.84375,
+        "right": 349,
+        "bottom": 3328.09375,
+        "width": 308,
+        "height": 23.25,
+        "staged": true
+      },
+      {
+        "selector": "got step on",
+        "text": "38.6 GBsample incl. npm",
+        "x": 41,
+        "y": 3555.96875,
+        "right": 349,
+        "bottom": 3617.96875,
+        "width": 308,
+        "height": 62,
+        "staged": true
+      },
+      {
+        "selector": "ask-btns step on",
+        "text": "Review in CairnNot now",
+        "x": 41,
+        "y": 3633.96875,
+        "right": 349,
+        "bottom": 3675.65625,
+        "width": 308,
+        "height": 41.6875,
+        "staged": true
+      },
+      {
+        "selector": "app-steps",
+        "text": "See where your space goesFree-space history, with next steps.\n              Review before you removeInspect paths, sizes and requirements before acting.\n              See what happenedInspect action records. Recovery depends on the method.",
+        "x": 20,
+        "y": 4677.625,
+        "right": 370,
+        "bottom": 4929.125,
+        "width": 350,
+        "height": 251.5,
+        "staged": true
+      },
+      {
+        "selector": "app-sample",
+        "text": "Sample data. Protection has limits.",
+        "x": 20,
+        "y": 4953.125,
+        "right": 370,
+        "bottom": 4973.515625,
+        "width": 350,
+        "height": 20.390625,
+        "staged": true
+      },
+      {
+        "selector": "more-list",
+        "text": "BrowsersReview rebuildable browser caches.\n            Creative appsReview app caches. Final Cut manages its own libraries.\n            Everyday appsUpdate downloads and caches from Zoom, Teams, Spotify and others.\n            Chat and notesReview known Slack, Discord and Notion caches.\n            Local AI modelsEligible models use Trash. Manage Ollama models in Ollama.",
+        "x": 20,
+        "y": 5341.96875,
+        "right": 370,
+        "bottom": 5784.34375,
+        "width": 350,
+        "height": 442.375,
+        "staged": true
+      },
+      {
+        "selector": "more-also",
+        "text": "Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept.",
+        "x": 20,
+        "y": 5784.34375,
+        "right": 370,
+        "bottom": 5870.125,
+        "width": 350,
+        "height": 85.78125,
+        "staged": true
+      },
+      {
+        "selector": "touches-foot",
+        "text": "Detected in-use items and recent build output are skipped. Move to Trash applies to eligible files, not every tool action. Ruby gem cleanup is advice only.",
+        "x": 20,
+        "y": 7858.53125,
+        "right": 370,
+        "bottom": 7923.3125,
+        "width": 350,
+        "height": 64.78125,
+        "staged": false
+      },
+      {
+        "selector": "footer-price",
+        "text": "Planned: £35.99 once for this major version. Sales are not open. Final licence, support and update terms are pending; future macOS compatibility and upgrade pricing are not promised.",
+        "x": 20,
+        "y": 8411.796875,
+        "right": 370,
+        "bottom": 8492.359375,
+        "width": 350,
+        "height": 80.5625,
+        "staged": false
+      },
+      {
+        "selector": "footer-availability",
+        "text": "Targets macOS 14+ on Apple silicon and Intel. Hardware acceptance and a notarised public release are still pending.",
+        "x": 20,
+        "y": 8500.359375,
+        "right": 370,
+        "bottom": 8541.140625,
+        "width": 350,
+        "height": 40.78125,
+        "staged": false
+      }
+    ]
+  }
+}

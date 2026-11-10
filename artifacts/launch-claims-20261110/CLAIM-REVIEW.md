@@ -237,6 +237,6 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 - Local website build and existing interaction, docs, storage and navigation checks passed: 18 pages, 568 local references.
 - Source and static export pass the claim checks and original-design preservation checks.
 - Four negative fixtures reject misleading visible copy, metadata, gallery descriptions and unavailable purchase calls to action.
-- Rendered desktop/mobile validation is running in the isolated GitHub workflow; see VERIFICATION.md for final results and limitations.
+- Rendered desktop/mobile validation passed in the isolated GitHub workflow; see [VERIFICATION.md](VERIFICATION.md) for results, screenshots and limitations.
 
 No native app source, packaging script or native CI definition changed. No personal cleanup, release, merge, public deployment, checkout or publication is authorised by this PR.
