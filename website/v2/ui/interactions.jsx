@@ -94,7 +94,7 @@ function App() {
               </div>
             </Tabs.Content>)}
           </Tabs.Root>
-          <Dialog.Description className="preview-note">Sample data. Disk actions are disabled in these native app captures.</Dialog.Description>
+          <Dialog.Description className="preview-note">Development capture with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action.</Dialog.Description>
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

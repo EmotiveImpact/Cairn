@@ -222,28 +222,28 @@
     {
       "file": "website/v2/story.html",
       "old": "Real Cairn screens, example numbers",
-      "new": "Development screens, sample data. Not measured results.",
+      "new": "Sample data. Protection has limits.",
       "count": 1,
       "evidence": "sample"
     },
     {
       "file": "website/v2/story.html",
       "old": "Render and preview files from Final Cut, Logic, Lightroom and more.",
-      "new": "Review caches and previews. Final Cut library cleanup stays in Final Cut.",
+      "new": "Review app caches. Final Cut manages its own libraries.",
       "count": 1,
       "evidence": "scope"
     },
     {
       "file": "website/v2/story.html",
       "old": "Caches from Slack, Discord and Notion. Each app makes them again the next time it opens.",
-      "new": "Review recognised caches from Slack, Discord and Notion, with app-specific requirements.",
+      "new": "Review known Slack, Discord and Notion caches.",
       "count": 1,
       "evidence": "scope"
     },
     {
       "file": "website/v2/story.html",
       "old": "Downloaded models, often gigabytes each. Your AI conversations are never touched.",
-      "new": "Review downloaded models. Eligible items use Trash; Ollama removal stays in Ollama.",
+      "new": "Eligible models use Trash. Manage Ollama models in Ollama.",
       "count": 1,
       "evidence": "model"
     },
@@ -467,7 +467,7 @@
     {
       "file": "website/v2/story.html",
       "old": "Screens from the Cairn app, with example numbers.",
-      "new": "Development captures with sample data, not measured results. Recovery depends on the action.",
+      "new": "Development captures with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action.",
       "count": 1,
       "evidence": "sample"
     },
@@ -547,6 +547,41 @@
       "new": "Scheduled rules use approved scopes and Trash only while Cairn is open. AI-tool cleaning is off by default, with a choice of approval each time or permitted eligible cleanup without a new prompt. Consent safeguards passed macOS CI on 9 November; live Mac acceptance remains open.",
       "count": 1,
       "evidence": "pr27"
+    },
+    {
+      "file": "website/v2/site/content.cjs",
+      "old": "History stays protected",
+      "new": "Separate from build output",
+      "count": 1,
+      "evidence": "git"
+    },
+    {
+      "file": "website/v2/site/content.cjs",
+      "old": "Selected size describes files. Space freed is based on the available-space increase macOS reports. Snapshots, purgeable data, package-tool behaviour and other activity can make those figures different.",
+      "new": "Selected sizes are estimates. Receipts distinguish action totals from later available-space readings; snapshots, package-tool behaviour and other activity can affect the change.",
+      "count": 1,
+      "evidence": "accounting"
+    },
+    {
+      "file": "website/v2/site/content.cjs",
+      "old": "Receipts distinguish measured space freed from items moved to Trash.",
+      "new": "Receipts distinguish items moved to Trash, action-size estimates and later available-space readings.",
+      "count": 1,
+      "evidence": "accounting"
+    },
+    {
+      "file": "website/v2/ui/interactions.jsx",
+      "old": "Sample data. Disk actions are disabled in these native app captures.",
+      "new": "Development capture with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action.",
+      "count": 1,
+      "evidence": "sample"
+    },
+    {
+      "file": "website/v2/site/content.cjs",
+      "old": "Native app preview · Sample data",
+      "new": "Development preview · Sample data · Protection and recovery have limits",
+      "count": 1,
+      "evidence": "sample"
     }
   ]
 }

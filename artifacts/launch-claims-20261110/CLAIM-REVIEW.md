@@ -6,7 +6,7 @@ Reviewed 10 November 2026 against master `7129dff82375694c4248ee6cd187c183314357
 
 Text and accessible descriptions only in the approved homepage. All scene elements, hierarchy, classes, IDs, media, inline styles, numeric animation data and links remain in place. The four pinned motion/style files and the original October main-markup hash remain unchanged. The preservation test reverses only the enumerated text edits and checks the entire original homepage hash as well. Supporting changes update their generators and committed output. Archived design studies are outside the active export and remain untouched.
 
-The screenshot artwork is deliberately retained. Its historic sample figures remain visibly labelled as development data and are not represented as measured results.
+The screenshot artwork is deliberately retained. Its historic sample figures and embedded safety wording are qualified by the adjacent sample caption and the expanded gallery explanation. The captures are not current release evidence or a guarantee that every code file or conversation is protected.
 
 ## Evidence and consequential claims
 
@@ -80,11 +80,13 @@ Methods vary by category. Final Cut libraries are advice-only; virtual-machine d
 
 ### git
 
-The scanner emits git gc --prune=now as an unselected review candidate. Do not advertise an unconditional preservation or undo guarantee for Git maintenance. Source-control path guards still apply; a scanner candidate is not certification of an executable adapter.
+The scanner emits git gc --prune=now as an unselected review candidate. Do not advertise an unconditional preservation or undo guarantee for Git maintenance. The tool-command route is distinct from file Trash protection; a scanner candidate is not release certification of an adapter.
 
 - [Cairn/Scanners/GitMaintenanceScanner.swift](https://github.com/EmotiveImpact/Cairn/blob/7129dff82375694c4248ee6cd187c183314357c3/Cairn/Scanners/GitMaintenanceScanner.swift)
 - [Cairn/Safety/Cleaner.swift](https://github.com/EmotiveImpact/Cairn/blob/7129dff82375694c4248ee6cd187c183314357c3/Cairn/Safety/Cleaner.swift)
 - [Cairn/Core/SafePaths.swift](https://github.com/EmotiveImpact/Cairn/blob/7129dff82375694c4248ee6cd187c183314357c3/Cairn/Core/SafePaths.swift)
+The official [git-gc documentation](https://git-scm.com/docs/git-gc) confirms that garbage collection can remove unreachable objects and that `--prune=now` increases concurrency risk.
+
 
 ### snapshots
 
@@ -175,10 +177,10 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 | `website/v2/story.html` | Then review it and free it, &lt;span&gt;in one calm place.&lt;/span&gt; | Then review what can go, &lt;span&gt;in one calm place.&lt;/span&gt; | [accounting](#accounting) |
 | `website/v2/story.html` | Exact paths and sizes. Folders you work in stay protected. | Inspect paths, sizes and requirements before acting. | [protection](#protection) |
 | `website/v2/story.html` | Every clean is recorded, with the way back for each one. | Inspect action records. Recovery depends on the method. | [recovery](#recovery) |
-| `website/v2/story.html` | Real Cairn screens, example numbers | Development screens, sample data. Not measured results. | [sample](#sample) |
-| `website/v2/story.html` | Render and preview files from Final Cut, Logic, Lightroom and more. | Review caches and previews. Final Cut library cleanup stays in Final Cut. | [scope](#scope) |
-| `website/v2/story.html` | Caches from Slack, Discord and Notion. Each app makes them again the next time it opens. | Review recognised caches from Slack, Discord and Notion, with app-specific requirements. | [scope](#scope) |
-| `website/v2/story.html` | Downloaded models, often gigabytes each. Your AI conversations are never touched. | Review downloaded models. Eligible items use Trash; Ollama removal stays in Ollama. | [model](#model) |
+| `website/v2/story.html` | Real Cairn screens, example numbers | Sample data. Protection has limits. | [sample](#sample) |
+| `website/v2/story.html` | Render and preview files from Final Cut, Logic, Lightroom and more. | Review app caches. Final Cut manages its own libraries. | [scope](#scope) |
+| `website/v2/story.html` | Caches from Slack, Discord and Notion. Each app makes them again the next time it opens. | Review known Slack, Discord and Notion caches. | [scope](#scope) |
+| `website/v2/story.html` | Downloaded models, often gigabytes each. Your AI conversations are never touched. | Eligible models use Trash. Manage Ollama models in Ollama. | [model](#model) |
 | `website/v2/story.html` | Plus big forgotten files, duplicates, leftovers from apps you have removed, and copies to an external drive with your originals kept. | Plus large-file, duplicate and app-leftover review, and copies to eligible encrypted APFS drives with originals kept. | [transfer](#transfer) |
 | `website/v2/story.html` | Where Cairn cleans, &lt;span&gt;and where it never goes.&lt;/span&gt; | What can go, &lt;span&gt;and what needs care.&lt;/span&gt; | [scope](#scope) |
 | `website/v2/story.html` | You see every item before anything goes, and nothing moves until you click Clean. | Review manual cleanups first. Scheduled rules and AI-tool cleaning need separate permission. | [agent](#agent) |
@@ -210,7 +212,7 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 | `website/v2/story.html` | Cairn review card: check once, then free 38.6 GB from Xcode, Docker, node_modules and npm | Sample Cairn review card: illustrative 38.6 GB selection, not guaranteed reclaimed space | [sample](#sample) |
 | `website/v2/story.html` | Cairn Projects screen with 21.7 GB of build output across 8 coding projects | Sample Cairn Projects screen with illustrative build-output figures | [sample](#sample) |
 | `website/v2/story.html` | Cairn Done screen: 38.6 GB freed, free space up from 42.6 GB to 81.2 GB | Sample Cairn result screen: illustrative capacity change, not a measured cleanup result | [sample](#sample) |
-| `website/v2/story.html` | Screens from the Cairn app, with example numbers. | Development captures with sample data, not measured results. Recovery depends on the action. | [sample](#sample) |
+| `website/v2/story.html` | Screens from the Cairn app, with example numbers. | Development captures with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action. | [sample](#sample) |
 | `website/v2/site/content.cjs` | Scheduled cleaning, local-model removal, Apple Intelligence controls and broad Ruby gem cleanup are still under safety review and are not presented here as release-ready. | Scheduled rules now require approved scopes and use Trash only. Eligible local models use recorded Trash recovery; Apple asset requests check cancellation. Ruby gem cleanup is advice only. These safeguards passed macOS CI; live Mac acceptance remains open. | [pr27](#pr27) |
 | `website/v2/site/content.cjs` | Scheduled-rule consent, local-model removal, Apple Intelligence cancellation and broad Ruby gem cleanup require further safety work before release. | Scheduled consent and model recovery were hardened and passed macOS CI. Cancellation cannot recall an admitted move or macOS request. Failed protected-state saves need a retry before quitting; live Keychain acceptance remains open. Ruby gem cleanup is advice only. | [pr27](#pr27) |
 | `website/v2/site/content.cjs` | The planned licence covers this major version. It is not a promise that all future major versions will be included. | The planned licence covers this major version. Final update and support terms remain pending; future macOS compatibility and major-version upgrade pricing are not promised. | [commercial](#commercial) |
@@ -222,6 +224,11 @@ Every row is a literal replacement. Repeated occurrences are counted. HTML delim
 | `website/v2/site/content.cjs` | This review is hosted privately with ChatGPT Sites. Hosting data handling and the final public hosting arrangement still need to be reviewed before public release. | Public deployment has not been verified. Hosting data handling and the final public hosting arrangement still need to be reviewed before public release. | [release](#release) |
 | `website/v2/docs/guide/reviewing.mdx` | Scheduled-rule consent remains under safety review and is not a release-ready feature. | Scheduled rules use approved scopes and Trash only while Cairn is open. AI-tool cleaning is off by default, with a choice of approval each time or permitted eligible cleanup without a new prompt. Consent safeguards passed macOS CI on 9 November; live Mac acceptance remains open. | [pr27](#pr27) |
 | `website/v2/docs/reference/faq.mdx` | Scheduled-rule consent is still under safety review; it is not a release-ready feature. | Scheduled rules use approved scopes and Trash only while Cairn is open. AI-tool cleaning is off by default, with a choice of approval each time or permitted eligible cleanup without a new prompt. Consent safeguards passed macOS CI on 9 November; live Mac acceptance remains open. | [pr27](#pr27) |
+| `website/v2/site/content.cjs` | History stays protected | Separate from build output | [git](#git) |
+| `website/v2/site/content.cjs` | Selected size describes files. Space freed is based on the available-space increase macOS reports. Snapshots, purgeable data, package-tool behaviour and other activity can make those figures different. | Selected sizes are estimates. Receipts distinguish action totals from later available-space readings; snapshots, package-tool behaviour and other activity can affect the change. | [accounting](#accounting) |
+| `website/v2/site/content.cjs` | Receipts distinguish measured space freed from items moved to Trash. | Receipts distinguish items moved to Trash, action-size estimates and later available-space readings. | [accounting](#accounting) |
+| `website/v2/ui/interactions.jsx` | Sample data. Disk actions are disabled in these native app captures. | Development capture with sample figures. No guarantee that every code file or conversation is protected. Recovery depends on the action. | [sample](#sample) |
+| `website/v2/site/content.cjs` | Native app preview · Sample data | Development preview · Sample data · Protection and recovery have limits | [sample](#sample) |
 
 ## Validation
 

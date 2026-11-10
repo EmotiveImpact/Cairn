@@ -40,8 +40,20 @@ async function measure(page,label,staged=false){
    if(stop){await page.locator('body').press('PageDown');await page.waitForFunction(({stop,last})=>{const t=document.querySelector('.stage-track');return Math.abs(scrollY-(t.offsetTop+(t.offsetHeight-innerHeight)*stop/last))<2;},{stop,last:stops-1},{timeout:10000});}
    // Wait for copy reveals/counts, rather than disabling approved animation.
    await page.waitForTimeout(1800);
+   if(stop===(width<760?5:4))await page.waitForFunction(()=>[...document.querySelectorAll('#ask .step')].every(e=>+getComputedStyle(e).opacity>=0.95),null,{timeout:10000});
    frames.push(await measure(page,`${width} stop ${stop}`,true));
    if([320,390,1440].includes(width))await page.screenshot({path:path.join(output,`${width}-story-${stop}.png`)});
+   if(stop===6){
+    await page.locator('.product-screen').click();
+    const note=page.locator('.radix-preview .preview-note');
+    await note.waitFor({state:'visible'});
+    assert((await note.textContent()).includes('No guarantee that every code file or conversation is protected.'));
+    const box=await note.boundingBox();
+    if(!box||box.x<0||box.y<0||box.x+box.width>width+1||box.y+box.height>height+1)report.failures.push(`${width}: gallery limitation outside viewport`);
+    if([320,390,1440].includes(width))await page.screenshot({path:path.join(output,`${width}-gallery.png`)});
+    await page.keyboard.press('Escape');
+    await note.waitFor({state:'hidden'});
+   }
   }
   await page.locator('#touches').scrollIntoViewIfNeeded();
   frames.push(await measure(page,`${width} protection`));
@@ -51,6 +63,7 @@ async function measure(page,label,staged=false){
   for(const route of [...pages.map(p=>p.slug+'.html'),...docs.map(p=>'docs-preview/'+p+'.html')]){
    await page.goto(base+'/'+route,{waitUntil:'networkidle'});
    frames.push(await measure(page,`${width} ${route}`));
+   if([390,1440].includes(width)&&['features.html','pricing.html','protection.html'].includes(route))await page.screenshot({path:path.join(output,`${width}-${route.replace('.html','.png')}`),fullPage:true});
   }
   report.viewports.push({width,height,frames});
   console.log(`Checked ${width}x${height}: ${stops} animated stops and 17 supporting pages`);
